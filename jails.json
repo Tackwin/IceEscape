@@ -1,6 +1,6 @@
 {
     "local_modules": [
-        "modules"
+        "src"
     ],
     "roots": [
         "build.jai"
