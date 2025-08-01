@@ -1,0 +1,3111 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"getS",
+				"getSliceReadyRoll"
+			],
+			[
+				"slice",
+				"slice_ready_roll"
+			],
+			[
+				"getSlice",
+				"getSliceReadyPos"
+			],
+			[
+				"sli",
+				"slice_ready_position"
+			],
+			[
+				"getSli",
+				"getSliceReadyNormal"
+			],
+			[
+				"setSlic",
+				"setSliceReadyRoll"
+			],
+			[
+				"m_slicere",
+				"m_sliceReadyRoll"
+			],
+			[
+				"m_slicerRe",
+				"m_sliceReadyRoll"
+			],
+			[
+				"enti",
+				"getRobotEntity"
+			],
+			[
+				"getMatrix",
+				"getMatrixFromEntityAToB"
+			],
+			[
+				"movRo",
+				"moveRobotToScanningPoint"
+			],
+			[
+				"updat",
+				"updateExternalAxisOnlineMode"
+			],
+			[
+				"getScan",
+				"getScanningPoints"
+			],
+			[
+				"Scanni",
+				"ScanningPointParams"
+			],
+			[
+				"scan",
+				"scanningPoints"
+			],
+			[
+				"RobotContr",
+				"RobotController"
+			],
+			[
+				"scene3d",
+				"m_scene3d"
+			],
+			[
+				"scanningpoi",
+				"getScanningPoints"
+			],
+			[
+				"scanni",
+				"scanningpoints"
+			],
+			[
+				"sca",
+				"scanningpoints"
+			],
+			[
+				"has_",
+				"has_positon"
+			],
+			[
+				"sc",
+				"scanningpoints"
+			],
+			[
+				"Tool",
+				"ToolPath_Point"
+			],
+			[
+				"ro",
+				"robotUUID"
+			],
+			[
+				"add_robo",
+				"add_robotuuid"
+			],
+			[
+				"QBYte",
+				"QByteArray"
+			],
+			[
+				"scanningPoint",
+				"scanningPoints"
+			],
+			[
+				"froomT",
+				"FromTwoVectors"
+			],
+			[
+				"Quater",
+				"Quaterniond"
+			],
+			[
+				"Quat",
+				"Quaterniond"
+			],
+			[
+				"syncFrom",
+				"syncFromTarget"
+			],
+			[
+				"mater",
+				"getMatrixFromEntityAToB"
+			],
+			[
+				"GetWorl",
+				"getWorldMatrixE"
+			],
+			[
+				"m_pos",
+				"m_posiAxes"
+			],
+			[
+				"m_robot",
+				"m_robotAxes"
+			],
+			[
+				"getScann",
+				"getScanningPoints"
+			],
+			[
+				"setting",
+				"getPathPlanningSettings"
+			],
+			[
+				"allPar",
+				"allPartListModel"
+			],
+			[
+				"partLis",
+				"allPartListModel"
+			],
+			[
+				"sync",
+				"syncFromAxes"
+			],
+			[
+				"pb",
+				"pbScanningPoint"
+			],
+			[
+				"getR",
+				"getRobotUuid"
+			],
+			[
+				"empl",
+				"emplace_back"
+			],
+			[
+				"scann",
+				"scanningPoints"
+			],
+			[
+				"to",
+				"toByteArray"
+			],
+			[
+				"Scannin",
+				"ScanningPointParams"
+			],
+			[
+				"getRo",
+				"getRobotUuid"
+			],
+			[
+				"pat",
+				"pathPlanningSettings"
+			],
+			[
+				"set",
+				"setToIdentity"
+			],
+			[
+				"tran",
+				"translate"
+			],
+			[
+				"getMatrixFrom",
+				"getQMatrixFromEntityAToB"
+			],
+			[
+				"di",
+				"distanceToPoint"
+			],
+			[
+				"euler",
+				"euler2"
+			],
+			[
+				"Ge",
+				"GeomUtils"
+			],
+			[
+				"Qua",
+				"Quaterniond"
+			],
+			[
+				"QU",
+				"Quaterniond"
+			],
+			[
+				"QQUa",
+				"QQuaternion"
+			],
+			[
+				"setSca",
+				"setScanningPoints"
+			],
+			[
+				"setti",
+				"settings"
+			],
+			[
+				"Kinematib",
+				"KinematicsBaseEntity"
+			],
+			[
+				"RobotController",
+				"RobotController"
+			],
+			[
+				"Sc",
+				"ScanningPoint"
+			],
+			[
+				"getScanni",
+				"getScanningPoints"
+			],
+			[
+				"updaetdPo",
+				"updatedPosi"
+			],
+			[
+				"m_pso",
+				"m_posiAxes"
+			],
+			[
+				"robot",
+				"robotAxesChanged"
+			],
+			[
+				"updated",
+				"updatedRobot"
+			],
+			[
+				"upda",
+				"updatedPosition"
+			],
+			[
+				"m_r",
+				"m_robotAxes"
+			],
+			[
+				"syncF",
+				"syncFromAxes"
+			],
+			[
+				"m_rob",
+				"m_robotAxes"
+			],
+			[
+				"Tar",
+				"KinematicTarget"
+			],
+			[
+				"m_posi",
+				"m_posiAxes"
+			],
+			[
+				"update",
+				"updateExternalAxisOnlineMode"
+			],
+			[
+				"m_po",
+				"m_posiAxes"
+			],
+			[
+				"posiA",
+				"m_posiAxes"
+			],
+			[
+				"m_",
+				"m_posiAxes"
+			],
+			[
+				"m_robo",
+				"m_robotAxes"
+			],
+			[
+				"syncFro",
+				"syncFromAxes"
+			],
+			[
+				"m_ax",
+				"m_robotAxes"
+			],
+			[
+				"Too",
+				"ToolPath_Profile"
+			],
+			[
+				"QUa",
+				"Quaterniond"
+			],
+			[
+				"Quate",
+				"Quaterniond"
+			],
+			[
+				"QPointer",
+				"QPointer"
+			],
+			[
+				"timep",
+				"time_point_cast"
+			],
+			[
+				"timepo",
+				"timepoint"
+			],
+			[
+				"sys",
+				"system_clock"
+			],
+			[
+				"access",
+				"access_key"
+			],
+			[
+				"appendcan",
+				"appendCanonicalHeaderParam"
+			],
+			[
+				"c_",
+				"c_str"
+			],
+			[
+				"filepa",
+				"filepath_from_software_one"
+			],
+			[
+				"appendsi",
+				"appendStringToSign"
+			],
+			[
+				"pico",
+				"picosha2"
+			],
+			[
+				"sh",
+				"hash256"
+			],
+			[
+				"can",
+				"canonicalRequest"
+			],
+			[
+				"canonic",
+				"canonicalRequest"
+			],
+			[
+				"cano",
+				"canonicalRequest"
+			],
+			[
+				"s",
+				"system_clock"
+			],
+			[
+				"syste",
+				"system_clock"
+			],
+			[
+				"has",
+				"hash256"
+			],
+			[
+				"appendc",
+				"appendCanonicalQueryString"
+			],
+			[
+				"filepath",
+				"filepath_length"
+			],
+			[
+				"filep",
+				"filepath"
+			],
+			[
+				"canc",
+				"canonicalized_amz_headers"
+			],
+			[
+				"content",
+				"content_type"
+			],
+			[
+				"graphics",
+				"graphicsGreen"
+			],
+			[
+				"deb",
+				"debugLines"
+			],
+			[
+				"gr",
+				"graphicsGreen"
+			],
+			[
+				"compiler_cr",
+				"compiler_get_nodes(code: Code) -> (root: *Code_Node, expressions: [] *Code_Node)"
+			],
+			[
+				"cwiseM",
+				"cwiseMin"
+			],
+			[
+				"lowes",
+				"lowestZ"
+			],
+			[
+				"getNo",
+				"getNodeCount"
+			],
+			[
+				"layer",
+				"layerTheta"
+			],
+			[
+				"Angle",
+				"AngleAxisd"
+			],
+			[
+				"grap",
+				"graphicsBlue"
+			],
+			[
+				"proje",
+				"projectToSurface"
+			],
+			[
+				"nor",
+				"normalized"
+			],
+			[
+				"Graph",
+				"graphicsApricot"
+			],
+			[
+				"Qu",
+				"Quaterniond"
+			],
+			[
+				"debu",
+				"debugLines"
+			],
+			[
+				"Scene",
+				"Scene3DViewHelper"
+			],
+			[
+				"Unti",
+				"UnitZ"
+			],
+			[
+				"radiu",
+				"radiuses"
+			],
+			[
+				"plan",
+				"plan2"
+			],
+			[
+				"entr",
+				"entry"
+			],
+			[
+				"work",
+				"worker_cache"
+			],
+			[
+				"Kinemat",
+				"KinematicCache"
+			],
+			[
+				"ax",
+				"axesIndex"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "Build.jai",
+			"settings":
+			{
+				"buffer_size": 939,
+				"line_ending": "Windows"
+			},
+			"undo_stack":
+			[
+			]
+		},
+		{
+			"file": "/C/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/examples/imgui_test.jai",
+			"settings":
+			{
+				"buffer_size": 5424,
+				"line_ending": "Windows"
+			},
+			"undo_stack":
+			[
+			]
+		},
+		{
+			"contents": "Searching 710 files for \"gl_load\"\n\nC:\\Users\\LucaBourroux\\Code\\IceEscape\\src\\main_game.jai:\n   16  \tWin32.query(*query);\n   17  \n   18: \tgl_load(*gl);\n   19  \tgl_enable_debug_output(false);\n   20  \n\nC:\\Users\\LucaBourroux\\Documents\\Soft\\jai\\modules\\GL\\GL.jai:\n   66  GetProcAddressFunction :: #type (proc: *u8) -> *void #c_call;\n   67  \n   68: gl_load :: (procs: *GL_Procedures, GetProcAddress: GetProcAddressFunction = null) {\n   69      info_struct := type_info(GL_Procedures);\n   70  \n\nC:\\Users\\LucaBourroux\\Documents\\Soft\\jai\\modules\\GL\\glad_all.jai:\n  272      GL_POLYGON :: 0x0009;\n  273      GL_ACCUM :: 0x0100;\n  274:     GL_LOAD :: 0x0101;\n  275      GL_RETURN :: 0x0102;\n  276      GL_MULT :: 0x0103;\n\nC:\\Users\\LucaBourroux\\Documents\\Soft\\jai\\modules\\GL\\examples\\gl_sdl.jai:\n   27      }  \n   28  \n   29:     gl_load(*gl, SDL_GL_GetProcAddress);\n   30      using gl;\n   31  \n\nC:\\Users\\LucaBourroux\\Documents\\Soft\\jai\\modules\\ImGui\\examples\\imgui_inspector.jai:\n  166      }\n  167  \n  168:     gl_load(*gl, SDL_GL_GetProcAddress);\n  169      //using gl;\n  170  \n\nC:\\Users\\LucaBourroux\\Documents\\Soft\\jai\\modules\\ImGui\\examples\\imgui_test.jai:\n   29      }\n   30  \n   31:     gl_load(*gl, SDL_GL_GetProcAddress);\n   32  \n   33      imgui_context := ImGui.CreateContext();\n\nC:\\Users\\LucaBourroux\\Documents\\Soft\\jai\\modules\\SDL\\SDL_video.jai:\n  201  SDL_EnableScreenSaver :: () #foreign SDL2;\n  202  SDL_DisableScreenSaver :: () #foreign SDL2;\n  203: SDL_GL_LoadLibrary :: (path: *u8) -> s32 #foreign SDL2;\n  204  SDL_GL_GetProcAddress :: (proc: *u8) -> *void #foreign SDL2;\n  205  SDL_GL_UnloadLibrary :: () #foreign SDL2;\n\nC:\\Users\\LucaBourroux\\Documents\\Soft\\jai\\modules\\Simp\\backend\\gl.jai:\n   62  \n   63          #if OS != .ANDROID { // Not available in the GLES module yet.\n   64:             gl_load(*gl);\n   65              gl_enable_debug_output(break_on_error = true);\n   66          }\n\n8 matches across 8 files\n",
+			"settings":
+			{
+				"buffer_size": 1926,
+				"line_ending": "Windows",
+				"name": "Find Results",
+				"scratch": true
+			},
+			"undo_stack":
+			[
+			]
+		},
+		{
+			"file": "/C/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/examples/imgui_inspector.jai",
+			"settings":
+			{
+				"buffer_size": 8624,
+				"line_ending": "Windows"
+			},
+			"undo_stack":
+			[
+			]
+		},
+		{
+			"file": "jails.json",
+			"settings":
+			{
+				"buffer_size": 119,
+				"line_ending": "Windows"
+			},
+			"undo_stack":
+			[
+			]
+		},
+		{
+			"file": "src/Inspector.jai",
+			"settings":
+			{
+				"buffer_size": 4315,
+				"encoding": "UTF-8",
+				"line_ending": "Windows"
+			},
+			"undo_stack":
+			[
+				[
+					6,
+					1,
+					"paste",
+					null,
+					"AQAAAAAAAAAAAAAAnRAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					20,
+					1,
+					"paste",
+					null,
+					"AQAAAAEAAAAAAAAAJQAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAAQAAAAAAAAABAAAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					23,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAACUAAAAAAAAAJgAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAJQAAAAAAAAAlAAAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					29,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAAAAAAAAAAAAAAAAAAAAAAABAAAACg",
+					"AQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					33,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAACMAAAAAAAAAJAAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAIwAAAAAAAAAjAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					34,
+					1,
+					"paste",
+					null,
+					"AQAAACQAAAAAAAAAPgAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAJAAAAAAAAAAkAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					37,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAD4AAAAAAAAAPgAAAAAAAAABAAAACg",
+					"AQAAAAAAAAABAAAAPgAAAAAAAAA+AAAAAAAAAAAAAAAAAAAA"
+				]
+			]
+		},
+		{
+			"file": "/C/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/examples/imgui_sdl_gl.jai",
+			"settings":
+			{
+				"buffer_size": 17253,
+				"line_ending": "Windows"
+			},
+			"undo_stack":
+			[
+			]
+		},
+		{
+			"file": "src/main_game.jai",
+			"settings":
+			{
+				"buffer_size": 2195,
+				"encoding": "UTF-8",
+				"line_ending": "Windows"
+			},
+			"undo_stack":
+			[
+				[
+					9,
+					1,
+					"insert",
+					{
+						"characters": "\n\ngl."
+					},
+					"BgAAAA0CAAAAAAAAEAIAAAAAAAAAAAAAEAIAAAAAAAATAgAAAAAAAAAAAAAOAgAAAAAAAA4CAAAAAAAAAgAAAAkJEQIAAAAAAAASAgAAAAAAAAAAAAASAgAAAAAAABMCAAAAAAAAAAAAABMCAAAAAAAAFAIAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAADQIAAAAAAAANAgAAAAAAAAAAAAAAsHZA"
+				],
+				[
+					10,
+					2,
+					"delete_word",
+					{
+						"forward": false
+					},
+					"AgAAABMCAAAAAAAAEwIAAAAAAAABAAAALhECAAAAAAAAEQIAAAAAAAACAAAAZ2w",
+					"AQAAAAAAAAABAAAAFAIAAAAAAAAUAgAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					11,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAA8CAAAAAAAADwIAAAAAAAADAAAACQkK",
+					"AQAAAAAAAAABAAAAEQIAAAAAAAARAgAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					29,
+					1,
+					"paste",
+					null,
+					"AQAAAAAAAAAAAAAAsCEAAAAAAAATAgAAI2ltcG9ydCAiQmFzaWMiOwojaW1wb3J0ICJQbGF0Zm9ybSI7CldpbjMyIDo6ICNpbXBvcnQgIndpbjMyX3BsYXRmb3JtIjsKCiNpbXBvcnQgIkdMIjsKCm1haW4gOjogKCkgewoKCXF1ZXJ5OiBXaW5kb3dfUXVlcnk7CglxdWVyeS5raW5kID0gcXVlcnkuS2luZC5DcmVhdGU7CglxdWVyeS53aWR0aCA9IDEyODA7CglxdWVyeS5oZWlnaHQgPSA3MjA7CglxdWVyeS50aXRsZSA9ICJJY2UgRXNjYXBlIjsKCVdpbjMyLnF1ZXJ5KCpxdWVyeSk7CglxdWVyeS5raW5kID0gLkNvbnRleHQ7CglXaW4zMi5xdWVyeSgqcXVlcnkpOwoKCWdsX2xvYWQoKmdsKTsKCWdsX2VuYWJsZV9kZWJ1Z19vdXRwdXQoZmFsc2UpOwoKCXdoaWxlIHRydWUgewoJCXF1ZXJ5ID0gLnt9OwoJCXF1ZXJ5LmtpbmQgPSAuVXBkYXRlOwoJCVdpbjMyLnF1ZXJ5KCpxdWVyeSk7CgkJaWYgcXVlcnkuYXNrX3F1aXQKCQkJYnJlYWs7CgoJCWdsLmdsQ2xlYXJDb2xvcigwLjEsIDAuMiwgMC4zLCAxLjApOwoJCWdsLmdsQ2xlYXIoR0xfQ09MT1JfQlVGRkVSX0JJVCk7CgoJfQp9",
+					"AQAAAAAAAAABAAAAAAAAAAAAAAATAgAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					51,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAD8AAAAAAAAAPwAAAAAAAAABAAAACg",
+					"AQAAAAAAAAABAAAAPwAAAAAAAAA/AAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					78,
+					1,
+					"cut",
+					null,
+					"AQAAAJgAAAAAAAAAmAAAAAAAAACdEAAACmluc3BlY3QgOjogKG5hbWU6ICp1OCwgdCA6ICokVCkgewoKICAgIEltR3VpLkJlZ2luKG5hbWUsICpzaG93X2luc3BlY3Rvcik7CgogICAgaW5zcGVjdChuYW1lLCB0LCB0eXBlX2luZm8oVCkpOwoKICAgIEltR3VpLkVuZCgpOwp9CgoKaW5zcGVjdCA6OiAobmFtZTogKnU4LCBkYXRhOiAqdm9pZCwgaW5mbzoqVHlwZV9JbmZvKSB7CiAgICBkZWZhdWx0X3NpemU6IEltR3VpLkltVmVjMjsKCiAgICB1c2luZyBUeXBlX0luZm9fVGFnOwogICAgaWYgI2NvbXBsZXRlIGluZm8udHlwZSA9PSB7CiAgICAgICAgY2FzZSBJTlRFR0VSOwogICAgICAgICAgICBpbmZvX2ludCA6PSBjYXN0KCpUeXBlX0luZm9fSW50ZWdlcikgaW5mbzsKICAgICAgICAgICAgSW1HdWkuSW5wdXRJbnQobmFtZSwgZGF0YSk7IC8vIEBAIEFkZCBzdXBwb3J0IGZvciB1bnNpZ25lZCwgYW5kIGxhcmdlciBpbnQgdHlwZXMuCiAgICAgICAgY2FzZSBGTE9BVDsKICAgICAgICAgICAgaWYgaW5mby5ydW50aW1lX3NpemUgPT0gewogICAgICAgICAgICAgICAgY2FzZSA0OwogICAgICAgICAgICAgICAgICAgIC8vSW1HdWkuRHJhZ0Zsb2F0KG5hbWUsIGRhdGEsIGRpc3BsYXlfZm9ybWF0PSIlLjNmIik7CiAgICAgICAgICAgICAgICAgICAgSW1HdWkuSW5wdXRGbG9hdChuYW1lLCBkYXRhLCAwLjAxLCAxLjApOwogICAgICAgICAgICAgICAgY2FzZSA4OwogICAgICAgICAgICAgICAgICAgIHggOiBmbG9hdCA9IHh4IDw8Y2FzdCgqZmxvYXQ2NCkgZGF0YTsKICAgICAgICAgICAgICAgICAgICBpZiBJbUd1aS5JbnB1dEZsb2F0KG5hbWUsICp4LCAwLjAxLCAxLjApIHsgPDxjYXN0KCpmbG9hdDY0KSBkYXRhID0geDsgfTsKICAgICAgICAgICAgfQogICAgICAgIGNhc2UgQk9PTDsKICAgICAgICAgICAgLy9JbUd1aS5DaGVja2JveChuYW1lLCBkYXRhKTsKICAgICAgICAgICAgaW5kZXggOiBzMzIgPSB4eCA8PGNhc3QoKmJvb2wpZGF0YTsKICAgICAgICAgICAgaWYgSW1HdWkuQ29tYm8obmFtZSwgKmluZGV4LCAiZmFsc2VcMHRydWVcMFwwIikgeyA8PGNhc3QoKmJvb2wpZGF0YSA9IHh4IGluZGV4OyB9OwogICAgICAgIGNhc2UgU1RSSU5HOwogICAgICAgICAgICBzIDo9IDw8IGNhc3QoKnN0cmluZykgZGF0YTsgIC8vIEZvciBub3cgd2UgYXNzdW1lIG5vbi1yZWxhdGl2ZSBzdHJpbmdzIG9ubHkuCiAgICAgICAgICAgIGlmIHMuY291bnQgSW1HdWkuSW5wdXRUZXh0KG5hbWUsIHMuZGF0YSwgeHggcy5jb3VudCwgSW1HdWkuSW5wdXRUZXh0RmxhZ3MuUmVhZE9ubHkpOyAgICAvLyBAQCBXZSBjb3VsZCBhbGxvdyBlZGl0aW5nIG9mIHN0cmluZ3MgdG9vLgogICAgICAgICAgICBlbHNlIEltR3VpLklucHV0VGV4dChuYW1lLCAiKG51bGwpIiwgNiwgSW1HdWkuSW5wdXRUZXh0RmxhZ3MuUmVhZE9ubHkpOwoKICAgICAgICBjYXNlIFBPSU5URVI7CiAgICAgICAgICAgIC8vIEBAIE9wZW4gaW4gbmV3IHdpbmRvdz8KICAgICAgICAgICAgSW1HdWkuVGV4dCgicG9pbnRlciIpOwogICAgICAgIGNhc2UgUFJPQ0VEVVJFOwogICAgICAgICAgICBJbUd1aS5UZXh0KCJwcm9jZWR1cmUiKTsKICAgICAgICBjYXNlIFZPSUQ7CiAgICAgICAgICAgIEltR3VpLlRleHQoInZvaWQiKTsKICAgICAgICBjYXNlIENPREU7CiAgICAgICAgICAgIEltR3VpLlRleHQoIkNvZGUiKTsKICAgICAgICBjYXNlIFNUUlVDVDsKICAgICAgICAgICAgaW5mb19zdHJ1Y3QgOj0gY2FzdCgqVHlwZV9JbmZvX1N0cnVjdCkgaW5mbzsKICAgICAgICAgICAgaWYgSW1HdWkuVHJlZU5vZGUobmFtZSwgIiU6ICUiLCB0b19zdHJpbmcobmFtZSksIGluZm9fc3RydWN0Lm5hbWUpIHsKICAgICAgICAgICAgICAgIGZvciBtZW1iZXI6IGluZm9fc3RydWN0Lm1lbWJlcnMgewogICAgICAgICAgICAgICAgICAgIGluc3BlY3QodGVtcF9jX3N0cmluZyhtZW1iZXIubmFtZSksIGRhdGEgKyBtZW1iZXIub2Zmc2V0X2luX2J5dGVzLCBtZW1iZXIudHlwZSk7CiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICBJbUd1aS5UcmVlUG9wKCk7CiAgICAgICAgICAgIH0KICAgICAgICBjYXNlIEFSUkFZOwogICAgICAgICAgICBpbmZvX2FycmF5IDo9IGNhc3QoKlR5cGVfSW5mb19BcnJheSkgaW5mbzsKICAgICAgICAgICAgYXJyYXlfY291bnQsIGFycmF5X2RhdGEgOj0gUmVmbGVjdGlvbi5nZXRfYXJyYXlfY291bnRfYW5kX2RhdGEoZGF0YSwgaW5mb19hcnJheSk7CiAgICAgICAgICAgIGFycmF5X25hbWUgOj0gdG9fc3RyaW5nKG5hbWUpOwogICAgICAgICAgICBlbGVtZW50X3NpemUgOj0gaW5mb19hcnJheS5lbGVtZW50X3R5cGUucnVudGltZV9zaXplOwogICAgICAgICAgICBpZiBJbUd1aS5UcmVlTm9kZShuYW1lLCAiJSAoY291bnQgPSAlKSIsIGFycmF5X25hbWUsIGFycmF5X2NvdW50KSB7CiAgICAgICAgICAgICAgICBmb3IgMC4uYXJyYXlfY291bnQtMSB7CiAgICAgICAgICAgICAgICAgICAgaXRlbV9uYW1lIDo9IHRlbXBfY19zdHJpbmcodHByaW50KCIlWyVdIiwgYXJyYXlfbmFtZSwgaXQpKTsKICAgICAgICAgICAgICAgICAgICBpbnNwZWN0KGl0ZW1fbmFtZSwgYXJyYXlfZGF0YSArIGl0ICogZWxlbWVudF9zaXplLCBpbmZvX2FycmF5LmVsZW1lbnRfdHlwZSk7CiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICBJbUd1aS5UcmVlUG9wKCk7CiAgICAgICAgICAgIH0KICAgICAgICBjYXNlIEFOWTsKICAgICAgICAgICAgLy8gQEAgRGlzcGxheSB0eXBlIGFuZCBpbnNwZWN0IHZhbHVlLgogICAgICAgICAgICBJbUd1aS5UZXh0KCJBbnkhIik7CiAgICAgICAgY2FzZSBFTlVNOwogICAgICAgICAgICBpbmZvX2VudW0gOj0gY2FzdCgqVHlwZV9JbmZvX0VudW0pIGluZm87CgogICAgICAgICAgICBpZiBpbmZvX2VudW0uZW51bV90eXBlX2ZsYWdzICYgLkZMQUdTIHsKICAgICAgICAgICAgICAgIC8vIEBAIEhvdyB0byBoYW5kbGUgZmxhZ3M/CiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxzZSB7CiAgICAgICAgICAgICAgICB2YWx1ZSA6PSBSZWZsZWN0aW9uLmdldF9lbnVtX3ZhbHVlKGRhdGEsIGluZm9fZW51bSk7CiAgICAgICAgICAgICAgICB2YWx1ZV9uYW1lIDo9ICIiOwogICAgICAgICAgICAgICAgZm9yIGluZm9fZW51bS5uYW1lcyB7CiAgICAgICAgICAgICAgICAgICAgaWYgdmFsdWUgPT0gaW5mb19lbnVtLnZhbHVlc1tpdF9pbmRleF0gIHZhbHVlX25hbWUgPSBpdDsKICAgICAgICAgICAgICAgIH0KCiAgICAgICAgICAgICAgICBpZiBJbUd1aS5CZWdpbkNvbWJvKG5hbWUsIHRlbXBfY19zdHJpbmcodmFsdWVfbmFtZSkpIHsKICAgICAgICAgICAgICAgICAgICBmb3IgaW5mb19lbnVtLm5hbWVzIHsKICAgICAgICAgICAgICAgICAgICAgICAgaXNfc2VsZWN0ZWQgOj0gdmFsdWUgPT0gaW5mb19lbnVtLnZhbHVlc1tpdF9pbmRleF07CiAgICAgICAgICAgICAgICAgICAgICAgIGlmIEltR3VpLlNlbGVjdGFibGUodGVtcF9jX3N0cmluZyhpdCksIGlzX3NlbGVjdGVkLCBzaXplPSpkZWZhdWx0X3NpemUpIHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIFJlZmxlY3Rpb24uc2V0X2VudW1fdmFsdWUoZGF0YSwgaW5mb19lbnVtLCBpbmZvX2VudW0udmFsdWVzW2l0X2luZGV4XSk7CiAgICAgICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICAgICAgaWYgaXNfc2VsZWN0ZWQgSW1HdWkuU2V0SXRlbURlZmF1bHRGb2N1cygpOwogICAgICAgICAgICAgICAgICAgIH0KCiAgICAgICAgICAgICAgICAgICAgSW1HdWkuRW5kQ29tYm8oKTsKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgfQoKCiAgICAgICAgY2FzZSBQT0xZTU9SUEhJQ19WQVJJQUJMRTsKICAgICAgICAgICAgLy8gQEAgPz8KICAgICAgICBjYXNlIFRZUEU7CiAgICAgICAgICAgIC8vIEBACiAgICAgICAgY2FzZSBPVkVSTE9BRF9TRVQ7CiAgICAgICAgICAgIC8vIEBACiAgICAgICAgY2FzZSBWQVJJQU5UOwogICAgICAgIC8vIEBJbmNvbXBsZXRlOiBDYW4gZG8gc29tZXRoaW5nIGJldHRlciBoZXJlLgogICAgICAgICAgICB0aXYgOj0gY2FzdCgqVHlwZV9JbmZvX1ZhcmlhbnQpIGluZm87CiAgICAgICAgICAgIGluc3BlY3QobmFtZSwgZGF0YSwgdGl2LnZhcmlhbnRfb2YpOwogICAgICAgIGNhc2UgVU5UWVBFRF9MSVRFUkFMOwogICAgICAgICAgICBJbUd1aS5UZXh0KCIodW50eXBlZCBsaXRlcmFsKSIpOwogICAgICAgIGNhc2UgVU5UWVBFRF9FTlVNOwogICAgICAgICAgICBJbUd1aS5UZXh0KCIodW50eXBlZCBlbnVtKSIpOwogICAgfQoKfQo",
+					"AQAAAAAAAAABAAAAmAAAAAAAAAA1EQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					84,
+					2,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AgAAAJkAAAAAAAAAmQAAAAAAAAA0AQAACkVudW1UZXN0IDo6IGVudW0gczMyIHsKICAgIFZhbHVlMTsKICAgIFZhbHVlMjsKICAgIFZhbHVlMzsKICAgIFZhbHVlNDsKfQoKCldlaXJkX1N0cnVjdHVyZSA6OiBzdHJ1Y3QgewogICAgbmFtZTogc3RyaW5nOwogICAgdjQ6IFZlY3RvcjQ7CiAgICB2MzogVmVjdG9yMzsKICAgIGI6IGJvb2w7CiAgICBpMzI6IHMzMjsKICAgIGk2NDogaW50OwogICAgdW5zaWduZWQ6IHUzMjsKICAgIGZsb2F0X2FycmF5IDogWzRdZmxvYXQ7CiAgICBlbnVtX3Rlc3QgOiBFbnVtVGVzdDsKfTsKd2VpcmRfc3RydWN0dXJlIDogV2VpcmRfU3RydWN0dXJlOwqZAAAAAAAAAJkAAAAAAAAAAQAAAAo",
+					"AQAAAAAAAAABAAAAzQEAAAAAAACZAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					87,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAJkAAAAAAAAAmQAAAAAAAAABAAAACg",
+					"AQAAAAAAAAABAAAAmQAAAAAAAACZAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					90,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAJgAAAAAAAAAmAAAAAAAAAABAAAACg",
+					"AQAAAAAAAAABAAAAmAAAAAAAAACYAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					93,
+					1,
+					"cut",
+					null,
+					"AQAAABsAAAAAAAAAGwAAAAAAAAAkAAAAUmVmbGVjdGlvbiA6OiAjaW1wb3J0ICJSZWZsZWN0aW9uIjsK",
+					"AQAAAAAAAAABAAAAJQAAAAAAAAAlAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					96,
+					1,
+					"cut",
+					null,
+					"AQAAAAAAAAAAAAAAAAAAAAAAAAAaAAAAI2xvYWQgImltZ3VpX3NkbF9nbC5qYWkiOwo",
+					"AQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					98,
+					1,
+					"paste",
+					null,
+					"AQAAAAAAAAAAAAAAGgAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					100,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAABoAAAAAAAAAGgAAAAAAAAABAAAACg",
+					"AQAAAAAAAAABAAAAGgAAAAAAAAAaAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					119,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AwAAAMAAAAAAAAAAxQAAAAAAAAAAAAAAwQAAAAAAAADBAAAAAAAAAAQAAAAgICAgwQAAAAAAAADGAAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAwAAAAAAAAADAAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					123,
+					1,
+					"insert",
+					{
+						"characters": "Ice"
+					},
+					"AwAAAMcAAAAAAAAAyAAAAAAAAAAZAAAASW1HdWkgU0RMMitPcGVuR0wgZXhhbXBsZcgAAAAAAAAAyQAAAAAAAAAAAAAAyQAAAAAAAADKAAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAxwAAAAAAAADgAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					124,
+					1,
+					"insert",
+					{
+						"characters": " Escape"
+					},
+					"BwAAAMoAAAAAAAAAywAAAAAAAAAAAAAAywAAAAAAAADMAAAAAAAAAAAAAADMAAAAAAAAAM0AAAAAAAAAAAAAAM0AAAAAAAAAzgAAAAAAAAAAAAAAzgAAAAAAAADPAAAAAAAAAAAAAADPAAAAAAAAANAAAAAAAAAAAAAAANAAAAAAAAAA0QAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAygAAAAAAAADKAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					128,
+					1,
+					"right_delete",
+					null,
+					"AQAAANMAAAAAAAAA0wAAAAAAAAABAAAAIA",
+					"AQAAAAAAAAABAAAA0wAAAAAAAADTAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					129,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAANMAAAAAAAAA2QAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAA0wAAAAAAAADTAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					132,
+					1,
+					"left_delete",
+					null,
+					"AQAAAPAAAAAAAAAA8AAAAAAAAAABAAAAIA",
+					"AQAAAAAAAAABAAAA8QAAAAAAAADxAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					133,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAAPAAAAAAAAAA9gAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAA8AAAAAAAAADwAAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					135,
+					1,
+					"right_delete",
+					null,
+					"AQAAAA0BAAAAAAAADQEAAAAAAAABAAAAIA",
+					"AQAAAAAAAAABAAAADQEAAAAAAAANAQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					136,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAAA0BAAAAAAAAEwEAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAADQEAAAAAAAANAQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					138,
+					1,
+					"right_delete",
+					null,
+					"AQAAABgBAAAAAAAAGAEAAAAAAAABAAAAIA",
+					"AQAAAAAAAAABAAAAGAEAAAAAAAAYAQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					139,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAABgBAAAAAAAAHgEAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAGAEAAAAAAAAYAQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					141,
+					1,
+					"right_delete",
+					null,
+					"AQAAACIBAAAAAAAAIgEAAAAAAAABAAAAIA",
+					"AQAAAAAAAAABAAAAIgEAAAAAAAAiAQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					142,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAACIBAAAAAAAAKAEAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAIgEAAAAAAAAiAQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					145,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAAE4BAAAAAAAAVAEAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAATgEAAAAAAABOAQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					146,
+					1,
+					"left_delete",
+					null,
+					"AQAAAFMBAAAAAAAAUwEAAAAAAAABAAAACQ",
+					"AQAAAAAAAAABAAAAVAEAAAAAAABUAQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					151,
+					1,
+					"unexpand_tabs",
+					{
+						"set_translate_tabs": true
+					},
+					"AQAAAAAAAAAAAAAAAA4AAAAAAADLDwAAI2xvYWQgImltZ3VpX3NkbF9nbC5qYWkiOwoKc2hvd19pbnNwZWN0b3IgOj0gZmFsc2U7ICAgIC8vIFdpc2ggd2UgY291bGQgZGVjbGFyZSBzdGF0aWMgdmFyaWFibGVzIGluc2lkZSBmdW5jdGlvbnMuCgptYWluIDo6ICgpIHsKCiAgICBTRExfSW5pdChTRExfSU5JVF9WSURFTyk7CgogICAgd2luZG93IDo9IFNETF9DcmVhdGVXaW5kb3coCiAgICAJIkljZSBFc2NhcGUiLAogICAgCVNETF9XSU5ET1dQT1NfQ0VOVEVSRUQsCiAgICAJU0RMX1dJTkRPV1BPU19DRU5URVJFRCwKICAgIAkxMjgwLAogICAgCTcyMCwKICAgIAlTRExfV0lORE9XX09QRU5HTHxTRExfV0lORE9XX1JFU0laQUJMRQogICAgKTsKCiAgICAvLyBDaGVjayB0aGF0IHRoZSB3aW5kb3cgd2FzIHN1Y2Nlc3NmdWxseSBjcmVhdGVkCiAgICBpZiB3aW5kb3cgPT0gbnVsbCB7CiAgICAgICAgLy8gSW4gdGhlIGNhc2UgdGhhdCB0aGUgd2luZG93IGNvdWxkIG5vdCBiZSBtYWRlLi4uCiAgICAgICAgcHJpbnQoIkNvdWxkIG5vdCBjcmVhdGUgd2luZG93OiAlXG4iLCB0b19zdHJpbmcoU0RMX0dldEVycm9yKCkpKTsKICAgICAgICByZXR1cm47CiAgICB9CgogICAgLy9TRExfR0xfU2V0QXR0cmlidXRlKFNETF9HTF9DT05URVhUX01BSk9SX1ZFUlNJT04sIDMpOwogICAgLy9TRExfR0xfU2V0QXR0cmlidXRlKFNETF9HTF9DT05URVhUX01JTk9SX1ZFUlNJT04sIDMpOwogICAgU0RMX0dMX1NldEF0dHJpYnV0ZShTRExfR0xfQ09OVEVYVF9QUk9GSUxFX01BU0ssIHh4IFNETF9HTF9DT05URVhUX1BST0ZJTEVfQ09SRSk7CgogICAgZ2xfY29udGV4dCA6PSBTRExfR0xfQ3JlYXRlQ29udGV4dCh3aW5kb3cpOwogICAgaWYgIWdsX2NvbnRleHQgewogICAgICAgIHByaW50KCAiQ291bGQgbm90IGNyZWF0ZSBPcGVuR0wgY29udGV4dDogJVxuIiwgdG9fc3RyaW5nKFNETF9HZXRFcnJvcigpKSk7CiAgICAgICAgcmV0dXJuOwogICAgfQoKICAgIGdsX2xvYWQoKmdsLCBTRExfR0xfR2V0UHJvY0FkZHJlc3MpOwogICAgLy91c2luZyBnbDsKCiAgICBpbWd1aV9jb250ZXh0IDo9IEltR3VpLkNyZWF0ZUNvbnRleHQoKTsKCiAgICAvLyBTZXR1cCBJbUd1aSBiaW5kaW5nCiAgICBJbUd1aV9JbXBsU2RsX0luaXQod2luZG93KTsKCiAgICAvLyBTZXR1cCBzdHlsZQogICAgSW1HdWkuU3R5bGVDb2xvcnNDbGFzc2ljKCk7CiAgICAvL0ltR3VpLlN0eWxlQ29sb3JzTGlnaHQoKTsKCiAgICBpbyA6PSBJbUd1aS5HZXRJTygpOwoKICAgIGNsZWFyX2NvbG9yIDo9IHJnYmEoMC40NSwgMC41NSwgMC42MCwgMS4wMCk7CgogICAgZiA6ZmxvYXQgPSAwLjA7CgogICAgLy8gTWFpbiBsb29wCiAgICBkb25lIDo9IGZhbHNlOwogICAgd2hpbGUgIWRvbmUgewogICAgICAgIC8vIFlvdSBjYW4gcmVhZCB0aGUgaW8uV2FudENhcHR1cmVNb3VzZSwgaW8uV2FudENhcHR1cmVLZXlib2FyZCBmbGFncyB0byB0ZWxsIGlmIGRlYXIgaW1ndWkgd2FudHMgdG8gdXNlIHlvdXIgaW5wdXRzLgogICAgICAgIC8vIC0gV2hlbiBpby5XYW50Q2FwdHVyZU1vdXNlIGlzIHRydWUsIGRvIG5vdCBkaXNwYXRjaCBtb3VzZSBpbnB1dCBkYXRhIHRvIHlvdXIgbWFpbiBhcHBsaWNhdGlvbi4KICAgICAgICAvLyAtIFdoZW4gaW8uV2FudENhcHR1cmVLZXlib2FyZCBpcyB0cnVlLCBkbyBub3QgZGlzcGF0Y2gga2V5Ym9hcmQgaW5wdXQgZGF0YSB0byB5b3VyIG1haW4gYXBwbGljYXRpb24uCiAgICAgICAgLy8gR2VuZXJhbGx5IHlvdSBtYXkgYWx3YXlzIHBhc3MgYWxsIGlucHV0cyB0byBkZWFyIGltZ3VpLCBhbmQgaGlkZSB0aGVtIGZyb20geW91ciBhcHBsaWNhdGlvbiBiYXNlZCBvbiB0aG9zZSB0d28gZmxhZ3MuCiAgICAgICAgZXZlbnQ6IFNETF9FdmVudDsKICAgICAgICB3aGlsZSBTRExfUG9sbEV2ZW50KCpldmVudCkgewogICAgICAgICAgICBJbUd1aV9JbXBsU2RsX1Byb2Nlc3NFdmVudCgqZXZlbnQpOwogICAgICAgICAgICBpZiBldmVudC50eXBlID09IFNETF9RVUlUIGRvbmUgPSB0cnVlOwogICAgICAgICAgICBpZiBldmVudC50eXBlID09IFNETF9XSU5ET1dFVkVOVCAmJiBldmVudC53aW5kb3cuZXZlbnQgPT0gU0RMX1dJTkRPV0VWRU5UX0NMT1NFICYmIGV2ZW50LndpbmRvdy53aW5kb3dJRCA9PSBTRExfR2V0V2luZG93SUQod2luZG93KSB7CiAgICAgICAgICAgICAgICBkb25lID0gdHJ1ZTsKICAgICAgICAgICAgfQogICAgICAgIH0KICAgICAgICBJbUd1aV9JbXBsU2RsX05ld0ZyYW1lKHdpbmRvdyk7CiAgICAgICAgLy8gU3RhcnQgdGhlIGZyYW1lLiBUaGlzIGNhbGwgd2lsbCB1cGRhdGUgdGhlIGlvLldhbnRDYXB0dXJlTW91c2UsIGlvLldhbnRDYXB0dXJlS2V5Ym9hcmQgZmxhZyB0aGF0IHlvdSBjYW4gdXNlIHRvIGRpc3BhdGNoIGlucHV0cyAob3Igbm90KSB0byB5b3VyIGFwcGxpY2F0aW9uLgogICAgICAgIEltR3VpLk5ld0ZyYW1lKCk7CgogICAgICAgIC8vIDEuIFNob3cgYSBzaW1wbGUgd2luZG93CiAgICAgICAgLy8gVGlwOiBpZiB3ZSBkb24ndCBjYWxsIEltR3VpOjpCZWdpbigpL0ltR3VpOjpFbmQoKSB0aGUgd2lkZ2V0cyBhdXRvbWF0aWNhbGx5IGFwcGVhcnMgaW4gYSB3aW5kb3cgY2FsbGVkICJEZWJ1ZyIuCiAgICAgICAgewogICAgICAgICAgICBpZiBJbUd1aS5CdXR0b24oIkluc3BlY3RvciIsIHNpemU9LnswLDB9KSBzaG93X2luc3BlY3RvciBePSB0cnVlOwogICAgICAgICAgICAvL0ltR3VpLlRleHQoIkFwcGxpY2F0aW9uIGF2ZXJhZ2UgJS4zZiBtcy9mcmFtZSAoJS4xZiBGUFMpIiwgMTAwMC4wIC8gaW8uRnJhbWVyYXRlLCBpby5GcmFtZXJhdGUpOwogICAgICAgIH0KCiAgICAgICAgaWYgc2hvd19pbnNwZWN0b3IgewogICAgICAgICAgICAvL2luc3BlY3QoImNsZWFyX2NvbG9yIiwgKmNsZWFyX2NvbG9yKTsKICAgICAgICAgICAgaW5zcGVjdCgid2VpcmRfc3RydWN0dXJlIiwgKndlaXJkX3N0cnVjdHVyZSk7CgogICAgICAgICAgICAvL2luc3BlY3QoImZsb2F0X2FycmF5IiwgKmZsb2F0X2FycmF5KTsKICAgICAgICB9CgoKICAgICAgICB1c2luZyBJbUd1aS5Nb3VzZUN1cnNvcjsKICAgICAgICBpZiBJbUd1aS5HZXRNb3VzZUN1cnNvcigpID09IHsKICAgICAgICAgICAgY2FzZSBBcnJvdzsgICAgICAgICBTRExfU2V0Q3Vyc29yKGN1cnNvcl9hcnJvdyk7CiAgICAgICAgICAgIGNhc2UgVGV4dElucHV0OyAgICAgU0RMX1NldEN1cnNvcihjdXJzb3JfdGV4dF9pbnB1dCk7CiAgICAgICAgICAgIGNhc2UgSGFuZDsgICAgICAgICAgU0RMX1NldEN1cnNvcihjdXJzb3JfbW92ZSk7CiAgICAgICAgICAgIGNhc2UgUmVzaXplTlM7ICAgICAgU0RMX1NldEN1cnNvcihjdXJzb3JfcmVzaXplX25zKTsKICAgICAgICAgICAgY2FzZSBSZXNpemVFVzsgICAgICBTRExfU2V0Q3Vyc29yKGN1cnNvcl9yZXNpemVfZXcpOwogICAgICAgICAgICBjYXNlIFJlc2l6ZU5FU1c7ICAgIFNETF9TZXRDdXJzb3IoY3Vyc29yX3Jlc2l6ZV9uZXN3KTsKICAgICAgICAgICAgY2FzZSBSZXNpemVOV1NFOyAgICBTRExfU2V0Q3Vyc29yKGN1cnNvcl9yZXNpemVfbndzZSk7CiAgICAgICAgfQoKICAgICAgICAvLyBSZW5kZXJpbmcKICAgICAgICBJbUd1aS5SZW5kZXIoKTsKICAgICAgICBnbFZpZXdwb3J0KDAsIDAsIHh4IGlvLkRpc3BsYXlTaXplLngsIHh4IGlvLkRpc3BsYXlTaXplLnkpOwogICAgICAgIGdsQ2xlYXJDb2xvcihjbGVhcl9jb2xvci54LCBjbGVhcl9jb2xvci55LCBjbGVhcl9jb2xvci56LCBjbGVhcl9jb2xvci53KTsKICAgICAgICBnbENsZWFyKEdMX0NPTE9SX0JVRkZFUl9CSVQpOwogICAgICAgIEltR3VpX0ltcGxTZGxfUmVuZGVyRHJhd0xpc3RzKEltR3VpLkdldERyYXdEYXRhKCkpOwogICAgICAgIFNETF9HTF9Td2FwV2luZG93KHdpbmRvdyk7CiAgICB9CgogICAgLy8gQ2xlYW51cAogICAgSW1HdWlfSW1wbFNkbF9TaHV0ZG93bigpOwogICAgSW1HdWkuRGVzdHJveUNvbnRleHQoaW1ndWlfY29udGV4dCk7CiAgICBTRExfR0xfRGVsZXRlQ29udGV4dChnbF9jb250ZXh0KTsKICAgIFNETF9EZXN0cm95V2luZG93KHdpbmRvdyk7CiAgICBTRExfUXVpdCgpOwp9Cgo",
+					"AQAAAAAAAAABAAAAAAAAAAAAAADLDwAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					159,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAADwBAAAAAAAAPAEAAAAAAAAzAAAACS8vIENoZWNrIHRoYXQgdGhlIHdpbmRvdyB3YXMgc3VjY2Vzc2Z1bGx5IGNyZWF0ZWQK",
+					"AQAAAAAAAAABAAAAbgEAAAAAAABuAQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					161,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAFEBAAAAAAAAUQEAAAAAAAA2AAAACQkvLyBJbiB0aGUgY2FzZSB0aGF0IHRoZSB3aW5kb3cgY291bGQgbm90IGJlIG1hZGUuLi4K",
+					"AQAAAAAAAAABAAAAUQEAAAAAAABRAQAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					162,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAFEBAAAAAAAAUQEAAAAAAABEAAAACQlwcmludCgiQ291bGQgbm90IGNyZWF0ZSB3aW5kb3c6ICVcbiIsIHRvX3N0cmluZyhTRExfR2V0RXJyb3IoKSkpOwo",
+					"AQAAAAAAAAABAAAAUQEAAAAAAABRAQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					169,
+					2,
+					"left_delete",
+					null,
+					"BAAAAJoBAAAAAAAAmgEAAAAAAAABAAAAL2EBAAAAAAAAYQEAAAAAAAABAAAAL5gBAAAAAAAAmAEAAAAAAAABAAAAL2ABAAAAAAAAYAEAAAAAAAABAAAALw",
+					"AQAAAAAAAAACAAAAYgEAAAAAAABiAQAAAAAAAAAAAAAAAPC/mwEAAAAAAACbAQAAAAAAAAAAAAAAgEhA"
+				],
+				[
+					179,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAGACAAAAAAAAYAIAAAAAAABNAAAACQlwcmludCggIkNvdWxkIG5vdCBjcmVhdGUgT3BlbkdMIGNvbnRleHQ6ICVcbiIsIHRvX3N0cmluZyhTRExfR2V0RXJyb3IoKSkpOwo",
+					"AQAAAAAAAAABAAAAYQIAAAAAAABhAgAAAAAAAAAAAAAAgERA"
+				],
+				[
+					183,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAJQCAAAAAAAAlAIAAAAAAAANAAAACS8vdXNpbmcgZ2w7Cg",
+					"AQAAAAAAAAABAAAAlAIAAAAAAACUAgAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					188,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAACIDAAAAAAAAIgMAAAAAAAAdAAAACS8vSW1HdWkuU3R5bGVDb2xvcnNMaWdodCgpOwo",
+					"AQAAAAAAAAABAAAAIgMAAAAAAAAiAwAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					190,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAL4CAAAAAAAAvgIAAAAAAAABAAAACg",
+					"AQAAAAAAAAABAAAAvgIAAAAAAAC+AgAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					194,
+					4,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"BAAAAKcDAAAAAAAApwMAAAAAAAB4AAAACQkvLyBZb3UgY2FuIHJlYWQgdGhlIGlvLldhbnRDYXB0dXJlTW91c2UsIGlvLldhbnRDYXB0dXJlS2V5Ym9hcmQgZmxhZ3MgdG8gdGVsbCBpZiBkZWFyIGltZ3VpIHdhbnRzIHRvIHVzZSB5b3VyIGlucHV0cy4KpwMAAAAAAACnAwAAAAAAAGQAAAAJCS8vIC0gV2hlbiBpby5XYW50Q2FwdHVyZU1vdXNlIGlzIHRydWUsIGRvIG5vdCBkaXNwYXRjaCBtb3VzZSBpbnB1dCBkYXRhIHRvIHlvdXIgbWFpbiBhcHBsaWNhdGlvbi4KpwMAAAAAAACnAwAAAAAAAGoAAAAJCS8vIC0gV2hlbiBpby5XYW50Q2FwdHVyZUtleWJvYXJkIGlzIHRydWUsIGRvIG5vdCBkaXNwYXRjaCBrZXlib2FyZCBpbnB1dCBkYXRhIHRvIHlvdXIgbWFpbiBhcHBsaWNhdGlvbi4KpwMAAAAAAACnAwAAAAAAAHsAAAAJCS8vIEdlbmVyYWxseSB5b3UgbWF5IGFsd2F5cyBwYXNzIGFsbCBpbnB1dHMgdG8gZGVhciBpbWd1aSwgYW5kIGhpZGUgdGhlbSBmcm9tIHlvdXIgYXBwbGljYXRpb24gYmFzZWQgb24gdGhvc2UgdHdvIGZsYWdzLgo",
+					"AQAAAAAAAAABAAAApwMAAAAAAACnAwAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					200,
+					1,
+					"left_delete",
+					null,
+					"AQAAAB4EAAAAAAAAHgQAAAAAAAABAAAAIA",
+					"AQAAAAAAAAABAAAAHwQAAAAAAAAfBAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					201,
+					1,
+					"insert",
+					{
+						"characters": "\n\t"
+					},
+					"AgAAAB4EAAAAAAAAIgQAAAAAAAAAAAAAIgQAAAAAAAAjBAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAHgQAAAAAAAAeBAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					209,
+					1,
+					"left_delete",
+					null,
+					"AQAAAFMEAAAAAAAAUwQAAAAAAAABAAAAIA",
+					"AQAAAAAAAAABAAAAVAQAAAAAAABUBAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					210,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAAFMEAAAAAAAAVwQAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAUwQAAAAAAABTBAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					213,
+					1,
+					"left_delete",
+					null,
+					"AQAAAIUEAAAAAAAAhQQAAAAAAAABAAAAIA",
+					"AQAAAAAAAAABAAAAhgQAAAAAAACGBAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					214,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAAIUEAAAAAAAAiQQAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAhQQAAAAAAACFBAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					218,
+					1,
+					"right_delete",
+					null,
+					"AQAAAL0EAAAAAAAAvQQAAAAAAAABAAAAew",
+					"AQAAAAAAAAABAAAAvQQAAAAAAAC9BAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					219,
+					1,
+					"left_delete",
+					null,
+					"AQAAALwEAAAAAAAAvAQAAAAAAAABAAAAIA",
+					"AQAAAAAAAAABAAAAvQQAAAAAAAC9BAAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					221,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAM4EAAAAAAAAzgQAAAAAAAAFAAAACQkJfQo",
+					"AQAAAAAAAAABAAAA0gQAAAAAAADSBAAAAAAAAAAAAAAAQIBA"
+				],
+				[
+					226,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"AQAAAPQEAAAAAAAA9AQAAAAAAACjAAAACQkvLyBTdGFydCB0aGUgZnJhbWUuIFRoaXMgY2FsbCB3aWxsIHVwZGF0ZSB0aGUgaW8uV2FudENhcHR1cmVNb3VzZSwgaW8uV2FudENhcHR1cmVLZXlib2FyZCBmbGFnIHRoYXQgeW91IGNhbiB1c2UgdG8gZGlzcGF0Y2ggaW5wdXRzIChvciBub3QpIHRvIHlvdXIgYXBwbGljYXRpb24uCg",
+					"AQAAAAAAAAABAAAACgUAAAAAAAAKBQAAAAAAAAAAAAAA4GxA"
+				],
+				[
+					229,
+					4,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"BAAAAAkFAAAAAAAACQUAAAAAAAAdAAAACQkvLyAxLiBTaG93IGEgc2ltcGxlIHdpbmRvdwoJBQAAAAAAAAkFAAAAAAAAdQAAAAkJLy8gVGlwOiBpZiB3ZSBkb24ndCBjYWxsIEltR3VpOjpCZWdpbigpL0ltR3VpOjpFbmQoKSB0aGUgd2lkZ2V0cyBhdXRvbWF0aWNhbGx5IGFwcGVhcnMgaW4gYSB3aW5kb3cgY2FsbGVkICJEZWJ1ZyIuCgkFAAAAAAAACQUAAAAAAAAEAAAACQl7CgkFAAAAAAAACQUAAAAAAABFAAAACQkJaWYgSW1HdWkuQnV0dG9uKCJJbnNwZWN0b3IiLCBzaXplPS57MCwwfSkgc2hvd19pbnNwZWN0b3IgXj0gdHJ1ZTsK",
+					"AQAAAAAAAAABAAAACQUAAAAAAAAJBQAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					230,
+					5,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"BQAAAAkFAAAAAAAACQUAAAAAAABmAAAACQkJLy9JbUd1aS5UZXh0KCJBcHBsaWNhdGlvbiBhdmVyYWdlICUuM2YgbXMvZnJhbWUgKCUuMWYgRlBTKSIsIDEwMDAuMCAvIGlvLkZyYW1lcmF0ZSwgaW8uRnJhbWVyYXRlKTsKCQUAAAAAAAAJBQAAAAAAAAQAAAAJCX0KCQUAAAAAAAAJBQAAAAAAAAEAAAAKCQUAAAAAAAAJBQAAAAAAABYAAAAJCWlmIHNob3dfaW5zcGVjdG9yIHsKCQUAAAAAAAAJBQAAAAAAACsAAAAJCQkvL2luc3BlY3QoImNsZWFyX2NvbG9yIiwgKmNsZWFyX2NvbG9yKTsK",
+					"AQAAAAAAAAABAAAACQUAAAAAAAAJBQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					231,
+					6,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete Line.sublime-macro"
+					},
+					"BgAAAAkFAAAAAAAACQUAAAAAAAAxAAAACQkJaW5zcGVjdCgid2VpcmRfc3RydWN0dXJlIiwgKndlaXJkX3N0cnVjdHVyZSk7CgkFAAAAAAAACQUAAAAAAAABAAAACgkFAAAAAAAACQUAAAAAAAArAAAACQkJLy9pbnNwZWN0KCJmbG9hdF9hcnJheSIsICpmbG9hdF9hcnJheSk7CgkFAAAAAAAACQUAAAAAAAAEAAAACQl9CgkFAAAAAAAACQUAAAAAAAABAAAACgkFAAAAAAAACQUAAAAAAAABAAAACg",
+					"AQAAAAAAAAABAAAACQUAAAAAAAAJBQAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					238,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAAO8GAAAAAAAA8AYAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAA7wYAAAAAAADvBgAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					243,
+					1,
+					"insert",
+					{
+						"characters": "\n"
+					},
+					"AQAAAO8GAAAAAAAA8AYAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAA7wYAAAAAAADvBgAAAAAAAAAAAAAAwGdA"
+				],
+				[
+					244,
+					1,
+					"reindent",
+					null,
+					"AQAAAPAGAAAAAAAA8gYAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAA8AYAAAAAAADwBgAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					245,
+					1,
+					"insert",
+					{
+						"characters": "gl."
+					},
+					"AwAAAPIGAAAAAAAA8wYAAAAAAAAAAAAA8wYAAAAAAAD0BgAAAAAAAAAAAAD0BgAAAAAAAPUGAAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAA8gYAAAAAAADyBgAAAAAAAAAAAAAAAPC/"
+				]
+			]
+		},
+		{
+			"contents": "Windows PowerShell                                                                                                                    \nCopyright (C) Microsoft Corporation. All rights reserved.                                                                             \n                                                                                                                                      \nRunning linker: \"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\link               ​‌​\n.exe\" /nologo C:/Users/LucaBourroux/Code/IceEscape/.build/IceEscape_0_w3.obj /OUT:C:/Users/LucaBourroux/Code/IceEscape/               ​‌​\nbin/IceEscape.exe /MACHINE:AMD64 /INCREMENTAL:NO /DEBUG /IMPLIB:C:/Users/LucaBourroux/Code/IceEscape/.build/IceEscape.l               ​‌​\nib /libpath:\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\lib\\x64\" /libpath:\"C:\\Pr.exe\" /nologo C​‌​\nogram Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\um\\x64\" /libpath:\"C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26xe /MACHINE:AMD​‌​\n100.0\\ucrt\\x64\" -nodefaultlib user32.lib C:/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/windows/ImGui.lib kerneMicrosoft Visua​‌​\nl32.lib C:/Users/LucaBourroux/Documents/Soft/jai/modules/SDL/windows/SDL2.lib DbgHelp.lib opengl32.lib libcmt.lib vcrun100.0\\um\\x64\" /​‌​\ntime.lib ucrt.lib                                                                                                      ux/Documents/So\nLINK : fatal error LNK1104: cannot open file 'C:\\Users\\LucaBourroux\\Code\\IceEscape\\bin\\IceEscape.exe'                  ib DbgHelp.lib \nPS C:\\Users\\LucaBourroux\\Code\\IceEscape> ls                                                                                           \n                                                                                                                                      \n                                                                                                                                      \n    Directory: C:\\Users\\LucaBourroux\\Code\\IceEscape                                                                                   \n                                                                                                                                      \n                                                                                                                                      \nMode                 LastWriteTime         Length Name                                                                                \n----                 -------------         ------ ----                                                                                \nd-----          8/1/2025   6:02 PM                src                                                                                 \n-a----          8/1/2025   5:59 PM             34 .gitignore                                                                          \n-a----          8/1/2025   5:59 PM            986 Build.jai                                                                           \n-a----          8/1/2025   5:59 PM            426 IceEscape.raddbg                                                                    \n-a----          8/1/2025   5:59 PM            127 jails.json                                                                          \n                                                                                                                                      \n                                                                                                                                      \nPS C:\\Users\\LucaBourroux\\Code\\IceEscape> mkdir bin                                                                                    \n                                                                                                                                      \n                                                                                                                                      \n    Directory: C:\\Users\\LucaBourroux\\Code\\IceEscape                                                                                   \n                                                                                                                                      \n                                                                                                                                      \nMode                 LastWriteTime         Length Name                                                                                \n----                 -------------         ------ ----                                                                                \nd-----          8/1/2025   6:03 PM                bin                                                                                 \n                                                                                                                                      \n                                                                                                                                      \nPS C:\\Users\\LucaBourroux\\Code\\IceEscape> jai .\\Build.jai -release                                                                     \nRunning linker: \"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\link               ​‌​\n.exe\" /nologo C:/Users/LucaBourroux/Code/IceEscape/.build/IceEscape_0_w3.obj /OUT:C:/Users/LucaBourroux/Code/IceEscape/               ​‌​\nbin/IceEscape.exe /MACHINE:AMD64 /INCREMENTAL:NO /DEBUG /IMPLIB:C:/Users/LucaBourroux/Code/IceEscape/.build/IceEscape.l.exe\" /nologo C​‌​\nib /libpath:\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\lib\\x64\" /libpath:\"C:\\Prxe /MACHINE:AMD​‌​\nogram Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\um\\x64\" /libpath:\"C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26Microsoft Visua​‌​\n100.0\\ucrt\\x64\" -nodefaultlib user32.lib C:/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/windows/ImGui.lib kerne100.0\\um\\x64\" /​‌​\nl32.lib C:/Users/LucaBourroux/Documents/Soft/jai/modules/SDL/windows/SDL2.lib DbgHelp.lib opengl32.lib libcmt.lib vcrunux/Documents/So​‌​\ntime.lib ucrt.lib                                                                                                      ib DbgHelp.lib \n   Creating library C:/Users/LucaBourroux/Code/IceEscape/.build/IceEscape.lib and object C:/Users/LucaBourroux/Code/Ice               ​‌​\nEscape/.build/IceEscape.exp                                                                                            Escape/.build/I\n                                                                                                                                      \nStats for Workspace 3 (\"Game\"):                                                                                                       \nLexer lines processed: 22516 (34164 including blank lines, comments.)                                                                 \nFront-end time: 0.076899 seconds.                                                                                                     \nllvm      time: 1.325483 seconds.                                                                                                     \n                                                                                                                                      \nCompiler  time: 1.402382 seconds.                                                                                                     \nLink      time: 0.303478 seconds.                                                                                                     \nTotal     time: 1.705860 seconds.                                                                                                     \nPS C:\\Users\\LucaBourroux\\Code\\IceEscape> .\\bin\\IceEscape.exe                                                                          \nPS C:\\Users\\LucaBourroux\\Code\\IceEscape> jai .\\Build.jai                                                                              \nRunning linker: \"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\link               ​‌​\n.exe\" /nologo C:/Users/LucaBourroux/Code/IceEscape/.build/IceEscape_0_w3.obj C:/Users/LucaBourroux/Code/IceEscape/.buil.exe\" /nologo C​‌​\nd/IceEscape_1_w3.obj C:/Users/LucaBourroux/Code/IceEscape/.build/IceEscape_2_w3.obj C:/Users/LucaBourroux/Code/IceEscap3.obj C:/Users/​‌​\ne/.build/IceEscape_3_w3.obj /OUT:C:/Users/LucaBourroux/Code/IceEscape/bin/IceEscape.exe /MACHINE:AMD64 /INCREMENTAL:NO UT:C:/Users/Luc​‌​\n/DEBUG /IMPLIB:C:/Users/LucaBourroux/Code/IceEscape/.build/IceEscape.lib /libpath:\"C:\\Program Files\\Microsoft Visual StEscape/.build/I​‌​\nudio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\lib\\x64\" /libpath:\"C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.ath:\"C:\\Program​‌​\n0\\um\\x64\" /libpath:\"C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\ucrt\\x64\" -nodefaultlib user32.lib C:/Users\\ucrt\\x64\" -nod​‌​\n/LucaBourroux/Documents/Soft/jai/modules/ImGui/windows/ImGui.lib kernel32.lib C:/Users/LucaBourroux/Documents/Soft/jai/aBourroux/Docum​‌​\nmodules/SDL/windows/SDL2.lib DbgHelp.lib opengl32.lib libcmt.lib vcruntime.lib ucrt.lib                                               \n   Creating library C:/Users/LucaBourroux/Code/IceEscape/.build/IceEscape.lib and object C:/Users/LucaBourroux/Code/IceEscape/.build/I​‌​\nEscape/.build/IceEscape.exp                                                                                                           \n                                                                                                                                      \nStats for Workspace 3 (\"Game\"):                                                                                                       \nLexer lines processed: 22516 (34164 including blank lines, comments.)                                                                 \nFront-end time: 0.074934 seconds.                                                                                                     \nllvm      time: 0.105042 seconds.                                                                                                     \n                                                                                                                                      \nCompiler  time: 0.179976 seconds.                                                                                                     \nLink      time: 0.279490 seconds.                                                                                                     \nTotal     time: 0.459466 seconds.                                                                                                     \nPS C:\\Users\\LucaBourroux\\Code\\IceEscape> .\\bin\\IceEscape.exe                                                           \nPS C:\\Users\\LucaBourroux\\Code\\IceEscape> ",
+			"settings":
+			{
+				"buffer_size": 11033,
+				"line_ending": "Windows",
+				"name": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.EXE",
+				"scratch": true
+			},
+			"undo_stack":
+			[
+				[
+					203,
+					1,
+					"terminus_render",
+					null,
+					"AgAAAKwqAAAAAAAA1CoAAAAAAAAAAAAA1CoAAAAAAADVKgAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAArCoAAAAAAACsKgAAAAAAAAAAAAAAAPC/"
+				],
+				[
+					206,
+					3,
+					"terminus_render",
+					null,
+					"FQEAAA4BAAAAAAAADgEAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAOAQAAAAAAAJQBAAAAAAAAAAAAAJUBAAAAAAAA7gEAAAAAAACGAAAASW5zdGFsbCB0aGUgbGF0ZXN0IFBvd2VyU2hlbGwgZm9yIG5ldyBmZWF0dXJlcyBhbmQgaW1wcm92ZW1lbnRzISBodHRwczovL2FrYS5tcy9QU1dpbmRvd3MgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICDuAQAAAAAAABsCAAAAAAAAAAAAABwCAAAAAAAAHAIAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAcAgAAAAAAAKICAAAAAAAAAAAAAKMCAAAAAAAA5AIAAAAAAACGAAAAUFMgQzpcVXNlcnNcTHVjYUJvdXJyb3V4XENvZGVcSWNlRXNjYXBlPiBqYWkgLlxCdWlsZC5qYWkgLXJlbGVhc2UgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICDkAgAAAAAAACkDAAAAAAAAAAAAACoDAAAAAAAAsAMAAAAAAACPAAAAUnVubmluZyBsaW5rZXI6ICJDOlxQcm9ncmFtIEZpbGVzXE1pY3Jvc29mdCBWaXN1YWwgU3R1ZGlvXDIwMjJcQ29tbXVuaXR5XFZDXFRvb2xzXE1TVkNcMTQuNDQuMzUyMDdcYmluXEhvc3R4NjRceDY0XGxpbmsuZXhlIiAvbm9sb2dvIEPigIvigIzigIuxAwAAAAAAADcEAAAAAAAAjwAAADovVXNlcnMvTHVjYUJvdXJyb3V4L0NvZGUvSWNlRXNjYXBlLy5idWlsZC9JY2VFc2NhcGVfMF93My5vYmogL09VVDpDOi9Vc2Vycy9MdWNhQm91cnJvdXgvQ29kZS9JY2VFc2NhcGUvYmluL0ljZUVzY2FwZS5leGUgL01BQ0hJTkU6QU1E4oCL4oCM4oCLOAQAAAAAAAC+BAAAAAAAAI8AAAA2NCAvSU5DUkVNRU5UQUw6Tk8gL0RFQlVHIC9JTVBMSUI6QzovVXNlcnMvTHVjYUJvdXJyb3V4L0NvZGUvSWNlRXNjYXBlLy5idWlsZC9JY2VFc2NhcGUubGliIC9saWJwYXRoOiJDOlxQcm9ncmFtIEZpbGVzXE1pY3Jvc29mdCBWaXN1YeKAi+KAjOKAi78EAAAAAAAARQUAAAAAAACPAAAAbCBTdHVkaW9cMjAyMlxDb21tdW5pdHlcVkNcVG9vbHNcTVNWQ1wxNC40NC4zNTIwN1xsaWJceDY0IiAvbGlicGF0aDoiQzpcUHJvZ3JhbSBGaWxlcyAoeDg2KVxXaW5kb3dzIEtpdHNcMTBcTGliXDEwLjAuMjYxMDAuMFx1bVx4NjQiIC/igIvigIzigItGBQAAAAAAAMwFAAAAAAAAjwAAAGxpYnBhdGg6IkM6XFByb2dyYW0gRmlsZXMgKHg4NilcV2luZG93cyBLaXRzXDEwXExpYlwxMC4wLjI2MTAwLjBcdWNydFx4NjQiIC1ub2RlZmF1bHRsaWIgdXNlcjMyLmxpYiBDOi9Vc2Vycy9MdWNhQm91cnJvdXgvRG9jdW1lbnRzL1Nv4oCL4oCM4oCLzQUAAAAAAABSBgAAAAAAAI8AAABmdC9qYWkvbW9kdWxlcy9JbUd1aS93aW5kb3dzL0ltR3VpLmxpYiBrZXJuZWwzMi5saWIgQzovVXNlcnMvTHVjYUJvdXJyb3V4L0RvY3VtZW50cy9Tb2Z0L2phaS9tb2R1bGVzL1NETC93aW5kb3dzL1NETDIubGliIERiZ0hlbHAubGliIOKAi+KAjOKAi1IGAAAAAAAAUwYAAAAAAAAAAAAAVAYAAAAAAACCBgAAAAAAAIYAAABvcGVuZ2wzMi5saWIgbGliY210LmxpYiB2Y3J1bnRpbWUubGliIHVjcnQubGliICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIIIGAAAAAAAA2gYAAAAAAAAAAAAA2wYAAAAAAABABwAAAAAAAIYAAABMSU5LIDogZmF0YWwgZXJyb3IgTE5LMTEwNDogY2Fubm90IG9wZW4gZmlsZSAnQzpcVXNlcnNcTHVjYUJvdXJyb3V4XENvZGVcSWNlRXNjYXBlXGJpblxJY2VFc2NhcGUuZXhlJyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEAHAAAAAAAAYQcAAAAAAAAAAAAAYgcAAAAAAACNBwAAAAAAAIYAAABQUyBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcQ29kZVxJY2VFc2NhcGU+IGxzICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgII0HAAAAAAAA6AcAAAAAAAAAAAAA6QcAAAAAAADpBwAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIOkHAAAAAAAAbwgAAAAAAAAAAAAAcAgAAAAAAABwCAAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHAIAAAAAAAA9ggAAAAAAAAAAAAA9wgAAAAAAAAqCQAAAAAAAIYAAAAgICAgRGlyZWN0b3J5OiBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcQ29kZVxJY2VFc2NhcGUgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICoJAAAAAAAAfQkAAAAAAAAAAAAAfgkAAAAAAAB+CQAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIH4JAAAAAAAABAoAAAAAAAAAAAAABQoAAAAAAAAFCgAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAUKAAAAAAAAiwoAAAAAAAAAAAAAjAoAAAAAAADCCgAAAAAAAIYAAABNb2RlICAgICAgICAgICAgICAgICBMYXN0V3JpdGVUaW1lICAgICAgICAgTGVuZ3RoIE5hbWUgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIMIKAAAAAAAAEgsAAAAAAAAAAAAAEwsAAAAAAABJCwAAAAAAAIYAAAAtLS0tICAgICAgICAgICAgICAgICAtLS0tLS0tLS0tLS0tICAgICAgICAgLS0tLS0tIC0tLS0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEkLAAAAAAAAmQsAAAAAAAAAAAAAmgsAAAAAAADPCwAAAAAAAIYAAABkLS0tLS0gICAgICAgICAgOC8xLzIwMjUgICA2OjAyIFBNICAgICAgICAgICAgICAgIHNyYyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIM8LAAAAAAAAIAwAAAAAAAAAAAAAIQwAAAAAAABdDAAAAAAAAIYAAAAtYS0tLS0gICAgICAgICAgOC8xLzIwMjUgICA1OjU5IFBNICAgICAgICAgICAgIDM0IC5naXRpZ25vcmUgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIF0MAAAAAAAApwwAAAAAAAAAAAAAqAwAAAAAAADjDAAAAAAAAIYAAAAtYS0tLS0gICAgICAgICAgOC8xLzIwMjUgICA1OjU5IFBNICAgICAgICAgICAgOTg2IEJ1aWxkLmphaSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIOMMAAAAAAAALg0AAAAAAAAAAAAALw0AAAAAAABxDQAAAAAAAIYAAAAtYS0tLS0gICAgICAgICAgOC8xLzIwMjUgICA1OjU5IFBNICAgICAgICAgICAgNDI2IEljZUVzY2FwZS5yYWRkYmcgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHENAAAAAAAAtQ0AAAAAAAAAAAAAtg0AAAAAAADyDQAAAAAAAIYAAAAtYS0tLS0gICAgICAgICAgOC8xLzIwMjUgICA1OjU5IFBNICAgICAgICAgICAgMTI3IGphaWxzLmpzb24gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIPINAAAAAAAAPA4AAAAAAAAAAAAAPQ4AAAAAAAA9DgAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgID0OAAAAAAAAww4AAAAAAAAAAAAAxA4AAAAAAADEDgAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIMQOAAAAAAAASg8AAAAAAAAAAAAASw8AAAAAAAB9DwAAAAAAAIYAAABQUyBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcQ29kZVxJY2VFc2NhcGU+IG1rZGlyIGJpbiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIH0PAAAAAAAA0Q8AAAAAAAAAAAAA0g8AAAAAAADSDwAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgINIPAAAAAAAAWBAAAAAAAAAAAAAAWRAAAAAAAABZEAAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFkQAAAAAAAA3xAAAAAAAAAAAAAA4BAAAAAAAAATEQAAAAAAAIYAAAAgICAgRGlyZWN0b3J5OiBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcQ29kZVxJY2VFc2NhcGUgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIBMRAAAAAAAAZhEAAAAAAAAAAAAAZxEAAAAAAABnEQAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGcRAAAAAAAA7REAAAAAAAAAAAAA7hEAAAAAAADuEQAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIO4RAAAAAAAAdBIAAAAAAAAAAAAAdRIAAAAAAACrEgAAAAAAAIYAAABNb2RlICAgICAgICAgICAgICAgICBMYXN0V3JpdGVUaW1lICAgICAgICAgTGVuZ3RoIE5hbWUgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIKsSAAAAAAAA+xIAAAAAAAAAAAAA/BIAAAAAAAAyEwAAAAAAAIYAAAAtLS0tICAgICAgICAgICAgICAgICAtLS0tLS0tLS0tLS0tICAgICAgICAgLS0tLS0tIC0tLS0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDITAAAAAAAAghMAAAAAAAAAAAAAgxMAAAAAAAC4EwAAAAAAAIYAAABkLS0tLS0gICAgICAgICAgOC8xLzIwMjUgICA2OjAzIFBNICAgICAgICAgICAgICAgIGJpbiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgILgTAAAAAAAACRQAAAAAAAAAAAAAChQAAAAAAAAKFAAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoUAAAAAAAAkBQAAAAAAAAAAAAAkRQAAAAAAACRFAAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIJEUAAAAAAAAFxUAAAAAAAAAAAAAGBUAAAAAAABZFQAAAAAAAIYAAABQUyBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcQ29kZVxJY2VFc2NhcGU+IGphaSAuXEJ1aWxkLmphaSAtcmVsZWFzZSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFkVAAAAAAAAnhUAAAAAAAAAAAAAnxUAAAAAAAAlFgAAAAAAAI8AAABSdW5uaW5nIGxpbmtlcjogIkM6XFByb2dyYW0gRmlsZXNcTWljcm9zb2Z0IFZpc3VhbCBTdHVkaW9cMjAyMlxDb21tdW5pdHlcVkNcVG9vbHNcTVNWQ1wxNC40NC4zNTIwN1xiaW5cSG9zdHg2NFx4NjRcbGluay5leGUiIC9ub2xvZ28gQ+KAi+KAjOKAiyYWAAAAAAAArBYAAAAAAACPAAAAOi9Vc2Vycy9MdWNhQm91cnJvdXgvQ29kZS9JY2VFc2NhcGUvLmJ1aWxkL0ljZUVzY2FwZV8wX3czLm9iaiAvT1VUOkM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Db2RlL0ljZUVzY2FwZS9iaW4vSWNlRXNjYXBlLmV4ZSAvTUFDSElORTpBTUTigIvigIzigIutFgAAAAAAADMXAAAAAAAAjwAAADY0IC9JTkNSRU1FTlRBTDpOTyAvREVCVUcgL0lNUExJQjpDOi9Vc2Vycy9MdWNhQm91cnJvdXgvQ29kZS9JY2VFc2NhcGUvLmJ1aWxkL0ljZUVzY2FwZS5saWIgL2xpYnBhdGg6IkM6XFByb2dyYW0gRmlsZXNcTWljcm9zb2Z0IFZpc3Vh4oCL4oCM4oCLNBcAAAAAAAC6FwAAAAAAAI8AAABsIFN0dWRpb1wyMDIyXENvbW11bml0eVxWQ1xUb29sc1xNU1ZDXDE0LjQ0LjM1MjA3XGxpYlx4NjQiIC9saWJwYXRoOiJDOlxQcm9ncmFtIEZpbGVzICh4ODYpXFdpbmRvd3MgS2l0c1wxMFxMaWJcMTAuMC4yNjEwMC4wXHVtXHg2NCIgL+KAi+KAjOKAi7sXAAAAAAAAQRgAAAAAAACPAAAAbGlicGF0aDoiQzpcUHJvZ3JhbSBGaWxlcyAoeDg2KVxXaW5kb3dzIEtpdHNcMTBcTGliXDEwLjAuMjYxMDAuMFx1Y3J0XHg2NCIgLW5vZGVmYXVsdGxpYiB1c2VyMzIubGliIEM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Eb2N1bWVudHMvU2/igIvigIzigItCGAAAAAAAAMcYAAAAAAAAjwAAAGZ0L2phaS9tb2R1bGVzL0ltR3VpL3dpbmRvd3MvSW1HdWkubGliIGtlcm5lbDMyLmxpYiBDOi9Vc2Vycy9MdWNhQm91cnJvdXgvRG9jdW1lbnRzL1NvZnQvamFpL21vZHVsZXMvU0RML3dpbmRvd3MvU0RMMi5saWIgRGJnSGVscC5saWIg4oCL4oCM4oCLxxgAAAAAAADIGAAAAAAAAAAAAADJGAAAAAAAAPcYAAAAAAAAhgAAAG9wZW5nbDMyLmxpYiBsaWJjbXQubGliIHZjcnVudGltZS5saWIgdWNydC5saWIgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg9xgAAAAAAABPGQAAAAAAAAAAAABQGQAAAAAAANYZAAAAAAAAjwAAACAgIENyZWF0aW5nIGxpYnJhcnkgQzovVXNlcnMvTHVjYUJvdXJyb3V4L0NvZGUvSWNlRXNjYXBlLy5idWlsZC9JY2VFc2NhcGUubGliIGFuZCBvYmplY3QgQzovVXNlcnMvTHVjYUJvdXJyb3V4L0NvZGUvSWNlRXNjYXBlLy5idWlsZC9J4oCL4oCM4oCL1xkAAAAAAADjGQAAAAAAAIYAAABjZUVzY2FwZS5leHAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIOMZAAAAAAAAXRoAAAAAAAAAAAAAXhoAAAAAAABeGgAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIF4aAAAAAAAA5BoAAAAAAAAAAAAA5RoAAAAAAAAEGwAAAAAAAIYAAABTdGF0cyBmb3IgV29ya3NwYWNlIDMgKCJHYW1lIik6ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAQbAAAAAAAAaxsAAAAAAAAAAAAAbBsAAAAAAACxGwAAAAAAAIYAAABMZXhlciBsaW5lcyBwcm9jZXNzZWQ6IDIyNTE2ICgzNDE2NCBpbmNsdWRpbmcgYmxhbmsgbGluZXMsIGNvbW1lbnRzLikgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgILEbAAAAAAAA8hsAAAAAAAAAAAAA8xsAAAAAAAAUHAAAAAAAAIYAAABGcm9udC1lbmQgdGltZTogMC4wNzY4OTkgc2Vjb25kcy4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIBQcAAAAAAAAeRwAAAAAAAAAAAAAehwAAAAAAACbHAAAAAAAAIYAAABsbHZtICAgICAgdGltZTogMS4zMjU0ODMgc2Vjb25kcy4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIJscAAAAAAAAAB0AAAAAAAAAAAAAAR0AAAAAAAABHQAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAEdAAAAAAAAhx0AAAAAAAAAAAAAiB0AAAAAAACpHQAAAAAAAIYAAABDb21waWxlciAgdGltZTogMS40MDIzODIgc2Vjb25kcy4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIKkdAAAAAAAADh4AAAAAAAAAAAAADx4AAAAAAAAwHgAAAAAAAIYAAABMaW5rICAgICAgdGltZTogMC4zMDM0Nzggc2Vjb25kcy4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDAeAAAAAAAAlR4AAAAAAAAAAAAAlh4AAAAAAAC3HgAAAAAAAIYAAABUb3RhbCAgICAgdGltZTogMS43MDU4NjAgc2Vjb25kcy4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgILceAAAAAAAAHB8AAAAAAAAAAAAAHR8AAAAAAABZHwAAAAAAAIYAAABQUyBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcQ29kZVxJY2VFc2NhcGU+IC5cYmluXEljZUVzY2FwZS5leGUgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFkfAAAAAAAAox8AAAAAAAAAAAAApB8AAAAAAADcHwAAAAAAAIYAAABQUyBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcQ29kZVxJY2VFc2NhcGU+IGphaSAuXEJ1aWxkLmphaSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgINwfAAAAAAAAKiAAAAAAAAAAAAAAKyAAAAAAAACxIAAAAAAAAI8AAABSdW5uaW5nIGxpbmtlcjogIkM6XFByb2dyYW0gRmlsZXNcTWljcm9zb2Z0IFZpc3VhbCBTdHVkaW9cMjAyMlxDb21tdW5pdHlcVkNcVG9vbHNcTVNWQ1wxNC40NC4zNTIwN1xiaW5cSG9zdHg2NFx4NjRcbGluay5leGUiIC9ub2xvZ28gQ+KAi+KAjOKAi7IgAAAAAAAAOCEAAAAAAACPAAAAOi9Vc2Vycy9MdWNhQm91cnJvdXgvQ29kZS9JY2VFc2NhcGUvLmJ1aWxkL0ljZUVzY2FwZV8wX3czLm9iaiBDOi9Vc2Vycy9MdWNhQm91cnJvdXgvQ29kZS9JY2VFc2NhcGUvLmJ1aWxkL0ljZUVzY2FwZV8xX3czLm9iaiBDOi9Vc2Vycy/igIvigIzigIs5IQAAAAAAAL8hAAAAAAAAjwAAAEx1Y2FCb3Vycm91eC9Db2RlL0ljZUVzY2FwZS8uYnVpbGQvSWNlRXNjYXBlXzJfdzMub2JqIEM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Db2RlL0ljZUVzY2FwZS8uYnVpbGQvSWNlRXNjYXBlXzNfdzMub2JqIC9PVVQ6QzovVXNlcnMvTHVj4oCL4oCM4oCLwCEAAAAAAABGIgAAAAAAAI8AAABhQm91cnJvdXgvQ29kZS9JY2VFc2NhcGUvYmluL0ljZUVzY2FwZS5leGUgL01BQ0hJTkU6QU1ENjQgL0lOQ1JFTUVOVEFMOk5PIC9ERUJVRyAvSU1QTElCOkM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Db2RlL0ljZUVzY2FwZS8uYnVpbGQvSeKAi+KAjOKAi0ciAAAAAAAAzSIAAAAAAACPAAAAY2VFc2NhcGUubGliIC9saWJwYXRoOiJDOlxQcm9ncmFtIEZpbGVzXE1pY3Jvc29mdCBWaXN1YWwgU3R1ZGlvXDIwMjJcQ29tbXVuaXR5XFZDXFRvb2xzXE1TVkNcMTQuNDQuMzUyMDdcbGliXHg2NCIgL2xpYnBhdGg6IkM6XFByb2dyYW3igIvigIzigIvOIgAAAAAAAFQjAAAAAAAAjwAAACBGaWxlcyAoeDg2KVxXaW5kb3dzIEtpdHNcMTBcTGliXDEwLjAuMjYxMDAuMFx1bVx4NjQiIC9saWJwYXRoOiJDOlxQcm9ncmFtIEZpbGVzICh4ODYpXFdpbmRvd3MgS2l0c1wxMFxMaWJcMTAuMC4yNjEwMC4wXHVjcnRceDY0IiAtbm9k4oCL4oCM4oCLVSMAAAAAAADbIwAAAAAAAI8AAABlZmF1bHRsaWIgdXNlcjMyLmxpYiBDOi9Vc2Vycy9MdWNhQm91cnJvdXgvRG9jdW1lbnRzL1NvZnQvamFpL21vZHVsZXMvSW1HdWkvd2luZG93cy9JbUd1aS5saWIga2VybmVsMzIubGliIEM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Eb2N1beKAi+KAjOKAi9wjAAAAAAAAQSQAAAAAAACGAAAAZW50cy9Tb2Z0L2phaS9tb2R1bGVzL1NETC93aW5kb3dzL1NETDIubGliIERiZ0hlbHAubGliIG9wZW5nbDMyLmxpYiBsaWJjbXQubGliIHZjcnVudGltZS5saWIgdWNydC5saWIgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBBJAAAAAAAAGIkAAAAAAAAAAAAAGMkAAAAAAAA6SQAAAAAAACPAAAAICAgQ3JlYXRpbmcgbGlicmFyeSBDOi9Vc2Vycy9MdWNhQm91cnJvdXgvQ29kZS9JY2VFc2NhcGUvLmJ1aWxkL0ljZUVzY2FwZS5saWIgYW5kIG9iamVjdCBDOi9Vc2Vycy9MdWNhQm91cnJvdXgvQ29kZS9JY2VFc2NhcGUvLmJ1aWxkL0nigIvigIzigIvqJAAAAAAAAPYkAAAAAAAAhgAAAGNlRXNjYXBlLmV4cCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg9iQAAAAAAABwJQAAAAAAAAAAAABxJQAAAAAAAHElAAAAAAAAhgAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgcSUAAAAAAAD3JQAAAAAAAAAAAAD4JQAAAAAAABcmAAAAAAAAhgAAAFN0YXRzIGZvciBXb3Jrc3BhY2UgMyAoIkdhbWUiKTogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgFyYAAAAAAAB+JgAAAAAAAAAAAAB/JgAAAAAAAMQmAAAAAAAAhgAAAExleGVyIGxpbmVzIHByb2Nlc3NlZDogMjI1MTYgKDM0MTY0IGluY2x1ZGluZyBibGFuayBsaW5lcywgY29tbWVudHMuKSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgxCYAAAAAAAAFJwAAAAAAAAAAAAAGJwAAAAAAACcnAAAAAAAAhgAAAEZyb250LWVuZCB0aW1lOiAwLjA3NDkzNCBzZWNvbmRzLiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJycAAAAAAACMJwAAAAAAAAAAAACNJwAAAAAAAK4nAAAAAAAAhgAAAGxsdm0gICAgICB0aW1lOiAwLjEwNTA0MiBzZWNvbmRzLiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgricAAAAAAAATKAAAAAAAAAAAAAAUKAAAAAAAABQoAAAAAAAAhgAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgFCgAAAAAAACaKAAAAAAAAAAAAACbKAAAAAAAALwoAAAAAAAAhgAAAENvbXBpbGVyICB0aW1lOiAwLjE3OTk3NiBzZWNvbmRzLiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgvCgAAAAAAAAhKQAAAAAAAAAAAAAiKQAAAAAAAEMpAAAAAAAAhgAAAExpbmsgICAgICB0aW1lOiAwLjI3OTQ5MCBzZWNvbmRzLiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQykAAAAAAACoKQAAAAAAAAAAAACpKQAAAAAAAMopAAAAAAAAhgAAAFRvdGFsICAgICB0aW1lOiAwLjQ1OTQ2NiBzZWNvbmRzLiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgyikAAAAAAAAvKgAAAAAAAAAAAAAwKgAAAAAAAGwqAAAAAAAAPAAAAFBTIEM6XFVzZXJzXEx1Y2FCb3Vycm91eFxDb2RlXEljZUVzY2FwZT4gLlxiaW5cSWNlRXNjYXBlLmV4ZW0qAAAAAAAAlSoAAAAAAAApAAAAUFMgQzpcVXNlcnNcTHVjYUJvdXJyb3V4XENvZGVcSWNlRXNjYXBlPiCVKgAAAAAAAJYqAAAAAAAAAAAAAJYqAAAAAAAAlyoAAAAAAAAAAAAAlyoAAAAAAACXKgAAAAAAAAAAAACWKgAAAAAAAJYqAAAAAAAAAQAAAAqVAQAAAAAAAB4CAAAAAAAAhgAAAEluc3RhbGwgdGhlIGxhdGVzdCBQb3dlclNoZWxsIGZvciBuZXcgZmVhdHVyZXMgYW5kIGltcHJvdmVtZW50cyEgaHR0cHM6Ly9ha2EubXMvUFNXaW5kb3dzICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgHwIAAAAAAACoAgAAAAAAAIYAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIKkCAAAAAAAAMgMAAAAAAACGAAAAUFMgQzpcVXNlcnNcTHVjYUJvdXJyb3V4XENvZGVcSWNlRXNjYXBlPiBqYWkgLlxCdWlsZC5qYWkgLXJlbGVhc2UgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAzAwAAAAAAALwDAAAAAAAAhgAAAFJ1bm5pbmcgbGlua2VyOiAiQzpcUHJvZ3JhbSBGaWxlc1xNaWNyb3NvZnQgVmlzdWFsIFN0dWRpb1wyMDIyXENvbW11bml0eVxWQ1xUb29sc1xNU1ZDXDE0LjQ0LjM1MjA3XGJpblxIb3N0eDY0XHg2NFxsaW5rLmV4ZSIgL25vbG9nbyBDvQMAAAAAAABGBAAAAAAAAIYAAAA6L1VzZXJzL0x1Y2FCb3Vycm91eC9Db2RlL0ljZUVzY2FwZS8uYnVpbGQvSWNlRXNjYXBlXzBfdzMub2JqIC9PVVQ6QzovVXNlcnMvTHVjYUJvdXJyb3V4L0NvZGUvSWNlRXNjYXBlL2Jpbi9JY2VFc2NhcGUuZXhlIC9NQUNISU5FOkFNREcEAAAAAAAA0AQAAAAAAACGAAAANjQgL0lOQ1JFTUVOVEFMOk5PIC9ERUJVRyAvSU1QTElCOkM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Db2RlL0ljZUVzY2FwZS8uYnVpbGQvSWNlRXNjYXBlLmxpYiAvbGlicGF0aDoiQzpcUHJvZ3JhbSBGaWxlc1xNaWNyb3NvZnQgVmlzdWHRBAAAAAAAAFoFAAAAAAAAhgAAAGwgU3R1ZGlvXDIwMjJcQ29tbXVuaXR5XFZDXFRvb2xzXE1TVkNcMTQuNDQuMzUyMDdcbGliXHg2NCIgL2xpYnBhdGg6IkM6XFByb2dyYW0gRmlsZXMgKHg4NilcV2luZG93cyBLaXRzXDEwXExpYlwxMC4wLjI2MTAwLjBcdW1ceDY0IiAvWwUAAAAAAADhBQAAAAAAAIYAAABsaWJwYXRoOiJDOlxQcm9ncmFtIEZpbGVzICh4ODYpXFdpbmRvd3MgS2l0c1wxMFxMaWJcMTAuMC4yNjEwMC4wXHVjcnRceDY0IiAtbm9kZWZhdWx0bGliIHVzZXIzMi5saWIgQzovVXNlcnMvTHVjYUJvdXJyb3V4L0RvY3VtZW50cy9Tb+IFAAAAAAAAZwYAAAAAAACGAAAAZnQvamFpL21vZHVsZXMvSW1HdWkvd2luZG93cy9JbUd1aS5saWIga2VybmVsMzIubGliIEM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Eb2N1bWVudHMvU29mdC9qYWkvbW9kdWxlcy9TREwvd2luZG93cy9TREwyLmxpYiBEYmdIZWxwLmxpYiBnBgAAAAAAAGgGAAAAAAAAAAAAAGkGAAAAAAAAlAYAAAAAAACGAAAAb3BlbmdsMzIubGliIGxpYmNtdC5saWIgdmNydW50aW1lLmxpYiB1Y3J0LmxpYiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICCUBgAAAAAAAO8GAAAAAAAAAAAAAPAGAAAAAAAA8AYAAAAAAACGAAAATElOSyA6IGZhdGFsIGVycm9yIExOSzExMDQ6IGNhbm5vdCBvcGVuIGZpbGUgJ0M6XFVzZXJzXEx1Y2FCb3Vycm91eFxDb2RlXEljZUVzY2FwZVxiaW5cSWNlRXNjYXBlLmV4ZScgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICDwBgAAAAAAAHYHAAAAAAAAAAAAAHcHAAAAAAAAdwcAAAAAAACGAAAAUFMgQzpcVXNlcnNcTHVjYUJvdXJyb3V4XENvZGVcSWNlRXNjYXBlPiBscyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB3BwAAAAAAAP0HAAAAAAAAAAAAAP4HAAAAAAAAMQgAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAxCAAAAAAAAIQIAAAAAAAAAAAAAIUIAAAAAAAAhQgAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICCFCAAAAAAAAAsJAAAAAAAAAAAAAAwJAAAAAAAADAkAAAAAAACGAAAAICAgIERpcmVjdG9yeTogQzpcVXNlcnNcTHVjYUJvdXJyb3V4XENvZGVcSWNlRXNjYXBlICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAMCQAAAAAAAJIJAAAAAAAAAAAAAJMJAAAAAAAAyQkAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICDJCQAAAAAAABkKAAAAAAAAAAAAABoKAAAAAAAAUAoAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBQCgAAAAAAAKAKAAAAAAAAAAAAAKEKAAAAAAAA1goAAAAAAACGAAAATW9kZSAgICAgICAgICAgICAgICAgTGFzdFdyaXRlVGltZSAgICAgICAgIExlbmd0aCBOYW1lICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICDWCgAAAAAAACcLAAAAAAAAAAAAACgLAAAAAAAAZAsAAAAAAACGAAAALS0tLSAgICAgICAgICAgICAgICAgLS0tLS0tLS0tLS0tLSAgICAgICAgIC0tLS0tLSAtLS0tICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBkCwAAAAAAAK4LAAAAAAAAAAAAAK8LAAAAAAAA6gsAAAAAAACGAAAAZC0tLS0tICAgICAgICAgIDgvMS8yMDI1ICAgNjowMiBQTSAgICAgICAgICAgICAgICBzcmMgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICDqCwAAAAAAADUMAAAAAAAAAAAAADYMAAAAAAAAeAwAAAAAAACGAAAALWEtLS0tICAgICAgICAgIDgvMS8yMDI1ICAgNTo1OSBQTSAgICAgICAgICAgICAzNCAuZ2l0aWdub3JlICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB4DAAAAAAAALwMAAAAAAAAAAAAAL0MAAAAAAAA+QwAAAAAAACGAAAALWEtLS0tICAgICAgICAgIDgvMS8yMDI1ICAgNTo1OSBQTSAgICAgICAgICAgIDk4NiBCdWlsZC5qYWkgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICD5DAAAAAAAAEMNAAAAAAAAAAAAAEQNAAAAAAAARA0AAAAAAACGAAAALWEtLS0tICAgICAgICAgIDgvMS8yMDI1ICAgNTo1OSBQTSAgICAgICAgICAgIDQyNiBJY2VFc2NhcGUucmFkZGJnICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBEDQAAAAAAAMoNAAAAAAAAAAAAAMsNAAAAAAAAyw0AAAAAAACGAAAALWEtLS0tICAgICAgICAgIDgvMS8yMDI1ICAgNTo1OSBQTSAgICAgICAgICAgIDEyNyBqYWlscy5qc29uICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICDLDQAAAAAAAFEOAAAAAAAAAAAAAFIOAAAAAAAAhA4AAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICCEDgAAAAAAANgOAAAAAAAAAAAAANkOAAAAAAAA2Q4AAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICDZDgAAAAAAAF8PAAAAAAAAAAAAAGAPAAAAAAAAYA8AAAAAAACGAAAAUFMgQzpcVXNlcnNcTHVjYUJvdXJyb3V4XENvZGVcSWNlRXNjYXBlPiBta2RpciBiaW4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBgDwAAAAAAAOYPAAAAAAAAAAAAAOcPAAAAAAAAGhAAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAaEAAAAAAAAG0QAAAAAAAAAAAAAG4QAAAAAAAAbhAAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBuEAAAAAAAAPQQAAAAAAAAAAAAAPUQAAAAAAAA9RAAAAAAAACGAAAAICAgIERpcmVjdG9yeTogQzpcVXNlcnNcTHVjYUJvdXJyb3V4XENvZGVcSWNlRXNjYXBlICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICD1EAAAAAAAAHsRAAAAAAAAAAAAAHwRAAAAAAAAshEAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICCyEQAAAAAAAAISAAAAAAAAAAAAAAMSAAAAAAAAORIAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA5EgAAAAAAAIkSAAAAAAAAAAAAAIoSAAAAAAAAvxIAAAAAAACGAAAATW9kZSAgICAgICAgICAgICAgICAgTGFzdFdyaXRlVGltZSAgICAgICAgIExlbmd0aCBOYW1lICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICC/EgAAAAAAABATAAAAAAAAAAAAABETAAAAAAAAERMAAAAAAACGAAAALS0tLSAgICAgICAgICAgICAgICAgLS0tLS0tLS0tLS0tLSAgICAgICAgIC0tLS0tLSAtLS0tICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAREwAAAAAAAJcTAAAAAAAAAAAAAJgTAAAAAAAAmBMAAAAAAACGAAAAZC0tLS0tICAgICAgICAgIDgvMS8yMDI1ICAgNjowMyBQTSAgICAgICAgICAgICAgICBiaW4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICCYEwAAAAAAAB4UAAAAAAAAAAAAAB8UAAAAAAAAYBQAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBgFAAAAAAAAKUUAAAAAAAAAAAAAKYUAAAAAAAALxUAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAwFQAAAAAAALkVAAAAAAAAhgAAAFBTIEM6XFVzZXJzXEx1Y2FCb3Vycm91eFxDb2RlXEljZUVzY2FwZT4gamFpIC5cQnVpbGQuamFpIC1yZWxlYXNlICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAguhUAAAAAAABDFgAAAAAAAIYAAABSdW5uaW5nIGxpbmtlcjogIkM6XFByb2dyYW0gRmlsZXNcTWljcm9zb2Z0IFZpc3VhbCBTdHVkaW9cMjAyMlxDb21tdW5pdHlcVkNcVG9vbHNcTVNWQ1wxNC40NC4zNTIwN1xiaW5cSG9zdHg2NFx4NjRcbGluay5leGUiIC9ub2xvZ28gQ0QWAAAAAAAAzRYAAAAAAACGAAAAOi9Vc2Vycy9MdWNhQm91cnJvdXgvQ29kZS9JY2VFc2NhcGUvLmJ1aWxkL0ljZUVzY2FwZV8wX3czLm9iaiAvT1VUOkM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Db2RlL0ljZUVzY2FwZS9iaW4vSWNlRXNjYXBlLmV4ZSAvTUFDSElORTpBTUTOFgAAAAAAAFcXAAAAAAAAhgAAADY0IC9JTkNSRU1FTlRBTDpOTyAvREVCVUcgL0lNUExJQjpDOi9Vc2Vycy9MdWNhQm91cnJvdXgvQ29kZS9JY2VFc2NhcGUvLmJ1aWxkL0ljZUVzY2FwZS5saWIgL2xpYnBhdGg6IkM6XFByb2dyYW0gRmlsZXNcTWljcm9zb2Z0IFZpc3VhWBcAAAAAAADhFwAAAAAAAIYAAABsIFN0dWRpb1wyMDIyXENvbW11bml0eVxWQ1xUb29sc1xNU1ZDXDE0LjQ0LjM1MjA3XGxpYlx4NjQiIC9saWJwYXRoOiJDOlxQcm9ncmFtIEZpbGVzICh4ODYpXFdpbmRvd3MgS2l0c1wxMFxMaWJcMTAuMC4yNjEwMC4wXHVtXHg2NCIgL+IXAAAAAAAAaxgAAAAAAACGAAAAbGlicGF0aDoiQzpcUHJvZ3JhbSBGaWxlcyAoeDg2KVxXaW5kb3dzIEtpdHNcMTBcTGliXDEwLjAuMjYxMDAuMFx1Y3J0XHg2NCIgLW5vZGVmYXVsdGxpYiB1c2VyMzIubGliIEM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Eb2N1bWVudHMvU29sGAAAAAAAAPEYAAAAAAAAhgAAAGZ0L2phaS9tb2R1bGVzL0ltR3VpL3dpbmRvd3MvSW1HdWkubGliIGtlcm5lbDMyLmxpYiBDOi9Vc2Vycy9MdWNhQm91cnJvdXgvRG9jdW1lbnRzL1NvZnQvamFpL21vZHVsZXMvU0RML3dpbmRvd3MvU0RMMi5saWIgRGJnSGVscC5saWIg8RgAAAAAAADyGAAAAAAAAAAAAADzGAAAAAAAAHwZAAAAAAAAhgAAAG9wZW5nbDMyLmxpYiBsaWJjbXQubGliIHZjcnVudGltZS5saWIgdWNydC5saWIgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgfRkAAAAAAAADGgAAAAAAAIYAAAAgICBDcmVhdGluZyBsaWJyYXJ5IEM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Db2RlL0ljZUVzY2FwZS8uYnVpbGQvSWNlRXNjYXBlLmxpYiBhbmQgb2JqZWN0IEM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Db2RlL0ljZUVzY2FwZS8uYnVpbGQvSQQaAAAAAAAABBoAAAAAAACGAAAAY2VFc2NhcGUuZXhwICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAEGgAAAAAAAIoaAAAAAAAAAAAAAIsaAAAAAAAAqhoAAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICCqGgAAAAAAABEbAAAAAAAAAAAAABIbAAAAAAAAVxsAAAAAAACGAAAAU3RhdHMgZm9yIFdvcmtzcGFjZSAzICgiR2FtZSIpOiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXGwAAAAAAAJgbAAAAAAAAAAAAAJkbAAAAAAAAuhsAAAAAAACGAAAATGV4ZXIgbGluZXMgcHJvY2Vzc2VkOiAyMjUxNiAoMzQxNjQgaW5jbHVkaW5nIGJsYW5rIGxpbmVzLCBjb21tZW50cy4pICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICC6GwAAAAAAAB8cAAAAAAAAAAAAACAcAAAAAAAAQRwAAAAAAACGAAAARnJvbnQtZW5kIHRpbWU6IDAuMDc2ODk5IHNlY29uZHMuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBBHAAAAAAAAKYcAAAAAAAAAAAAAKccAAAAAAAApxwAAAAAAACGAAAAbGx2bSAgICAgIHRpbWU6IDEuMzI1NDgzIHNlY29uZHMuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICCnHAAAAAAAAC0dAAAAAAAAAAAAAC4dAAAAAAAATx0AAAAAAACGAAAAICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBPHQAAAAAAALQdAAAAAAAAAAAAALUdAAAAAAAA1h0AAAAAAACGAAAAQ29tcGlsZXIgIHRpbWU6IDEuNDAyMzgyIHNlY29uZHMuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICDWHQAAAAAAADseAAAAAAAAAAAAADweAAAAAAAAXR4AAAAAAACGAAAATGluayAgICAgIHRpbWU6IDAuMzAzNDc4IHNlY29uZHMuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBdHgAAAAAAAMIeAAAAAAAAAAAAAMMeAAAAAAAA/x4AAAAAAACGAAAAVG90YWwgICAgIHRpbWU6IDEuNzA1ODYwIHNlY29uZHMuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICD/HgAAAAAAAEkfAAAAAAAAAAAAAEofAAAAAAAAgh8AAAAAAACGAAAAUFMgQzpcVXNlcnNcTHVjYUJvdXJyb3V4XENvZGVcSWNlRXNjYXBlPiAuXGJpblxJY2VFc2NhcGUuZXhlICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICCCHwAAAAAAANAfAAAAAAAAAAAAANEfAAAAAAAAWiAAAAAAAACGAAAAUFMgQzpcVXNlcnNcTHVjYUJvdXJyb3V4XENvZGVcSWNlRXNjYXBlPiBqYWkgLlxCdWlsZC5qYWkgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBbIAAAAAAAAOQgAAAAAAAAhgAAAFJ1bm5pbmcgbGlua2VyOiAiQzpcUHJvZ3JhbSBGaWxlc1xNaWNyb3NvZnQgVmlzdWFsIFN0dWRpb1wyMDIyXENvbW11bml0eVxWQ1xUb29sc1xNU1ZDXDE0LjQ0LjM1MjA3XGJpblxIb3N0eDY0XHg2NFxsaW5rLmV4ZSIgL25vbG9nbyBD5SAAAAAAAABuIQAAAAAAAIYAAAA6L1VzZXJzL0x1Y2FCb3Vycm91eC9Db2RlL0ljZUVzY2FwZS8uYnVpbGQvSWNlRXNjYXBlXzBfdzMub2JqIEM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Db2RlL0ljZUVzY2FwZS8uYnVpbGQvSWNlRXNjYXBlXzFfdzMub2JqIEM6L1VzZXJzL28hAAAAAAAA+CEAAAAAAACGAAAATHVjYUJvdXJyb3V4L0NvZGUvSWNlRXNjYXBlLy5idWlsZC9JY2VFc2NhcGVfMl93My5vYmogQzovVXNlcnMvTHVjYUJvdXJyb3V4L0NvZGUvSWNlRXNjYXBlLy5idWlsZC9JY2VFc2NhcGVfM193My5vYmogL09VVDpDOi9Vc2Vycy9MdWP5IQAAAAAAAIIiAAAAAAAAhgAAAGFCb3Vycm91eC9Db2RlL0ljZUVzY2FwZS9iaW4vSWNlRXNjYXBlLmV4ZSAvTUFDSElORTpBTUQ2NCAvSU5DUkVNRU5UQUw6Tk8gL0RFQlVHIC9JTVBMSUI6QzovVXNlcnMvTHVjYUJvdXJyb3V4L0NvZGUvSWNlRXNjYXBlLy5idWlsZC9JgyIAAAAAAAAJIwAAAAAAAIYAAABjZUVzY2FwZS5saWIgL2xpYnBhdGg6IkM6XFByb2dyYW0gRmlsZXNcTWljcm9zb2Z0IFZpc3VhbCBTdHVkaW9cMjAyMlxDb21tdW5pdHlcVkNcVG9vbHNcTVNWQ1wxNC40NC4zNTIwN1xsaWJceDY0IiAvbGlicGF0aDoiQzpcUHJvZ3JhbYMiAAAAAAAADCMAAAAAAACGAAAAdWRpb1wyMDIyXENvbW11bml0eVxWQ1xUb29sc1xNU1ZDXDE0LjQ0LjM1MjA3XGxpYlx4NjQiIC9saWJwYXRoOiJDOjJcQ29tbXVuaXR5XFZDXFRvb2xzXE1TVkNcMTQuNDQuMzUyMDdcbGliXHg2NCIgL2xpYnBhdGg6IkM6XFByb2dyYW0NIwAAAAAAAJYjAAAAAAAAhgAAACBGaWxlcyAoeDg2KVxXaW5kb3dzIEtpdHNcMTBcTGliXDEwLjAuMjYxMDAuMFx1bVx4NjQiIC9saWJwYXRoOiJDOlxQcm9ncmFtIEZpbGVzICh4ODYpXFdpbmRvd3MgS2l0c1wxMFxMaWJcMTAuMC4yNjEwMC4wXHVjcnRceDY0IiAtbm9klyMAAAAAAAAgJAAAAAAAAIYAAABlZmF1bHRsaWIgdXNlcjMyLmxpYiBDOi9Vc2Vycy9MdWNhQm91cnJvdXgvRG9jdW1lbnRzL1NvZnQvamFpL21vZHVsZXMvSW1HdWkvd2luZG93cy9JbUd1aS5saWIga2VybmVsMzIubGliIEM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Eb2N1bSEkAAAAAAAAeCQAAAAAAACGAAAAZW50cy9Tb2Z0L2phaS9tb2R1bGVzL1NETC93aW5kb3dzL1NETDIubGliIERiZ0hlbHAubGliIG9wZW5nbDMyLmxpYiBsaWJjbXQubGliIHZjcnVudGltZS5saWIgdWNydC5saWIgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB4JAAAAAAAAKckAAAAAAAAAAAAAKgkAAAAAAAAMSUAAAAAAACGAAAAICAgQ3JlYXRpbmcgbGlicmFyeSBDOi9Vc2Vycy9MdWNhQm91cnJvdXgvQ29kZS9JY2VFc2NhcGUvLmJ1aWxkL0ljZUVzY2FwZS5saWIgYW5kIG9iamVjdCBDOi9Vc2Vycy9MdWNhQm91cnJvdXgvQ29kZS9JY2VFc2NhcGUvLmJ1aWxkL0kyJQAAAAAAAE0lAAAAAAAAhgAAAGNlRXNjYXBlLmV4cCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTSUAAAAAAAC4JQAAAAAAAAAAAAC5JQAAAAAAALklAAAAAAAAhgAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAguSUAAAAAAAA/JgAAAAAAAAAAAABAJgAAAAAAAF8mAAAAAAAAhgAAAFN0YXRzIGZvciBXb3Jrc3BhY2UgMyAoIkdhbWUiKTogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgXyYAAAAAAADGJgAAAAAAAAAAAADHJgAAAAAAAAwnAAAAAAAAhgAAAExleGVyIGxpbmVzIHByb2Nlc3NlZDogMjI1MTYgKDM0MTY0IGluY2x1ZGluZyBibGFuayBsaW5lcywgY29tbWVudHMuKSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgDCcAAAAAAABNJwAAAAAAAAAAAABOJwAAAAAAAG8nAAAAAAAAhgAAAEZyb250LWVuZCB0aW1lOiAwLjA3NDkzNCBzZWNvbmRzLiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgbycAAAAAAADUJwAAAAAAAAAAAADVJwAAAAAAAPYnAAAAAAAAhgAAAGxsdm0gICAgICB0aW1lOiAwLjEwNTA0MiBzZWNvbmRzLiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg9icAAAAAAABbKAAAAAAAAAAAAABcKAAAAAAAAFwoAAAAAAAAhgAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgXCgAAAAAAADiKAAAAAAAAAAAAADjKAAAAAAAAAQpAAAAAAAAhgAAAENvbXBpbGVyICB0aW1lOiAwLjE3OTk3NiBzZWNvbmRzLiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgBCkAAAAAAABpKQAAAAAAAAAAAABqKQAAAAAAAIspAAAAAAAAhgAAAExpbmsgICAgICB0aW1lOiAwLjI3OTQ5MCBzZWNvbmRzLiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgiykAAAAAAADwKQAAAAAAAAAAAADxKQAAAAAAABIqAAAAAAAAhgAAAFRvdGFsICAgICB0aW1lOiAwLjQ1OTQ2NiBzZWNvbmRzLiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgEioAAAAAAAB3KgAAAAAAAAAAAAB4KgAAAAAAALQqAAAAAAAAPAAAAFBTIEM6XFVzZXJzXEx1Y2FCb3Vycm91eFxDb2RlXEljZUVzY2FwZT4gLlxiaW5cSWNlRXNjYXBlLmV4ZbQqAAAAAAAA7yoAAAAAAAAAAAAA8CoAAAAAAAAYKwAAAAAAACkAAABQUyBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcQ29kZVxJY2VFc2NhcGU+IBgrAAAAAAAAZysAAAAAAAAAAAAAGSsAAAAAAAAZKwAAAAAAAE4AAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA",
+					"AQAAAAAAAAABAAAAmCoAAAAAAACYKgAAAAAAAAAAAAAAAPC/"
+				]
+			]
+		},
+		{
+			"file": "src/imgui_sdl_gl.jai",
+			"settings":
+			{
+				"buffer_size": 17253,
+				"encoding": "UTF-8",
+				"line_ending": "Windows"
+			},
+			"undo_stack":
+			[
+				[
+					2,
+					1,
+					"paste",
+					null,
+					"AQAAAAAAAAAAAAAAZUMAAAAAAAAAAAAA",
+					"AQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/"
+				]
+			]
+		}
+	],
+	"build_system": "",
+	"build_system_choices":
+	[
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"lsp",
+				"Preferences: LSP Settings"
+			],
+			[
+				"jai",
+				"Set Syntax: Jai"
+			],
+			[
+				"ena",
+				"LSP: Enable Language Server Globally"
+			],
+			[
+				"disa",
+				"LSP: Disable Language Server Globally"
+			],
+			[
+				"lsp ser",
+				"LSP: Troubleshoot Server"
+			],
+			[
+				"lsp ",
+				"LSP: Toggle Log Panel"
+			],
+			[
+				"enabl",
+				"LSP: Enable Language Server Globally"
+			],
+			[
+				"conver ",
+				"Indentation: Convert to Tabs"
+			],
+			[
+				"shell",
+				"Terminus: List Shells"
+			],
+			[
+				"word",
+				"Word Wrap: Toggle"
+			],
+			[
+				"ter",
+				"Terminus: List Shells"
+			],
+			[
+				"termi",
+				"Terminus: List Shells"
+			],
+			[
+				"find ref",
+				"LSP: Find References"
+			],
+			[
+				"term",
+				"Terminus: List Shells"
+			],
+			[
+				"enable",
+				"LSP: Enable Language Server Globally"
+			],
+			[
+				"log pa",
+				"LSP: Toggle Log Panel"
+			],
+			[
+				"add fol",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"lsp: server",
+				"LSP: Restart Server"
+			],
+			[
+				"set syntax jai",
+				"Set Syntax: Jai"
+			],
+			[
+				"jaitoo",
+				"JaiTools: Read Me"
+			],
+			[
+				"install",
+				"Package Control: Install Package"
+			],
+			[
+				"set s",
+				"Set Syntax: C"
+			],
+			[
+				"lsp se",
+				"Preferences: LSP Settings"
+			],
+			[
+				"lsp: ",
+				"LSP: Troubleshoot Server"
+			],
+			[
+				"LSP:",
+				"LSP: Troubleshoot Server"
+			],
+			[
+				"LSP: ",
+				"LSP: Troubleshoot Server"
+			],
+			[
+				"lop ",
+				"LSP: Toggle Log Panel"
+			],
+			[
+				"enab",
+				"LSP: Enable Language Server Globally"
+			],
+			[
+				"disable",
+				"LSP: Disable Language Server Globally"
+			],
+			[
+				"enable ",
+				"LSP: Enable Language Server Globally"
+			],
+			[
+				"clangd",
+				"Preferences: LSP-clangd Settings"
+			],
+			[
+				"lsp set",
+				"Preferences: LSP Settings"
+			],
+			[
+				"lsp server",
+				"LSP: Troubleshoot Server"
+			],
+			[
+				"l",
+				"LSP: Enable Language Server Globally"
+			],
+			[
+				"log",
+				"LSP: Toggle Log Panel"
+			],
+			[
+				"addfol",
+				"AddFolderToProject: Add Custom Folder to Project"
+			],
+			[
+				"add ",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"tab",
+				"Tidy Tabs"
+			],
+			[
+				"remove",
+				"AddFolderToProject: Remove Folder from Project"
+			],
+			[
+				"clea",
+				"Diffable: Cleanup"
+			],
+			[
+				"compar",
+				"Diffable: Compare Inline"
+			],
+			[
+				"lsp di",
+				"LSP: Goto Diagnostic"
+			],
+			[
+				"find",
+				"LSP: Find References"
+			],
+			[
+				"fi",
+				"LSP: Find References (Output Panel)"
+			],
+			[
+				"fin",
+				"LSP: Find References"
+			],
+			[
+				"find re",
+				"LSP: Find References"
+			],
+			[
+				"blame",
+				"Sublime Merge: Blame File"
+			],
+			[
+				"addfolte",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"termin",
+				"Terminus: List Shells"
+			],
+			[
+				"remo",
+				"AddFolderToProject: Remove Folder from Project"
+			],
+			[
+				"tidy",
+				"Tidy Tabs"
+			],
+			[
+				"add folt",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"comp",
+				"Diffable: Compare Inline"
+			],
+			[
+				"find ",
+				"LSP: Find References"
+			],
+			[
+				"diff",
+				"Diffable: Cleanup"
+			],
+			[
+				"clean",
+				"Diffable: Cleanup"
+			],
+			[
+				"compa",
+				"Diffable: Compare Inline"
+			],
+			[
+				"tid",
+				"Tidy Tabs"
+			],
+			[
+				"remove ",
+				"AddFolderToProject: Remove Folder from Project"
+			],
+			[
+				"add",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"tidy ",
+				"Tidy Tabs"
+			],
+			[
+				"add foled",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"folder",
+				"AddFolderToProject: Remove Folder from Project"
+			],
+			[
+				"conver to",
+				"Indentation: Convert to Tabs"
+			],
+			[
+				"add folter",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"lsp find ",
+				"LSP: Find References"
+			],
+			[
+				"set syntax c++",
+				"Set Syntax: C++"
+			],
+			[
+				"remov",
+				"AddFolderToProject: Remove Folder from Project"
+			],
+			[
+				"logp",
+				"LSP: Toggle Log Panel"
+			],
+			[
+				"dif",
+				"Diffable: Compare Inline"
+			],
+			[
+				"compare",
+				"Diffable: Compare Inline"
+			],
+			[
+				"compara",
+				"Diffable: Compare Kaleidoscope"
+			],
+			[
+				"lo",
+				"LSP: Toggle Log Panel"
+			],
+			[
+				"lsp enabl",
+				"LSP: Enable Language Server in Project"
+			],
+			[
+				"lsp lo",
+				"LSP: Toggle Log Panel"
+			],
+			[
+				"lsp sett",
+				"Preferences: LSP Settings"
+			],
+			[
+				"diago",
+				"LSP: Goto Diagnostic in Project"
+			],
+			[
+				"lsp re",
+				"LSP: Troubleshoot Server"
+			],
+			[
+				"tabs",
+				"Indentation: Convert to Tabs"
+			],
+			[
+				"lsp settin",
+				"Preferences: LSP Settings"
+			],
+			[
+				"convert",
+				"Indentation: Convert to Tabs"
+			],
+			[
+				"ldp fin",
+				"LSP: Find References (Output Panel)"
+			],
+			[
+				"conver",
+				"Indentation: Convert to Tabs"
+			],
+			[
+				"go",
+				"LSP: Goto Diagnostic"
+			],
+			[
+				"go to",
+				"LSP: Goto Diagnostic"
+			],
+			[
+				"go to di",
+				"LSP: Goto Diagnostic"
+			],
+			[
+				"dia",
+				"LSP: Goto Diagnostic"
+			],
+			[
+				"lsp fin",
+				"LSP: Find References"
+			],
+			[
+				"terminus",
+				"Terminus: List Shells"
+			],
+			[
+				"add f",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"removef",
+				"AddFolderToProject: Remove Folder from Project"
+			],
+			[
+				"diagn",
+				"LSP: Goto Diagnostic"
+			],
+			[
+				"diag",
+				"LSP: Goto Diagnostic"
+			],
+			[
+				"lsp tr",
+				"LSP: Troubleshoot Server"
+			],
+			[
+				"findr",
+				"LSP: Find References"
+			],
+			[
+				"comap",
+				"Diffable: Compare Inline"
+			],
+			[
+				"command",
+				"Preferences: Terminus Command Palette"
+			],
+			[
+				"res",
+				"LSP: Restart Server"
+			],
+			[
+				"restar",
+				"LSP: Restart Server"
+			],
+			[
+				"find r",
+				"LSP: Find References"
+			],
+			[
+				"lsp res",
+				"LSP: Restart Server"
+			],
+			[
+				"add fold",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"lsp sea",
+				"LSP: Source Action"
+			],
+			[
+				"findre",
+				"LSP: Find References"
+			],
+			[
+				"add folder",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"renam",
+				"File: Rename File"
+			],
+			[
+				"re",
+				"File: Revert"
+			],
+			[
+				"findren",
+				"LSP: Find References (Output Panel)"
+			],
+			[
+				"go to ",
+				"LSP: Goto Diagnostic"
+			],
+			[
+				"low",
+				"Convert Case: Lower Case"
+			],
+			[
+				"upper",
+				"Convert Case: Upper Case"
+			],
+			[
+				"",
+				"Arithmetic"
+			],
+			[
+				"tidt",
+				"Tidy Tabs"
+			],
+			[
+				"f",
+				"LSP: Find References"
+			],
+			[
+				"lsp log",
+				"LSP: Toggle Log Panel"
+			],
+			[
+				"rever",
+				"File: Revert"
+			],
+			[
+				"ls",
+				"LSP: Toggle Log Panel"
+			],
+			[
+				"addfod",
+				"AddFolderToProject: Remove Folder from Project"
+			],
+			[
+				"remove fold",
+				"AddFolderToProject: Remove Folder from Project"
+			],
+			[
+				"add fo",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"find e",
+				"LSP: Find References"
+			],
+			[
+				"fo",
+				"LSP: Find References (Output Panel)"
+			],
+			[
+				"fidn",
+				"LSP: Find References"
+			],
+			[
+				"a",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"list pack",
+				"Package Control: Install Package"
+			],
+			[
+				"addf",
+				"AddFolderToProject: Add Folder to Project"
+			],
+			[
+				"diffa",
+				"Diffable: Cleanup"
+			],
+			[
+				"set syn",
+				"Set Syntax: C"
+			]
+		],
+		"width": 0.0
+	},
+	"console":
+	{
+		"height": 112.0,
+		"history":
+		[
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": false,
+		"show_minimap": true,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"expanded_folders":
+	[
+		"/C/Users/LucaBourroux/Code/IceEscape",
+		"/C/Users/LucaBourroux/Code/IceEscape/src",
+		"/C/Users/LucaBourroux/Documents/Soft/jai",
+		"/C/Users/LucaBourroux/Documents/Soft/jai/modules",
+		"/C/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui",
+		"/C/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/examples",
+		"/C/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/windows"
+	],
+	"file_history":
+	[
+		"/C/Users/LucaBourroux/Code/IceEscape/Build.jai",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/utils/ScanningPathRenderer.h",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/utils/ScanningPathRenderer.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/entities/Robot.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/entities/Gizmo.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/common/src/core/Parameters.h",
+		"/C/DATA  _bug/AdaOne/software-one/common/src/core/Parameters.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/scene3dviewhelper.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/common/src/core/ScanningPoint.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/common/src/core/ManualScanningPlanner.h",
+		"/C/DATA  _bug/AdaOne/software-one/common/src/kinematics/closed_form_kinematics.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/common/src/serialization/parameters.proto",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/utils/Serialization.h",
+		"/C/DATA  _bug/AdaOne/software-one/common/src/core/ToolPathPoint.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/drivers/RobotController.h",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/drivers/RobotController.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/RobotController.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/utils/Serialization.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/Devops/2_Test/RegressionData/PostProcessor/DEEP_MAXQ3_R6_dynA1A2/DEEP_MAXQ3_R6_dynA1A2_00001.csr",
+		"/C/Users/LucaBourroux/Desktop/zdzdddddddddddd/zdzdddddddddddd_00003.csr",
+		"/C/Users/LucaBourroux/Desktop/zdzdddddddddddd/zdzdddddddddddd_00001.csr",
+		"/C/Users/LucaBourroux/Desktop/zdzdddddddddddd/zdzdddddddddddd_00002_scan.csr",
+		"/C/Users/LucaBourroux/Desktop/zdzdddddddddddd/zdzdddddddddddd_00000_scan.csr",
+		"/C/DATA  _bug/AdaOne/software-one/common/src/core/ManualScanningPlanner.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/utils/MeshProcessing.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/common/src/core/ScanningPoint.h",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/entities/Robot.h",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/RobotController.h",
+		"/C/Users/LucaBourroux/Documents/demo/hemi1/hemi1_00003.csr",
+		"/C/Users/LucaBourroux/Documents/demo/hemi1/hemi1_00002.csr",
+		"/C/Users/LucaBourroux/Documents/demo/hemi1/hemi1_00001.csr",
+		"/C/Users/LucaBourroux/Documents/demo/hemi1/hemi1_00000.csr",
+		"/C/Users/LucaBourroux/Documents/demo/hemi1/Main.csr",
+		"/C/Users/LucaBourroux/Documents/demo/cube1/cube1_00097.csr",
+		"/C/Users/LucaBourroux/Documents/demo/cube7/cube7_00006_scan.csr",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/utils/KinematicCache.cpp",
+		"/C/Users/LucaBourroux/Desktop/hellooo/hellooo_00047_scan.csr",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/components/ToolPathComputation.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/entities/ToolPathEntity.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/utils/MeshProcessing.h",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/scene3dviewhelper.h",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/components/PathPlanningSettings.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/components/PathPlanningSettings.h",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/utils/GeomUtils.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/entities/Gizmo.h",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/utils/GeomUtils.h",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/backend/entities/InfillPickerEntity.cpp",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/frontend/whitelabel/meltio/windows/PostProcessors.qml",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/frontend/windows/PostProcessors.qml",
+		"/C/DATA  _bug/AdaOne/software-one/DesktopApp/frontend/panels/pathplanning/strategies/ManualScanningSettings.qml",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/src/core/geometry/intersection_test.h",
+		"/C/Users/LucaBourroux/Code/aws_bucket/picosha256.h",
+		"/C/Users/LucaBourroux/Code/aws_bucket/main.cpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/src/core/geometry/intersection_test.cpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/DesktopApp/backend/utils/GeomUtils.cpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/DesktopApp/backend/utils/MeshProcessing.cpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/src/core/Graph.h",
+		"/C/DATA _ part - Copy/AdaOne/software-one/Devops/1_Build/build.bat",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/src/core/GeodesicTaping.h",
+		"/C/DATA _ master/AdaOne/software-one/Devops/3_Deploy/AutoSetupAdaOne.iss",
+		"/C/DATA _ part - Copy/AdaOne/software-one/.gitlab-ci.yml",
+		"/C/DATA _ part - Copy/AdaOne/software-one/DesktopApp/backend/materials/shaders/gl45/part.vert",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/libs/igl/lscm.h",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/libs/igl/lscm.cpp",
+		"/C/Users/LucaBourroux/Code/aws_bucket/main.py",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/src/core/GeodesicTaping.cpp",
+		"/C/DATA _ part/AdaOne/software-one/DesktopApp/backend/Job/QJobSystem.h",
+		"/C/DATA _ part/AdaOne/software-one/DesktopApp/backend/Job/QJobSystem.cpp",
+		"/C/DATA _ part/AdaOne/software-one/DesktopApp/frontend/devUtils/JobSystem.qml",
+		"/C/DATA  _bug/AdaOne/software-one/common/src/core/ADK/adk/Data/Geometry.hpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/DesktopApp/backend/main.cpp",
+		"/C/DATA _ master/AdaOne/software-one/DesktopApp/backend/utils/GeomUtils.cpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/thirdparty/include/bvh/bvh.hpp",
+		"/C/Users/LucaBourroux/Documents/Soft/jai/how_to/630_compiler_get_nodes.jai",
+		"/C/DATA _ part - Copy/AdaOne/software-one/DesktopApp/backend/global_enums.h",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/src/core/Geometry.h",
+		"/C/DATA _ part - Copy/AdaOne/software-one/DesktopApp/backend/BRepCurvePicker.cpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/DesktopApp/backend/scene3dviewhelper.cpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/src/core/RevolvedSurfacePathBuilder.cpp",
+		"/C/DATA _ master/AdaOne/software-one/Devops/2_Test/RegressionResults/ManifoldSweepDEDAdaptive_produced.gcode",
+		"/D/A3_0_SECOND/A3_0_SECOND.JBI",
+		"/D/ADAXIS4_0_PER_LAYER/ADAXIS4_0_PER_LAYER_00000.JBI",
+		"/C/DATA _ master/AdaOne/software-one/DesktopApp/backend/components/ToolPathComputation.h",
+		"/C/DATA _ master/AdaOne/software-one/DesktopApp/backend/components/ToolPathComputation.cpp",
+		"/C/DATA _ master/AdaOne/software-one/common/src/postprocessor/GeneralPostProcessor.cpp",
+		"/C/DATA/AdaOne/software-one/DesktopApp/backend/utils/ShapeModelling.cpp",
+		"/C/DATA/AdaOne/software-one/common/src/core/adk/Analysis/Statistics.hpp",
+		"/C/DATA _ master/AdaOne/software-one/Devops/2_Test/RegressionResults/nonPlanarResult.gcode",
+		"/D/ADAXIS4_0_PER_LAYER/ADAXIS4_0_PER_LAYER.JBI",
+		"/C/DATA _ master/AdaOne/software-one/common/src/core/geometry/intersection_test.cpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/DesktopApp/backend/scene3dviewhelper.h",
+		"/D/A3_0/A3_0.JBI",
+		"/C/Users/LucaBourroux/Desktop/DDDDDDDDDDD/DDDDDDDDDDD.JBI",
+		"/C/DATA _ master/AdaOne/software-one/DesktopApp/backend/entities/Positionner.cpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/libs/gte/Mathematics/BSplineCurve.h",
+		"/C/DATA _ part - Copy/AdaOne/software-one/DesktopApp/backend/utils/GeomUtils.h",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/libs/gte/Mathematics/BSplineCurveFit.h",
+		"/C/Users/LucaBourroux/Code/IceEscape/jails.json",
+		"/C/Users/LucaBourroux/Documents/Soft/jai/modules/Preload.jai",
+		"/C/Users/LucaBourroux/Documents/Soft/jai/modules/Compiler/Compiler.jai",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/src/core/ADK/adk/Data/ToolPath_ADK.hpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/src/core/ADK/adk/Data/ToolPath_ADK.cpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/src/core/Infill.cpp",
+		"/C/Users/LucaBourroux/Documents/Soft/jai/examples/add_build_string_into_specific_scope/build.jai",
+		"/C/DATA _ master/AdaOne/software-one/DesktopApp/backend/entities/ToolPathEntity.h",
+		"/C/DATA _ master/AdaOne/software-one/DesktopApp/backend/entities/ToolPathEntity.cpp",
+		"/C/Qt/6.5.6/msvc2019_64/include/QtCore/qsharedpointer_impl.h",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/src/core/ADK/adk/Memory/Memory.hpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/src/kinematics/parameters.h",
+		"/C/DATA _ part - Copy/AdaOne/software-one/Devops/2_Test/RegressionData/5AxisMachine/overhang_revolved_surface.gcode",
+		"/C/DATA _ part - Copy/AdaOne/software-one/DesktopApp/backend/physics/CollisionDetectionManager.h",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/thirdparty/include/bvh/single_ray_traverser.hpp",
+		"/C/DATA _ part - Copy/AdaOne/software-one/common/libs/igl/raytri.c",
+		"/C/Qt/6.5.6/msvc2019_64/include/Qt3DCore/qgeometry.h",
+		"/C/Qt/6.5.6/msvc2019_64/include/Qt3DRender/qgeometryrenderer.h",
+		"/C/Qt/6.5.6/msvc2019_64/include/Qt3DRender/qmesh.h",
+		"/C/DATA _ master/AdaOne/software-one/DesktopApp/backend/materials/ThickLinesEffect.cpp",
+		"/C/DATA _ master/AdaOne/software-one/DesktopApp/backend/materials/ThickLinesEffect.h",
+		"/C/DATA _ master/AdaOne/software-one/DesktopApp/backend/entities/ThickLines.h",
+		"/C/DATA _ master/AdaOne/software-one/DesktopApp/backend/entities/ThickLines.cpp",
+		"/C/DATA _ master/AdaOne/software-one/DesktopApp/backend/materials/shaders/gl45/thickLines.vert",
+		"/C/DATA _ master/AdaOne/software-one/DesktopApp/backend/entities/ThickPoints.cpp",
+		"/C/DATA _ master/AdaOne/software-one/common/src/core/ADK/adk/Memory/Memory.hpp",
+		"/C/DATA _ master/AdaOne/software-one/Devops/2_Test/RegressionResults/Siemens_reversed_vector_and_normal.mpf",
+		"/C/DATA _ master/AdaOne/software-one/Devops/2_Test/RegressionData/PostProcessor/DEEP_MAXQ3_R4_dynA2/DEEP_MAXQ3_R4_dynA2_00001.csr",
+		"/C/DATA _ master/AdaOne/software-one/Devops/2_Test/RegressionResults/BENTPIPE_STATIONWITHPULSE.JBI",
+		"/C/DATA _ master/AdaOne/software-one/Devops/2_Test/RegressionData/PostProcessor/blade_1_layer2to4.JBI",
+		"/C/DATA _ master/AdaOne/software-one/Devops/2_Test/RegressionData/PostProcessor/blade_1.JBI"
+	],
+	"find":
+	{
+		"height": 39.0
+	},
+	"find_in_files":
+	{
+		"height": 131.0,
+		"where_history":
+		[
+			"*.jai"
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"                        }",
+			"Reflection",
+			"gl_load"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+		],
+		"reverse": false,
+		"scrollbar_highlights": true,
+		"show_context": true,
+		"use_buffer2": true,
+		"use_gitignore": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"folders":
+	[
+		{
+			"path": "C:\\Users\\LucaBourroux\\Code\\IceEscape"
+		},
+		{
+			"path": "C:\\Users\\LucaBourroux\\Documents\\Soft\\jai"
+		}
+	],
+	"groups":
+	[
+		{
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "Build.jai",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 939,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								939,
+								939
+							]
+						],
+						"settings":
+						{
+							"lsp_uri": "file:///C:/Users/LucaBourroux/Code/IceEscape/Build.jai",
+							"syntax": "Packages/JaiTools/Jai.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 6,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "/C/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/examples/imgui_test.jai",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 5424,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1316,
+								1316
+							]
+						],
+						"settings":
+						{
+							"lsp_uri": "file:///C:/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/examples/imgui_test.jai",
+							"syntax": "Packages/JaiTools/Jai.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 1926,
+						"regions":
+						{
+							"match":
+							{
+								"flags": 112,
+								"regions":
+								[
+									[
+										136,
+										143
+									],
+									[
+										342,
+										349
+									],
+									[
+										628,
+										635
+									],
+									[
+										817,
+										824
+									],
+									[
+										1001,
+										1008
+									],
+									[
+										1182,
+										1189
+									],
+									[
+										1459,
+										1466
+									],
+									[
+										1803,
+										1810
+									]
+								],
+								"scope": ""
+							}
+						},
+						"selection":
+						[
+							[
+								1026,
+								1026
+							]
+						],
+						"settings":
+						{
+							"auto_complete_triggers":
+							[
+								{
+									"characters": "<",
+									"selector": "text.html, text.xml"
+								},
+								{
+									"rhs_empty": true,
+									"selector": "punctuation.accessor"
+								}
+							],
+							"detect_indentation": false,
+							"line_numbers": false,
+							"lsp_uri": "buffer:1173",
+							"output_tag": 1,
+							"result_base_dir": "",
+							"result_file_regex": "^([^ \t].*):$",
+							"result_line_regex": "^ +([0-9]+):",
+							"scroll_past_end": true,
+							"syntax": "Packages/Default/Find Results.hidden-tmLanguage"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 5,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "/C/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/examples/imgui_inspector.jai",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 8624,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								7376,
+								7376
+							]
+						],
+						"settings":
+						{
+							"lsp_uri": "file:///C:/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/examples/imgui_inspector.jai",
+							"syntax": "Packages/JaiTools/Jai.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 3110.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "jails.json",
+					"semi_transient": true,
+					"settings":
+					{
+						"buffer_size": 119,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								119,
+								119
+							]
+						],
+						"settings":
+						{
+							"lsp_uri": "file:///C:/Users/LucaBourroux/Code/IceEscape/jails.json",
+							"syntax": "Packages/JSON/JSON.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 5,
+					"file": "src/Inspector.jai",
+					"selected": true,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 4315,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								36,
+								36
+							]
+						],
+						"settings":
+						{
+							"auto_complete_triggers":
+							[
+								{
+									"characters": "<",
+									"selector": "text.html, text.xml"
+								},
+								{
+									"rhs_empty": true,
+									"selector": "punctuation.accessor"
+								}
+							],
+							"lsp_uri": "file:///C:/Users/LucaBourroux/Code/IceEscape/src/Inspector.jai",
+							"syntax": "Packages/JaiTools/Jai.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 6,
+					"file": "/C/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/examples/imgui_sdl_gl.jai",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 17253,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								474,
+								474
+							]
+						],
+						"settings":
+						{
+							"lsp_uri": "file:///C:/Users/LucaBourroux/Documents/Soft/jai/modules/ImGui/examples/imgui_sdl_gl.jai",
+							"syntax": "Packages/JaiTools/Jai.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 324.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 4,
+					"stack_multiselect": false,
+					"type": "text"
+				}
+			]
+		},
+		{
+			"sheets":
+			[
+				{
+					"buffer": 7,
+					"file": "src/main_game.jai",
+					"selected": true,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2195,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1741,
+								1741
+							]
+						],
+						"settings":
+						{
+							"lsp_uri": "file:///C:/Users/LucaBourroux/Code/IceEscape/src/main_game.jai",
+							"syntax": "Packages/JaiTools/Jai.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 970.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"contents": "<style>\nhtml {\n  --mdpopups-fg: var(--foreground);\n  --mdpopups-link: var(--bluish);\n  --mdpopups-font-mono: \"sf mono\", Consolas, \"Liberation Mono\", Menlo, Courier, monospace;\n  --mdpopups-admon-fg: var(--foreground);\n  --mdpopups-admon-info-fg: var(--foreground);\n  --mdpopups-admon-error-fg: var(--foreground);\n  --mdpopups-admon-warning-fg: var(--foreground);\n  --mdpopups-admon-success-fg: var(--foreground);\n  --mdpopups-admon-bg: var(--background);\n  --mdpopups-admon-info-bg: var(--background);\n  --mdpopups-admon-error-bg: var(--background);\n  --mdpopups-admon-warning-bg: var(--background);\n  --mdpopups-admon-success-bg: var(--background);\n  --mdpopups-admon-accent: color(var(--background) blend(var(--foreground) 50%));\n  --mdpopups-admon-title-fg:  var(--foreground);\n  --mdpopups-admon-info-title-fg:  var(--foreground);\n  --mdpopups-admon-error-title-fg:  var(--foreground);\n  --mdpopups-admon-warning-title-fg:  var(--foreground);\n  --mdpopups-admon-success-title-fg:  var(--foreground);\n  --mdpopups-admon-info-accent: color(var(--background) blend(var(--bluish) 50%));\n  --mdpopups-admon-error-accent: color(var(--background) blend(var(--redish) 50%));\n  --mdpopups-admon-warning-accent: color(var(--background) blend(var(--orangish) 50%));\n  --mdpopups-admon-success-accent: color(var(--background) blend(var(--greenish) 50%));\n  --mdpopups-kbd-fg: var(--background);\n  --mdpopups-kbd-bg: var(--foreground);\n}\nhtml.light {\n  --mdpopups-bg:  var(--background);\n  --mdpopups-hr: color(var(--background) blend(black 85%));\n  --mdpopups-kbd-border: color(var(--foreground) blend(white 80%));\n  --mdpopups-hl-border: color(var(--background) blend(black 90%));\n  --mdpopups-hl-bg: color(var(--background) blend(black 98%));\n  background-color: var(--mdpopups-bg);\n}\nhtml.dark {\n  --mdpopups-bg:  var(--background);\n  --mdpopups-hr: color(var(--background) blend(white 85%));\n  --mdpopups-kbd-border: color(var(--foreground) blend(black 80%));\n  --mdpopups-hl-border: color(var(--background) blend(white 90%));\n  --mdpopups-hl-bg: color(var(--background) blend(white 98%));\n  background-color: var(--mdpopups-bg);\n}\n\nhtml, body { padding: 0; margin: 0; }\ndiv.mdpopups {\n  display: block;\n  margin: 0;\n  padding: 0;\n  font-size: 1rem;\n  line-height: 1.1rem;\n  color: var(--mdpopups-fg);\n  background-color: var(--mdpopups-bg);\n}\n.mdpopups a {\n  color: var(--mdpopups-link);\n}\n.mdpopups .highlight,\n.mdpopups code,\n.mdpopups var,\n.mdpopups tt {\n  font-family: var(--mdpopups-font-mono);\n}\n.mdpopups div { display: block; }\n\n.mdpopups h1 { font-size: 1.5rem; }\n.mdpopups h2 { font-size: 1.4rem; }\n.mdpopups h3 { font-size: 1.3rem; }\n.mdpopups h4 { font-size: 1.2rem; }\n.mdpopups h5 { font-size: 1.1rem; }\n.mdpopups h6 { font-size: 1rem; }\n.mdpopups h1, .mdpopups h2, .mdpopups h3, .mdpopups h4, .mdpopups h5, .mdpopups h6 {\n  margin-top: 0.2rem;\n  margin-bottom: 0.2rem;\n}\n\n.mdpopups blockquote { display: block; font-style: italic; }\n\n.mdpopups hr {\n  display: block;\n  border-color: var(--mdpopups-hr);\n  border-style: solid;\n  border-width: 0 0 1px 0;\n  margin-top: 1rem;\n  margin-bottom: 1rem;\n}\n\n.mdpopups dl { display: block; }\n.mdpopups dt {\n  display: block;\n  font-style: italic;\n  font-weight: bold;\n  margin-bottom: 0.5rem;\n}\n.mdpopups dd {\n  display: block;\n  margin-left: 1.5rem;\n  margin-bottom: 0.5rem;\n}\n\n.mdpopups pre { display: block; }\n\n.mdpopups blockquote, .mdpopups ol, .mdpopups ul, .mdpopups dl, .mdpopups p {\n  padding: 0;\n  margin-top: 0;\n  margin-bottom: 0.5rem;\n  margin-left: 0;\n  margin-right: 0;\n}\n.mdpopups ul, .mdpopups ol { padding-left: 2rem; }\n\n.mdpopups kbd {\n  display: inline;\n  font-size: 0.9rem;\n  padding: 0.05rem 0.25rem;\n  border-radius: 0.25rem;\n  background-color: var(--mdpopups-kbd-bg);\n  color: var(--mdpopups-kbd-fg);\n  border: 1px solid var(--mdpopups-kbd-border);\n}\n\n.mdpopups .admonition {\n  display: block;\n  padding: 0 0.5rem 0.5rem 0.5rem;\n  border-radius: 0.25rem;\n  margin-bottom: 0.5rem;\n  background-color: var(--mdpopups-admon-bg);\n  color: var(--mdpopups-admon-fg);\n  border: 1px solid var(--mdpopups-admon-accent);\n}\n.mdpopups .admonition-title {\n  font-weight: 600;\n  font-size: 1.1rem;\n  margin: 0 -0.5rem 0.5rem -0.5rem;\n  padding: 0.1rem 0.5rem 0.1rem 0.5rem;\n  border-top-left-radius: 0.25rem;\n  border-top-right-radius: 0.25rem;\n  color:  var(--mdpopups-admon-title-fg);\n  background-color: var(--mdpopups-admon-accent);\n}\n\n.mdpopups .admonition.panel-success .admonition-title {\n  color: var(--mdpopups-admon-success-title-fg);\n  background-color: var(--mdpopups-admon-success-accent);\n}\n.mdpopups .admonition.panel-success {\n  color:  var(--mdpopups-admon-success-fg);\n  background-color: var(--mdpopups-admon-success-bg);\n  border-color: var(--mdpopups-admon-success-accent);\n}\n.mdpopups .admonition.panel-warning .admonition-title {\n  color: var(--mdpopups-admon-warning-title-fg);\n  background-color: var(--mdpopups-admon-warning-accent);\n}\n.mdpopups .admonition.panel-warning {\n  color:  var(--mdpopups-admon-warning-fg);\n  background-color: var(--mdpopups-admon-warning-bg);\n  border-color: var(--mdpopups-admon-warning-accent);\n}\n.mdpopups .admonition.panel-error .admonition-title {\n  color: var(--mdpopups-admon-error-title-fg);\n  background-color: var(--mdpopups-admon-error-accent);\n}\n.mdpopups .admonition.panel-error {\n  color:  var(--mdpopups-admon-error-fg);\n  background-color: var(--mdpopups-admon-error-bg);\n  border-color: var(--mdpopups-admon-error-accent);\n}\n.mdpopups .admonition.panel-info .admonition-title {\n  color: var(--mdpopups-admon-info-title-fg);\n  background-color: var(--mdpopups-admon-info-accent);\n}\n.mdpopups .admonition.panel-info {\n  color:  var(--mdpopups-admon-info-fg);\n  background-color: var(--mdpopups-admon-info-bg);\n  border-color: var(--mdpopups-admon-info-accent);\n}\n.mdpopups .highlight {\n  border: 1px solid var(--mdpopups-hl-border);\n  border-radius: 0.25rem;\n  font-size: 0.9rem;\n  background-color: var(--mdpopups-hl-bg);\n}\n.mdpopups div.highlight,\n.mdpopups pre.highlight {\n  padding: 0.5rem;\n  margin-bottom: 0.5rem;\n  font-size: 1rem;\n}\n.mdpopups code.highlight {\n  padding: 0.05rem 0.25rem;\n}\n\n.lsp_sheet {\n    padding: 1rem;\n}\n.lsp_sheet h1 {\n    margin-top: 0;\n    font-family: system;\n}\n.lsp_sheet h2,\n.lsp_sheet h3,\n.lsp_sheet h4,\n.lsp_sheet p {\n    margin-top: 1rem;\n    font-family: system;\n}\n.lsp_sheet li {\n    font-family: system;\n}\n</style><div class=\"mdpopups\"><div class=\"lsp_sheet\"><p><a href='subl:lsp_copy_to_clipboard_from_base64 {\"contents\":\"IyBUcm91Ymxlc2hvb3Rpbmc6IGphaQojIyBWZXJzaW9uCiAtIExTUDogMi4zLjAKIC0gU3VibGltZSBUZXh0OiA0MjAwCiMjIFNlcnZlciBUZXN0IFJ1bgogLSBleGl0IGNvZGU6IDAKIC0gb3V0cHV0CmBgYAoKYGBgCiMjIFNlcnZlciBDb25maWd1cmF0aW9uCiAtIGNvbW1hbmQKYGBganNvbgpbCiAgIkM6L1VzZXJzL0x1Y2FCb3Vycm91eC9Db2RlL2phaWxzL2Jpbi9qYWlscy5leGUiCl0KYGBgCiAtIHNoZWxsIGNvbW1hbmQKYGBgc2gKQzovVXNlcnMvTHVjYUJvdXJyb3V4L0NvZGUvamFpbHMvYmluL2phaWxzLmV4ZQpgYGAKIC0gc2VsZWN0b3IKYGBgCnNvdXJjZS5qYWkKYGBgCiAtIHByaW9yaXR5X3NlbGVjdG9yCmBgYApzb3VyY2UuamFpCmBgYAogLSBpbml0X29wdGlvbnMKYGBganNvbgp7fQpgYGAKIC0gc2V0dGluZ3MKYGBganNvbgp7fQpgYGAKIC0gZW52CmBgYGpzb24Ke30KYGBgCgojIyBBY3RpdmUgdmlldwogLSBGaWxlIG5hbWUKYGBgCkM6XFVzZXJzXEx1Y2FCb3Vycm91eFxDb2RlXEljZUVzY2FwZVxzcmNcbWFpbl9nYW1lLmphaQpgYGAKIC0gU2V0dGluZ3MKYGBganNvbgp7CiAgImF1dG9fY29tcGxldGVfc2VsZWN0b3IiOiAibWV0YS50YWcsIHNvdXJjZSAtIGNvbW1lbnQgLSBzdHJpbmcucXVvdGVkLmRvdWJsZS5ibG9jayAtIHN0cmluZy5xdW90ZWQuc2luZ2xlLmJsb2NrIC0gc3RyaW5nLnVucXVvdGVkLmhlcmVkb2MiLAogICJsc3BfYWN0aXZlIjogbnVsbCwKICAic3ludGF4IjogIlBhY2thZ2VzL0phaVRvb2xzL0phaS5zdWJsaW1lLXN5bnRheCIKfQpgYGAKIC0gYmFzZSBzY29wZQpgYGAKc291cmNlLmphaQpgYGAKCiMjIFByb2plY3QgLyBXb3Jrc3BhY2UKIC0gZm9sZGVycwpgYGBqc29uClsKICAiQzpcXFVzZXJzXFxMdWNhQm91cnJvdXhcXENvZGVcXEljZUVzY2FwZSIsCiAgIkM6XFxVc2Vyc1xcTHVjYUJvdXJyb3V4XFxEb2N1bWVudHNcXFNvZnRcXGphaSIKXQpgYGAKIC0gaXMgcHJvamVjdDogRmFsc2UKCiMjIExTUCBjb25maWd1cmF0aW9uCgpgYGBqc29uCnsKICAiY2xpZW50cyI6IHsKICAgICJqYWkiOiB7CiAgICAgICJjb21tYW5kIjogWwogICAgICAgICJDOi9Vc2Vycy9MdWNhQm91cnJvdXgvQ29kZS9qYWlscy9iaW4vamFpbHMuZXhlIgogICAgICBdLAogICAgICAiZW5hYmxlZCI6IHRydWUsCiAgICAgICJzZWxlY3RvciI6ICJzb3VyY2UuamFpIgogICAgfSwKICAgICJxbWwiOiB7CiAgICAgICJjb21tYW5kIjogWwogICAgICAgICJDOi9RdC82LjguMy9tc3ZjMjAyMl82NC9iaW4vcW1sbHMuZXhlIiwKICAgICAgICAiLS1idWlsZC1kaXIiLAogICAgICAgICJDOi9EQVRBIF8gbWFzdGVyL0FkYU9uZS9zb2Z0d2FyZS1vbmUvRGVza3RvcEFwcC9mcm9udGVuZC9pbXBvcnRzL0FkYU9uZSIKICAgICAgXSwKICAgICAgImVuYWJsZWQiOiB0cnVlLAogICAgICAic2VsZWN0b3IiOiAic291cmNlLnFtbCIKICAgIH0KICB9LAogICJzaG93X2lubGF5X2hpbnRzIjogZmFsc2UKfQpgYGAKIyMgU3lzdGVtIFBBVEgKIC0gQzpcVnVsa2FuU0RLXDEuNC4zMDQuMVxCaW4KIC0gQzpcUHJvZ3JhbSBGaWxlc1xOVklESUEgR1BVIENvbXB1dGluZyBUb29sa2l0XENVREFcdjEyLjFcYmluCiAtIEM6XFByb2dyYW0gRmlsZXNcTlZJRElBIEdQVSBDb21wdXRpbmcgVG9vbGtpdFxDVURBXHYxMi4xXGxpYm52dnAKIC0gQzpcUHJvZ3JhbSBGaWxlc1xJbWFnZU1hZ2ljay03LjEuMC1RMTYKIC0gQzpcV2luZG93c1xzeXN0ZW0zMgogLSBDOlxXaW5kb3dzCiAtIEM6XFdpbmRvd3NcU3lzdGVtMzJcV2JlbQogLSBDOlxXaW5kb3dzXFN5c3RlbTMyXFdpbmRvd3NQb3dlclNoZWxsXHYxLjBcCiAtIEM6XFdpbmRvd3NcU3lzdGVtMzJcT3BlblNTSFwKIC0gQzpcUHJvZ3JhbSBGaWxlcyAoeDg2KVxOVklESUEgQ29ycG9yYXRpb25cUGh5c1hcQ29tbW9uCiAtIEM6XFByb2dyYW0gRmlsZXNcR2l0XGNtZAogLSBDOlxQcm9ncmFtIEZpbGVzXGRvdG5ldFwKIC0gQzpcUHJvZ3JhbSBGaWxlc1xDTWFrZVxiaW4KIC0gQzpcUHJvZ3JhbURhdGFcY2hvY29sYXRleVxiaW4KIC0gQzpcV0lORE9XU1xzeXN0ZW0zMgogLSBDOlxXSU5ET1dTCiAtIEM6XFdJTkRPV1NcU3lzdGVtMzJcV2JlbQogLSBDOlxXSU5ET1dTXFN5c3RlbTMyXFdpbmRvd3NQb3dlclNoZWxsXHYxLjBcCiAtIEM6XFdJTkRPV1NcU3lzdGVtMzJcT3BlblNTSFwKIC0gQzpcU3RyYXdiZXJyeVxjXGJpbgogLSBDOlxTdHJhd2JlcnJ5XHBlcmxcc2l0ZVxiaW4KIC0gQzpcU3RyYXdiZXJyeVxwZXJsXGJpbgogLSBDOlxQcm9ncmFtIEZpbGVzICh4ODYpXE1pY3Jvc29mdCBTUUwgU2VydmVyXDExMFxUb29sc1xCaW5uXAogLSBDOlxQcm9ncmFtIEZpbGVzICh4ODYpXE1pY3Jvc29mdCBTUUwgU2VydmVyXDExMFxEVFNcQmlublwKIC0gQzpcUHJvZ3JhbSBGaWxlcyAoeDg2KVxXaW5kb3dzIEtpdHNcMTBcTWljcm9zb2Z0IEFwcGxpY2F0aW9uIFZpcnR1YWxpemF0aW9uXFNlcXVlbmNlclwKIC0gQzpcUHJvZ3JhbSBGaWxlcyAoeDg2KVxXaW5kb3dzIEtpdHNcMTBcV2luZG93cyBQZXJmb3JtYW5jZSBUb29sa2l0XAogLSBDOlxQcm9ncmFtIEZpbGVzXE1pY3Jvc29mdCBOZXR3b3JrIE1vbml0b3IgM1wKIC0gQzpcUHJvZ3JhbSBGaWxlc1xMTFZNXGJpbgogLSBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcQ29kZVxlbXNka1x1cHN0cmVhbVxlbXNjcmlwdGVuCiAtIEM6XFVzZXJzXEx1Y2FCb3Vycm91eFxDb2RlXGVtc2RrCiAtIEM6XFVzZXJzXEx1Y2FCb3Vycm91eFxDb2RlXGVtc2RrXG5vZGVcMTYuMjAuMF82NGJpdFxiaW4KIC0gQzpcUHJvZ3JhbSBGaWxlc1xuZ3NvbHZlLXY2LjIuMjMwMVxiaW4KIC0gQzpcVXNlcnNcTHVjYUJvdXJyb3V4XEFwcERhdGFcTG9jYWxcUHJvZ3JhbXNcUHl0aG9uXFB5dGhvbjMxMVxTY3JpcHRzXAogLSBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcQXBwRGF0YVxMb2NhbFxQcm9ncmFtc1xQeXRob25cUHl0aG9uMzExXAogLSBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcLmNhcmdvXGJpbgogLSBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcQXBwRGF0YVxMb2NhbFxNaWNyb3NvZnRcV2luZG93c0FwcHMKIC0gQzpcVXNlcnNcTHVjYUJvdXJyb3V4XERvY3VtZW50c1xTb2Z0CiAtIEM6XFVzZXJzXEx1Y2FCb3Vycm91eFxBcHBEYXRhXExvY2FsXFByb2dyYW1zXE1pY3Jvc29mdCBWUyBDb2RlXGJpbgogLSBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcQ29kZVx2Y3BrZwogLSBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcRG9jdW1lbnRzXFNvZnRcamFpXGJpbgogLSBDOlxEQVRBXEFkYU9uZVxzb2Z0d2FyZS1vbmVcY29tbW9uXHRvb2xzXHByb3RvYnVmCiAtIEM6XFVzZXJzXEx1Y2FCb3Vycm91eFxEb2N1bWVudHNcU29mdFxuYXNtLTIuMTUuMDUKIC0gQzpcVXNlcnNcTHVjYUJvdXJyb3V4XEFwcERhdGFcTG9jYWxcUHJvZ3JhbXNcUHl0aG9uXFB5dGhvbjM3CiAtIEM6XFByb2dyYW0gRmlsZXMgKHg4NilcSW5ubyBTZXR1cCA2CiAtIEM6XFVzZXJzXEx1Y2FCb3Vycm91eFxEb2N1bWVudHNcU29mdFxyYWRkYmcKIC0gQzpcVXNlcnNcTHVjYUJvdXJyb3V4XENvZGVcQURLXHg2NFxEZWJ1ZwogLSBDOlxVc2Vyc1xMdWNhQm91cnJvdXhcRG9jdW1lbnRzXFNvZnRcd2FidC0xLjAuMzRcYmluCiAtIA==\"}'>&lt;kbd&gt;Copy&nbsp;to&nbsp;clipboard&lt;/kbd&gt;</a></p>\n<h1>Troubleshooting: jai</h1>\n<h2>Version</h2>\n<ul>\n<li>LSP: 2.3.0</li>\n<li>Sublime Text: 4200</li>\n</ul>\n<h2>Server Test Run</h2>\n<ul>\n<li>exit code: 0</li>\n<li>output<br />\n<div class=\"highlight\"><pre><br></pre></div></li>\n</ul>\n<h2>Server Configuration</h2>\n<ul>\n<li>command<br />\n<div class=\"highlight\"><pre><span style=\"color: #f8f8f2;\">[</span><br><span style=\"color: #f8f8f2;\">&nbsp; </span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #e7db74;\">C:/Users/LucaBourroux/Code/jails/bin/jails.exe</span><span style=\"color: #e7db74;\">\"</span><br><span style=\"color: #f8f8f2;\"></span><span style=\"color: #f8f8f2;\">]</span><br></pre></div></li>\n<li>shell command<br />\n<div class=\"highlight\"><pre><span style=\"color: #67d8ef;\">C:</span><span style=\"color: #67d8ef;\">/</span><span style=\"color: #67d8ef;\">Users</span><span style=\"color: #67d8ef;\">/</span><span style=\"color: #67d8ef;\">LucaBourroux</span><span style=\"color: #67d8ef;\">/</span><span style=\"color: #67d8ef;\">Code</span><span style=\"color: #67d8ef;\">/</span><span style=\"color: #67d8ef;\">jails</span><span style=\"color: #67d8ef;\">/</span><span style=\"color: #67d8ef;\">bin</span><span style=\"color: #67d8ef;\">/</span><span style=\"color: #67d8ef;\">jails.exe</span><br></pre></div></li>\n<li>selector<br />\n<div class=\"highlight\"><pre><span style=\"color: #f8f8f2;\">source.jai</span><br></pre></div></li>\n<li>priority_selector<br />\n<div class=\"highlight\"><pre><span style=\"color: #f8f8f2;\">source.jai</span><br></pre></div></li>\n<li>init_options<br />\n<div class=\"highlight\"><pre><span style=\"color: #f8f8f2;\">{</span><span style=\"color: #f8f8f2;\">}</span><br></pre></div></li>\n<li>settings<br />\n<div class=\"highlight\"><pre><span style=\"color: #f8f8f2;\">{</span><span style=\"color: #f8f8f2;\">}</span><br></pre></div></li>\n<li>env<br />\n<div class=\"highlight\"><pre><span style=\"color: #f8f8f2;\">{</span><span style=\"color: #f8f8f2;\">}</span><br></pre></div></li>\n</ul>\n<h2>Active view</h2>\n<ul>\n<li>File name<br />\n<div class=\"highlight\"><pre><span style=\"color: #f8f8f2;\">C:\\Users\\LucaBourroux\\Code\\IceEscape\\src\\main_game.jai</span><br></pre></div></li>\n<li>Settings<br />\n<div class=\"highlight\"><pre><span style=\"color: #f8f8f2;\">{</span><br><span style=\"color: #f8f8f2;\">&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">auto_complete_selector</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #e7db74;\">meta.tag, source - comment - string.quoted.double.block - string.quoted.single.block - string.unquoted.heredoc</span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #f8f8f2;\">,</span><br><span style=\"color: #f8f8f2;\">&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">lsp_active</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #ac80ff;\">null</span><span style=\"color: #f8f8f2;\">,</span><br><span style=\"color: #f8f8f2;\">&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">syntax</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #e7db74;\">Packages/JaiTools/Jai.sublime-syntax</span><span style=\"color: #e7db74;\">\"</span><br><span style=\"color: #f8f8f2;\"></span><span style=\"color: #f8f8f2;\">}</span><br></pre></div></li>\n<li>base scope<br />\n<div class=\"highlight\"><pre><span style=\"color: #f8f8f2;\">source.jai</span><br></pre></div></li>\n</ul>\n<h2>Project / Workspace</h2>\n<ul>\n<li>folders<br />\n<div class=\"highlight\"><pre><span style=\"color: #f8f8f2;\">[</span><br><span style=\"color: #f8f8f2;\">&nbsp; </span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #e7db74;\">C:</span><span style=\"color: #ac80ff;\">\\\\</span><span style=\"color: #e7db74;\">Users</span><span style=\"color: #ac80ff;\">\\\\</span><span style=\"color: #e7db74;\">LucaBourroux</span><span style=\"color: #ac80ff;\">\\\\</span><span style=\"color: #e7db74;\">Code</span><span style=\"color: #ac80ff;\">\\\\</span><span style=\"color: #e7db74;\">IceEscape</span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #f8f8f2;\">,</span><br><span style=\"color: #f8f8f2;\">&nbsp; </span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #e7db74;\">C:</span><span style=\"color: #ac80ff;\">\\\\</span><span style=\"color: #e7db74;\">Users</span><span style=\"color: #ac80ff;\">\\\\</span><span style=\"color: #e7db74;\">LucaBourroux</span><span style=\"color: #ac80ff;\">\\\\</span><span style=\"color: #e7db74;\">Documents</span><span style=\"color: #ac80ff;\">\\\\</span><span style=\"color: #e7db74;\">Soft</span><span style=\"color: #ac80ff;\">\\\\</span><span style=\"color: #e7db74;\">jai</span><span style=\"color: #e7db74;\">\"</span><br><span style=\"color: #f8f8f2;\"></span><span style=\"color: #f8f8f2;\">]</span><br></pre></div></li>\n<li>is project: False</li>\n</ul>\n<h2>LSP configuration</h2>\n<div class=\"highlight\"><pre><span style=\"color: #f8f8f2;\">{</span><br><span style=\"color: #f8f8f2;\">&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">clients</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #f8f8f2;\">{</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">jai</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #f8f8f2;\">{</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">command</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #f8f8f2;\">[</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #e7db74;\">C:/Users/LucaBourroux/Code/jails/bin/jails.exe</span><span style=\"color: #e7db74;\">\"</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span style=\"color: #f8f8f2;\">]</span><span style=\"color: #f8f8f2;\">,</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">enabled</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #ac80ff;\">true</span><span style=\"color: #f8f8f2;\">,</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">selector</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #e7db74;\">source.jai</span><span style=\"color: #e7db74;\">\"</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp; </span><span style=\"color: #f8f8f2;\">}</span><span style=\"color: #f8f8f2;\">,</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">qml</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #f8f8f2;\">{</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">command</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #f8f8f2;\">[</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #e7db74;\">C:/Qt/6.8.3/msvc2022_64/bin/qmlls.exe</span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #f8f8f2;\">,</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #e7db74;\">--build-dir</span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #f8f8f2;\">,</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #e7db74;\">C:/DATA _ master/AdaOne/software-one/DesktopApp/frontend/imports/AdaOne</span><span style=\"color: #e7db74;\">\"</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span style=\"color: #f8f8f2;\">]</span><span style=\"color: #f8f8f2;\">,</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">enabled</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #ac80ff;\">true</span><span style=\"color: #f8f8f2;\">,</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">selector</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #e7db74;\">\"</span><span style=\"color: #e7db74;\">source.qml</span><span style=\"color: #e7db74;\">\"</span><br><span style=\"color: #f8f8f2;\">&nbsp;&nbsp;&nbsp; </span><span style=\"color: #f8f8f2;\">}</span><br><span style=\"color: #f8f8f2;\">&nbsp; </span><span style=\"color: #f8f8f2;\">}</span><span style=\"color: #f8f8f2;\">,</span><br><span style=\"color: #f8f8f2;\">&nbsp; </span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #fd9621;\">show_inlay_hints</span><span style=\"color: #fd9621;\">\"</span><span style=\"color: #f8f8f2;\">:</span><span style=\"color: #f8f8f2;\"> </span><span style=\"color: #ac80ff;\">false</span><br><span style=\"color: #f8f8f2;\"></span><span style=\"color: #f8f8f2;\">}</span><br></pre></div>\n\n<h2>System PATH</h2>\n<ul>\n<li>C:\\VulkanSDK\\1.4.304.1\\Bin</li>\n<li>C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.1\\bin</li>\n<li>C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.1\\libnvvp</li>\n<li>C:\\Program Files\\ImageMagick-7.1.0-Q16</li>\n<li>C:\\Windows\\system32</li>\n<li>C:\\Windows</li>\n<li>C:\\Windows\\System32\\Wbem</li>\n<li>C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\</li>\n<li>C:\\Windows\\System32\\OpenSSH\\</li>\n<li>C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common</li>\n<li>C:\\Program Files\\Git\\cmd</li>\n<li>C:\\Program Files\\dotnet\\</li>\n<li>C:\\Program Files\\CMake\\bin</li>\n<li>C:\\ProgramData\\chocolatey\\bin</li>\n<li>C:\\WINDOWS\\system32</li>\n<li>C:\\WINDOWS</li>\n<li>C:\\WINDOWS\\System32\\Wbem</li>\n<li>C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\</li>\n<li>C:\\WINDOWS\\System32\\OpenSSH\\</li>\n<li>C:\\Strawberry\\c\\bin</li>\n<li>C:\\Strawberry\\perl\\site\\bin</li>\n<li>C:\\Strawberry\\perl\\bin</li>\n<li>C:\\Program Files (x86)\\Microsoft SQL Server\\110\\Tools\\Binn\\</li>\n<li>C:\\Program Files (x86)\\Microsoft SQL Server\\110\\DTS\\Binn\\</li>\n<li>C:\\Program Files (x86)\\Windows Kits\\10\\Microsoft Application Virtualization\\Sequencer\\</li>\n<li>C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\</li>\n<li>C:\\Program Files\\Microsoft Network Monitor 3\\</li>\n<li>C:\\Program Files\\LLVM\\bin</li>\n<li>C:\\Users\\LucaBourroux\\Code\\emsdk\\upstream\\emscripten</li>\n<li>C:\\Users\\LucaBourroux\\Code\\emsdk</li>\n<li>C:\\Users\\LucaBourroux\\Code\\emsdk\\node\\16.20.0_64bit\\bin</li>\n<li>C:\\Program Files\\ngsolve-v6.2.2301\\bin</li>\n<li>C:\\Users\\LucaBourroux\\AppData\\Local\\Programs\\Python\\Python311\\Scripts\\</li>\n<li>C:\\Users\\LucaBourroux\\AppData\\Local\\Programs\\Python\\Python311\\</li>\n<li>C:\\Users\\LucaBourroux.cargo\\bin</li>\n<li>C:\\Users\\LucaBourroux\\AppData\\Local\\Microsoft\\WindowsApps</li>\n<li>C:\\Users\\LucaBourroux\\Documents\\Soft</li>\n<li>C:\\Users\\LucaBourroux\\AppData\\Local\\Programs\\Microsoft VS Code\\bin</li>\n<li>C:\\Users\\LucaBourroux\\Code\\vcpkg</li>\n<li>C:\\Users\\LucaBourroux\\Documents\\Soft\\jai\\bin</li>\n<li>C:\\DATA\\AdaOne\\software-one\\common\\tools\\protobuf</li>\n<li>C:\\Users\\LucaBourroux\\Documents\\Soft\\nasm-2.15.05</li>\n<li>C:\\Users\\LucaBourroux\\AppData\\Local\\Programs\\Python\\Python37</li>\n<li>C:\\Program Files (x86)\\Inno Setup 6</li>\n<li>C:\\Users\\LucaBourroux\\Documents\\Soft\\raddbg</li>\n<li>C:\\Users\\LucaBourroux\\Code\\ADK\\x64\\Debug</li>\n<li>C:\\Users\\LucaBourroux\\Documents\\Soft\\wabt-1.0.34\\bin</li>\n<li></li>\n</ul></div></div>",
+					"file": "Server: jai",
+					"semi_transient": false,
+					"stack_index": 1,
+					"stack_multiselect": false,
+					"type": "html"
+				},
+				{
+					"buffer": 8,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 11033,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								6968,
+								6968
+							]
+						],
+						"settings":
+						{
+							"__vi_external_disable": true,
+							"auto_complete": false,
+							"auto_complete_commit_on_tab": false,
+							"bracket_highlighter.clone_locations":
+							{
+							},
+							"bracket_highlighter.ignore": true,
+							"color_scheme": "Terminus.hidden-color-scheme",
+							"draw_centered": false,
+							"draw_indent_guides": false,
+							"draw_unicode_white_space": false,
+							"draw_white_space": "none",
+							"gutter": false,
+							"highlight_line": false,
+							"is_widget": true,
+							"lsp_uri": "buffer:1205",
+							"result_base_dir": "C:\\Users\\LucaBourroux\\Code\\IceEscape",
+							"result_file_regex": null,
+							"result_line_regex": null,
+							"rulers":
+							[
+								100,
+								500
+							],
+							"scroll_past_end": true,
+							"syntax": "Terminus View.sublime-syntax",
+							"terminus.highlight_counter": 74,
+							"terminus_view": true,
+							"terminus_view.args":
+							{
+								"auto_close": true,
+								"cancellable": false,
+								"cmd":
+								[
+									"powershell"
+								],
+								"cwd": "C:\\Users\\LucaBourroux\\Code\\IceEscape",
+								"default_title": "powershell",
+								"env":
+								{
+									"PROMPT_TOOLKIT_COLOR_DEPTH": "DEPTH_8_BIT",
+									"TERMINUS_SUBLIME": "1",
+									"TERM_PROGRAM": "Terminus-Sublime"
+								},
+								"file_regex": null,
+								"line_regex": null,
+								"panel_name": "Terminus 2",
+								"reactivable": true,
+								"show_in_panel": null,
+								"tag": null,
+								"timeit": false,
+								"title": null,
+								"view_settings":
+								{
+								}
+							},
+							"terminus_view.cancellable": false,
+							"terminus_view.key.ctrl+k": true,
+							"terminus_view.key.ctrl+p": true,
+							"terminus_view.natural_keyboard": true,
+							"terminus_view.reactivable": true,
+							"terminus_view.tag": null,
+							"terminus_view.viewport_y": 54.0,
+							"word_wrap": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 54.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 9,
+					"file": "src/imgui_sdl_gl.jai",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 17253,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								17253,
+								17253
+							]
+						],
+						"settings":
+						{
+							"auto_complete_triggers":
+							[
+								{
+									"characters": "<",
+									"selector": "text.html, text.xml"
+								},
+								{
+									"rhs_empty": true,
+									"selector": "punctuation.accessor"
+								}
+							],
+							"auto_name": "",
+							"lsp_uri": "file:///C:/Users/LucaBourroux/Code/IceEscape/src/imgui_sdl_gl.jai",
+							"syntax": "Packages/JaiTools/Jai.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"stack_multiselect": false,
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 27.0
+	},
+	"input":
+	{
+		"height": 49.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			],
+			[
+				1,
+				0,
+				2,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			0.5,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.LSP Log Panel":
+	{
+		"height": 714.0,
+		"history":
+		[
+		]
+	},
+	"output.Terminus":
+	{
+		"height": 691.0,
+		"history":
+		[
+		]
+	},
+	"output.Terminus 2":
+	{
+		"height": 327.0,
+		"history":
+		[
+		]
+	},
+	"output.diagnostics":
+	{
+		"height": 112.0,
+		"history":
+		[
+		]
+	},
+	"output.exec":
+	{
+		"height": 523.0,
+		"history":
+		[
+		]
+	},
+	"output.find_results":
+	{
+		"height": 0.0,
+		"history":
+		[
+		]
+	},
+	"output.mdpopups":
+	{
+		"height": 0.0,
+		"history":
+		[
+		]
+	},
+	"output.mdpopups-dummy":
+	{
+		"height": 0.0,
+		"history":
+		[
+		]
+	},
+	"output.references":
+	{
+		"height": 126.0,
+		"history":
+		[
+		]
+	},
+	"pinned_build_system": "",
+	"project": "",
+	"replace":
+	{
+		"height": 50.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"imgui_s",
+				"jai\\modules\\ImGui\\examples\\imgui_sdl_gl.jai"
+			],
+			[
+				"module imgui",
+				"jai\\modules\\ImGui\\examples\\imgui_test.jai"
+			],
+			[
+				"main",
+				"src\\main_game.jai"
+			],
+			[
+				"build",
+				"Build.jai"
+			],
+			[
+				"gizmo",
+				"DesktopApp\\backend\\entities\\Gizmo.cpp"
+			],
+			[
+				"toolpathcomp",
+				"DesktopApp\\backend\\components\\ToolPathComputation.cpp"
+			],
+			[
+				"meshproce",
+				"DesktopApp\\backend\\utils\\MeshProcessing.cpp"
+			],
+			[
+				"manualscan",
+				"common\\src\\core\\ManualScanningPlanner.cpp"
+			],
+			[
+				"scene",
+				"DesktopApp\\backend\\scene3dviewhelper.cpp"
+			],
+			[
+				"scanning",
+				"common\\src\\core\\ScanningPoint.h"
+			],
+			[
+				"scene3d",
+				"DesktopApp\\backend\\scene3dviewhelper.cpp"
+			],
+			[
+				"toolpathcomputati",
+				"DesktopApp\\backend\\components\\ToolPathComputation.cpp"
+			],
+			[
+				"robotcont",
+				"DesktopApp\\backend\\drivers\\RobotController.cpp"
+			],
+			[
+				"robotCont",
+				"DesktopApp\\backend\\RobotController.cpp"
+			],
+			[
+				"toolpathentit",
+				"DesktopApp\\backend\\entities\\ToolPathEntity.cpp"
+			],
+			[
+				"parameter",
+				"common\\src\\serialization\\parameters.proto"
+			],
+			[
+				"scanningpoi",
+				"common\\src\\core\\ScanningPoint.cpp"
+			],
+			[
+				"serializ",
+				"DesktopApp\\backend\\utils\\Serialization.cpp"
+			],
+			[
+				"serial",
+				"DesktopApp\\backend\\utils\\Serialization.cpp"
+			],
+			[
+				"meshprocess",
+				"DesktopApp\\backend\\utils\\MeshProcessing.cpp"
+			],
+			[
+				"toolpathenti",
+				"DesktopApp\\backend\\entities\\ToolPathEntity.cpp"
+			],
+			[
+				"paramet",
+				"common\\src\\core\\Parameters.h"
+			],
+			[
+				"meshpro",
+				"DesktopApp\\backend\\utils\\MeshProcessing.cpp"
+			],
+			[
+				"",
+				"common\\src\\core\\ManualScanningPlanner.cpp"
+			],
+			[
+				"seriali",
+				"DesktopApp\\backend\\utils\\Serialization.cpp"
+			],
+			[
+				"scanningpath",
+				"DesktopApp\\backend\\utils\\ScanningPathRenderer.cpp"
+			],
+			[
+				"manualscann",
+				"common\\src\\core\\ManualScanningPlanner.cpp"
+			],
+			[
+				"scene3",
+				"DesktopApp\\backend\\scene3dviewhelper.cpp"
+			],
+			[
+				"closed_for",
+				"common\\src\\kinematics\\closed_form_kinematics.cpp"
+			],
+			[
+				"scanningp",
+				"common\\src\\core\\ScanningPoint.h"
+			],
+			[
+				"parameters.pro",
+				"common\\src\\serialization\\parameters.proto"
+			],
+			[
+				"meshproc",
+				"DesktopApp\\backend\\utils\\MeshProcessing.cpp"
+			],
+			[
+				"pathplanninse",
+				"DesktopApp\\backend\\components\\PathPlanningSettings.h"
+			],
+			[
+				"scanninga",
+				"DesktopApp\\backend\\utils\\ScanningPathRenderer.cpp"
+			],
+			[
+				"geomutils",
+				"DesktopApp\\backend\\utils\\GeomUtils.h"
+			],
+			[
+				"scanningPo",
+				"common\\src\\core\\ScanningPoint.cpp"
+			],
+			[
+				"geomut",
+				"DesktopApp\\backend\\utils\\GeomUtils.h"
+			],
+			[
+				"scannin g",
+				"common\\src\\core\\ScanningPoint.cpp"
+			],
+			[
+				"manualsca",
+				"DesktopApp\\frontend\\panels\\pathplanning\\strategies\\ManualScanningSettings.qml"
+			],
+			[
+				"scanningren",
+				"DesktopApp\\backend\\utils\\ScanningPathRenderer.cpp"
+			],
+			[
+				"parameters.cpp",
+				"common\\src\\core\\Parameters.cpp"
+			],
+			[
+				"robot.h",
+				"DesktopApp\\backend\\entities\\Robot.h"
+			],
+			[
+				"controller",
+				"DesktopApp\\backend\\drivers\\RobotController.cpp"
+			],
+			[
+				"robot",
+				"DesktopApp\\backend\\entities\\Robot.h"
+			],
+			[
+				"scanningpo",
+				"common\\src\\core\\ScanningPoint.h"
+			],
+			[
+				"manuals",
+				"DesktopApp\\frontend\\panels\\pathplanning\\strategies\\ManualScanningSettings.qml"
+			],
+			[
+				"main.py",
+				"C:\\Users\\LucaBourroux\\Code\\aws_bucket\\main.py"
+			],
+			[
+				"geomutis",
+				"DesktopApp\\backend\\utils\\GeomUtils.cpp"
+			],
+			[
+				"graph.h",
+				"common\\src\\core\\Graph.h"
+			],
+			[
+				"part.vert",
+				"DesktopApp\\backend\\materials\\shaders\\gl45\\part.vert"
+			],
+			[
+				"igl lscm",
+				"common\\libs\\igl\\lscm.cpp"
+			],
+			[
+				"build.bat",
+				"Devops\\1_Build\\build.bat"
+			],
+			[
+				"gitla",
+				".gitlab-ci.yml"
+			],
+			[
+				"geodesic",
+				"common\\src\\core\\GeodesicTaping.h"
+			],
+			[
+				"geodesict",
+				"common\\src\\core\\GeodesicTaping.cpp"
+			],
+			[
+				"howto com",
+				"jai\\how_to\\630_compiler_get_nodes.jai"
+			],
+			[
+				"toolpath_adk",
+				"common\\src\\core\\ADK\\adk\\Data\\ToolPath_ADK.cpp"
+			],
+			[
+				"global_",
+				"DesktopApp\\backend\\global_enums.h"
+			],
+			[
+				"geometr",
+				"common\\src\\core\\Geometry.h"
+			],
+			[
+				"graph",
+				"common\\src\\core\\Graph.h"
+			],
+			[
+				"brepcr",
+				"DesktopApp\\backend\\BRepCurvePicker.cpp"
+			],
+			[
+				"geodesi",
+				"common\\src\\core\\GeodesicTaping.cpp"
+			],
+			[
+				"geomu",
+				"DesktopApp\\backend\\utils\\GeomUtils.h"
+			],
+			[
+				"revolvedsur",
+				"common\\src\\core\\RevolvedSurfacePathBuilder.cpp"
+			],
+			[
+				"bvh",
+				"common\\thirdparty\\include\\bvh\\bvh.hpp"
+			],
+			[
+				"brepcur",
+				"DesktopApp\\backend\\BRepCurvePicker.cpp"
+			],
+			[
+				"main.cpp",
+				"DesktopApp\\backend\\main.cpp"
+			],
+			[
+				"toolpath_ad",
+				"common\\src\\core\\ADK\\adk\\Data\\ToolPath_ADK.cpp"
+			],
+			[
+				"toolpathcompu",
+				"DesktopApp\\backend\\components\\ToolPathComputation.cpp"
+			],
+			[
+				"DEEP_MAXQ3_R4_dynA2_00001.csr",
+				"Devops\\2_Test\\RegressionData\\PostProcessor\\DEEP_MAXQ3_R4_dynA2\\DEEP_MAXQ3_R4_dynA2_00001.csr"
+			],
+			[
+				"blade_1_perLayer_00000.JBI",
+				"Devops\\2_Test\\RegressionData\\PostProcessor\\blade_1_perLayer\\blade_1_perLayer_00000.JBI"
+			],
+			[
+				"BENTPIPE_STATIONWITHPULSE.JBI",
+				"Devops\\2_Test\\RegressionResults\\BENTPIPE_STATIONWITHPULSE.JBI"
+			],
+			[
+				"BLADE_1_LAYER2TO4.JBI",
+				"Devops\\2_Test\\RegressionData\\PostProcessor\\blade_1_layer2to4.JBI"
+			],
+			[
+				"BLADE_1.JBI",
+				"Devops\\2_Test\\RegressionData\\PostProcessor\\blade_1.JBI"
+			],
+			[
+				"CYLINDER360.JBI",
+				"Devops\\2_Test\\RegressionData\\PostProcessor\\cylinder360.JBI"
+			],
+			[
+				"overhang_revolved_surface.gcode",
+				"Devops\\2_Test\\RegressionData\\5AxisMachine\\overhang_revolved_surface.gcode"
+			],
+			[
+				"overhang_revolved_surface.rob",
+				"Devops\\2_Test\\RegressionData\\Positioner\\dynamic_axis1_axis2\\overhang_revolved_surface.RobotWF.src"
+			],
+			[
+				"overhang_revolved_surface.RobotWF",
+				"Devops\\2_Test\\RegressionResults\\overhang_revolved_surface.RobotWF.src"
+			],
+			[
+				"overhang_revolved_surface.src",
+				"Devops\\2_Test\\RegressionData\\Positioner\\dynamic_axis1_axis2\\overhang_revolved_surface.src"
+			],
+			[
+				"cubeConditionalEvent.src",
+				"Devops\\2_Test\\RegressionData\\PostProcessor\\cubeConditionalEvent.src"
+			],
+			[
+				"cube_default.RobotWF.src",
+				"Devops\\2_Test\\RegressionData\\Positioner\\axis1_static_axis2_dynamic\\cube_default.RobotWF.src"
+			],
+			[
+				"cube_default.src",
+				"Devops\\2_Test\\RegressionData\\Positioner\\axis1_static_axis2_dynamic\\cube_default.src"
+			],
+			[
+				"overhang_revolved_surface_adac.mod",
+				"Devops\\2_Test\\RegressionData\\Positioner\\dynamic_axis1_axis2\\overhang_revolved_surface_adac.mod"
+			],
+			[
+				"overhang_revolved_surface_triggc.mod",
+				"Devops\\2_Test\\RegressionData\\Positioner\\dynamic_axis1_axis2\\overhang_revolved_surface_triggc.mod"
+			],
+			[
+				"overhang_revolved_surface.mod",
+				"Devops\\2_Test\\RegressionData\\Positioner\\dynamic_axis1_axis2\\overhang_revolved_surface.mod"
+			],
+			[
+				"cube_default_adal.RobotWF.mod",
+				"Devops\\2_Test\\RegressionData\\Positioner\\axis1_static_axis2_dynamic\\cube_default_adal.RobotWF.mod"
+			],
+			[
+				"cube_default_adal",
+				"Devops\\2_Test\\RegressionData\\Positioner\\axis1_static_axis2_dynamic\\cube_default_adal.mod"
+			],
+			[
+				"cube_default_triggl",
+				"Devops\\2_Test\\RegressionData\\Positioner\\axis1_static_axis2_dynamic\\cube_default_triggl.mod"
+			],
+			[
+				"cube_default.mod",
+				"Devops\\2_Test\\RegressionData\\Positioner\\axis1_static_axis2_dynamic\\cube_default.mod"
+			],
+			[
+				"Siemens_reversed_vector_and_normal",
+				"Devops\\2_Test\\RegressionResults\\Siemens_reversed_vector_and_normal.mpf"
+			],
+			[
+				"kinematic",
+				"DesktopApp\\backend\\utils\\KinematicCache.cpp"
+			],
+			[
+				"toolpathent",
+				"DesktopApp\\backend\\entities\\ToolPathEntity.cpp"
+			],
+			[
+				"toolpathco",
+				"DesktopApp\\backend\\components\\ToolPathComputation.cpp"
+			],
+			[
+				"mainwi",
+				"DesktopApp\\frontend\\MainWindow.qml"
+			],
+			[
+				"toolpathcomputation",
+				"DesktopApp\\backend\\components\\ToolPathComputation.cpp"
+			],
+			[
+				"cartesianma",
+				"common\\src\\kinematics\\Future ADK\\CartesianMachineKin.cpp"
+			],
+			[
+				"manufact",
+				"DesktopApp\\backend\\utils\\ManufacturingSequence.cpp"
+			],
+			[
+				"toolpathan",
+				"DesktopApp\\backend\\components\\ToolPathAnimation.cpp"
+			],
+			[
+				"robotsim",
+				"DesktopApp\\backend\\utils\\RobotSimulationUtils.cpp"
+			],
+			[
+				"kinematicca",
+				"DesktopApp\\backend\\utils\\KinematicCache.h"
+			],
+			[
+				"robot.cpp",
+				"DesktopApp\\backend\\entities\\Robot.cpp"
+			],
+			[
+				"rapid",
+				"common\\src\\postprocessor\\Rapid3DPWelding.cpp"
+			],
+			[
+				"rapid.cpp",
+				"common\\src\\postprocessor\\Rapid.cpp"
+			],
+			[
+				"rapid3dp",
+				"common\\src\\postprocessor\\Rapid3DPWelding.cpp"
+			],
+			[
+				"lineara",
+				"DesktopApp\\backend\\entities\\LinearAxis.cpp"
+			],
+			[
+				"gantry",
+				"DesktopApp\\backend\\entities\\Gantry.cpp"
+			],
+			[
+				"manufacturingS",
+				"DesktopApp\\backend\\utils\\ManufacturingSequence.cpp"
+			],
+			[
+				"linear",
+				"DesktopApp\\backend\\entities\\LinearAxis.cpp"
+			],
+			[
+				"toolpathdatapr",
+				"DesktopApp\\backend\\utils\\ToolPathDataProvider.cpp"
+			],
+			[
+				"generalpos",
+				"common\\src\\postprocessor\\GeneralPostProcessor.cpp"
+			],
+			[
+				"kinematiccac",
+				"DesktopApp\\backend\\utils\\KinematicCache.h"
+			],
+			[
+				"toolpathcomput",
+				"DesktopApp\\backend\\components\\ToolPathComputation.cpp"
+			],
+			[
+				"todo",
+				"TODO TODO TODO"
+			],
+			[
+				"toolpathcomputa",
+				"DesktopApp\\backend\\components\\ToolPathComputation.cpp"
+			],
+			[
+				"rapid.",
+				"common\\src\\postprocessor\\Rapid.cpp"
+			],
+			[
+				"cartesianmachi",
+				"common\\src\\kinematics\\Future ADK\\CartesianMachineKin.cpp"
+			],
+			[
+				"generalpo",
+				"common\\src\\postprocessor\\GeneralPostProcessor.cpp"
+			],
+			[
+				"tooolpathcompu",
+				"DesktopApp\\backend\\components\\ToolPathComputation.cpp"
+			],
+			[
+				"toolpathani",
+				"DesktopApp\\backend\\components\\ToolPathAnimation.cpp"
+			],
+			[
+				"kinema",
+				"DesktopApp\\backend\\utils\\KinematicCache.h"
+			],
+			[
+				"kinematicc",
+				"DesktopApp\\backend\\utils\\KinematicCache.h"
+			],
+			[
+				"nav",
+				"DesktopApp\\backend\\entities\\NavigationCube.cpp"
+			],
+			[
+				"navcub",
+				"DesktopApp\\backend\\materials\\shaders\\gl45\\navCube.frag"
+			],
+			[
+				"thickpoints",
+				"DesktopApp\\backend\\entities\\ThickPoints.cpp"
+			],
+			[
+				"thicklines.vert",
+				"DesktopApp\\backend\\materials\\shaders\\gl45\\thickLines.vert"
+			],
+			[
+				"arrowhead",
+				"DesktopApp\\backend\\materials\\shaders\\gl45\\arrowHeads.vert"
+			],
+			[
+				"thicklines",
+				"DesktopApp\\backend\\entities\\ThickLines.cpp"
+			],
+			[
+				"thickpoint",
+				"DesktopApp\\backend\\entities\\ThickPoints.cpp"
+			]
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 500.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 380.0
+	},
+	"select_symbol":
+	{
+		"height": 323.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 592.0
+	},
+	"selected_group": 1,
+	"settings":
+	{
+		"lsp_show_inlay_hints": false
+	},
+	"show_minimap": true,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 273.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}
