@@ -4,6 +4,7 @@ ImGui :: #import "ImGui";
 #import "SDL";
 #import "Math";
 #import "GL";
+#import "Platform";
 
 // Data
 g_Time: u64 = 0;
@@ -34,7 +35,7 @@ cursor_resize_nwse: *SDL_Cursor;
 // This is the main rendering function that you have to implement and provide to ImGui (via setting up 'RenderDrawListsFn' in the ImGuiIO structure)
 // Note that this implementation is little overcomplicated because we are saving/setting up/restoring every OpenGL state explicitly, in order to be able to run within any OpenGL engine that doesn't do so.
 // If text or lines are blurry when integrating ImGui in your engine: in your Render function, try translating your projection matrix by (0.5f,0.5f) or (0.375f,0.375f)
-ImGui_ImplSdl_RenderDrawLists :: (draw_data: *ImGui.ImDrawData) #c_call {
+ImGui_ImplSdl_RenderDrawLists :: (rhi: RHI_proc, draw_data: *ImGui.ImDrawData) #c_call {
     // @@ Watch out, we don't have a context here!
 
     // Avoid rendering when minimized, scale coordinates for retina displays (screen coordinates != framebuffer coordinates)

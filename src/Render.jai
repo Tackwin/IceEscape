@@ -3,6 +3,7 @@
 #import "Flat_Pool";
 #import "String";
 #import "Algebra";
+#import "Assets";
 
 #scope_export
 
@@ -51,6 +52,18 @@ set_uniform :: (shader: Shader, name: string, value: $T) {
 		gl.glUniformMatrix4fv(loc, 1, GL_FALSE, value.data.data);
 	}
 }
+set_uniform :: (shader: Shader, name: string, value: Texture, unit: int) {
+	gl.glUseProgram(shader.program);
+	loc := gl.glGetUniformLocation(shader.program, name.data);
+	if loc < 0 {
+		print("Uniform % not found in shader program.\n", name);
+	}
+ 
+	gl.glActiveTexture(xx (GL_TEXTURE0 + unit));
+	gl.glBindTexture(GL_TEXTURE_2D, value.id);
+	gl.glUniform1i(loc, xx unit);
+}
+
 
 compile :: (shader: *Shader) {
 	status: GLint;
@@ -121,6 +134,7 @@ Geometry :: struct {
 	Vertex_Data :: struct {
 		pos: V3f;
 		nor: V3f;
+		tex: V2f;
 	}
 
 	cpu_buffer: [] Vertex_Data;
@@ -133,18 +147,43 @@ Geometry :: struct {
 		return geometry;
 	}
 
+	make_square :: (allocator: Allocator, v1: V3f, v2: V3f, v3: V3f, v4: V3f) -> Geometry {
+		geometry := new(allocator);
+
+		n := normalize(cross(v2 - v1, v3 - v1));
+
+		geometry.cpu_buffer = NewArray(6, Geometry.Vertex_Data, false,, geometry.allocator);
+		geometry.cpu_buffer[0] = .{ pos = v1, nor = n, tex = .{ 0, 0 } };
+		geometry.cpu_buffer[1] = .{ pos = v2, nor = n, tex = .{ 1, 0 } };
+		geometry.cpu_buffer[2] = .{ pos = v3, nor = n, tex = .{ 1, 1 } };
+		geometry.cpu_buffer[3] = .{ pos = v1, nor = n, tex = .{ 0, 0 } };
+		geometry.cpu_buffer[4] = .{ pos = v3, nor = n, tex = .{ 1, 1 } };
+		geometry.cpu_buffer[5] = .{ pos = v4, nor = n, tex = .{ 0, 1 } };
+
+		upload(*geometry);
+
+		return geometry;
+	}
+
 	make_from_obj :: (allocator: Allocator, obj: string) -> Geometry {
 		geometry := Geometry.new(allocator);
 
 		vertices: [..] V3f;
 		vertices.allocator = temp;
+		array_add(*vertices, .{ 0, 0, 0 });
 
 		normals: [..] V3f;
 		normals.allocator = temp;
+		array_add(*normals, .{ 0, 0, 0 });
+
+		textures: [..] V2f;
+		textures.allocator = temp;
+		array_add(*textures, .{ 0, 0 });
 
 		Obj_Face :: struct {
-			positions: [3] u32;
-			normals: [3] u32;
+			positions: [3] u32 = .[ 0, 0, 0 ];
+			normals: [3] u32 = .[ 0, 0, 0 ];
+			textures: [3] u32 = .[ 0, 0, 0 ];
 		}
 
 		faces: [..] Obj_Face;
@@ -166,12 +205,7 @@ Geometry :: struct {
 			y: float32;
 			z: float32;
 
-			a: u32;
-			b: u32;
-			c: u32;
-			d: u32;
-			e: u32;
-			f: u32;
+			i: [9] u32;
 
 			if scan2(line, "v % % %", *x, *y, *z) {
 				array_add(*vertices, .{ x = x, y = y, z = z });
@@ -179,14 +213,38 @@ Geometry :: struct {
 			if scan2(line, "vn % % %", *x, *y, *z) {
 				array_add(*normals, .{ x = x, y = y, z = z });
 			}
-			if scan2(line, "f %//% %//% %//%", *a, *b, *c, *d, *e, *f) {
+			if scan2(line, "vt % %", *x, *y) {
+				array_add(*textures, .{ x = x, y = y });
+			}
+			if scan2(
+				line,
+				"f %/%/% %/%/% %/%/%",
+				*i[0], *i[1], *i[2], *i[3], *i[4], *i[5], *i[6], *i[7], *i[8]
+			) {
 				face: Obj_Face;
-				face.positions[0] = cast(u32)(a - 1);
-				face.positions[1] = cast(u32)(c - 1);
-				face.positions[2] = cast(u32)(e - 1);
-				face.normals[0] = cast(u32)(b - 1);
-				face.normals[1] = cast(u32)(d - 1);
-				face.normals[2] = cast(u32)(f - 1);
+				face.positions[0] = i[0];
+				face.positions[1] = i[3];
+				face.positions[2] = i[6];
+				face.normals[0] = i[2];
+				face.normals[1] = i[5];
+				face.normals[2] = i[8];
+				face.textures[0] = i[1];
+				face.textures[1] = i[4];
+				face.textures[2] = i[7];
+				array_add(*faces, face);
+			}
+			if scan2(
+				line,
+				"f %//% %//% %//%",
+				*i[0], *i[1], *i[2], *i[3], *i[4], *i[5]
+			) {
+				face: Obj_Face;
+				face.positions[0] = i[0];
+				face.positions[1] = i[2];
+				face.positions[2] = i[4];
+				face.normals[0] = i[1];
+				face.normals[1] = i[3];
+				face.normals[2] = i[5];
 				array_add(*faces, face);
 			}
 		}
@@ -198,18 +256,31 @@ Geometry :: struct {
 		for faces {
 			geometry.cpu_buffer[it_index * 3 + 0].pos = vertices[it.positions[0]];
 			geometry.cpu_buffer[it_index * 3 + 0].nor = normals[it.normals[0]];
+			geometry.cpu_buffer[it_index * 3 + 0].tex = textures[it.textures[0]];
 
 			geometry.cpu_buffer[it_index * 3 + 1].pos = vertices[it.positions[1]];
 			geometry.cpu_buffer[it_index * 3 + 1].nor = normals[it.normals[1]];
+			geometry.cpu_buffer[it_index * 3 + 1].tex = textures[it.textures[1]];
 
 			geometry.cpu_buffer[it_index * 3 + 2].pos = vertices[it.positions[2]];
 			geometry.cpu_buffer[it_index * 3 + 2].nor = normals[it.normals[2]];
+			geometry.cpu_buffer[it_index * 3 + 2].tex = textures[it.textures[2]];
 		}
 
 		upload(*geometry);
 
 		return geometry;
 	}
+}
+
+offset_of :: ($T: Type, $member: string) -> int {
+	for type_info(T).members {
+		if it.name == member
+			return it.offset_in_bytes;
+	}
+
+	assert(false, "Type '%' does not have member '%'", T, member);
+	return -1;
 }
 
 upload :: (geometry: *Geometry) {
@@ -235,15 +306,20 @@ upload :: (geometry: *Geometry) {
 	gl.glEnableVertexAttribArray(0); // Position
 	gl.glVertexAttribPointer(
 		0, 3, GL_FLOAT, GL_FALSE,
-		size_of(Geometry.Vertex_Data), xx 0
+		size_of(Geometry.Vertex_Data), xx offset_of(Geometry.Vertex_Data, "pos")
 	);
 
 	gl.glEnableVertexAttribArray(1); // Normal
 	gl.glVertexAttribPointer(
 		1, 3, GL_FLOAT, GL_FALSE,
-		size_of(Geometry.Vertex_Data), xx size_of(V3f)
+		size_of(Geometry.Vertex_Data), xx offset_of(Geometry.Vertex_Data, "nor")
 	);
 
+	gl.glEnableVertexAttribArray(2); // Texture
+	gl.glVertexAttribPointer(
+		2, 2, GL_FLOAT, GL_FALSE,
+		size_of(Geometry.Vertex_Data),  xx offset_of(Geometry.Vertex_Data, "tex")
+	);
 }
 
 render :: (geometry: Geometry, shader: Shader) {
@@ -253,3 +329,30 @@ render :: (geometry: Geometry, shader: Shader) {
 }
 
 
+Texture :: struct {
+	width: u32;
+	height: u32;
+	id: GLuint;
+
+	make_from_image :: (image: Image) -> Texture {
+		texture: Texture;
+		texture.width = image.width;
+		texture.height = image.height;
+		texture.id = 0;
+
+		upload(*texture, image.data);
+		return texture;
+	}
+}
+upload :: (texture: *Texture, data: [] u8) {
+	gl.glGenTextures(1, *texture.id);
+	gl.glBindTexture(GL_TEXTURE_2D, texture.id);
+	gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	gl.glTexImage2D(
+		GL_TEXTURE_2D, 0, GL_RGB, texture.width, texture.height, 0,
+		GL_RGB, GL_UNSIGNED_BYTE, data.data
+	);
+}

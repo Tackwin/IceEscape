@@ -59,3 +59,26 @@ look_at :: (eye: V3f, target: V3f, up: V3f) -> M4f {
 	M.data[15] = 1.0;
 	return M;
 }
+
+unproject_ndc :: (ndc: V2f, V: M4f, P: M4f) -> V3f {
+	iP := inverse(P);
+	ray_eye := iP * V4f.{ ndc.x, ndc.y, -1.0, 1.0 };
+	ray_eye.z = -1.0;
+	ray_eye.w = 0.0;
+
+	ray_world := v3(inverse(V) * ray_eye);
+	return normalize(ray_world);
+}
+
+
+Player :: struct {
+	controlled := false;
+
+	position  := V3f.{ 0, 0, 0 };
+	direction := V3f.{ 1, 1, 0 };
+
+	moving := false;
+	speed := 0.1;
+}
+
+
