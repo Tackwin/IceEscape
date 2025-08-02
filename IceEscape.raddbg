@@ -1,17 +1,18 @@
 // raddbg 0.9.16 project file
 
 recent_file: path: "src/main_game.jai"
+recent_file: path: "src/imgui_sdl_gl.jai"
 recent_file: path: "../jai/modules/gl/gl.jai"
 recent_file: path: "src/win32_platform.jai"
 recent_file: path: "../jai/modules/preload.jai"
-breakpoint:
-{
-  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_game.jai:14:1"
-  hit_count: 0
-}
 target:
 {
   executable: "bin/IceEscape.exe"
   working_directory: bin
   enabled: 1
+}
+breakpoint:
+{
+  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_game.jai:99:1"
+  hit_count: 1
 }

@@ -8,15 +8,27 @@ V3 :: struct(T: Type) {
 	z: T = 0;
 }
 
-V3d :: V3(f64);
-V3f :: V3(f32);
+V3d :: V3(float64);
+V3f :: V3(float32);
 
 M4 :: struct(T: Type) {
 	data: [16] T;
+
+	identity :: () -> M4(T) {
+		M: M4(T);
+		for * M.data
+			it.* = 0;
+		M.data[0 + 0 * 4] = 1;
+		M.data[1 + 1 * 4] = 1;
+		M.data[2 + 2 * 4] = 1;
+		M.data[3 + 3 * 4] = 1;
+		return M;
+	}
 }
 
-M4d :: M4(f64);
-M4f :: M4(f32);
+M4d :: M4(float64);
+M4f :: M4(float32);
+
 
 DEG_RAD :: PI / 180;
 RAD_DEG :: 180 / PI;
@@ -40,3 +52,8 @@ cross :: (a: V3($T), b: V3(T)) -> V3(T) {
 		a.x * b.y - a.y * b.x
 	};
 }
+
+dot :: (a: V3($T), b: V3(T)) -> T {
+	return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
