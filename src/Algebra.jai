@@ -29,6 +29,7 @@ V2 :: struct(T: Type) {
 
 V2d :: V2(float64);
 V2f :: V2(float32);
+V2i :: V2(int);
 
 // Column major
 M4 :: struct(T: Type) {
@@ -168,6 +169,18 @@ to_rotation_matrix :: (q: Q($T)) -> M4(T) {
 	);
 }
 
+angle_between :: (from: V3($T), to: V3(T), up: V3(T)) -> T {
+	c := cross(from, to);
+	n := normalize(c);
+	if dot(n, up) < 0
+		n = n * -1;
+
+	y := dot(n, c);
+	x := dot(from, to);
+
+	return atan2(y, x);
+}
+
 DEG_RAD :: PI / 180;
 RAD_DEG :: 180 / PI;
 
@@ -186,6 +199,10 @@ operator * :: (q: Q($T), v: V3(T)) -> V3(T) {
 
 operator - :: (a: V3($T), b: V3(T)) -> V3(T) #symmetric {
 	return .{ a.x - b.x, a.y - b.y, a.z - b.z };
+}
+
+operator - :: (a: V2($T), b: V2(T)) -> V2(T) #symmetric {
+	return .{ a.x - b.x, a.y - b.y };
 }
 
 operator + :: (a: V3($T), b: V3(T)) -> V3(T) #symmetric {
@@ -214,6 +231,10 @@ dot :: (a: V4($T), b: V4(T)) -> T {
 	return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
 
+norm :: (a: V3($T)) -> T {
+	return sqrt(dot(a, a));
+}
+
 operator * :: (A: M4($T), B: M4(T)) -> M4(T) {
 	C: M4(T);
 	for i: 0..3
@@ -233,6 +254,12 @@ operator * :: (M: M4($T), v4: V4(T)) -> V4(T) {
 	return v;
 }
 
+v2 :: (v3: V3($T)) -> V2(T) {
+	return .{ v3.x, v3.y };
+}
+v3 :: (v2: V2($T), z := 0.0) -> V3(T) {
+	return .{ v2.x, v2.y, z };
+}
 v3 :: (v4: V4($T)) -> V3(T) {
 	return .{ v4.x, v4.y, v4.z };
 }

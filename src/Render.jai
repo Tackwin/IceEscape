@@ -1,9 +1,9 @@
-#import "GL";
 #import "Basic";
-#import "Flat_Pool";
 #import "String";
 #import "Algebra";
 #import "Assets";
+#import "Platform";
+#import "Hash_Table";
 
 #scope_export
 
@@ -16,6 +16,8 @@ Shader :: struct {
 	program: GLuint;
 
 	allocator: Allocator;
+
+	locations: Table(string, int);
 
 	new :: (allocator: Allocator) -> Shader {
 		shader: Shader;
@@ -42,86 +44,98 @@ Shader :: struct {
 }
 
 set_uniform :: (shader: Shader, name: string, value: $T) {
-	gl.glUseProgram(shader.program);
-	loc := gl.glGetUniformLocation(shader.program, name.data);
+	context.rhi.glUseProgram(shader.program);
+
+	found, loc := table_find_new(*shader.locations, name);
+	if !found {
+		loc = context.rhi.glGetUniformLocation(shader.program, name.data);
+		table_add(*shader.locations, name, loc);
+	}
+
 	if loc < 0 {
 		print("Uniform % not found in shader program.\n", name);
 	}
 
 	if T == M4f {
-		gl.glUniformMatrix4fv(loc, 1, GL_FALSE, value.data.data);
+		context.rhi.glUniformMatrix4fv(xx loc, 1, GL_FALSE, value.data.data);
 	}
 }
 set_uniform :: (shader: Shader, name: string, value: Texture, unit: int) {
-	gl.glUseProgram(shader.program);
-	loc := gl.glGetUniformLocation(shader.program, name.data);
+	context.rhi.glUseProgram(shader.program);
+
+	found, loc := table_find_new(*shader.locations, name);
+	if !found {
+		loc = context.rhi.glGetUniformLocation(shader.program, name.data);
+		table_add(*shader.locations, name, loc);
+	}
+
 	if loc < 0 {
 		print("Uniform % not found in shader program.\n", name);
 	}
  
-	gl.glActiveTexture(xx (GL_TEXTURE0 + unit));
-	gl.glBindTexture(GL_TEXTURE_2D, value.id);
-	gl.glUniform1i(loc, xx unit);
+	context.rhi.glActiveTexture(xx (GL_TEXTURE0 + unit));
+	context.rhi.glBindTexture(GL_TEXTURE_2D, value.id);
+	context.rhi.glUniform1i(xx loc, xx unit);
 }
 
 
 compile :: (shader: *Shader) {
 	status: GLint;
 	// Compile vertex shader
-	vertex_shader := gl.glCreateShader(GL_VERTEX_SHADER);
+	vertex_shader := context.rhi.glCreateShader(GL_VERTEX_SHADER);
 	x := cast(s32)(shader.vertex_code.count);
-	gl.glShaderSource(vertex_shader, 1, *shader.vertex_code.data, *x);
-	gl.glCompileShader(vertex_shader);
+	context.rhi.glShaderSource(vertex_shader, 1, *shader.vertex_code.data, *x);
+	context.rhi.glCompileShader(vertex_shader);
 	status = 0;
-	gl.glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, *status);
+	context.rhi.glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, *status);
 	if status == 0 {
 		buffer := NewArray(1024, u8, false,, temp);
 		written: u32;
-		gl.glGetShaderInfoLog(vertex_shader, xx buffer.count, *written, buffer.data);
+		context.rhi.glGetShaderInfoLog(vertex_shader, xx buffer.count, *written, buffer.data);
 		error_msg: string = .{ data =buffer.data, count = written };
 
 		print("Vertex shader compilation failed: %\n", error_msg);
-		gl.glDeleteShader(vertex_shader);
+		context.rhi.glDeleteShader(vertex_shader);
 		return;
 	}
 	shader.vertex_shader = vertex_shader;
 
 	// Compile fragment shader
-	fragment_shader := gl.glCreateShader(GL_FRAGMENT_SHADER);
+	fragment_shader := context.rhi.glCreateShader(GL_FRAGMENT_SHADER);
 	x = cast(s32)(shader.fragment_code.count);
-	gl.glShaderSource(fragment_shader, 1, *shader.fragment_code.data, *x);
-	gl.glCompileShader(fragment_shader);
+	context.rhi.glShaderSource(fragment_shader, 1, *shader.fragment_code.data, *x);
+	context.rhi.glCompileShader(fragment_shader);
 	status = 0;
-	gl.glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, *status);
+	context.rhi.glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, *status);
 	if status == 0 {
 		buffer := NewArray(1024, u8, false,, temp);
 		written: u32;
-		gl.glGetShaderInfoLog(vertex_shader, xx buffer.count, *written, buffer.data);
+		context.rhi.glGetShaderInfoLog(vertex_shader, xx buffer.count, *written, buffer.data);
 		error_msg: string = .{ data =buffer.data, count = written };
 
 		print("Fragment shader compilation failed: %\n", error_msg);
-		gl.glDeleteShader(fragment_shader);
-		gl.glDeleteShader(vertex_shader);
+		context.rhi.glDeleteShader(fragment_shader);
+		context.rhi.glDeleteShader(vertex_shader);
 		return;
 	}
 	shader.fragment_shader = fragment_shader;
 
 	// Create shader program
-	shader_program := gl.glCreateProgram();
-	gl.glAttachShader(shader_program, shader.vertex_shader);
-	gl.glAttachShader(shader_program, shader.fragment_shader);
-	gl.glLinkProgram(shader_program);
+	shader_program := context.rhi.glCreateProgram();
+	context.rhi.glAttachShader(shader_program, shader.vertex_shader);
+	context.rhi.glAttachShader(shader_program, shader.fragment_shader);
+	context.rhi.glLinkProgram(shader_program);
 	status = 0;
-	gl.glGetProgramiv(shader_program, GL_LINK_STATUS, *status);
+	context.rhi.glGetProgramiv(shader_program, GL_LINK_STATUS, *status);
 	if status == 0 {
 		buffer := NewArray(1024, u8, false,, temp);
 		written: u32;
-		gl.glGetProgramInfoLog(vertex_shader, xx buffer.count, *written, buffer.data);
+		context.rhi.glGetProgramInfoLog(vertex_shader, xx buffer.count, *written, buffer.data);
 		error_msg: string = .{ data =buffer.data, count = buffer.count };
 		print("Shader program linking failed: %\n", error_msg);
-		gl.glDeleteProgram(shader_program);
-		gl.glDeleteShader(fragment_shader);
-		gl.glDeleteShader(vertex_shader);
+		context.rhi.glDeleteProgram(shader_program);
+		context.rhi.glDeleteShader(fragment_shader);
+		context.rhi.glDeleteShader(vertex_shader);
 		return;
 	}
 
@@ -286,46 +300,46 @@ offset_of :: ($T: Type, $member: string) -> int {
 upload :: (geometry: *Geometry) {
 	// If no object is assigned, create it.
 	if geometry.gpu_object == 0 {
-		gl.glGenVertexArrays(1, *geometry.gpu_object);
+		context.rhi.glGenVertexArrays(1, *geometry.gpu_object);
 	}
-	gl.glBindVertexArray(geometry.gpu_object);
+	context.rhi.glBindVertexArray(geometry.gpu_object);
 
 	// If the buffer is null, create it.
 	if geometry.gpu_buffer == 0 {
-		gl.glGenBuffers(1, *geometry.gpu_buffer);
+		context.rhi.glGenBuffers(1, *geometry.gpu_buffer);
 	}
 
-	gl.glBindBuffer(GL_ARRAY_BUFFER, geometry.gpu_buffer);
-	gl.glBufferData(
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, geometry.gpu_buffer);
+	context.rhi.glBufferData(
 		GL_ARRAY_BUFFER,
 		geometry.cpu_buffer.count * size_of(Geometry.Vertex_Data),
 		geometry.cpu_buffer.data,
 		GL_STATIC_DRAW
 	);
 
-	gl.glEnableVertexAttribArray(0); // Position
-	gl.glVertexAttribPointer(
+	context.rhi.glEnableVertexAttribArray(0); // Position
+	context.rhi.glVertexAttribPointer(
 		0, 3, GL_FLOAT, GL_FALSE,
 		size_of(Geometry.Vertex_Data), xx offset_of(Geometry.Vertex_Data, "pos")
 	);
 
-	gl.glEnableVertexAttribArray(1); // Normal
-	gl.glVertexAttribPointer(
+	context.rhi.glEnableVertexAttribArray(1); // Normal
+	context.rhi.glVertexAttribPointer(
 		1, 3, GL_FLOAT, GL_FALSE,
 		size_of(Geometry.Vertex_Data), xx offset_of(Geometry.Vertex_Data, "nor")
 	);
 
-	gl.glEnableVertexAttribArray(2); // Texture
-	gl.glVertexAttribPointer(
+	context.rhi.glEnableVertexAttribArray(2); // Texture
+	context.rhi.glVertexAttribPointer(
 		2, 2, GL_FLOAT, GL_FALSE,
 		size_of(Geometry.Vertex_Data),  xx offset_of(Geometry.Vertex_Data, "tex")
 	);
 }
 
 render :: (geometry: Geometry, shader: Shader) {
-	gl.glUseProgram(shader.program);
-	gl.glBindVertexArray(geometry.gpu_object);
-	gl.glDrawArrays(GL_TRIANGLES, 0, xx geometry.cpu_buffer.count);
+	context.rhi.glUseProgram(shader.program);
+	context.rhi.glBindVertexArray(geometry.gpu_object);
+	context.rhi.glDrawArrays(GL_TRIANGLES, 0, xx geometry.cpu_buffer.count);
 }
 
 
@@ -345,14 +359,14 @@ Texture :: struct {
 	}
 }
 upload :: (texture: *Texture, data: [] u8) {
-	gl.glGenTextures(1, *texture.id);
-	gl.glBindTexture(GL_TEXTURE_2D, texture.id);
-	gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	gl.glTexImage2D(
-		GL_TEXTURE_2D, 0, GL_RGB, texture.width, texture.height, 0,
+	context.rhi.glGenTextures(1, *texture.id);
+	context.rhi.glBindTexture(GL_TEXTURE_2D, texture.id);
+	context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	context.rhi.glTexImage2D(
+		GL_TEXTURE_2D, 0, GL_RGB8, texture.width, texture.height, 0,
 		GL_RGB, GL_UNSIGNED_BYTE, data.data
 	);
 }

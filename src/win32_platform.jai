@@ -2,27 +2,184 @@
 #import "Window_Creation";
 #import "Input";
 #import "Basic";
-#import "GL";
+GL :: #import "GL";
+#import "SDL";
+#import "Reflection";
 
-windows: [..] Window_Type;
+sdl_window: *SDL_Window;
+sdl_gl_context: SDL_GLContext;
+g_Time: u64 = 0;
+
+pressed: [Key_COUNT] bool;
+
+map_sdl_to_key :: (key: int) -> int {
+	if key == {
+		case xx SDLK_a; return xx Key.A;
+		case xx SDLK_z; return xx Key.Z;
+		case xx SDLK_e; return xx Key.E;
+		case xx SDLK_r; return xx Key.R;
+		case xx SDLK_t; return xx Key.T;
+		case xx SDLK_y; return xx Key.Y;
+		case xx SDLK_u; return xx Key.U;
+		case xx SDLK_i; return xx Key.I;
+		case xx SDLK_o; return xx Key.O;
+		case xx SDLK_p; return xx Key.P;
+		case xx SDLK_q; return xx Key.Q;
+		case xx SDLK_s; return xx Key.S;
+		case xx SDLK_d; return xx Key.D;
+		case xx SDLK_f; return xx Key.F;
+		case xx SDLK_g; return xx Key.G;
+		case xx SDLK_h; return xx Key.H;
+		case xx SDLK_j; return xx Key.J;
+		case xx SDLK_k; return xx Key.K;
+		case xx SDLK_l; return xx Key.L;
+		case xx SDLK_m; return xx Key.M;
+		case xx SDLK_w; return xx Key.W;
+		case xx SDLK_x; return xx Key.X;
+		case xx SDLK_c; return xx Key.C;
+		case xx SDLK_v; return xx Key.V;
+		case xx SDLK_b; return xx Key.B;
+		case xx SDLK_n; return xx Key.N;
+	}
+	return key;
+}
 
 #scope_export
 
-query :: (req: *Window_Query) {
 
-	if req.kind == {
-		case Window_Query.Kind.Create;
-			window := create_window(req.width, req.height, req.title);
+win32_get_frame_info :: () -> Frame_Info {
+	info: Frame_Info;
+	// Setup display size (every frame to accommodate for window resizing)
+	w, h: s32;
+	display_w, display_h: s32;
+	SDL_GetWindowSize(sdl_window, *w, *h);
+	SDL_GL_GetDrawableSize(sdl_window, *display_w, *display_h);
 
-			req.id = windows.count;
-			array_add(*windows, window);
-		case Window_Query.Kind.Update;
-			update_window_events();
-			for events_this_frame {
-				if it.type == .QUIT
-					req.ask_quit = true;
-			}
-		case Window_Query.Kind.Context;
-			wgl_create_context(windows[req.id], null, 3, 3, true, true, 4);
+	info.window_size = .{ xx w, xx h };
+	info.framebuffer_size = .{ xx display_w, xx display_h };
+
+	frequency := SDL_GetPerformanceFrequency();
+	current_time := SDL_GetPerformanceCounter();
+	if g_Time > 0 {
+		info.delta_time = cast(float)((cast(float64)(current_time - g_Time)) / frequency);
+	} else {
+		info.delta_time = (1.0/60.0);
 	}
+	g_Time = current_time;
+
+	// Setup inputs
+	// (we already got mouse wheel, keyboard keys & characters from SDL_PollEvent())
+	mx, my: s32;
+	mouseMask := SDL_GetMouseState(*mx, *my);
+	info.mouse_position.x = xx mx;
+	info.mouse_position.y = xx my;
+	info.window_focused =  (SDL_GetWindowFlags(sdl_window) & SDL_WINDOW_MOUSE_FOCUS) > 0;
+
+	event: SDL_Event;
+	while SDL_PollEvent(*event) {
+		if event.type == SDL_MOUSEWHEEL {
+			if event.wheel.y > 0
+				info.mouse_wheel = 1;
+			if event.wheel.y < 0
+				info.mouse_wheel = -1;
+		}
+		if event.type == SDL_MOUSEBUTTONDOWN {
+			if event.button.button == SDL_BUTTON_LEFT   pressed[Key.MouseLeft] = true;
+			if event.button.button == SDL_BUTTON_RIGHT  pressed[Key.MouseRight] = true;
+			if event.button.button == SDL_BUTTON_MIDDLE pressed[Key.MouseMiddle] = true;
+		}
+		if event.type == SDL_MOUSEBUTTONUP {
+			if event.button.button == SDL_BUTTON_LEFT   pressed[Key.MouseLeft] = false;
+			if event.button.button == SDL_BUTTON_RIGHT  pressed[Key.MouseRight] = false;
+			if event.button.button == SDL_BUTTON_MIDDLE pressed[Key.MouseMiddle] = false;
+		}
+		// if event.type == SDL_TEXTINPUT {
+		//     io.AddInputCharactersUTF8(io, xx event.text.text.data);
+		// }
+		if event.type == SDL_KEYUP {
+			key := event.key.keysym.sym & (xx ~(1<<30));
+			pressed[map_sdl_to_key(xx key)] = false;
+		}
+		if event.type == SDL_KEYDOWN {
+			key := event.key.keysym.sym & (xx ~(1<<30));
+			pressed[map_sdl_to_key(xx key)] = true;
+			// kmod := SDL_GetModState();
+			// io.KeyShift = ((kmod & KMOD_SHIFT) != 0);
+			// io.KeyCtrl = ((kmod & KMOD_CTRL) != 0);
+			// io.KeyAlt = ((kmod & KMOD_ALT) != 0);
+			// io.KeySuper = ((kmod & KMOD_GUI) != 0);
+		}
+		if event.type == SDL_QUIT
+			info.quit = true;
+		if event.type == SDL_WINDOWEVENT
+		&& event.window.event == SDL_WINDOWEVENT_CLOSE
+		&& event.window.windowID == SDL_GetWindowID(sdl_window)
+			info.quit = true;
+	}
+
+	for * info.key_pressed {
+		it.* = pressed[it_index];
+	}
+
+	return info;
+}
+
+win32_end_frame :: () {
+	SDL_GL_SwapWindow(sdl_window);
+}
+
+init_platform :: () -> Platform {
+	platform: Platform;
+	for * pressed
+		it.* = false;
+
+	SDL_Init(SDL_INIT_VIDEO);
+
+	sdl_window = SDL_CreateWindow(
+		"Ice Escape",
+		SDL_WINDOWPOS_CENTERED,
+		SDL_WINDOWPOS_CENTERED,
+		1366,
+		768,
+		SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE
+	);
+
+	if sdl_window == null {
+		return .{};
+	}
+
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, xx SDL_GL_CONTEXT_PROFILE_CORE);
+
+	sdl_gl_context = SDL_GL_CreateContext(sdl_window);
+	if !sdl_gl_context {
+		return .{};
+	}
+
+	platform.get_frame_info = win32_get_frame_info;
+	platform.end_frame = win32_end_frame;
+	GL.gl_load(*GL.gl, SDL_GL_GetProcAddress);
+
+	meta_run :: () -> string {
+		sb: String_Builder;
+
+		info : *Type_Info_Struct = cast(*Type_Info_Struct) type_info(RHI_proc);
+		for info.members {
+			print(*sb, "platform.rhi.% = GL.%;\n", it.name, it.name);
+		}
+
+		return builder_to_string(*sb);
+	}
+	#insert #run meta_run();
+
+	context.rhi = platform.rhi;
+	return platform;
+}
+
+
+exit_platform :: (platform: Platform) {
+	SDL_GL_DeleteContext(sdl_gl_context);
+	SDL_DestroyWindow(sdl_window);
+	SDL_Quit();
 }

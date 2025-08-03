@@ -1,42 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>OpenGL ES 3.3 (WebGL 2.0) Canvas</title>
-	<style>
-		body {
-			margin: 0;
-			overflow: hidden;
-		}
-		canvas {
-			display: block;
-		}
-	</style>
+    <link rel="manifest" href="manifest.json" />
+    <link
+          rel="icon"
+          href="icon.png"
+          type="image/png"
+          sizes="512x512"
+    />
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0">
+    <style>
+        body {
+            margin: 0;
+            background-color: #333;
+            width:  100%;
+            height: 100%;
+            overflow: hidden; /* Prevent scrolling */
+        }
+    </style>
 </head>
+
 <body>
-	<canvas id="glCanvas"></canvas>
-	<script>
-		// Get the canvas element
-		const canvas = document.getElementById('glCanvas');
-		// Set the canvas to fill the window
-		canvas.width = 1366;
-		canvas.height = 768;
-
-		// Initialize WebGL 2.0 context
-		const gl = canvas.getContext('webgl2');
-		if (!gl) {
-			console.error('WebGL 2.0 is not supported by your browser.');
-		} else {
-			console.log('WebGL 2.0 context initialized successfully.');
-		}
-
-		// Set the viewport to match the canvas size
-		gl.viewport(0, 0, canvas.width, canvas.height);
-
-		// Clear the canvas with a color
-		gl.clearColor(0.0, 0.0, 0.0, 1.0); // Black
-		gl.clear(gl.COLOR_BUFFER_BIT);
-	</script>
+<script src="runtime.js"></script>
 </body>
+
 </html>

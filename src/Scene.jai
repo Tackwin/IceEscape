@@ -1,8 +1,26 @@
-#load "imgui_sdl_gl.jai";
-
 #import "Algebra";
+#import "Math";
+#import "Basic";
+#import "String";
+Render :: #import "Render";
+#import "Tagged_Union";
 
 #scope_export
+
+
+Scene :: struct {
+	texture_shader: Render.Shader;
+	ice_texture: Render.Texture;
+	grass_texture: Render.Texture;
+
+	tile_geometry: Render.Geometry;
+
+	camera: Camera;
+
+	player: Player;
+
+	current_terrain: *Terrain;
+}
 
 Camera :: struct {
 	position: V3f;
@@ -75,10 +93,213 @@ Player :: struct {
 	controlled := false;
 
 	position  := V3f.{ 0, 0, 0 };
-	direction := V3f.{ 1, 1, 0 };
+	direction := V3f.{ 1, 0, 0 };
+	target_direction := V3f.{ 1, 0, 0 };
 
-	moving := false;
-	speed := 0.1;
+	walking_toward_position := V3f.{ 0, 0, 0 };
+	walking_toward := false;
+
+	slipping := false;
+
+	speed := 10.0;
+	turning_speed := 360 * 2.5;
+
+	Command_Move :: struct {
+		ground_target: V2f;
+	}
+	Command :: Tagged_Union(Command_Move);
+}
+make_player_command :: (command: $T) -> Player.Command {
+	cmd: Player.Command;
+	set(*cmd, command);
+	return cmd;
+}
+
+update :: (scene: Scene, player: *Player, dt: float32) {
+	tile, ok := tile_under(scene.current_terrain, player.position);
+	if !ok {
+		return;
+	}
+	if #complete tile.kind == {
+		case .Ice; #through;
+		case .Slippy_Ice;
+			player.slipping = true;
+		case .Grass;
+			player.slipping = false;
+		case .None;
+	}
+
+	if player.slipping {
+		dt_angle := angle_between(player.direction, player.target_direction, V3f.{ 0, 0, 1 });
+		turn_angle := 0.0;
+		if dt_angle < 0
+			turn_angle = -min(player.turning_speed * dt * DEG_RAD, -dt_angle);
+		else
+			turn_angle = min(player.turning_speed * dt * DEG_RAD, dt_angle);
+
+		q := axis_angle(V3f.{ 0, 0, 1 }, turn_angle);
+		player.direction = q * player.direction;
+		player.direction = normalize(player.direction);
+
+		player.position += player.direction * player.speed * dt;
+	} else {
+		player.direction = player.target_direction;
+
+		if player.walking_toward {
+			dt_pos := player.walking_toward_position - player.position;
+			dist := norm(dt_pos);
+			dt_pos = normalize(dt_pos);
+
+			dist = min(dist, player.speed * dt);
+			player.position += dt_pos * dist;
+			player.target_direction = dt_pos;
+
+			if norm(player.position - player.walking_toward_position) < 0.1 {
+				player.walking_toward = false;
+				player.walking_toward_position = player.position; // Reset to current position
+			}
+		}
+	}
+}
+
+process :: (scene: Scene, player: *Player, command: Player.Command) {
+	move : *Player.Command_Move = isa(command, Player.Command_Move);
+	if move {
+		tile, ok := tile_under(scene.current_terrain, player.position);
+		if ok {
+			if #complete tile.kind == {
+				case .Ice; #through;
+				case .Slippy_Ice;
+					player.target_direction = normalize(
+						v3(move.ground_target - v2(player.position))
+					);
+					player.walking_toward = false;
+				case .Grass;
+					player.walking_toward = true;
+					player.walking_toward_position = v3(move.ground_target);
+				case .None;
+			}
+		}
+	}
 }
 
 
+Tile :: struct {
+	Kind :: enum {
+		None       :: 0;
+		Ice        :: 1;
+		Grass      :: 2;
+		Slippy_Ice :: 3;
+	}
+
+	kind: Kind;
+}
+
+Terrain :: struct {
+	tiles_count: V2i;
+	spawn_tile: V2i;
+
+	tiles: [..] Tile;
+}
+
+load_terrain_from_ascii :: (ascii: string) -> Terrain {
+	max_width := 1;
+	height := 0;
+
+	lines := split(ascii, "\n",, temp);
+	height = lines.count;
+
+	for lines
+		max_width = max(max_width, it.count);
+	max_width -= 1; // We remove the \n
+
+	terrain: Terrain;
+	terrain.tiles_count = .{ max_width, height };
+
+	array_resize(*terrain.tiles, max_width * height);
+
+	for * terrain.tiles {
+		it.kind = .None;
+	}
+
+	for y: 0..height - 1 {
+		line := lines[height - 1 - y];
+		if line.count <= 1
+			continue;
+
+		width := line.count - 1;
+
+		low_x := (max_width - width) / 2;
+		hi_x := low_x + width;
+
+		for x: low_x..hi_x-1 {
+			if line[x] == {
+				case #char "I";
+					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Ice;
+				case #char "G";
+					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Grass;
+				case #char "i";
+					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Slippy_Ice;
+				case #char "S";
+					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Grass;
+					terrain.spawn_tile = .{ x, y };
+			}
+		}
+	}
+
+	return terrain;
+}
+
+tile_under :: (terrain: Terrain, spot: V3f) -> Tile, bool {
+	xi := cast(int) floor(spot.x);
+	yi := cast(int) floor(spot.y);
+
+	if xi < 0 || xi >= terrain.tiles_count.x || yi < 0 || yi >= terrain.tiles_count.y {
+		return Tile.{}, false; // Out of bounds
+	}
+
+	tile_index := xi + yi * terrain.tiles_count.x;
+	if tile_index < 0 || tile_index >= terrain.tiles.count {
+		return Tile.{}, false; // Out of bounds
+	}
+
+	return terrain.tiles[tile_index], true; // Return the tile and true to indicate it exists
+}
+
+render :: (scene: Scene, terrain: Terrain) {
+	V := look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
+	P := perspective(scene.camera);
+
+	Render.set_uniform(scene.texture_shader, "V", V);
+	Render.set_uniform(scene.texture_shader, "P", P);
+	Render.set_uniform(scene.texture_shader, "texture_sampler", scene.ice_texture, 0);
+
+	used_texture := *scene.ice_texture;
+
+	for y: 0..terrain.tiles_count.y - 1 {
+		for x: 0..terrain.tiles_count.x - 1 {
+			tile := terrain.tiles[x + y * terrain.tiles_count.x];
+
+			wanted_texture := *scene.ice_texture;
+			if tile.kind == {
+				case .Ice;
+					wanted_texture = *scene.ice_texture;
+				case .Grass;
+					wanted_texture = *scene.grass_texture;
+			}
+
+			if wanted_texture != used_texture {
+				Render.set_uniform(scene.texture_shader, "texture_sampler", wanted_texture.*, 0);
+				used_texture = wanted_texture;
+			}
+
+			M := M4f.translate(.{ cast(float32) x, cast(float32) y, 0 });
+			Render.set_uniform(scene.texture_shader, "M", M);
+			Render.render(scene.tile_geometry, scene.texture_shader);
+		}
+	}
+}
+spawn_into :: (player: *Player, terrain: Terrain) {
+	player.position.x = xx terrain.spawn_tile.x + 0.0;
+	player.position.y = xx terrain.spawn_tile.y + 0.0;
+}

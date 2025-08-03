@@ -1,5 +1,6 @@
 // raddbg 0.9.16 project file
 
+recent_file: path: "src/Scene.jai"
 recent_file: path: "src/main_game.jai"
 recent_file: path: "src/imgui_sdl_gl.jai"
 recent_file: path: "../jai/modules/gl/gl.jai"
@@ -13,6 +14,6 @@ target:
 }
 breakpoint:
 {
-  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_game.jai:99:1"
+  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Scene.jai:174:1"
   hit_count: 1
 }

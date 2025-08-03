@@ -1,212 +1,183 @@
-#load "imgui_sdl_gl.jai";
+#if OS == .WINDOWS {
+	#import "imgui_sdl_gl";
+}
+#import "Math";
+#import "Basic";
 #import "Algebra";
+#import "Platform";
 Scene :: #import "Scene";
 Render :: #import "Render";
 Assets :: #import "Assets";
 
 show_inspector := false;    // Wish we could declare static variables inside functions.
 
+STARTER_TERRAIN_ASCII :: #string TERRAIN
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGSGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+TERRAIN
+
+
 main :: () {
+	platform := init_platform();
+	rhi := platform.rhi;
 
-	SDL_Init(SDL_INIT_VIDEO);
-
-	window := SDL_CreateWindow(
-		"Ice Escape",
-		SDL_WINDOWPOS_CENTERED,
-		SDL_WINDOWPOS_CENTERED,
-		1366,
-		768,
-		SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE
-	);
-
-	if window == null {
-		return;
+	#if OS == .WINDOWS {
+		imgui_context := ImGui.CreateContext();
+		ImGui.StyleColorsClassic();
 	}
 
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, xx SDL_GL_CONTEXT_PROFILE_CORE);
+	clear_color := V4f.{0.45, 0.55, 0.60, 1.00};
 
-	gl_context := SDL_GL_CreateContext(window);
-	if !gl_context {
-		return;
-	}
+	scene: Scene.Scene;
 
-	gl_load(*gl, SDL_GL_GetProcAddress);
-
-	imgui_context := ImGui.CreateContext();
-	// Setup ImGui binding
-	ImGui_ImplSdl_Init(window);
-
-	// Setup style
-	ImGui.StyleColorsClassic();
-
-	io := ImGui.GetIO();
-
-	clear_color := rgba(0.45, 0.55, 0.60, 1.00);
-
-	camera: Scene.Camera;
-	camera.position = .{ 0, -9, 18 };
-	camera.target = .{ 0, 0, 0 };
-	camera.fov = 55;
-
-	player: Scene.Player;
-	player.controlled = true;
-
-	shader := Render.Shader.make(context.allocator, Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT);
-	texture_shader := Render.Shader.make(
+	scene.camera.position = .{ 0, -9, 18 };
+	scene.camera.target = .{ 0, 0, 0 };
+	scene.camera.fov = 55;
+	scene.texture_shader = Render.Shader.make(
 		context.allocator, Assets.PLAIN_VERTEX, Assets.TEXTURE_FRAGMENT
 	);
-	geometry := Render.Geometry.make_from_obj(context.allocator, Assets.CAR_OBJ);
-	texture := Render.Texture.make_from_image(Assets.ICE_TEXTURE);
-	tile := Render.Geometry.make_square(
+	scene.ice_texture = Render.Texture.make_from_image(Assets.ICE_TEXTURE);
+	scene.grass_texture = Render.Texture.make_from_image(Assets.GRASS_TEXTURE);
+	scene.tile_geometry = Render.Geometry.make_square(
 		context.allocator, .{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
 	);
+	scene.player.controlled = true;
 
-	pressed: [#run enum_values_as_s64(Key).count] bool;
-	just_pressed: [#run enum_values_as_s64(Key).count] bool;
-	just_released: [#run enum_values_as_s64(Key).count] bool;
-	mouse_position: V2f = .{ 0, 0 };
-	window_size: V2f = .{ 0, 0 };
+	shader := Render.Shader.make(context.allocator, Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT);
+	geometry := Render.Geometry.make_from_obj(context.allocator, Assets.CAR_OBJ);
+
+	just_pressed: [Key_COUNT] bool;
+	just_released: [Key_COUNT] bool;
+	pressed: [Key_COUNT] bool;
+
+	T := 0;
+
+	terrain := Scene.load_terrain_from_ascii(STARTER_TERRAIN_ASCII);
+	Scene.spawn_into(*scene.player, terrain);
+	{
+		dt := scene.camera.position - scene.camera.target;
+		scene.camera.target = scene.player.position;
+		scene.camera.position = scene.camera.target + dt;
+	}
+	scene.current_terrain = *terrain;
 
 	// Main loop
 	done := false;
 	while !done {
-		for * just_pressed
-			it.* = false;
-		for * just_released
-			it.* = false;
 
-		// >PLATFORM
-		event: SDL_Event;
-		while SDL_PollEvent(*event) {
-			ImGui_ImplSdl_ProcessEvent(*event);
-			if event.type == SDL_QUIT
-				done = true;
-			if event.type == SDL_WINDOWEVENT
-			&& event.window.event == SDL_WINDOWEVENT_CLOSE
-			&& event.window.windowID == SDL_GetWindowID(window)
-				done = true;
-
-			handle_key :: (mykey: Key, sdlkey: SDL_Keycode) #expand {
-				if event.type == SDL_KEYDOWN {
-					if event.key.keysym.sym == sdlkey {
-						if !pressed[mykey]
-							just_pressed[mykey] = true;
-						pressed[mykey] = true;
-					}
-				}
-				if event.type == SDL_KEYUP {
-					if event.key.keysym.sym == sdlkey {
-						just_released[mykey] = true;
-						pressed[mykey] = false;
-					}
-				}
-			}
-
-			handle_mouse :: (mykey: Key, sdlmouse: int) #expand {
-				if event.type == SDL_MOUSEBUTTONDOWN {
-					if event.button.button == sdlmouse {
-						if !pressed[mykey]
-							just_pressed[mykey] = true;
-						pressed[mykey] = true;
-					}
-				}
-				if event.type == SDL_MOUSEBUTTONUP {
-					if event.button.button == sdlmouse {
-						just_released[mykey] = true;
-						pressed[mykey] = false;
-					}
-				}
-			}
-
-			handle_key(Key.Z, SDLK_z);
-			handle_key(Key.Q, SDLK_q);
-			handle_key(Key.S, SDLK_s);
-			handle_key(Key.D, SDLK_d);
-			handle_mouse(Key.M_Left, SDL_BUTTON_LEFT);
-			handle_mouse(Key.M_Right, SDL_BUTTON_RIGHT);
-			handle_mouse(Key.M_Middle, SDL_BUTTON_MIDDLE);
+		frame_info := platform.get_frame_info();
+		if frame_info.quit
+			done = true;
+		for * just_pressed {
+			if frame_info.key_pressed[it_index] && !pressed[it_index]
+				it.* = true;
+			else
+				it.* = false;
 		}
-		{
-			mx, my: s32;
-			SDL_GetMouseState(*mx, *my);
-			mouse_position.x = cast(float32) mx;
-			mouse_position.y = cast(float32) my;
-
-			w, h: s32;
-			SDL_GetWindowSize(window, *w, *h);
-			window_size = .{xx w, xx h};
+		for * just_released {
+			if !frame_info.key_pressed[it_index] && pressed[it_index]
+				it.* = true;
+			else
+				it.* = false;
+		}
+		for * pressed {
+			it.* = frame_info.key_pressed[it_index];
 		}
 
-		V := Scene.look_at(camera.position, camera.target, .{ 0, 0, 1 });
-		P := Scene.perspective(camera);
+		V := Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
+		P := Scene.perspective(scene.camera);
 
-		ImGui_ImplSdl_NewFrame(window);
-		ImGui.NewFrame();
+		#if OS == .WINDOWS {
+			ImGui_Impl_NewFrame(frame_info, platform);
+			ImGui.NewFrame();
+		}
 
 		if pressed[Key.Q] {
-			camera.position.x -= 0.1;
-			camera.target.x -= 0.1;
+			scene.camera.position.x -= 0.1;
+			scene.camera.target.x -= 0.1;
 		}
 		if pressed[Key.D] {
-			camera.position.x += 0.1;
-			camera.target.x += 0.1;
+			scene.camera.position.x += 0.1;
+			scene.camera.target.x += 0.1;
 		}
 		if pressed[Key.S] {
-			camera.position.y -= 0.1;
-			camera.target.y -= 0.1;
+			scene.camera.position.y -= 0.1;
+			scene.camera.target.y -= 0.1;
 		}
 		if pressed[Key.Z] {
-			camera.position.y += 0.1;
-			camera.target.y += 0.1;
+			scene.camera.position.y += 0.1;
+			scene.camera.target.y += 0.1;
 		}
 
-		if just_pressed[Key.M_Left] {
+		T += 1;
+
+		if just_pressed[Key.MouseLeft] {
 			r := Scene.unproject_ndc(
 				.{
-					mouse_position.x / window_size.x * 2 - 1,
-					1 - mouse_position.y / window_size.y * 2
+					frame_info.mouse_position.x / frame_info.window_size.x * 2 - 1,
+					1 - frame_info.mouse_position.y / frame_info.window_size.y * 2
 				},
 				V,
 				P
 			);
 
-			target, ok := ray_plane(camera.position, r, .{ 0, 0, 1 });
+			target, ok := ray_plane(scene.camera.position, r, .{ 0, 0, 1 });
 			if ok {
-				player.moving = true;
-				player.direction = normalize(target - player.position);
+				command: Scene.Player.Command_Move;
+				command.ground_target = v2(target);
+
+				Scene.process(scene, *scene.player, Scene.make_player_command(command));
 			}
 		}
 
-		if player.moving {
-			player.position += player.direction * player.speed;
-		}
+		Scene.update(scene, *scene.player, frame_info.delta_time);
 
-
-		// Rendering
-		ImGui.Render();
-
-		glViewport(0, 0, xx io.DisplaySize.x, xx io.DisplaySize.y);
-		glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
-		gl.glEnable(GL_BLEND);
-		gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		gl.glEnable(GL_DEPTH_TEST);
-		gl.glDepthFunc(GL_LESS);
-		gl.glEnable(GL_CULL_FACE);
-		gl.glCullFace(GL_BACK);
-		gl.glFrontFace(GL_CCW);
-		gl.glClearDepth(1.0);
-		gl.glColorMaski(0, true, true, true, true);
-		gl.glDrawBuffer(GL_BACK);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		rhi.glViewport(0, 0, xx frame_info.framebuffer_size.x, xx frame_info.framebuffer_size.y);
+		rhi.glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
+		rhi.glEnable(GL_BLEND);
+		rhi.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		rhi.glEnable(GL_DEPTH_TEST);
+		rhi.glEnable(GL_CULL_FACE);
+		rhi.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		{
 			M := M4f.identity();
 
-			q := from_unit_vectors(V3f.{ 1, 0, 0 }, player.direction);
+			q := from_unit_vectors(V3f.{ 1, 0, 0 }, scene.player.direction);
 			M = to_rotation_matrix(q);
-			M = M4f.translate(player.position) * M;
+
+			M = M4f.translate(scene.player.position) * M;
 
 			Render.set_uniform(shader, "M", M);
 			Render.set_uniform(shader, "V", V);
@@ -215,28 +186,30 @@ main :: () {
 			Render.render(geometry, shader);
 		}
 
-		Render.set_uniform(texture_shader, "V", V);
-		Render.set_uniform(texture_shader, "P", P);
-		Render.set_uniform(texture_shader, "texture_sampler", texture, 0);
+		Scene.render(scene, terrain);
+		//Render.set_uniform(texture_shader, "V", V);
+		//Render.set_uniform(texture_shader, "P", P);
+		//Render.set_uniform(texture_shader, "texture_sampler", texture, 0);
+//
+		//for x: -20..20 {
+		//	for y: -20..20 {
+		//		M := M4f.translate(.{ cast(float32) x, cast(float32) y, 0 });
+		//		Render.set_uniform(texture_shader, "M", M);
+//
+		//		Render.render(tile, texture_shader);
+		//	}
+		//}
 
-		for x: -20..20 {
-			for y: -20..20 {
-				M := M4f.translate(.{ cast(float32) x, cast(float32) y, 0 });
-				Render.set_uniform(texture_shader, "M", M);
-
-				Render.render(tile, texture_shader);
-			}
+		#if OS == .WINDOWS {
+			ImGui.Render();
+			ImGui_ImplSdl_RenderDrawLists(platform.rhi, ImGui.GetDrawData());
 		}
-
-		ImGui_ImplSdl_RenderDrawLists(ImGui.GetDrawData());
-		SDL_GL_SwapWindow(window);
+		platform.end_frame();
 	}
-
-	// Cleanup
-	ImGui_ImplSdl_Shutdown();
-	ImGui.DestroyContext(imgui_context);
-	SDL_GL_DeleteContext(gl_context);
-	SDL_DestroyWindow(window);
-	SDL_Quit();
+	#if OS == .WINDOWS {
+		ImGui_Impl_Shutdown(platform);
+		ImGui.DestroyContext(imgui_context);
+	}
+	exit_platform(platform);
 }
 
