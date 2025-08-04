@@ -5,6 +5,7 @@
 #import "Basic";
 #import "Algebra";
 #import "Platform";
+#import "Communication";
 Scene :: #import "Scene";
 Render :: #import "Render";
 Assets :: #import "Assets";
@@ -47,6 +48,36 @@ GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
 GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
 TERRAIN
 
+send_web_message :: (platform: Platform, command: Command) {
+	payload := NewArray(size_of(Command), u8, false,, temp);
+	memcpy(payload.data, cast(*void)*command, size_of(Command));
+	platform.send_web_message(payload);
+}
+
+// 				Scene.process(scene, *scene.player, Scene.make_player_command(command));
+
+parse_web_message :: (frame_info: Frame_Info) -> [] Command {
+	commands := NewArray(frame_info.message_received_count, Command, false,, temp);
+
+	cursor := 0;
+	for 0..frame_info.message_received_count - 1 {
+		if frame_info.message_received[it].count != size_of(Command)
+			continue;
+
+		command: Command;
+		memcpy(
+			cast(*void)*command,
+			frame_info.message_received[it].data,
+			size_of(Command)
+		);
+
+		commands[cursor] = command;
+		cursor += 1;
+	}
+
+	commands.count = cursor;
+	return commands;
+}
 
 main :: () {
 	platform := init_platform();
@@ -72,7 +103,6 @@ main :: () {
 	scene.tile_geometry = Render.Geometry.make_square(
 		context.allocator, .{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
 	);
-	scene.player.controlled = true;
 
 	shader := Render.Shader.make(context.allocator, Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT);
 	geometry := Render.Geometry.make_from_obj(context.allocator, Assets.CAR_OBJ);
@@ -84,12 +114,6 @@ main :: () {
 	T := 0;
 
 	terrain := Scene.load_terrain_from_ascii(STARTER_TERRAIN_ASCII);
-	Scene.spawn_into(*scene.player, terrain);
-	{
-		dt := scene.camera.position - scene.camera.target;
-		scene.camera.target = scene.player.position;
-		scene.camera.position = scene.camera.target + dt;
-	}
 	scene.current_terrain = *terrain;
 
 	// Main loop
@@ -154,14 +178,20 @@ main :: () {
 
 			target, ok := ray_plane(scene.camera.position, r, .{ 0, 0, 1 });
 			if ok {
-				command: Scene.Player.Command_Move;
+				command: Command.Move;
 				command.ground_target = v2(target);
-
-				Scene.process(scene, *scene.player, Scene.make_player_command(command));
+				send_web_message(platform, make_command(command));
 			}
 		}
 
-		Scene.update(scene, *scene.player, frame_info.delta_time);
+		commands := parse_web_message(frame_info);
+		for commands {
+			Scene.process(*scene, it);
+		}
+
+		for * scene.players {
+			Scene.update(scene, it, frame_info.delta_time);
+		}
 
 		rhi.glViewport(0, 0, xx frame_info.framebuffer_size.x, xx frame_info.framebuffer_size.y);
 		rhi.glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
@@ -171,20 +201,20 @@ main :: () {
 		rhi.glEnable(GL_CULL_FACE);
 		rhi.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		{
+		Render.set_uniform(shader, "V", V);
+		Render.set_uniform(shader, "P", P);
+		for * scene.players {
 			M := M4f.identity();
 
-			q := from_unit_vectors(V3f.{ 1, 0, 0 }, scene.player.direction);
+			q := from_unit_vectors(V3f.{ 1, 0, 0 }, it.direction);
 			M = to_rotation_matrix(q);
 
-			M = M4f.translate(scene.player.position) * M;
+			M = M4f.translate(it.position) * M;
 
 			Render.set_uniform(shader, "M", M);
-			Render.set_uniform(shader, "V", V);
-			Render.set_uniform(shader, "P", P);
-
 			Render.render(geometry, shader);
 		}
+
 
 		Scene.render(scene, terrain);
 		//Render.set_uniform(texture_shader, "V", V);

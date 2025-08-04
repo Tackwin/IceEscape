@@ -28,6 +28,31 @@ build_win32 :: () -> Workspace {
 	return w;
 }
 
+build_server :: () -> Workspace {
+	w := compiler_create_workspace("Server");
+
+	seed := get_build_options();
+	opts := get_build_options(w);
+
+	opts.Commonly_Propagated = seed.Commonly_Propagated;
+	opts.output_type = .EXECUTABLE;
+	opts.output_path = "./bin/server/";
+	opts.output_executable_name = "IceEscape_Server";
+
+	paths: [..] string;
+	paths.allocator = temp;
+	array_add(*paths, ..opts.import_path);
+	array_add(*paths, "./src/");
+	opts.import_path = paths;
+
+	#if #exists(JAILS_DIAGNOSTICS_BUILD) {
+		options.output_type = .NO_OUTPUT;
+	}
+
+	set_build_options(opts, w);
+	return w;
+}
+
 build_wasm :: () {
 	process: Process;
 	ok := create_process(
@@ -60,15 +85,17 @@ build_wasm :: () {
 
 build :: () {
 	win32_game := build_win32();
+	server := build_server();
 
 	wss : [..] Workspace;
+	array_add(*wss, server);
 	array_add(*wss, win32_game);
 
 	for wss
 		compiler_begin_intercept(it);
 
-	for wss
-		add_build_file("src/main_game.jai", it);
+	add_build_file("src/main_game.jai", win32_game);
+	add_build_file("src/main_server.jai", server);
 
 	completed := 0;
 	while true {

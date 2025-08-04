@@ -4,6 +4,7 @@
 #import "String";
 Render :: #import "Render";
 #import "Tagged_Union";
+#import "Communication";
 
 #scope_export
 
@@ -17,7 +18,8 @@ Scene :: struct {
 
 	camera: Camera;
 
-	player: Player;
+	players: [..] Player;
+	controlled_player_id := 0;
 
 	current_terrain: *Terrain;
 }
@@ -90,7 +92,7 @@ unproject_ndc :: (ndc: V2f, V: M4f, P: M4f) -> V3f {
 
 
 Player :: struct {
-	controlled := false;
+	id := 0;
 
 	position  := V3f.{ 0, 0, 0 };
 	direction := V3f.{ 1, 0, 0 };
@@ -103,16 +105,6 @@ Player :: struct {
 
 	speed := 10.0;
 	turning_speed := 360 * 2.5;
-
-	Command_Move :: struct {
-		ground_target: V2f;
-	}
-	Command :: Tagged_Union(Command_Move);
-}
-make_player_command :: (command: $T) -> Player.Command {
-	cmd: Player.Command;
-	set(*cmd, command);
-	return cmd;
 }
 
 update :: (scene: Scene, player: *Player, dt: float32) {
@@ -162,9 +154,33 @@ update :: (scene: Scene, player: *Player, dt: float32) {
 	}
 }
 
-process :: (scene: Scene, player: *Player, command: Player.Command) {
-	move : *Player.Command_Move = isa(command, Player.Command_Move);
-	if move {
+process :: (scene: *Scene, command: Command) -> bool {
+	print("Processing %\n", command);
+
+	spawn: *Command.Spawn = isa(command.payload, Command.Spawn);
+	if spawn {
+		player: Player;
+		player.id = spawn.player_id;
+
+		if spawn.its_you {
+			scene.controlled_player_id = spawn.player_id;
+		}
+		
+		spawn_into(*player, scene.current_terrain);
+
+		array_add(*scene.players, player);
+		return true;
+	}
+	for * scene.players {
+		if process(scene, it, command)
+			return true;
+	}
+	return false;
+}
+
+process :: (scene: Scene, player: *Player, command: Command) -> bool {
+	move : *Command.Move = isa(command.payload, Command.Move);
+	if move && move.player_id == player.id {
 		tile, ok := tile_under(scene.current_terrain, player.position);
 		if ok {
 			if #complete tile.kind == {
@@ -180,7 +196,11 @@ process :: (scene: Scene, player: *Player, command: Player.Command) {
 				case .None;
 			}
 		}
+
+		return true;
 	}
+
+	return false;
 }
 
 

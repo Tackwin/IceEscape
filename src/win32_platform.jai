@@ -5,12 +5,17 @@
 GL :: #import "GL";
 #import "SDL";
 #import "Reflection";
+#import "Curl";
 
 sdl_window: *SDL_Window;
 sdl_gl_context: SDL_GLContext;
 g_Time: u64 = 0;
 
 pressed: [Key_COUNT] bool;
+
+curl: *CURL;
+curl_errbuf: [CURL_ERROR_SIZE] u8;
+curl_buffer: [] u8;
 
 map_sdl_to_key :: (key: int) -> int {
 	if key == {
@@ -46,6 +51,16 @@ map_sdl_to_key :: (key: int) -> int {
 
 #scope_export
 
+send_web_message :: (msg: [] u8) {
+	sent: u64 = 0;
+	code := curl_ws_send(curl, msg.data, xx msg.count, *sent, 0, CURLWS_TEXT);
+	if code {
+		str: string;
+		str.data = curl_errbuf.data;
+		str.count = c_style_strlen(curl_errbuf.data);
+		print("Error sending message: %\n", str);
+	}
+}
 
 win32_get_frame_info :: () -> Frame_Info {
 	info: Frame_Info;
@@ -121,6 +136,24 @@ win32_get_frame_info :: () -> Frame_Info {
 		it.* = pressed[it_index];
 	}
 
+	frame: *curl_ws_frame;
+	recv: u64;
+	curl_ws_recv(curl, curl_buffer.data, xx curl_buffer.count, *recv, *frame);
+
+	cursor := 0;
+	while cursor < (xx recv) && info.message_received_count < info.message_received.count {
+		next_message_length := (cast(*u64)(curl_buffer.data + cursor)).*;
+
+		msg: Web_Message;
+		msg.data = curl_buffer.data + cursor + 8;
+		msg.count = xx next_message_length;
+		info.message_received[info.message_received_count] = msg;
+		info.message_received_count += 1;
+
+		cursor += 8;
+		cursor += xx next_message_length;
+	}
+
 	return info;
 }
 
@@ -133,7 +166,16 @@ init_platform :: () -> Platform {
 	for * pressed
 		it.* = false;
 
-	SDL_Init(SDL_INIT_VIDEO);
+
+
+	version := curl_version_info(.LAST);
+	curl = curl_easy_init();
+	curl_easy_setopt(curl, .URL, "ws://localhost:2356/ws");
+	curl_easy_setopt(curl, .ERRORBUFFER, curl_errbuf.data);
+	curl_easy_setopt(curl, .CONNECT_ONLY, 2);
+	curl_code := curl_easy_perform(curl);
+
+	curl_buffer = NewArray(1024*1024*32, u8, false);
 
 	sdl_window = SDL_CreateWindow(
 		"Ice Escape",
@@ -159,6 +201,7 @@ init_platform :: () -> Platform {
 
 	platform.get_frame_info = win32_get_frame_info;
 	platform.end_frame = win32_end_frame;
+	platform.send_web_message = send_web_message;
 	GL.gl_load(*GL.gl, SDL_GL_GetProcAddress);
 
 	meta_run :: () -> string {

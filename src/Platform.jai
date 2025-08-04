@@ -46,6 +46,8 @@ Key :: enum s32 {
 }
 Key_COUNT :: #run enum_values_as_s64(Key).count;
 
+Web_Message :: [] u8;
+
 Frame_Info :: struct {
 	key_pressed: [Key_COUNT] bool;
 
@@ -59,6 +61,9 @@ Frame_Info :: struct {
 	delta_time := 0.0;
 
 	mouse_wheel := 0;
+
+	message_received: [64] Web_Message;
+	message_received_count := 0;
 }
 
 Platform :: struct {
@@ -66,6 +71,8 @@ Platform :: struct {
 
 	get_frame_info: () -> Frame_Info = null;
 	end_frame: #type () = null;
+
+	send_web_message: #type (msg: [] u8) = null;
 }
 
 GLenum :: u32;

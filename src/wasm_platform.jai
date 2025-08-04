@@ -6,6 +6,8 @@ WebGL :: #import "Toolchains/Web/WebGL";
 window: Window_Type;
 pressed: [Key_COUNT] bool;
 
+web_buffer: [] u8;
+
 map_key_to_key :: (key: int) -> int {
 	if key == {
 		case #char "A"; return xx Key.A;
@@ -42,6 +44,10 @@ map_key_to_key :: (key: int) -> int {
 }
 #scope_export
 
+send_web_message :: (msg: [] u8) {
+	js_send_web_message :: (data: *void, count: int) #foreign;
+	js_send_web_message(msg.data, msg.count);
+}
 
 wasm_get_frame_info :: () -> Frame_Info {
 	info: Frame_Info;
@@ -79,6 +85,26 @@ wasm_get_frame_info :: () -> Frame_Info {
 		it.* = pressed[it_index];
 	}
 
+	js_get_web_message_received :: (data: *void, count: int, recv: *void) #foreign;
+	{
+		recv := 0;
+		js_get_web_message_received(web_buffer.data, web_buffer.count, *recv);
+
+		cursor := 0;
+		while cursor < (xx recv) && info.message_received_count < info.message_received.count {
+			next_message_length := (cast(*u64)(web_buffer.data + cursor)).*;
+
+			msg: Web_Message;
+			msg.data = web_buffer.data + cursor + 8;
+			msg.count = xx next_message_length;
+			info.message_received[info.message_received_count] = msg;
+			info.message_received_count += 1;
+
+			cursor += 8;
+			cursor += xx next_message_length;
+		}
+	}
+
 	return info;
 }
 
@@ -92,10 +118,13 @@ init_platform :: () -> Platform {
 	for * pressed
 		it.* = false;
 
+	web_buffer = NewArray(1024*1024*32, u8, false);
+
 	platform: Platform;
 
 	platform.get_frame_info = wasm_get_frame_info;
 	platform.end_frame = wasm_end_frame;
+	platform.send_web_message = send_web_message;
 
 	meta_run :: () -> string {
 		sb: String_Builder;
