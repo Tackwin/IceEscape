@@ -1,19 +1,23 @@
 // raddbg 0.9.16 project file
 
+recent_file: path: "src/main_server.jai"
+recent_file: path: "src/websocket/websocket.jai"
+recent_file: path: "src/websocket/module.jai"
+recent_file: path: "../jai/modules/basic/print.jai"
+recent_file: path: "src/win32_platform.jai"
 recent_file: path: "src/Scene.jai"
 recent_file: path: "src/main_game.jai"
 recent_file: path: "src/imgui_sdl_gl.jai"
 recent_file: path: "../jai/modules/gl/gl.jai"
-recent_file: path: "src/win32_platform.jai"
 recent_file: path: "../jai/modules/preload.jai"
 target:
 {
-  executable: "bin/IceEscape.exe"
-  working_directory: bin
+  executable: "bin/server/IceEscape_Server.exe"
+  working_directory: "bin/server"
   enabled: 1
 }
 breakpoint:
 {
-  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Scene.jai:174:1"
+  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_server.jai:100:1"
   hit_count: 1
 }

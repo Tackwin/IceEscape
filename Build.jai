@@ -28,7 +28,7 @@ build_win32 :: () -> Workspace {
 	return w;
 }
 
-build_server :: () -> Workspace {
+build_server :: (os: Operating_System_Tag) -> Workspace {
 	w := compiler_create_workspace("Server");
 
 	seed := get_build_options();
@@ -38,6 +38,7 @@ build_server :: () -> Workspace {
 	opts.output_type = .EXECUTABLE;
 	opts.output_path = "./bin/server/";
 	opts.output_executable_name = "IceEscape_Server";
+	opts.os_target = os;
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -85,33 +86,31 @@ build_wasm :: () {
 
 build :: () {
 	win32_game := build_win32();
-	server := build_server();
+	win32_server := build_server(.WINDOWS);
 
 	wss : [..] Workspace;
-	array_add(*wss, server);
+	array_add(*wss, win32_server);
 	array_add(*wss, win32_game);
 
+	mains: [..] string;
+	array_add(*mains, "src/main_server.jai");
+	array_add(*mains, "src/main_game.jai");
+
+
 	for wss
+	{
 		compiler_begin_intercept(it);
+		add_build_file(mains[it_index], it);
+		while true {
+			message := compiler_wait_for_message();
 
-	add_build_file("src/main_game.jai", win32_game);
-	add_build_file("src/main_server.jai", server);
-
-	completed := 0;
-	while true {
-		message := compiler_wait_for_message();
-
-		if message.kind == {
-			case .COMPLETE;
-				completed += 1;
+			if message.kind == {
+				case .COMPLETE;
+					break;
+			}
 		}
-
-		if completed >= wss.count
-			break;
-	}
-
-	for wss
 		compiler_end_intercept(it);
+	}
 
 	set_build_options_dc(.{ do_output = false });
 

@@ -166,11 +166,9 @@ init_platform :: () -> Platform {
 	for * pressed
 		it.* = false;
 
-
-
 	version := curl_version_info(.LAST);
 	curl = curl_easy_init();
-	curl_easy_setopt(curl, .URL, "ws://localhost:2356/ws");
+	curl_easy_setopt(curl, .URL, "ws://localhost:5623/ws");
 	curl_easy_setopt(curl, .ERRORBUFFER, curl_errbuf.data);
 	curl_easy_setopt(curl, .CONNECT_ONLY, 2);
 	curl_code := curl_easy_perform(curl);

@@ -56,8 +56,11 @@ set_uniform :: (shader: Shader, name: string, value: $T) {
 		print("Uniform % not found in shader program.\n", name);
 	}
 
-	if T == M4f {
+	#if T == M4f {
 		context.rhi.glUniformMatrix4fv(xx loc, 1, GL_FALSE, value.data.data);
+	}
+	#if T == V3f {
+		context.rhi.glUniform3f(xx loc, value.x, value.y, value.z);
 	}
 }
 set_uniform :: (shader: Shader, name: string, value: Texture, unit: int) {

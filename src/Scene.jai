@@ -155,10 +155,9 @@ update :: (scene: Scene, player: *Player, dt: float32) {
 }
 
 process :: (scene: *Scene, command: Command) -> bool {
-	print("Processing %\n", command);
-
 	spawn: *Command.Spawn = isa(command.payload, Command.Spawn);
 	if spawn {
+		print("Spawn %\n", spawn.*);
 		player: Player;
 		player.id = spawn.player_id;
 
@@ -292,6 +291,7 @@ render :: (scene: Scene, terrain: Terrain) {
 
 	Render.set_uniform(scene.texture_shader, "V", V);
 	Render.set_uniform(scene.texture_shader, "P", P);
+	Render.set_uniform(scene.texture_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
 	Render.set_uniform(scene.texture_shader, "texture_sampler", scene.ice_texture, 0);
 
 	used_texture := *scene.ice_texture;

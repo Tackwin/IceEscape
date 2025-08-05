@@ -33,12 +33,13 @@ in vec3 fworld_pos;
 in vec3 fworld_nor;
 in vec2 ftex;
 
+uniform vec3 tint;
 out vec4 outColor;
 
 void main() {
 	float d = dot(fworld_nor, vec3(0.0, 0.0, 1.0)) * 0.5 + 0.5;
 
-	outColor = vec4(d, d, d, 1.0); // Color base
+	outColor = vec4(tint * d, 1.0); // Color base
 }
 FRAGMENT;
 
@@ -53,15 +54,16 @@ in vec2 ftex;
 out vec4 outColor;
 
 uniform sampler2D texture_sampler;
+uniform vec3 tint;
 
 void main() {
 	float d = dot(fworld_nor, vec3(0.0, 0.0, 1.0)) * 0.5 + 0.5;
 
 	vec4 texture_color = texture(texture_sampler, ftex);
 	outColor = vec4(
-		texture_color.r * d,
-		texture_color.g * d,
-		texture_color.b * d,
+		texture_color.r * d * tint.r,
+		texture_color.g * d * tint.g,
+		texture_color.b * d * tint.b,
 		texture_color.a
 	);
 }

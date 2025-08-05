@@ -49,8 +49,9 @@ GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
 TERRAIN
 
 send_web_message :: (platform: Platform, command: Command) {
-	payload := NewArray(size_of(Command), u8, false,, temp);
-	memcpy(payload.data, cast(*void)*command, size_of(Command));
+	payload := NewArray(size_of(Command) + 8, u8, false,, temp);
+	(cast(*u64)payload.data).* = size_of(Command);
+	memcpy(payload.data + 8, cast(*void)*command, size_of(Command));
 	platform.send_web_message(payload);
 }
 
@@ -116,6 +117,16 @@ main :: () {
 	terrain := Scene.load_terrain_from_ascii(STARTER_TERRAIN_ASCII);
 	scene.current_terrain = *terrain;
 
+	colors :: V3f.[
+		V3f.{ 1.0, 0.9, 0.9 },
+		V3f.{ 0.9, 1.0, 0.9 },
+		V3f.{ 0.9, 0.9, 1.0 },
+		V3f.{ 1.0, 1.0, 0.9 },
+		V3f.{ 1.0, 0.9, 1.0 },
+		V3f.{ 0.9, 1.0, 1.0 },
+		V3f.{ 1.0, 1.0, 1.0 }
+	];
+
 	// Main loop
 	done := false;
 	while !done {
@@ -180,6 +191,7 @@ main :: () {
 			if ok {
 				command: Command.Move;
 				command.ground_target = v2(target);
+				command.player_id = scene.controlled_player_id;
 				send_web_message(platform, make_command(command));
 			}
 		}
@@ -212,6 +224,7 @@ main :: () {
 			M = M4f.translate(it.position) * M;
 
 			Render.set_uniform(shader, "M", M);
+			Render.set_uniform(shader, "tint", colors[it.id % colors.count]);
 			Render.render(geometry, shader);
 		}
 
