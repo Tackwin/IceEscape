@@ -79,8 +79,19 @@ CAR_OBJ :: #run,host -> string {
 	}
 
 	return read_ct_file(tprint("%/../assets/car.obj", #filepath));
-}
-;//string;// : #run CT_File.read_entire_file("assets/car.obj");
+};
+
+TOMBSTONE_OBJ :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+		return str;
+	}
+
+	return read_ct_file(tprint("%/../assets/tombstone.obj", #filepath));
+};
 
 Image :: struct {
 	width: u32;

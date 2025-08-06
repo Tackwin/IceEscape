@@ -113,11 +113,15 @@ win32_get_frame_info :: () -> Frame_Info {
 		// }
 		if event.type == SDL_KEYUP {
 			key := event.key.keysym.sym & (xx ~(1<<30));
-			pressed[map_sdl_to_key(xx key)] = false;
+			map := map_sdl_to_key(xx key);
+			if map < pressed.count
+				pressed[map] = false;
 		}
 		if event.type == SDL_KEYDOWN {
 			key := event.key.keysym.sym & (xx ~(1<<30));
-			pressed[map_sdl_to_key(xx key)] = true;
+			map := map_sdl_to_key(xx key);
+			if map < pressed.count
+				pressed[map] = true;
 			// kmod := SDL_GetModState();
 			// io.KeyShift = ((kmod & KMOD_SHIFT) != 0);
 			// io.KeyCtrl = ((kmod & KMOD_CTRL) != 0);

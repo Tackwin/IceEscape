@@ -38,6 +38,15 @@ Command :: struct {
 		player_id: int;
 		its_you: bool;
 	}
+	Respawn :: struct {
+		player_id: int;
+		spawn_position: V3f;
+		spawn_direction: V3f;
+	}
+	Die :: struct {
+		player_id: int;
+		position: V3f;
+	}
 	Quit :: struct {
 		player_id: int;
 	}
@@ -48,9 +57,10 @@ Command :: struct {
 		player_id: int;
 		position: V3f;
 		direction: V3f;
+		dead: bool;
 	}
 
-	payload: Sum_Type(Move, Spawn, New_Terrain, Sync_Player, Quit);
+	payload: Sum_Type(Move, Spawn, New_Terrain, Sync_Player, Quit, Die, Respawn);
 }
 
 isa :: (s: Sum_Type, $T: Type) -> *T {

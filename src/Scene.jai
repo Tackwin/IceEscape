@@ -10,6 +10,8 @@ Render :: #import "Render";
 
 
 Scene :: struct {
+	is_server := false;
+
 	texture_shader: Render.Shader;
 	ice_texture: Render.Texture;
 	grass_texture: Render.Texture;
@@ -21,7 +23,32 @@ Scene :: struct {
 	players: [..] Player;
 	controlled_player_id := 0;
 
+	tombstones: [..] Tombstone;
+
 	current_terrain: *Terrain;
+}
+
+Frame_Result :: struct {
+	died: [..] Command.Die;
+	respawn: [..] Command.Respawn;
+}
+free :: (frame_result: *Frame_Result) {
+	array_free(frame_result.died);
+	array_free(frame_result.respawn);
+}
+clear :: (frame_result: *Frame_Result) {
+	frame_result.died.count = 0;
+	frame_result.respawn.count = 0;
+}
+
+Process_Response :: struct {
+	move: [..] Command.Move;
+}
+free :: (process_response: *Process_Response) {
+	array_free(process_response.move);
+}
+clear :: (response: *Process_Response) {
+	response.move.count = 0;
 }
 
 Camera :: struct {
@@ -90,74 +117,161 @@ unproject_ndc :: (ndc: V2f, V: M4f, P: M4f) -> V3f {
 	return normalize(ray_world);
 }
 
+Tombstone :: struct {
+	player_id: int;
+	position: V3f;
+}
 
 Player :: struct {
 	id := 0;
 
-	position  := V3f.{ 0, 0, 0 };
-	direction := V3f.{ 1, 0, 0 };
-	target_direction := V3f.{ 1, 0, 0 };
+	// This is the stuff that gets overwritten as soon as we get information from the server.
+	server: struct {
+		position: V3f;
+		direction: V3f;
+		target_direction := V3f.{ 1, 0, 0 };
+		walking_toward_position := V3f.{ 0, 0, 0 };
+		walking_toward := false;
+		slipping := false;
+		speed := 10.0;
+		turning_speed := 360 * 2.5;
+		dead := false;
+	};
 
-	walking_toward_position := V3f.{ 0, 0, 0 };
-	walking_toward := false;
-
-	slipping := false;
-
-	speed := 10.0;
-	turning_speed := 360 * 2.5;
+	// This is the stuff that gets optimistically updated by the client. For rendering
+	client: struct {
+		position  := V3f.{ 0, 0, 0 };
+		direction := V3f.{ 1, 0, 0 };
+	};
 }
 
-update :: (scene: Scene, player: *Player, dt: float32) {
-	tile, ok := tile_under(scene.current_terrain, player.position);
-	if !ok {
-		return;
+find_by_player_id :: (scene: Scene, id: int) -> *Player {
+	for * scene.players {
+		if it.id == id
+			return it;
 	}
-	if #complete tile.kind == {
-		case .Ice; #through;
-		case .Slippy_Ice;
-			player.slipping = true;
-		case .Grass;
-			player.slipping = false;
-		case .None;
+	return null;
+}
+find_tombstone_by_player_id :: (scene: Scene, id: int) -> *Tombstone {
+	for * scene.tombstones {
+		if it.player_id == id
+			return it;
 	}
+	return null;
+}
 
-	if player.slipping {
-		dt_angle := angle_between(player.direction, player.target_direction, V3f.{ 0, 0, 1 });
-		turn_angle := 0.0;
-		if dt_angle < 0
-			turn_angle = -min(player.turning_speed * dt * DEG_RAD, -dt_angle);
-		else
-			turn_angle = min(player.turning_speed * dt * DEG_RAD, dt_angle);
+interpolate_to_server :: (player: *Player) {
+	player.client.direction += 0.2 * (player.server.direction - player.client.direction);
+	player.client.direction = normalize(player.client.direction);
+	player.client.position += 0.2 * (player.server.position - player.client.position);
+}
 
-		q := axis_angle(V3f.{ 0, 0, 1 }, turn_angle);
-		player.direction = q * player.direction;
-		player.direction = normalize(player.direction);
+update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
+	for * scene.players {
+		update(scene, it, dt);
 
-		player.position += player.direction * player.speed * dt;
-	} else {
-		player.direction = player.target_direction;
+	}
+	if scene.is_server {
+		for * scene.players {
+			if !it.server.dead {
+				tile, ok := tile_under(scene.current_terrain, it.server.position);
+				if !ok && result {
+					died: Command.Die;
+					died.player_id = it.id;
+					died.position = it.server.position;
+					array_add(*result.died, died);
+					it.server.dead = true;
+					tombstone: Tombstone;
+					tombstone.player_id = died.player_id;
+					tombstone.position = died.position;
 
-		if player.walking_toward {
-			dt_pos := player.walking_toward_position - player.position;
-			dist := norm(dt_pos);
-			dt_pos = normalize(dt_pos);
+					array_add(*scene.tombstones, tombstone);
+					continue;
+				}
 
-			dist = min(dist, player.speed * dt);
-			player.position += dt_pos * dist;
-			player.target_direction = dt_pos;
+				for tomb: scene.tombstones {
+					dt := norm(it.server.position - tomb.position);
 
-			if norm(player.position - player.walking_toward_position) < 0.1 {
-				player.walking_toward = false;
-				player.walking_toward_position = player.position; // Reset to current position
+					if dt < 3 {
+						respawn: Command.Respawn;
+						respawn.player_id = tomb.player_id;
+
+						array_add(*result.respawn, respawn);
+
+						player_to_respawn := find_by_player_id(scene, tomb.player_id);
+						if player_to_respawn {
+							player_to_respawn.server.dead = false;
+							spawn_into(player_to_respawn, scene.current_terrain);
+						}
+
+						remove tomb;
+					}
+				}
 			}
 		}
 	}
 }
 
-process :: (scene: *Scene, command: Command) -> bool {
+update :: (scene: Scene, player: *Player, dt: float32) {
+	if !scene.is_server
+		interpolate_to_server(player);
+
+	if player.server.dead
+		return;
+
+	tile, ok := tile_under(scene.current_terrain, player.server.position);
+	if !ok {
+		return;
+	}
+
+	if #complete tile.kind == {
+		case .Ice; #through;
+		case .Slippy_Ice;
+			player.server.slipping = true;
+		case .Grass;
+			player.server.slipping = false;
+		case .None;
+	}
+
+	if player.server.slipping {
+		dt_angle := angle_between(
+			player.server.direction, player.server.target_direction, V3f.{ 0, 0, 1 }
+		);
+		turn_angle := 0.0;
+		if dt_angle < 0
+			turn_angle = -min(player.server.turning_speed * dt * DEG_RAD, -dt_angle);
+		else
+			turn_angle = min(player.server.turning_speed * dt * DEG_RAD, dt_angle);
+
+		q := axis_angle(V3f.{ 0, 0, 1 }, turn_angle);
+		player.server.direction = q * player.server.direction;
+		player.server.direction = normalize(player.server.direction);
+
+		player.server.position += player.server.direction * player.server.speed * dt;
+	} else {
+		player.server.direction = player.server.target_direction;
+
+		if player.server.walking_toward {
+			dt_pos := player.server.walking_toward_position - player.server.position;
+			dist := norm(dt_pos);
+			dt_pos = normalize(dt_pos);
+
+			dist = min(dist, player.server.speed * dt);
+			player.server.position += dt_pos * dist;
+			player.server.target_direction = dt_pos;
+
+			if norm(player.server.position - player.server.walking_toward_position) < 0.1 {
+				player.server.walking_toward = false;
+				player.server.walking_toward_position = player.server.position;
+			}
+		}
+	}
+}
+
+process :: (scene: *Scene, command: Command, response: *Process_Response) -> bool {
 	spawn: *Command.Spawn = isa(command.payload, Command.Spawn);
 	if spawn {
-		print("Spawn %\n", spawn.*);
+		print("Process spawn %\n", spawn.*);
 		player: Player;
 		player.id = spawn.player_id;
 
@@ -170,33 +284,91 @@ process :: (scene: *Scene, command: Command) -> bool {
 		array_add(*scene.players, player);
 		return true;
 	}
+
+	quit: *Command.Quit = isa(command.payload, Command.Quit);
+	if quit {
+		print("Process quit %\n", quit.*);
+		remove_player_from_scene(quit.player_id, scene);
+		return true;
+	}
+
+	died: *Command.Die = isa(command.payload, Command.Die);
+	if died {
+		print("Process die %\n", died.*);
+		player := find_by_player_id(scene, died.player_id);
+		if player
+		{
+			player.server.dead = true;
+			tombstone: Tombstone;
+			tombstone.player_id = died.player_id;
+			tombstone.position = died.position;
+
+			array_add(*scene.tombstones, tombstone);
+		}
+	}
+
+	respawn: *Command.Respawn = isa(command.payload, Command.Respawn);
+	if respawn {
+		print("Process respawn %\n", respawn.*);
+
+		for * scene.tombstones {
+			if it.player_id == respawn.player_id {
+
+				player := find_by_player_id(scene, it.player_id);
+				player.server.dead = false;
+				spawn_into(player, scene.current_terrain);
+
+				remove it;
+			}
+		}
+	}
+
 	for * scene.players {
-		if process(scene, it, command)
+		if process(scene, it, command, response)
 			return true;
 	}
 	return false;
 }
 
-process :: (scene: Scene, player: *Player, command: Command) -> bool {
+process :: (scene: Scene, player: *Player, command: Command, response: *Process_Response) -> bool {
 	move : *Command.Move = isa(command.payload, Command.Move);
 	if move && move.player_id == player.id {
-		tile, ok := tile_under(scene.current_terrain, player.position);
+		print("Process move %\n", move.*);
+		tile, ok := tile_under(scene.current_terrain, player.server.position);
 		if ok {
 			if #complete tile.kind == {
 				case .Ice; #through;
 				case .Slippy_Ice;
-					player.target_direction = normalize(
-						v3(move.ground_target - v2(player.position))
+					player.server.target_direction = normalize(
+						v3(move.ground_target - v2(player.server.position))
 					);
-					player.walking_toward = false;
+					player.server.walking_toward = false;
 				case .Grass;
-					player.walking_toward = true;
-					player.walking_toward_position = v3(move.ground_target);
+					player.server.walking_toward = true;
+					player.server.walking_toward_position = v3(move.ground_target);
 				case .None;
 			}
 		}
 
+		if response {
+			reply: Command.Move;
+			reply.player_id = player.id;
+			reply.ground_target = move.ground_target;
+			array_add(*response.move, reply);
+		}
+
 		return true;
+	}
+
+	sync: *Command.Sync_Player = isa(command.payload, Command.Sync_Player);
+	if sync {
+		print("Process sync %\n", sync.*);
+		for * scene.players if it.id == sync.player_id {
+
+			it.server.direction = sync.direction;
+			it.server.position = sync.position;
+			it.server.dead = sync.dead;
+		}
 	}
 
 	return false;
@@ -320,6 +492,18 @@ render :: (scene: Scene, terrain: Terrain) {
 	}
 }
 spawn_into :: (player: *Player, terrain: Terrain) {
-	player.position.x = xx terrain.spawn_tile.x + 0.0;
-	player.position.y = xx terrain.spawn_tile.y + 0.0;
+	player.server.position.x = xx terrain.spawn_tile.x + 0.0;
+	player.server.position.y = xx terrain.spawn_tile.y + 0.0;
+	player.server.walking_toward = false;
+	player.server.slipping = false;
+	player.server.dead = false;
+}
+
+remove_player_from_scene :: (player_id: int, scene: *Scene) {
+	for * scene.players {
+		if it.id == player_id {
+			remove it;
+			break;
+		}
+	}
 }

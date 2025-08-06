@@ -107,6 +107,7 @@ main :: () {
 
 	shader := Render.Shader.make(context.allocator, Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT);
 	geometry := Render.Geometry.make_from_obj(context.allocator, Assets.CAR_OBJ);
+	tombstone_geometry := Render.Geometry.make_from_obj(context.allocator, Assets.TOMBSTONE_OBJ);
 
 	just_pressed: [Key_COUNT] bool;
 	just_released: [Key_COUNT] bool;
@@ -198,12 +199,9 @@ main :: () {
 
 		commands := parse_web_message(frame_info);
 		for commands {
-			Scene.process(*scene, it);
+			Scene.process(*scene, it, null);
 		}
-
-		for * scene.players {
-			Scene.update(scene, it, frame_info.delta_time);
-		}
+		Scene.update(*scene, frame_info.delta_time, null);
 
 		rhi.glViewport(0, 0, xx frame_info.framebuffer_size.x, xx frame_info.framebuffer_size.y);
 		rhi.glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
@@ -216,18 +214,27 @@ main :: () {
 		Render.set_uniform(shader, "V", V);
 		Render.set_uniform(shader, "P", P);
 		for * scene.players {
-			M := M4f.identity();
+			if !it.server.dead {
+				M := M4f.identity();
 
-			q := from_unit_vectors(V3f.{ 1, 0, 0 }, it.direction);
-			M = to_rotation_matrix(q);
+				q := from_unit_vectors(V3f.{ 1, 0, 0 }, it.client.direction);
+				M = to_rotation_matrix(q);
 
-			M = M4f.translate(it.position) * M;
+				M = M4f.translate(it.client.position) * M;
 
-			Render.set_uniform(shader, "M", M);
-			Render.set_uniform(shader, "tint", colors[it.id % colors.count]);
-			Render.render(geometry, shader);
+				Render.set_uniform(shader, "M", M);
+				Render.set_uniform(shader, "tint", colors[it.id % colors.count]);
+				Render.render(geometry, shader);
+			}
 		}
 
+		Render.set_uniform(shader, "tint", V3f.{ 1, 1, 1 });
+		for * scene.tombstones {
+			M := M4f.translate(it.position);
+
+			Render.set_uniform(shader, "M", M);
+			Render.render(tombstone_geometry, shader);
+		}
 
 		Scene.render(scene, terrain);
 		//Render.set_uniform(texture_shader, "V", V);

@@ -1,9 +1,45 @@
 #import "http";
 #import "Basic";
 #import "Communication";
-#import "Scene";
+Scene :: #import "Scene";
 #import "Thread";
 #import "Hash_Table";
+
+STARTER_TERRAIN_ASCII :: #string TERRAIN
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGSGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
+TERRAIN
 
 prepare_typed_message :: (payload: $T) -> [] u8 {
 	message := NewArray(size_of(T) + 8, u8, false,, temp);
@@ -41,23 +77,44 @@ send_prepared :: (ws: *Websocket, prepared_payload: [] u8) {
 	websocket_send(ws, str, .BINARY);
 }
 
+Period :: struct(period: float) {
+	last: Apollo_Time;
+}
+
+check :: (period: *Period) -> bool, float {
+	t := current_time_monotonic();
+	dt := to_float64_seconds(t - period.last);
+	if dt > period.period {
+		period.last = t;
+		return true, cast(float32)dt;
+	}
+	return false, 0;
+}
+
 State :: struct {
 	server: *Websocket_Server = null;
 	last_sync_sent_time: Apollo_Time;
 
-	players: [..] Player;
 	player_generation := 0;
 
 	socket_to_player_id: Table(*Websocket, int);
 
-	Queue :: struct {
-		commands : [128] Command;
-		socket   : [128] *Websocket; // null is for broadcast
+	Queue :: struct(N: int) {
+		commands : [N] Command;
+		socket   : [N] *Websocket; // null is for broadcast
 		count    := 0;
 	};
 
-	queue: Queue;
+	queue: Queue(128);
 	queue_semaphore: Semaphore;
+
+	received: Queue(1024);
+	received_semaphore: Semaphore;
+
+	sync_period: Period(0.05);
+	tick_period: Period(0.005);
+
+	scene: Scene.Scene;
 }
 state: State;
 
@@ -67,7 +124,7 @@ append_queue :: (cmd: $T, socket: *Websocket) {
 		signal(*state.queue_semaphore);
 	}
 
-	if state.queue.count >= state.queue.commands.count {
+	if state.queue.count >= state.queue.N {
 		print("Queue overflow!\n");
 		return;
 	}
@@ -77,29 +134,104 @@ append_queue :: (cmd: $T, socket: *Websocket) {
 	state.queue.count += 1;
 }
 
+append_received :: (cmd: Command, socket: *Websocket) {
+	wait_for(*state.received_semaphore);
+	defer {
+		signal(*state.received_semaphore);
+	}
+
+	if state.received.count >= state.received.N {
+		print("Received queue overflow!\n");
+		return;
+	}
+
+	state.received.socket[state.received.count] = socket;
+	state.received.commands[state.received.count] = cmd;
+	state.received.count += 1;
+}
+
+parse_message :: (data: [] u8) -> Command, bool {
+	if data.count < 8 {
+		print("Message too short: %\n", data);
+		return .{}, false;
+	}
+
+	size := (cast(*u64)data.data).*;
+	if size > xx (data.count - 8) {
+		print("Message size mismatch: expected % but got %\n", size, data.count - 8);
+		return .{}, false;
+	}
+
+	command: Command;
+	memcpy(cast(*void)*command, data.data + 8, size_of(Command));
+	return command, true;
+
+}
 
 sync :: (state: State) {
-	print("Sync\n");
-	for * state.players {
+	for * state.scene.players {
 		msg: Command.Sync_Player;
 		msg.player_id = it.id;
-		msg.direction = it.direction;
-		msg.position = it.position;
+		msg.direction = it.server.direction;
+		msg.position = it.server.position;
+		msg.dead = it.server.dead;
 
-		broadcast(state.server, msg);
+		broadcast(state.server, make_command(msg));
+	}
+}
+
+process_response: Scene.Process_Response;
+frame_result: Scene.Frame_Result;
+
+tick :: (state: *State) {
+	Scene.clear(*process_response);
+	Scene.clear(*frame_result);
+
+	// Early test
+	if state.received.count > 0 {
+		wait_for(*state.received_semaphore);
+		defer {
+			signal(*state.received_semaphore);
+		}
+
+		for 0..state.received.count - 1 {
+			cmd := state.received.commands[it];
+
+			Scene.process(*state.scene, cmd, *process_response);
+		}
+
+		state.received.count = 0; // Clear the queue after processing.
+	}
+
+	for process_response.move {
+		broadcast(state.server, make_command(it));
+	}
+
+	Scene.update(*state.scene, state.tick_period.period, *frame_result);
+
+	for frame_result.died {
+		broadcast(state.server, make_command(it));
+	}
+	for frame_result.respawn {
+		broadcast(state.server, make_command(it));
 	}
 }
 
 main :: () {
+
 	init(*state.queue_semaphore, 1);
+	init(*state.received_semaphore, 1);
+	state.scene.is_server = true;
+	terrain := Scene.load_terrain_from_ascii(STARTER_TERRAIN_ASCII);
+	state.scene.current_terrain = *terrain;
 
 	http_listen(port=5623);
 
 	server := websocket_listen("/ws");
 	server.onopen = (ws: *Websocket) {
-		print("Connect\n");
 		state.player_generation += 1;
 
+		// Notify the existing player of a new player
 		for ws.server.websockets {
 			if it == ws
 				continue;
@@ -110,31 +242,41 @@ main :: () {
 			append_queue(spawn, it);
 		}
 
-		array_add(*state.players, .{ id = state.player_generation });
-		table_add(*state.socket_to_player_id, ws, state.player_generation);
-
-		for state.players {
+		{
+			// tell the serve a new guy just connected
 			spawn: Command.Spawn;
-			spawn.player_id = it.id;
-			spawn.its_you = (it_index + 1) == state.players.count;
+			spawn.player_id = state.player_generation;
+			spawn.its_you = false;
+			append_received(make_command(spawn), null);
+
+			// Tell the new player about everyone else
+			for * state.scene.players {
+				spawn: Command.Spawn;
+				spawn.player_id = it.id;
+				spawn.its_you = false;
+				append_queue(spawn, ws);
+			}
+			spawn.its_you = true;
 			append_queue(spawn, ws);
 		}
+		table_add(*state.socket_to_player_id, ws, state.player_generation);
 	};
 	server.onmsg = (ws: *Websocket, msg: string) {
-		print("received\n");
 		data: [] u8;
 		data.data = msg.data;
 		data.count = msg.count;
-		broadcast_prepared(ws.server, data);
+
+		cmd, ok := parse_message(data);
+		if ok {
+			append_received(cmd, ws);
+		}
 	};
 	server.onclose = (ws: *Websocket) {
-		print("Closed\n");
-
 		found, id := table_find_new(*state.socket_to_player_id, ws);
 		if found {
 			table_remove(*state.socket_to_player_id, ws);
 
-			for * state.players {
+			for * state.scene.players {
 				if it.id == id {
 					remove it;
 					break;
@@ -154,12 +296,15 @@ main :: () {
 	state.server = server;
 
 	while 1 {
-		now := current_time_monotonic();
-		{
-			dt := to_float64_seconds(now - state.last_sync_sent_time);
-			if dt > 0.1 {
-				sync(state);
-				state.last_sync_sent_time = current_time_monotonic();
+		if check(*state.sync_period) {
+			sync(state);
+		}
+
+		to_tick, dt := check(*state.tick_period);
+		if to_tick {
+			while dt > 0 {
+				tick(*state);
+				dt -= state.tick_period.period;
 			}
 		}
 
