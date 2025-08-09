@@ -187,6 +187,9 @@ RAD_DEG :: 180 / PI;
 operator * :: (v: V3($T), f: T) -> V3(T) #symmetric {
 	return .{ v.x * f, v.y * f, v.z * f };
 }
+operator * :: (v: V3($T), f: float64) -> V3(T) #symmetric {
+	return .{ cast(T)(v.x * f), cast(T)(v.y * f), cast(T)(v.z * f) };
+}
 
 operator * :: (q: Q($T), v: V3(T)) -> V3(T) {
 	u := V3f.{q.x, q.y, q.z};
@@ -207,6 +210,10 @@ operator - :: (a: V2($T), b: V2(T)) -> V2(T) #symmetric {
 
 operator + :: (a: V3($T), b: V3(T)) -> V3(T) #symmetric {
 	return .{ a.x + b.x, a.y + b.y, a.z + b.z };
+}
+
+operator + :: (a: V2($T), b: V2(T)) -> V2(T) #symmetric {
+	return .{ a.x + b.x, a.y + b.y };
 }
 
 normalize :: (a: V3($T)) -> V3(T) {
@@ -407,4 +414,69 @@ ray_plane :: (o: V3($T), d: V3(T), n: V3(T)) -> V3(T), bool {
 	if (t > 0)
 		return .{ 0, 0, 0 }, false; // No intersection
 	return o - d * t, true;
+}
+
+
+damp :: (a: $T, b: T, lamda: float64, dt: float64) -> T {
+	return cast(T) (a + (b - a) * (1 - exp(-lamda * dt)));
+}
+
+#import "Basic";
+
+damp_angle_between :: (a: V3($T), b: V3(T), lambda: T, dt: T) -> V3(T) {
+	axis := cross(a, b);
+	if norm(axis) == 0 {
+		axis = cross(V3f.{1, 0, 0}, a);
+	}
+	axis = normalize(axis);
+
+	angle := angle_between(a, b, axis);
+	if angle == 0
+		return a;
+
+	return axis_angle(axis, damp(-angle, 0, cast(float64) lambda, cast(float64) dt)) * b;
+}
+
+
+dist_aabb :: (p: V3($T), low: V3(T), high: V3(T)) -> T {
+	q := p;
+	q.x = clamp(q.x, low.x, high.x);
+	q.y = clamp(q.y, low.y, high.y);
+	q.z = clamp(q.z, low.z, high.z);
+	return norm(q - p);
+}
+
+line_line :: (a1: V2($T), a2: V2(T), b1: V2(T), b2: V2(T)) -> bool {
+	b := a2 - a1;
+	d := b2 - b1;
+	bDotDPerp := b.x * d.y - b.y * d.x;
+	if bDotDPerp == 0
+		return false;
+
+	c := b1 - a1;
+	t := (c.x * d.y - c.y * d.x) / bDotDPerp;
+	if t < 0 || t > 1
+		return false;
+
+	u := (c.x * b.y - c.y * b.x) / bDotDPerp;
+	if u < 0 || u > 1
+		return false;
+
+	return true;
+}
+
+line_aabb :: (a1: V2($T), b: V2(T), low: V2(T), high: V2(T)) -> bool {
+	return line_line(
+		a1, a1 + b,
+		low, V2(T).{ low.x, high.y }
+	) || line_line(
+		a1, a1 + b,
+		V2(T).{ low.x, high.y }, high
+	) || line_line(
+		a1, a1 + b,
+		V2(T).{ high.x, high.y }, V2(T).{ high.x, low.y }
+	) || line_line(
+		a1, a1 + b,
+		V2(T).{ high.x, low.y }, low
+	);
 }

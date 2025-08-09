@@ -7,6 +7,8 @@ window: Window_Type;
 pressed: [Key_COUNT] bool;
 
 web_buffer: [] u8;
+last_frame: Apollo_Time;
+last_frame_init := false;
 
 map_key_to_key :: (key: int) -> int {
 	if key == {
@@ -50,8 +52,17 @@ send_web_message :: (msg: [] u8) {
 }
 
 wasm_get_frame_info :: () -> Frame_Info {
+
 	info: Frame_Info;
-	info.delta_time = 1.0 / 150.0;
+	info.delta_time = 1.0 / 60.0;
+	if last_frame_init {
+		info.delta_time = xx to_float64_seconds(
+			current_time_monotonic() - last_frame
+		);
+
+	}
+	last_frame = current_time_monotonic();
+	last_frame_init = true;
 	info.framebuffer_size = .{ xx 1366, xx 768 };
 	info.quit = false;
 	info.window_focused = true;

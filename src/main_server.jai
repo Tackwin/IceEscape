@@ -1,3 +1,4 @@
+Terrain :: #import "Terrain";
 #import "http";
 #import "Basic";
 #import "Communication";
@@ -80,6 +81,17 @@ send_prepared :: (ws: *Websocket, prepared_payload: [] u8) {
 Period :: struct(period: float) {
 	last: Apollo_Time;
 }
+Counter :: struct(n: int) {
+	count := 0;
+}
+check :: (counter: *Counter) -> bool {
+	counter.count += 1;
+	if counter.count > counter.n {
+		counter.count = 0;
+		return true;
+	}
+	return false;
+}
 
 check :: (period: *Period) -> bool, float {
 	t := current_time_monotonic();
@@ -91,9 +103,14 @@ check :: (period: *Period) -> bool, float {
 	return false, 0;
 }
 
+
 State :: struct {
 	server: *Websocket_Server = null;
 	last_sync_sent_time: Apollo_Time;
+
+	sync_count_player: Counter(1);
+	sync_count_skull: Counter(20);
+	sync_count_key: Counter(50);
 
 	player_generation := 0;
 
@@ -169,14 +186,37 @@ parse_message :: (data: [] u8) -> Command, bool {
 }
 
 sync :: (state: State) {
-	for * state.scene.players {
-		msg: Command.Sync_Player;
-		msg.player_id = it.id;
-		msg.direction = it.server.direction;
-		msg.position = it.server.position;
-		msg.dead = it.server.dead;
+	if check(*state.sync_count_player) {
+		for * state.scene.players {
+			msg: Command.Sync_Player;
+			msg.player_id = it.id;
+			msg.direction = it.server.direction;
+			msg.position = it.server.position;
+			msg.dead = it.server.dead;
 
-		broadcast(state.server, make_command(msg));
+			broadcast(state.server, make_command(msg));
+		}
+	}
+
+	if check(*state.sync_count_skull) {
+		for * state.scene.skulls {
+			msg: Command.Sync_Skull;
+			msg.skull_id = it.id;
+			msg.t = it.server.t;
+
+			broadcast(state.server, make_command(msg));
+		}
+	}
+
+	if check(*state.sync_count_key) {
+		for * state.scene.keys {
+			msg: Command.Sync_Key;
+			msg.key_id = it.id;
+			msg.holder = it.holder;
+			msg.position = it.server.position;
+
+			broadcast(state.server, make_command(msg));
+		}
 	}
 }
 
@@ -206,6 +246,9 @@ tick :: (state: *State) {
 	for process_response.move {
 		broadcast(state.server, make_command(it));
 	}
+	for process_response.coin_spawn {
+		broadcast(state.server, make_command(it));
+	}
 
 	Scene.update(*state.scene, state.tick_period.period, *frame_result);
 
@@ -215,15 +258,20 @@ tick :: (state: *State) {
 	for frame_result.respawn {
 		broadcast(state.server, make_command(it));
 	}
+	for frame_result.sync_gate {
+		broadcast(state.server, make_command(it));
+	}
 }
 
 main :: () {
 
 	init(*state.queue_semaphore, 1);
 	init(*state.received_semaphore, 1);
+
+	state.sync_period.last = current_time_monotonic();
+	state.tick_period.last = current_time_monotonic();
 	state.scene.is_server = true;
-	terrain := Scene.load_terrain_from_ascii(STARTER_TERRAIN_ASCII);
-	state.scene.current_terrain = *terrain;
+	Terrain.init_roundabout(*state.scene);
 
 	http_listen(port=5623);
 
@@ -295,6 +343,7 @@ main :: () {
 
 	state.server = server;
 
+	error := 0.0;
 	while 1 {
 		if check(*state.sync_period) {
 			sync(state);
@@ -302,10 +351,11 @@ main :: () {
 
 		to_tick, dt := check(*state.tick_period);
 		if to_tick {
-			while dt > 0 {
+			while (dt + error) > state.tick_period.period {
 				tick(*state);
 				dt -= state.tick_period.period;
 			}
+			error += dt;
 		}
 
 		// Purge the command queue.

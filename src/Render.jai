@@ -7,13 +7,251 @@
 
 #scope_export
 
+IM: struct {
+	display_size: V2f;
+
+	Quad :: struct {
+		pos: V2f;
+		size: V2f;
+		color: V3f;
+		z: float = 0.0;
+	}
+
+	Char :: struct {
+		id: int;
+		pos: V2f;
+		color: V3f;
+		z: float;
+		height: float;
+	}
+
+	quad_object: GLuint = 0;
+	quad_buffer: GLuint = 0;
+
+	char_object: GLuint = 0;
+	char_buffer: GLuint = 0;
+
+	quads: [..] Quad;
+	quad_shader: Shader;
+
+	chars: [..] Char;
+	char_shader: Shader;
+	char_texture: Texture;
+
+}
+
+push_quad :: (quad: IM.Quad) {
+	array_add(*IM.quads, quad);
+}
+
+push_text :: (text: string, pos: V2f, height := 12.0, z := 0.0) {
+	x := pos.x;
+
+	for text {
+		char: IM.Char;
+		char.id = it - 0x20;
+		char.pos.x = x;
+		char.pos.y = pos.y;
+		char.z = z;
+		char.color = .{ 1, 1, 1 };
+		char.height = height;
+
+		x += MAIN_FONT.sprites[char.id].charAdvanceX * height / MAIN_FONT.height;
+
+		array_add(*IM.chars, char);
+	}
+}
+
+render_im_quad :: () {
+	if IM.quads.count == 0
+		return;
+
+	if !ok(IM.quad_shader) {
+		IM.quad_shader = Shader.make(context.allocator, QUAD_VERTEX, QUAD_FRAGMENT);
+	}
+	context.rhi.glUseProgram(IM.quad_shader.program);
+
+	if !IM.quad_object {
+		context.rhi.glGenVertexArrays(1, *IM.quad_object);
+	}
+	context.rhi.glBindVertexArray(IM.quad_object);
+	
+	if !IM.quad_buffer {
+		context.rhi.glGenBuffers(1, *IM.quad_buffer);
+	}
+
+
+	Quad_Vertex :: struct {
+		pos: V3f;
+		color: V3f;
+	}
+
+	vertices := NewArray(
+		IM.quads.count * 6, Quad_Vertex, false,, temp
+	);
+	for IM.quads {
+		vertices[it_index * 6 + 0].pos = .{ it.pos.x, it.pos.y, it.z };
+		vertices[it_index * 6 + 0].color = it.color;
+
+		vertices[it_index * 6 + 1].pos = .{ it.pos.x + it.size.x, it.pos.y, it.z };
+		vertices[it_index * 6 + 1].color = it.color;
+
+		vertices[it_index * 6 + 2].pos = .{ it.pos.x + it.size.x, it.pos.y + it.size.y, it.z };
+		vertices[it_index * 6 + 2].color = it.color;
+
+		vertices[it_index * 6 + 3].pos = .{ it.pos.x, it.pos.y, it.z };
+		vertices[it_index * 6 + 3].color = it.color;
+
+		vertices[it_index * 6 + 4].pos = .{ it.pos.x + it.size.x, it.pos.y + it.size.y, it.z };
+		vertices[it_index * 6 + 4].color = it.color;
+
+		vertices[it_index * 6 + 5].pos = .{ it.pos.x, it.pos.y + it.size.y, it.z };
+		vertices[it_index * 6 + 5].color = it.color;
+	}
+
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, IM.quad_buffer);
+	context.rhi.glBufferData(
+		GL_ARRAY_BUFFER,
+		vertices.count * size_of(Quad_Vertex),
+		vertices.data,
+		GL_DYNAMIC_DRAW
+	);
+
+	context.rhi.glEnableVertexAttribArray(0); // Position
+	context.rhi.glVertexAttribPointer(
+		0, 3, GL_FLOAT, GL_FALSE,
+		size_of(Quad_Vertex), xx offset_of(Quad_Vertex, "pos")
+	);
+
+	context.rhi.glEnableVertexAttribArray(1); // Color
+	context.rhi.glVertexAttribPointer(
+		1, 3, GL_FLOAT, GL_FALSE,
+		size_of(Quad_Vertex), xx offset_of(Quad_Vertex, "color")
+	);
+
+	context.rhi.glDrawArrays(GL_TRIANGLES, 0, xx vertices.count);
+
+	IM.quads.count = 0;
+}
+
+
+render_im_char :: () {
+	if IM.chars.count == 0
+		return;
+
+	if !ok(IM.char_shader) {
+		IM.char_shader = Shader.make(context.allocator, FONT_VERTEX, FONT_FRAGMENT);
+	}
+	if !ok(IM.char_texture) {
+		IM.char_texture = Texture.make_from_image(MAIN_FONT.atlas);
+	}
+	context.rhi.glUseProgram(IM.char_shader.program);
+	set_uniform(IM.char_shader, "font_sampler", IM.char_texture, 0);
+
+	if !IM.char_object {
+		context.rhi.glGenVertexArrays(1, *IM.char_object);
+	}
+	context.rhi.glBindVertexArray(IM.char_object);
+	
+	if !IM.char_buffer {
+		context.rhi.glGenBuffers(1, *IM.char_buffer);
+	}
+
+
+	Char_Vertex :: struct {
+		pos: V3f;
+		color: V3f;
+		tex: V2f;
+	}
+
+	vertices := NewArray(
+		IM.chars.count * 6, Char_Vertex, false,, temp
+	);
+	for IM.chars {
+		sprite := MAIN_FONT.sprites[it.id];
+		x := it.pos.x / IM.display_size.x * 2 - 1.0;
+		y := it.pos.y / IM.display_size.y * 2 - 1.0;
+		width := sprite.sourceWidth * it.height / MAIN_FONT.height;
+		width = width / IM.display_size.x * 2;
+		height := sprite.sourceHeight * it.height / MAIN_FONT.height;
+		height = height / IM.display_size.y * 2;
+		pos := V2f.{ xx (sprite.positionX - sprite.padding), xx (sprite.positionY - sprite.padding) };
+		size := V2f.{ xx sprite.sourceWidth, xx sprite.sourceHeight };
+		pos.x /= MAIN_FONT.atlas.width;
+		pos.y /= MAIN_FONT.atlas.height;
+		size.x /= MAIN_FONT.atlas.width;
+		size.y /= MAIN_FONT.atlas.height;
+		pos.y = pos.y + size.y;
+		size.y = -size.y;
+
+		vertices[it_index * 6 + 0].pos = .{ x, y, it.z };
+		vertices[it_index * 6 + 0].color = it.color;
+		vertices[it_index * 6 + 0].tex = .{ pos.x + 0 * size.x, pos.y + 0 * size.y };
+
+		vertices[it_index * 6 + 1].pos = .{ x + width, y, it.z };
+		vertices[it_index * 6 + 1].color = it.color;
+		vertices[it_index * 6 + 1].tex = .{ pos.x + 1 * size.x, pos.y + 0 * size.y };
+
+		vertices[it_index * 6 + 2].pos = .{ x + width, y + height, it.z };
+		vertices[it_index * 6 + 2].color = it.color;
+		vertices[it_index * 6 + 2].tex = .{ pos.x + 1 * size.x, pos.y + 1 * size.y };
+
+		vertices[it_index * 6 + 3].pos = .{ x, y, it.z };
+		vertices[it_index * 6 + 3].color = it.color;
+		vertices[it_index * 6 + 3].tex = .{ pos.x + 0 * size.x, pos.y + 0 * size.y };
+
+		vertices[it_index * 6 + 4].pos = .{ x + width, y + height, it.z };
+		vertices[it_index * 6 + 4].color = it.color;
+		vertices[it_index * 6 + 4].tex = .{ pos.x + 1 * size.x, pos.y + 1 * size.y };
+
+		vertices[it_index * 6 + 5].pos = .{ x, y + height, it.z };
+		vertices[it_index * 6 + 5].color = it.color;
+		vertices[it_index * 6 + 5].tex = .{ pos.x + 0 * size.x, pos.y + 1 * size.y };
+	}
+
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, IM.char_buffer);
+	context.rhi.glBufferData(
+		GL_ARRAY_BUFFER,
+		vertices.count * size_of(Char_Vertex),
+		vertices.data,
+		GL_DYNAMIC_DRAW
+	);
+
+	context.rhi.glEnableVertexAttribArray(0); // Position
+	context.rhi.glVertexAttribPointer(
+		0, 3, GL_FLOAT, GL_FALSE,
+		size_of(Char_Vertex), xx offset_of(Char_Vertex, "pos")
+	);
+
+	context.rhi.glEnableVertexAttribArray(1); // Color
+	context.rhi.glVertexAttribPointer(
+		1, 3, GL_FLOAT, GL_FALSE,
+		size_of(Char_Vertex), xx offset_of(Char_Vertex, "color")
+	);
+
+	context.rhi.glEnableVertexAttribArray(2); // Color
+	context.rhi.glVertexAttribPointer(
+		2, 2, GL_FLOAT, GL_FALSE,
+		size_of(Char_Vertex), xx offset_of(Char_Vertex, "tex")
+	);
+
+	context.rhi.glDrawArrays(GL_TRIANGLES, 0, xx vertices.count);
+
+	IM.chars.count = 0;
+}
+
+render_im :: () {
+	render_im_quad();
+	render_im_char();
+}
+
 Shader :: struct {
 	vertex_code: string;
 	fragment_code: string;
 
-	vertex_shader: GLuint;
-	fragment_shader: GLuint;
-	program: GLuint;
+	vertex_shader: GLuint = 0;
+	fragment_shader: GLuint = 0;
+	program: GLuint = 0;
 
 	allocator: Allocator;
 
@@ -41,6 +279,10 @@ Shader :: struct {
 		compile(*shader);
 		return shader;
 	}
+
+}
+ok :: (shader: Shader) -> bool {
+	return shader.program > 0;
 }
 
 set_uniform :: (shader: Shader, name: string, value: $T) {
@@ -61,6 +303,9 @@ set_uniform :: (shader: Shader, name: string, value: $T) {
 	}
 	#if T == V3f {
 		context.rhi.glUniform3f(xx loc, value.x, value.y, value.z);
+	}
+	#if T == V2f {
+		context.rhi.glUniform2f(xx loc, value.x, value.y);
 	}
 }
 set_uniform :: (shader: Shader, name: string, value: Texture, unit: int) {
@@ -357,19 +602,34 @@ Texture :: struct {
 		texture.height = image.height;
 		texture.id = 0;
 
-		upload(*texture, image.data);
+		upload(*texture, image.data, image.has_alpha);
 		return texture;
 	}
 }
-upload :: (texture: *Texture, data: [] u8) {
+
+ok :: (texture: Texture) -> bool {
+	return texture.id > 0;
+}
+upload :: (texture: *Texture, data: [] u8, has_alpha := false) {
 	context.rhi.glGenTextures(1, *texture.id);
 	context.rhi.glBindTexture(GL_TEXTURE_2D, texture.id);
 	context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	context.rhi.glTexImage2D(
-		GL_TEXTURE_2D, 0, GL_RGB8, texture.width, texture.height, 0,
-		GL_RGB, GL_UNSIGNED_BYTE, data.data
-	);
+	if has_alpha {
+		context.rhi.glTexImage2D(
+			GL_TEXTURE_2D, 0, GL_RGBA8, texture.width, texture.height, 0,
+			GL_RGBA, GL_UNSIGNED_BYTE, data.data
+		);
+	} else {
+		context.rhi.glTexImage2D(
+			GL_TEXTURE_2D, 0, GL_RGB8, texture.width, texture.height, 0,
+			GL_RGB, GL_UNSIGNED_BYTE, data.data
+		);
+	}
+}
+set_parameter :: (texture: Texture, parameter: GLenum, value: GLint) {
+	context.rhi.glBindTexture(GL_TEXTURE_2D, texture.id);
+	context.rhi.glTexParameteri(GL_TEXTURE_2D, parameter, value);
 }

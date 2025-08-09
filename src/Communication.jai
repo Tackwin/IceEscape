@@ -38,10 +38,20 @@ Command :: struct {
 		player_id: int;
 		its_you: bool;
 	}
+	Spawn_Coin :: struct {
+		id: int;
+		sender: int;
+		position: V3f;
+		direction: V3f;
+	}
+	Despawn_Coin :: struct {
+		id: int;
+	}
 	Respawn :: struct {
-		player_id: int;
+		player_id := -1;
 		spawn_position: V3f;
 		spawn_direction: V3f;
+		coin_id := -1;
 	}
 	Die :: struct {
 		player_id: int;
@@ -59,8 +69,24 @@ Command :: struct {
 		direction: V3f;
 		dead: bool;
 	}
+	Sync_Skull :: struct {
+		skull_id: int;
+		t: float;
+	}
+	Sync_Key :: struct {
+		key_id: int;
+		position: V3f;
+		holder: int;
+	}
+	Sync_Gate :: struct {
+		gate_id: int;
+		is_closed: bool;
+	}
 
-	payload: Sum_Type(Move, Spawn, New_Terrain, Sync_Player, Quit, Die, Respawn);
+	payload: Sum_Type(
+		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull,
+		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate
+	);
 }
 
 isa :: (s: Sum_Type, $T: Type) -> *T {

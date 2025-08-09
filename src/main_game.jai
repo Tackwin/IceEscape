@@ -1,6 +1,7 @@
 #if OS == .WINDOWS {
 	#import "imgui_sdl_gl";
 }
+Terrain :: #import "Terrain";
 #import "Math";
 #import "Basic";
 #import "Algebra";
@@ -11,42 +12,6 @@ Render :: #import "Render";
 Assets :: #import "Assets";
 
 show_inspector := false;    // Wish we could declare static variables inside functions.
-
-STARTER_TERRAIN_ASCII :: #string TERRAIN
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGSGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
-TERRAIN
 
 send_web_message :: (platform: Platform, command: Command) {
 	payload := NewArray(size_of(Command) + 8, u8, false,, temp);
@@ -93,21 +58,39 @@ main :: () {
 
 	scene: Scene.Scene;
 
-	scene.camera.position = .{ 0, -9, 18 };
+	scene.camera.position = .{ 0, -4, 8 };
 	scene.camera.target = .{ 0, 0, 0 };
+	scene.camera.target_target = scene.camera.target;
+	scene.camera.wanted_target_to_position = scene.camera.position - scene.camera.target;
 	scene.camera.fov = 55;
+	scene.model_shader = Render.Shader.make(
+		context.allocator, Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT
+	);
 	scene.texture_shader = Render.Shader.make(
 		context.allocator, Assets.PLAIN_VERTEX, Assets.TEXTURE_FRAGMENT
 	);
+	scene.font_shader = Render.Shader.make(
+		context.allocator, Assets.FONT_VERTEX, Assets.FONT_FRAGMENT
+	);
 	scene.ice_texture = Render.Texture.make_from_image(Assets.ICE_TEXTURE);
+	scene.coin_texture = Render.Texture.make_from_image(Assets.COIN_TEXTURE);
+	scene.dirt_texture = Render.Texture.make_from_image(Assets.DIRT_TEXTURE);
 	scene.grass_texture = Render.Texture.make_from_image(Assets.GRASS_TEXTURE);
+	scene.slippy_ice_texture = Render.Texture.make_from_image(Assets.SLIPPY_ICE_TEXTURE);
 	scene.tile_geometry = Render.Geometry.make_square(
 		context.allocator, .{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
 	);
+	scene.mark_texture = Render.Texture.make_from_image(Assets.MARK_TEXTURE);
+	Render.set_parameter(scene.mark_texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	shader := Render.Shader.make(context.allocator, Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT);
 	geometry := Render.Geometry.make_from_obj(context.allocator, Assets.CAR_OBJ);
 	tombstone_geometry := Render.Geometry.make_from_obj(context.allocator, Assets.TOMBSTONE_OBJ);
+	scene.coin_geometry = Render.Geometry.make_from_obj(context.allocator, Assets.COIN_OBJ);
+	scene.skull_geometry = Render.Geometry.make_from_obj(context.allocator, Assets.SKULL_OBJ);
+	scene.key_geometry = Render.Geometry.make_from_obj(context.allocator, Assets.KEY_OBJ);
+	scene.mark_geometry = Render.Geometry.make_from_obj(context.allocator, Assets.MARK_OBJ);
+	scene.gate_geometry = Render.Geometry.make_from_obj(context.allocator, Assets.GATE_OBJ);
+	scene.gate_close_geometry = Render.Geometry.make_from_obj(context.allocator, Assets.GATE_CLOSE_OBJ);
 
 	just_pressed: [Key_COUNT] bool;
 	just_released: [Key_COUNT] bool;
@@ -115,8 +98,9 @@ main :: () {
 
 	T := 0;
 
-	terrain := Scene.load_terrain_from_ascii(STARTER_TERRAIN_ASCII);
-	scene.current_terrain = *terrain;
+	// terrain := Scene.load_terrain_from_ascii(STARTER_TERRAIN_ASCII);
+	// scene.current_terrain = *terrain;
+	Terrain.init_roundabout(*scene);
 
 	colors :: V3f.[
 		V3f.{ 1.0, 0.9, 0.9 },
@@ -128,11 +112,22 @@ main :: () {
 		V3f.{ 1.0, 1.0, 1.0 }
 	];
 
+	history_dt: [100] float;
+	history_cursor := 0;
+	render_fps := false;
+
+	yes: [..] V2f;
+	last_yes: Apollo_Time;
+
 	// Main loop
 	done := false;
 	while !done {
 
 		frame_info := platform.get_frame_info();
+		history_dt[history_cursor % history_dt.count] = frame_info.delta_time;
+		history_cursor += 1;
+		Render.IM.display_size = frame_info.framebuffer_size;
+
 		if frame_info.quit
 			done = true;
 		for * just_pressed {
@@ -159,21 +154,45 @@ main :: () {
 			ImGui.NewFrame();
 		}
 
+		any_camera_move := false;
 		if pressed[Key.Q] {
-			scene.camera.position.x -= 0.1;
-			scene.camera.target.x -= 0.1;
+			scene.camera.target_target.x -= scene.camera.speed * frame_info.delta_time;
+			any_camera_move = true;
 		}
 		if pressed[Key.D] {
-			scene.camera.position.x += 0.1;
-			scene.camera.target.x += 0.1;
+			scene.camera.target_target.x += scene.camera.speed * frame_info.delta_time;
+			any_camera_move = true;
 		}
 		if pressed[Key.S] {
-			scene.camera.position.y -= 0.1;
-			scene.camera.target.y -= 0.1;
+			scene.camera.target_target.y -= scene.camera.speed * frame_info.delta_time;
+			any_camera_move = true;
 		}
 		if pressed[Key.Z] {
-			scene.camera.position.y += 0.1;
-			scene.camera.target.y += 0.1;
+			scene.camera.target_target.y += scene.camera.speed * frame_info.delta_time;
+			any_camera_move = true;
+		}
+
+		if !any_camera_move {
+			scene.camera.target_target = scene.camera.target;
+		}
+
+		if just_pressed[Key.H] {
+			render_fps = !render_fps;
+		}
+
+		if scene.succeed && to_float64_seconds(current_time_monotonic() - last_yes) > 0.25 {
+			p := V2f.{ 0, 0 };
+			if yes.count > 0 {
+				p = yes[yes.count - 1];
+			}
+
+			p.x += 123456;
+			p.y += 456789;
+			p.x = fmod_cycling(p.x, frame_info.framebuffer_size.x);
+			p.y = fmod_cycling(p.y, frame_info.framebuffer_size.y);
+
+			array_add(*yes, p);
+			last_yes = current_time_monotonic();
 		}
 
 		T += 1;
@@ -194,6 +213,17 @@ main :: () {
 				command.ground_target = v2(target);
 				command.player_id = scene.controlled_player_id;
 				send_web_message(platform, make_command(command));
+				scene.mark_clicked_time = current_time_monotonic();
+				scene.mark_clicked_pos = target;
+			}
+		}
+		
+		if just_pressed[Key.C] {
+			player := Scene.find_by_player_id(scene, scene.controlled_player_id);
+			if player && !player.server.dead {
+				command: Command.Spawn_Coin;
+				command.sender = player.id;
+				send_web_message(platform, make_command(command));
 			}
 		}
 
@@ -211,9 +241,10 @@ main :: () {
 		rhi.glEnable(GL_CULL_FACE);
 		rhi.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		Render.set_uniform(shader, "V", V);
-		Render.set_uniform(shader, "P", P);
+		Render.set_uniform(scene.model_shader, "V", V);
+		Render.set_uniform(scene.model_shader, "P", P);
 		for * scene.players {
+
 			if !it.server.dead {
 				M := M4f.identity();
 
@@ -222,33 +253,56 @@ main :: () {
 
 				M = M4f.translate(it.client.position) * M;
 
-				Render.set_uniform(shader, "M", M);
-				Render.set_uniform(shader, "tint", colors[it.id % colors.count]);
-				Render.render(geometry, shader);
+				Render.set_uniform(scene.model_shader, "M", M);
+				Render.set_uniform(scene.model_shader, "tint", colors[it.id % colors.count]);
+				Render.render(geometry, scene.model_shader);
 			}
 		}
 
-		Render.set_uniform(shader, "tint", V3f.{ 1, 1, 1 });
+		Render.set_uniform(scene.model_shader, "tint", V3f.{ 1, 1, 1 });
 		for * scene.tombstones {
 			M := M4f.translate(it.position);
 
-			Render.set_uniform(shader, "M", M);
-			Render.render(tombstone_geometry, shader);
+			Render.set_uniform(scene.model_shader, "M", M);
+			Render.render(tombstone_geometry, scene.model_shader);
 		}
 
-		Scene.render(scene, terrain);
-		//Render.set_uniform(texture_shader, "V", V);
-		//Render.set_uniform(texture_shader, "P", P);
-		//Render.set_uniform(texture_shader, "texture_sampler", texture, 0);
-//
-		//for x: -20..20 {
-		//	for y: -20..20 {
-		//		M := M4f.translate(.{ cast(float32) x, cast(float32) y, 0 });
-		//		Render.set_uniform(texture_shader, "M", M);
-//
-		//		Render.render(tile, texture_shader);
-		//	}
-		//}
+		Scene.render(scene, scene.current_terrain);
+
+		for yes {
+			Render.push_text("GG, you won !", it, 24);
+		}
+
+		if render_fps {
+
+			Render.push_quad(.{
+				pos = .{ -0.95, -0.95 },
+				size = .{ 0.75, 0.4 },
+				color = .{ 0.0, 0.0, 0.0 },
+				z = 0.0
+			});
+			n := history_dt.count;
+			for history_dt {
+				fps := 1.0 / it;
+
+				h := min(fps, 300);
+				h /= 300;
+
+				Render.push_quad(.{
+					pos = .{ -0.95 + it_index * 0.75 / n, -0.94 },
+					size = .{ 0.73 / n, 0.38 * h },
+					color = .{ 1.0, 1.0, 1.0 },
+					z = -0.1
+				});
+			}
+			Render.push_quad(.{
+				pos = .{ -0.95, -0.94 + 0.38 * (60.0 / 300) },
+				size = .{ 0.75, 0.002 },
+				color = .{ 0.0, 1.0, 0.0 },
+				z = -0.2
+			});
+		}
+		Render.render_im();
 
 		#if OS == .WINDOWS {
 			ImGui.Render();

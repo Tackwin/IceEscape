@@ -373,6 +373,7 @@ GL_TEXTURE_COMPRESSED :: 0x86A1;
 GL_NUM_COMPRESSED_TEXTURE_FORMATS :: 0x86A2;
 GL_COMPRESSED_TEXTURE_FORMATS :: 0x86A3;
 GL_CLAMP_TO_BORDER :: 0x812D;
+GL_CLAMP_TO_EDGE :: 0x812F;
 
 // GL_VERSION_1_4
 GL_BLEND_DST_RGB :: 0x80C8;
@@ -767,6 +768,7 @@ GL_TIME_ELAPSED :: 0x88BF;
 GL_TIMESTAMP :: 0x8E28;
 GL_INT_2_10_10_10_REV :: 0x8D9F;
 
+GL_SHADER_STORAGE_BUFFER :: 0x90D2;
 
 RHI_proc :: struct {
 	glClear : (mask: GLbitfield) #c_call;
@@ -876,6 +878,7 @@ RHI_proc :: struct {
 	glGetProgramInfoLog : (program: GLuint, bufSize: GLsizei, length: *GLsizei, infoLog: *GLchar) #c_call;
 	glDeleteProgram : (program: GLuint) #c_call;
 	glDrawArrays : (mode: GLenum, first: GLint, count: GLsizei) #c_call;
+	glBindBufferBase : (target: GLenum, index: GLuint, buffer: GLuint) #c_call;
 }
 
 #if OS == .WASM {
