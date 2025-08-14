@@ -25,6 +25,11 @@ IM: struct {
 		height: float;
 	}
 
+	Spatial_Quad :: struct {
+		center: V3f;
+		size: V3f;
+	}
+
 	quad_object: GLuint = 0;
 	quad_buffer: GLuint = 0;
 
@@ -41,6 +46,18 @@ IM: struct {
 }
 
 push_quad :: (quad: IM.Quad) {
+	array_add(*IM.quads, quad);
+}
+push_quad_screen :: (pos: V2f, size: V2f, color: V3f, z := 0.0) {
+	quad: IM.Quad;
+	// IM.display_size
+	quad.pos.x = pos.x / IM.display_size.x * 2 - 1.0;
+	quad.pos.y = pos.y / IM.display_size.y * 2 - 1.0;
+	quad.size.x = size.x / IM.display_size.x * 2;
+	quad.size.y = size.y / IM.display_size.y * 2;
+	quad.color = color;
+	quad.z = z;
+
 	array_add(*IM.quads, quad);
 }
 
@@ -67,7 +84,7 @@ render_im_quad :: () {
 		return;
 
 	if !ok(IM.quad_shader) {
-		IM.quad_shader = Shader.make(context.allocator, QUAD_VERTEX, QUAD_FRAGMENT);
+		IM.quad_shader = Shader.make(QUAD_VERTEX, QUAD_FRAGMENT);
 	}
 	context.rhi.glUseProgram(IM.quad_shader.program);
 
@@ -89,6 +106,7 @@ render_im_quad :: () {
 	vertices := NewArray(
 		IM.quads.count * 6, Quad_Vertex, false,, temp
 	);
+
 	for IM.quads {
 		vertices[it_index * 6 + 0].pos = .{ it.pos.x, it.pos.y, it.z };
 		vertices[it_index * 6 + 0].color = it.color;
@@ -140,13 +158,13 @@ render_im_char :: () {
 		return;
 
 	if !ok(IM.char_shader) {
-		IM.char_shader = Shader.make(context.allocator, FONT_VERTEX, FONT_FRAGMENT);
+		IM.char_shader = Shader.make(FONT_VERTEX, FONT_FRAGMENT);
 	}
 	if !ok(IM.char_texture) {
 		IM.char_texture = Texture.make_from_image(MAIN_FONT.atlas);
 	}
 	context.rhi.glUseProgram(IM.char_shader.program);
-	set_uniform(IM.char_shader, "font_sampler", IM.char_texture, 0);
+	set_uniform(*IM.char_shader, "font_sampler", IM.char_texture, 0);
 
 	if !IM.char_object {
 		context.rhi.glGenVertexArrays(1, *IM.char_object);
@@ -253,24 +271,17 @@ Shader :: struct {
 	fragment_shader: GLuint = 0;
 	program: GLuint = 0;
 
-	allocator: Allocator;
-
 	locations: Table(string, int);
+	keys: [..] string;
 
-	new :: (allocator: Allocator) -> Shader {
+	make :: (from_vertex_code: string, from_fragment_code: string) -> Shader {
 		shader: Shader;
-		shader.allocator = allocator;
-		return shader;
-	}
-
-	make :: (allocator: Allocator, from_vertex_code: string, from_fragment_code: string) -> Shader {
-		shader := Shader.new(allocator);
 
 		shader.vertex_code.data =
-			NewArray(from_vertex_code.count, u8, false,, shader.allocator).data;
+			NewArray(from_vertex_code.count, u8, false,, temp).data;
 		shader.vertex_code.count = from_vertex_code.count;
 		shader.fragment_code.data =
-			NewArray(from_fragment_code.count, u8, false,, shader.allocator).data;
+			NewArray(from_fragment_code.count, u8, false,, temp).data;
 		shader.fragment_code.count = from_fragment_code.count;
 
 		memcpy(shader.vertex_code.data, from_vertex_code.data, shader.vertex_code.count);
@@ -280,18 +291,31 @@ Shader :: struct {
 		return shader;
 	}
 
+	free :: (shader: *Shader) {
+		deinit(*shader.locations);
+		for shader.keys {
+			free(it);
+		}
+		array_free(shader.keys);
+	}
+
 }
 ok :: (shader: Shader) -> bool {
 	return shader.program > 0;
 }
 
-set_uniform :: (shader: Shader, name: string, value: $T) {
+set_uniform :: (shader: *Shader, name: string, value: $T) {
 	context.rhi.glUseProgram(shader.program);
 
 	found, loc := table_find_new(*shader.locations, name);
 	if !found {
 		loc = context.rhi.glGetUniformLocation(shader.program, name.data);
-		table_add(*shader.locations, name, loc);
+		allocated_name: string;
+		allocated_name.data = xx alloc(name.count);
+		allocated_name.count = name.count;
+		memcpy(allocated_name.data, name.data, name.count);
+		array_add(*shader.keys, allocated_name);
+		table_add(*shader.locations, allocated_name, loc);
 	}
 
 	if loc < 0 {
@@ -308,13 +332,18 @@ set_uniform :: (shader: Shader, name: string, value: $T) {
 		context.rhi.glUniform2f(xx loc, value.x, value.y);
 	}
 }
-set_uniform :: (shader: Shader, name: string, value: Texture, unit: int) {
+set_uniform :: (shader: *Shader, name: string, value: Texture, unit: int) {
 	context.rhi.glUseProgram(shader.program);
 
 	found, loc := table_find_new(*shader.locations, name);
 	if !found {
 		loc = context.rhi.glGetUniformLocation(shader.program, name.data);
-		table_add(*shader.locations, name, loc);
+		allocated_name: string;
+		allocated_name.data = xx alloc(name.count);
+		allocated_name.count = name.count;
+		memcpy(allocated_name.data, name.data, name.count);
+		array_add(*shader.keys, allocated_name);
+		table_add(*shader.locations, allocated_name, loc);
 	}
 
 	if loc < 0 {
@@ -358,7 +387,7 @@ compile :: (shader: *Shader) {
 	if status == 0 {
 		buffer := NewArray(1024, u8, false,, temp);
 		written: u32;
-		context.rhi.glGetShaderInfoLog(vertex_shader, xx buffer.count, *written, buffer.data);
+		context.rhi.glGetShaderInfoLog(fragment_shader, xx buffer.count, *written, buffer.data);
 		error_msg: string = .{ data =buffer.data, count = written };
 
 		print("Fragment shader compilation failed: %\n", error_msg);
@@ -391,7 +420,10 @@ compile :: (shader: *Shader) {
 }
 
 Geometry :: struct {
-	allocator: Allocator;
+	Instance_Data :: struct {
+		M: M4f;
+		kind: int;
+	}
 
 	Vertex_Data :: struct {
 		pos: V3f;
@@ -402,19 +434,14 @@ Geometry :: struct {
 	cpu_buffer: [] Vertex_Data;
 	gpu_object: GLuint = 0;
 	gpu_buffer: GLuint = 0;
+	instanced_buffer: GLuint = 0;
 
-	new :: (allocator: Allocator) -> Geometry {
+	make_square :: (v1: V3f, v2: V3f, v3: V3f, v4: V3f) -> Geometry {
 		geometry: Geometry;
-		geometry.allocator = allocator;
-		return geometry;
-	}
-
-	make_square :: (allocator: Allocator, v1: V3f, v2: V3f, v3: V3f, v4: V3f) -> Geometry {
-		geometry := new(allocator);
 
 		n := normalize(cross(v2 - v1, v3 - v1));
 
-		geometry.cpu_buffer = NewArray(6, Geometry.Vertex_Data, false,, geometry.allocator);
+		geometry.cpu_buffer = NewArray(6, Geometry.Vertex_Data, false);
 		geometry.cpu_buffer[0] = .{ pos = v1, nor = n, tex = .{ 0, 0 } };
 		geometry.cpu_buffer[1] = .{ pos = v2, nor = n, tex = .{ 1, 0 } };
 		geometry.cpu_buffer[2] = .{ pos = v3, nor = n, tex = .{ 1, 1 } };
@@ -427,8 +454,8 @@ Geometry :: struct {
 		return geometry;
 	}
 
-	make_from_obj :: (allocator: Allocator, obj: string) -> Geometry {
-		geometry := Geometry.new(allocator);
+	make_from_obj :: (obj: string) -> Geometry {
+		geometry: Geometry;
 
 		vertices: [..] V3f;
 		vertices.allocator = temp;
@@ -512,7 +539,7 @@ Geometry :: struct {
 		}
 
 		geometry.cpu_buffer = NewArray(
-			faces.count * 3, Geometry.Vertex_Data, false,, geometry.allocator
+			faces.count * 3, Geometry.Vertex_Data, false
 		);
 
 		for faces {
@@ -584,12 +611,79 @@ upload :: (geometry: *Geometry) {
 	);
 }
 
+add_instance :: (geometry: *Geometry, instanced: [] u8) {
+	context.rhi.glBindVertexArray(geometry.gpu_object);
+	if geometry.instanced_buffer == 0 {
+		context.rhi.glGenBuffers(1, *geometry.instanced_buffer);
+	}
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, geometry.instanced_buffer);
+	context.rhi.glBufferData(
+		GL_ARRAY_BUFFER,
+		instanced.count * size_of(u8),
+		instanced.data,
+		GL_STATIC_DRAW
+	);
+}
+
 render :: (geometry: Geometry, shader: Shader) {
 	context.rhi.glUseProgram(shader.program);
 	context.rhi.glBindVertexArray(geometry.gpu_object);
 	context.rhi.glDrawArrays(GL_TRIANGLES, 0, xx geometry.cpu_buffer.count);
 }
 
+render_instanced :: (geometry: Geometry, shader: Shader, n: int) {
+	context.rhi.glUseProgram(shader.program);
+	context.rhi.glBindVertexArray(geometry.gpu_object);
+	context.rhi.glDrawArraysInstanced(GL_TRIANGLES, 0, xx geometry.cpu_buffer.count, xx n);
+}
+enable_instanced_attributes :: (slot: int) {
+	context.rhi.glEnableVertexAttribArray(xx (slot + 0)); // Matrix
+	context.rhi.glEnableVertexAttribArray(xx (slot + 1)); // Matrix
+	context.rhi.glEnableVertexAttribArray(xx (slot + 2)); // Matrix
+	context.rhi.glEnableVertexAttribArray(xx (slot + 3)); // Matrix
+	context.rhi.glVertexAttribPointer(
+		xx (slot + 0),
+		4,
+		GL_FLOAT,
+		0,
+		size_of(Geometry.Instance_Data),
+		xx (offset_of(Geometry.Instance_Data, "M") + 00)
+	);
+	context.rhi.glVertexAttribPointer(
+		xx (slot + 1),
+		4,
+		GL_FLOAT,
+		0,
+		size_of(Geometry.Instance_Data),
+		xx (offset_of(Geometry.Instance_Data, "M") + 16)
+	);
+	context.rhi.glVertexAttribPointer(
+		xx (slot + 2),
+		4,
+		GL_FLOAT,
+		0,
+		size_of(Geometry.Instance_Data),
+		xx (offset_of(Geometry.Instance_Data, "M") + 32)
+	);
+	context.rhi.glVertexAttribPointer(
+		xx (slot + 3),
+		4,
+		GL_FLOAT,
+		0,
+		size_of(Geometry.Instance_Data),
+		xx (offset_of(Geometry.Instance_Data, "M") + 48)
+	);
+	context.rhi.glVertexAttribDivisor(xx (slot + 0), 1);
+	context.rhi.glVertexAttribDivisor(xx (slot + 1), 1);
+	context.rhi.glVertexAttribDivisor(xx (slot + 2), 1);
+	context.rhi.glVertexAttribDivisor(xx (slot + 3), 1);
+	context.rhi.glEnableVertexAttribArray(xx (slot + 4)); // Matrix
+	context.rhi.glVertexAttribIPointer(
+		xx (slot + 4), 1, GL_INT,
+		size_of(Geometry.Instance_Data),  xx offset_of(Geometry.Instance_Data, "kind")
+	);
+	context.rhi.glVertexAttribDivisor(xx (slot + 4), 1);
+}
 
 Texture :: struct {
 	width: u32;

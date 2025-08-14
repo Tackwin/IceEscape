@@ -63,7 +63,7 @@ build_wasm :: () {
 		"-release",
 		"-import_dir", ".",
 		"-output_path", "../web/",
-		"+Toolchains/Web/Progressive_Web_App", "-inect_call_to_pwa_assets_update"
+		"+Toolchains/Web/Progressive_Web_App"
 	);
 
 	while true {
@@ -85,16 +85,37 @@ build_wasm :: () {
 }
 
 build :: () {
+	args := get_build_options().compile_time_command_line;
+	linux := false;
+	server := false;
+	wasm := false;
+	for args {
+		linux |= compare(it, "linux") == 0;
+		server |= compare(it, "server") == 0;
+		wasm |= compare(it, "wasm") == 0;
+	}
+
 	win32_game := build_win32();
 	win32_server := build_server(.WINDOWS);
+	linux_server := build_server(.LINUX);
 
 	wss : [..] Workspace;
-	array_add(*wss, win32_server);
-	array_add(*wss, win32_game);
+	if linux {
+		array_add(*wss, linux_server);
+	} else {
+		if server
+			array_add(*wss, win32_server);
+		array_add(*wss, win32_game);
+	}
 
 	mains: [..] string;
-	array_add(*mains, "src/main_server.jai");
-	array_add(*mains, "src/main_game.jai");
+	if linux {
+		array_add(*mains, "src/main_server.jai");
+	} else {
+		if server
+			array_add(*mains, "src/main_server.jai");
+		array_add(*mains, "src/main_game.jai");
+	}
 
 
 	for wss
@@ -114,15 +135,7 @@ build :: () {
 
 	set_build_options_dc(.{ do_output = false });
 
-	args := get_build_options().compile_time_command_line;
-	found := false;
-	for args {
-		if compare(it, "wasm") == 0 {
-			found = true;
-			break;
-		}
-	}
-	if found
+	if wasm
 		build_wasm();
 }
 

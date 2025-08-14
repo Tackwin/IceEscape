@@ -82,11 +82,22 @@ Command :: struct {
 		gate_id: int;
 		is_closed: bool;
 	}
+	Sync_Moving_Frame :: struct {
+		frame_id: int;
+		t: float;
+	}
+	NTP :: struct {
+		t0: float64;
+		t1: float64;
+		t2: float64;
+		t3: float64;
+	}
 
 	payload: Sum_Type(
-		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull,
-		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate
+		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame,
+		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP
 	);
+	sent_timestamp: float64;
 }
 
 isa :: (s: Sum_Type, $T: Type) -> *T {

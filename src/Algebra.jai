@@ -438,6 +438,14 @@ damp_angle_between :: (a: V3($T), b: V3(T), lambda: T, dt: T) -> V3(T) {
 }
 
 
+closest_aabb :: (p: V3($T), low: V3(T), high: V3(T)) -> V3(T) {
+	q := p;
+	q.x = clamp(q.x, low.x, high.x);
+	q.y = clamp(q.y, low.y, high.y);
+	q.z = clamp(q.z, low.z, high.z);
+	return q;
+}
+
 dist_aabb :: (p: V3($T), low: V3(T), high: V3(T)) -> T {
 	q := p;
 	q.x = clamp(q.x, low.x, high.x);

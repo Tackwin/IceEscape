@@ -5,6 +5,7 @@ Terrain :: #import "Terrain";
 Scene :: #import "Scene";
 #import "Thread";
 #import "Hash_Table";
+#import "Utils";
 
 STARTER_TERRAIN_ASCII :: #string TERRAIN
 GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
@@ -42,17 +43,15 @@ GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
 GGGGGGGGGGGGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIiiiiiIIIIIIIIIIIIIIGGG
 TERRAIN
 
-prepare_typed_message :: (payload: $T) -> [] u8 {
+prepare_typed_message :: (_payload: $T) -> [] u8 {
+	payload := _payload;
+	#if T == Command {
+		payload.sent_timestamp = to_float64_seconds(current_time_monotonic());
+	}
+
 	message := NewArray(size_of(T) + 8, u8, false,, temp);
 	(cast(*u64)message.data).* = xx size_of(T);
 	memcpy(message.data + 8, xx *payload, size_of(T));
-	return message;
-}
-
-prepare_message :: (payload: [] u8) -> [] u8 {
-	message := NewArray(payload.count + 8, u8, false,, temp);
-	(cast(*u64)message.data).* = xx payload.count;
-	memcpy(message.data + 8, payload.data, payload.count);
 	return message;
 }
 
@@ -78,38 +77,13 @@ send_prepared :: (ws: *Websocket, prepared_payload: [] u8) {
 	websocket_send(ws, str, .BINARY);
 }
 
-Period :: struct(period: float) {
-	last: Apollo_Time;
-}
-Counter :: struct(n: int) {
-	count := 0;
-}
-check :: (counter: *Counter) -> bool {
-	counter.count += 1;
-	if counter.count > counter.n {
-		counter.count = 0;
-		return true;
-	}
-	return false;
-}
-
-check :: (period: *Period) -> bool, float {
-	t := current_time_monotonic();
-	dt := to_float64_seconds(t - period.last);
-	if dt > period.period {
-		period.last = t;
-		return true, cast(float32)dt;
-	}
-	return false, 0;
-}
-
-
 State :: struct {
 	server: *Websocket_Server = null;
 	last_sync_sent_time: Apollo_Time;
 
 	sync_count_player: Counter(1);
 	sync_count_skull: Counter(20);
+	sync_moving_frame: Counter(10);
 	sync_count_key: Counter(50);
 
 	player_generation := 0;
@@ -186,6 +160,7 @@ parse_message :: (data: [] u8) -> Command, bool {
 }
 
 sync :: (state: State) {
+	reset_temporary_storage();
 	if check(*state.sync_count_player) {
 		for * state.scene.players {
 			msg: Command.Sync_Player;
@@ -193,6 +168,16 @@ sync :: (state: State) {
 			msg.direction = it.server.direction;
 			msg.position = it.server.position;
 			msg.dead = it.server.dead;
+
+			broadcast(state.server, make_command(msg));
+		}
+	}
+
+	if check(*state.sync_moving_frame) {
+		for * state.scene.moving_frames {
+			msg: Command.Sync_Moving_Frame;
+			msg.frame_id = it.id;
+			msg.t = it.server.t;
 
 			broadcast(state.server, make_command(msg));
 		}
@@ -224,6 +209,7 @@ process_response: Scene.Process_Response;
 frame_result: Scene.Frame_Result;
 
 tick :: (state: *State) {
+	reset_temporary_storage();
 	Scene.clear(*process_response);
 	Scene.clear(*frame_result);
 
@@ -351,6 +337,14 @@ main :: () {
 
 		to_tick, dt := check(*state.tick_period);
 		if to_tick {
+			if dt + error > (2 * state.tick_period.period) {
+				print(
+					"Long tick detected: % seconds, doing % iterations\n",
+					dt + error,
+					cast(int) ((dt + error) / state.tick_period.period)
+				);
+			}
+
 			while (dt + error) > state.tick_period.period {
 				tick(*state);
 				dt -= state.tick_period.period;
@@ -379,8 +373,6 @@ main :: () {
 				state.queue.count = 0; // Clear the queue after processing.
 			}
 		}
-
-		sleep_milliseconds(1);
 	}
 }
 

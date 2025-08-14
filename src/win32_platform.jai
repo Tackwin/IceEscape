@@ -17,6 +17,8 @@ curl: *CURL;
 curl_errbuf: [CURL_ERROR_SIZE] u8;
 curl_buffer: [] u8;
 
+fake_one_way_ping := 300.0;
+
 map_sdl_to_key :: (key: int) -> int {
 	if key == {
 		case xx SDLK_a; return xx Key.A;
@@ -45,21 +47,38 @@ map_sdl_to_key :: (key: int) -> int {
 		case xx SDLK_v; return xx Key.V;
 		case xx SDLK_b; return xx Key.B;
 		case xx SDLK_n; return xx Key.N;
+		case xx SDLK_SPACE; return xx Key.Space;
+		case xx SDLK_F1; return xx Key.F1;
+		case xx SDLK_F2; return xx Key.F2;
+		case xx SDLK_F3; return xx Key.F3;
+		case xx SDLK_F4; return xx Key.F4;
+		case xx SDLK_F5; return xx Key.F5;
+		case xx SDLK_F6; return xx Key.F6;
+		case xx SDLK_F7; return xx Key.F7;
+		case xx SDLK_F8; return xx Key.F8;
+		case xx SDLK_F9; return xx Key.F9;
+		case xx SDLK_F10; return xx Key.F10;
+		case xx SDLK_F11; return xx Key.F11;
+		case xx SDLK_F12; return xx Key.F12;
 	}
 	return key;
 }
 
+Message :: struct {
+	data: [..] u8;
+	sent_time: Apollo_Time;
+}
+messages_pending: [..] Message;
+message_arrived: [..] Message;
+
 #scope_export
 
 send_web_message :: (msg: [] u8) {
-	sent: u64 = 0;
-	code := curl_ws_send(curl, msg.data, xx msg.count, *sent, 0, CURLWS_TEXT);
-	if code {
-		str: string;
-		str.data = curl_errbuf.data;
-		str.count = c_style_strlen(curl_errbuf.data);
-		print("Error sending message: %\n", str);
-	}
+	message: Message;
+	array_resize(*message.data, msg.count);
+	memcpy(message.data.data, msg.data, msg.count);
+	message.sent_time = current_time_monotonic();
+	array_add(*messages_pending, message);
 }
 
 win32_get_frame_info :: () -> Frame_Info {
@@ -142,27 +161,82 @@ win32_get_frame_info :: () -> Frame_Info {
 
 	frame: *curl_ws_frame;
 	recv: u64;
-	curl_ws_recv(curl, curl_buffer.data, xx curl_buffer.count, *recv, *frame);
+
+	buffer := curl_buffer;
+	total_recv := 0;
+	while true {
+		recv = 0;
+		curl_ws_recv(curl, buffer.data, xx buffer.count, *recv, *frame);
+		if !frame || recv == 0
+			break;
+		buffer.data += recv;
+		buffer.count -= xx recv;
+		total_recv += xx recv;
+	}
 
 	cursor := 0;
-	while cursor < (xx recv) && info.message_received_count < info.message_received.count {
+	while cursor < (xx total_recv) && info.message_received_count < info.message_received.count {
 		next_message_length := (cast(*u64)(curl_buffer.data + cursor)).*;
 
-		msg: Web_Message;
-		msg.data = curl_buffer.data + cursor + 8;
-		msg.count = xx next_message_length;
-		info.message_received[info.message_received_count] = msg;
-		info.message_received_count += 1;
+		msg: Message;
+		array_resize(*msg.data, xx next_message_length);
+		memcpy(msg.data.data, curl_buffer.data + cursor + 8, xx next_message_length);
+		msg.sent_time = current_time_monotonic();
+		array_add(*message_arrived, msg);
 
 		cursor += 8;
 		cursor += xx next_message_length;
 	}
+
+	info.message_received_count = 0;
+	cursor = 0;
+	for * message_arrived {
+		dt := to_float64_seconds(current_time_monotonic() - it.sent_time);
+
+		if 1000 * dt > fake_one_way_ping {
+			info.message_received_count += 1;
+			info.message_received[info.message_received_count - 1] = NewArray(
+				it.data.count, u8, initialized = false,, temp
+			);
+			memcpy(
+				info.message_received[info.message_received_count - 1].data,
+				it.data.data,
+				it.data.count
+			);
+		} else {
+			message_arrived[cursor] = it.*;
+			cursor += 1;
+		}
+	}
+	message_arrived.count = cursor;
 
 	return info;
 }
 
 win32_end_frame :: () {
 	SDL_GL_SwapWindow(sdl_window);
+
+	cursor := 0;
+	for * messages_pending {
+		dt := to_float64_seconds(current_time_monotonic() - it.sent_time);
+		if dt * 1000 > fake_one_way_ping {
+			sent: u64 = 0;
+			code := curl_ws_send(curl, it.data.data, xx it.data.count, *sent, 0, CURLWS_TEXT);
+			if code {
+				str: string;
+				str.data = curl_errbuf.data;
+				str.count = c_style_strlen(curl_errbuf.data);
+				print("Error sending message: %\n", str);
+			}
+
+			array_free(it.data);
+		} else {
+			messages_pending[cursor] = it.*;
+			cursor += 1;
+		}
+	}
+
+	messages_pending.count = cursor;
 }
 
 init_platform :: () -> Platform {

@@ -41,6 +41,19 @@ map_key_to_key :: (key: int) -> int {
 		case xx Key_Code.MOUSE_BUTTON_LEFT; return xx Key.MouseLeft;
 		case xx Key_Code.MOUSE_BUTTON_RIGHT; return xx Key.MouseRight;
 		case xx Key_Code.MOUSE_BUTTON_MIDDLE; return xx Key.MouseMiddle;
+		case xx Key_Code.SPACEBAR; return xx Key.Space;
+		case xx Key_Code.F1; return xx Key.F1;
+		case xx Key_Code.F2; return xx Key.F2;
+		case xx Key_Code.F3; return xx Key.F3;
+		case xx Key_Code.F4; return xx Key.F4;
+		case xx Key_Code.F5; return xx Key.F5;
+		case xx Key_Code.F6; return xx Key.F6;
+		case xx Key_Code.F7; return xx Key.F7;
+		case xx Key_Code.F8; return xx Key.F8;
+		case xx Key_Code.F9; return xx Key.F9;
+		case xx Key_Code.F10; return xx Key.F10;
+		case xx Key_Code.F11; return xx Key.F11;
+		case xx Key_Code.F12; return xx Key.F12;
 	}
 	return -1;
 }
@@ -101,6 +114,7 @@ wasm_get_frame_info :: () -> Frame_Info {
 		recv := 0;
 		js_get_web_message_received(web_buffer.data, web_buffer.count, *recv);
 
+		n := 0;
 		cursor := 0;
 		while cursor < (xx recv) && info.message_received_count < info.message_received.count {
 			next_message_length := (cast(*u64)(web_buffer.data + cursor)).*;
@@ -113,6 +127,7 @@ wasm_get_frame_info :: () -> Frame_Info {
 
 			cursor += 8;
 			cursor += xx next_message_length;
+			n += 1;
 		}
 	}
 
@@ -121,13 +136,15 @@ wasm_get_frame_info :: () -> Frame_Info {
 
 wasm_end_frame ::  () {
 	js_webgl_swap_buffers :: (window: Window_Type, vsync: bool) #foreign;
-	js_webgl_swap_buffers(window, true);
+	js_webgl_swap_buffers(window, false);
 }
 
 init_platform :: () -> Platform {
 	window := create_window(1366, 768, "Ice Escape");
 	for * pressed
 		it.* = false;
+	js_webgl_swap_buffers :: (window: Window_Type, vsync: bool) #foreign;
+	js_webgl_swap_buffers(window, false);
 
 	web_buffer = NewArray(1024*1024*32, u8, false);
 

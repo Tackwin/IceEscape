@@ -40,6 +40,19 @@ Key :: enum s32 {
 	_7;
 	_8;
 	_9;
+	Space;
+	F1;
+	F2;
+	F3;
+	F4;
+	F5;
+	F6;
+	F7;
+	F8;
+	F9;
+	F10;
+	F11;
+	F12;
 	MouseLeft;
 	MouseRight;
 	MouseMiddle;
@@ -62,7 +75,7 @@ Frame_Info :: struct {
 
 	mouse_wheel := 0;
 
-	message_received: [64] Web_Message;
+	message_received: [1024] Web_Message;
 	message_received_count := 0;
 }
 
@@ -878,7 +891,10 @@ RHI_proc :: struct {
 	glGetProgramInfoLog : (program: GLuint, bufSize: GLsizei, length: *GLsizei, infoLog: *GLchar) #c_call;
 	glDeleteProgram : (program: GLuint) #c_call;
 	glDrawArrays : (mode: GLenum, first: GLint, count: GLsizei) #c_call;
+	glDrawArraysInstanced : (mode: GLenum, first: GLint, count: GLsizei, instancecount: GLsizei) #c_call;
 	glBindBufferBase : (target: GLenum, index: GLuint, buffer: GLuint) #c_call;
+	glVertexAttribIPointer : (index: GLuint, size: GLint, type: GLenum, stride: GLsizei, pointer: *void) #c_call;
+	glVertexAttribDivisor : (index: GLuint, divisor: GLuint) #c_call;
 }
 
 #if OS == .WASM {

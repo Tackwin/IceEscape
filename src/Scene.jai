@@ -13,9 +13,15 @@ Render :: #import "Render";
 Scene :: struct {
 	is_server := false;
 
+	terrain_vao: GLint = -1;
+	terrain_tile_buffer: GLint = -1;
+
 	font_shader: Render.Shader;
 	model_shader: Render.Shader;
 	texture_shader: Render.Shader;
+	instance_shader: Render.Shader;
+	tile_shader: Render.Shader;
+
 	ice_texture: Render.Texture;
 	coin_texture: Render.Texture;
 	slippy_ice_texture: Render.Texture;
@@ -23,6 +29,10 @@ Scene :: struct {
 	dirt_texture: Render.Texture;
 	mark_texture: Render.Texture;
 
+	tile_kind_to_shader: [64] *Render.Texture;
+
+	player_geometry: Render.Geometry;
+	tombstone_geometry: Render.Geometry;
 	tile_geometry: Render.Geometry;
 	skull_geometry: Render.Geometry;
 	coin_geometry: Render.Geometry;
@@ -30,9 +40,11 @@ Scene :: struct {
 	mark_geometry: Render.Geometry;
 	gate_geometry: Render.Geometry;
 	gate_close_geometry: Render.Geometry;
+	shuriken_geometry: Render.Geometry;
 
 	camera: Camera;
 
+	// >TODO put all allocation relating to the map in the same pool.
 	players: [..] Player;
 	controlled_player_id := 0;
 
@@ -41,6 +53,9 @@ Scene :: struct {
 	coins: [..] Coin;
 	keys: [..] Key;
 	gates: [..] Gate;
+	moving_frames: [..] Moving_Frame;
+	shurikens: [..] Shuriken;
+
 	coin_generation := 0;
 
 	current_terrain: *Terrain;
@@ -85,6 +100,9 @@ Camera :: struct {
 	target:   V3f;
 	target_target: V3f;
 	wanted_target_to_position: V3f;
+
+	locked_to := -1;
+	locked := false;
 
 	fov  := 65.0;
 	near := 0.1;
@@ -148,6 +166,43 @@ unproject_ndc :: (ndc: V2f, V: M4f, P: M4f) -> V3f {
 
 	ray_world := v3(inverse(V) * ray_eye);
 	return normalize(ray_world);
+}
+
+Moving_Frame :: struct {
+	id: int;
+
+	Key :: struct {
+		pos: V3f;
+		theta: float;
+		period: float;
+	}
+
+	keys: [..] Key;
+
+	server: struct {
+		t: float = 0;
+		speed: float = 1.0;
+	}
+
+	client: struct {
+		t: float = 0;
+	}
+}
+
+Shuriken :: struct {
+	frame_id := -1;
+
+	server: struct {
+		position: V3f;
+
+		radius_hitbox := 0.2;
+	}
+
+	client: struct {
+		theta: float = 0;
+
+		theta_speed : float = xx (-3.1415926 * 2.0 * 3.0);
+	}
 }
 
 Coin :: struct {
@@ -222,11 +277,12 @@ Player :: struct {
 		walking_toward := false;
 		slipping := false;
 		speed := 3.5;
-		turning_speed := 360 * 1.2;
+		turning_speed := 360 * 1.1;
 		dead := false;
 
 		radius_hitbox_tombstone := 0.75;
 		radius_hurtbox_skull := 0.5;
+		radius_hurtbox_shuriken := 0.25;
 		radius_hitbox_key := 0.55;
 		radius_hitbox_confirmed := 0.15;
 
@@ -238,6 +294,14 @@ Player :: struct {
 		position  := V3f.{ 0, 0, 0 };
 		direction := V3f.{ 1, 0, 0 };
 	};
+}
+
+find_by_frame_id :: (scene: Scene, id: int) -> *Moving_Frame {
+	for * scene.moving_frames {
+		if it.id == id
+			return it;
+	}
+	return null;
 }
 
 find_by_player_id :: (scene: Scene, id: int) -> *Player {
@@ -281,10 +345,10 @@ find_tombstone_by_player_id :: (scene: Scene, id: int) -> *Tombstone {
 	return null;
 }
 
-interpolate_to_server :: (player: *Player) {
-	player.client.direction += 0.2 * (player.server.direction - player.client.direction);
+interpolate_to_server :: (player: *Player, dt: float) {
+	player.client.direction = damp(player.client.direction, player.server.direction, 50.0, dt);
 	player.client.direction = normalize(player.client.direction);
-	player.client.position += 0.2 * (player.server.position - player.client.position);
+	player.client.position = damp(player.client.position, player.server.position, 50.0, dt);
 }
 
 interpolate_to_server :: (skull: *Skull) {
@@ -333,6 +397,14 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 		update(scene, it, dt);
 	}
 
+	for * scene.moving_frames {
+		update(scene, it, dt);
+	}
+
+	for * scene.shurikens {
+		update(scene, it, dt);
+	}
+
 	for * scene.keys {
 		interpolate_to_server(it, dt);
 
@@ -367,32 +439,38 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	}
 
 	if scene.is_server && result {
+
+		// >RULE Coin revive dead player on tombstone collision
 		for * scene.coins {
 			pos := it.server.position;
 
 			for * tombstone: scene.tombstones {
-				dt := norm(pos - tombstone.position);
+				// You can't revive yourself
+				if it.sender != tombstone.player_id {
+					dt := norm(pos - tombstone.position);
 
-				if dt < it.server.radius_hitbox {
-					respawn: Command.Respawn;
-					respawn.player_id = tombstone.player_id;
-					respawn.coin_id = it.id;
+					if dt < it.server.radius_hitbox {
+						respawn: Command.Respawn;
+						respawn.player_id = tombstone.player_id;
+						respawn.coin_id = it.id;
 
-					array_add(*result.respawn, respawn);
+						array_add(*result.respawn, respawn);
 
-					player_to_respawn := find_by_player_id(scene, tombstone.player_id);
-					if player_to_respawn {
-						player_to_respawn.server.dead = false;
-						spawn_into(player_to_respawn, scene.current_terrain);
+						player_to_respawn := find_by_player_id(scene, tombstone.player_id);
+						if player_to_respawn {
+							player_to_respawn.server.dead = false;
+							spawn_into(player_to_respawn, scene.current_terrain);
+						}
+
+						remove it;
+						remove tombstone;
+						continue it;
 					}
-
-					remove it;
-					remove tombstone;
-					continue it;
 				}
 			}
 		}
 
+		// >RULE Player die when not under any tile or under a dirt tile
 		for * scene.players {
 			if !it.server.dead {
 				tile, ok := tile_under(scene.current_terrain, it.server.position);
@@ -400,7 +478,12 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					server_die(scene, it, result);
 					continue;
 				}
+			}
+		}
 
+		// >RULE Player revivde dead player on tombstone collision
+		for * scene.players {
+			if !it.server.dead {
 				for tomb: scene.tombstones {
 					dt := norm(it.server.position - tomb.position);
 
@@ -420,7 +503,12 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 						continue;
 					}
 				}
+			}
+		}
 
+		// >RULE Player dies on contact with a skull
+		for * scene.players {
+			if !it.server.dead {
 				for skull: scene.skulls {
 					skull_pos := compute_skull_pos(scene, skull);
 
@@ -433,6 +521,7 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 			}
 		}
 
+		// >RULE Key open gate
 		for * scene.keys {
 			p := it.server.position;
 
@@ -452,6 +541,23 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 						sync.gate_id = gate.id;
 						sync.is_closed = gate.is_closed;
 						array_add(*result.sync_gate, sync);
+					}
+				}
+			}
+		}
+
+		// >RULE Player die on contact with a shuriken
+		for * scene.shurikens {
+			p := compute_shuriken_server_world_pos(scene, it);
+
+			for * player: scene.players {
+				if !player.server.dead {
+					q := player.server.position;
+
+					d := norm(p - q);
+					if d < (it.server.radius_hitbox + player.server.radius_hurtbox_shuriken) {
+						server_die(scene, player, result);
+						continue;
 					}
 				}
 			}
@@ -478,7 +584,32 @@ server_die :: (scene: Scene, player: *Player, result: *Frame_Result) {
 	}
 }
 
+update :: (scene: Scene, shuriken: *Shuriken, dt: float32) {
+	shuriken.client.theta += shuriken.client.theta_speed * dt;
+}
+
+update :: (scene: Scene, frame: *Moving_Frame, dt: float32) {
+	frame.client.t = damp(frame.client.t, frame.server.t, 10.0, dt);
+	frame.server.t += frame.server.speed * dt;
+	sum := 0.0;
+	for 1..frame.keys.count-1 {
+		sum += frame.keys[it - 1].period;
+	}
+	frame.server.t = fmod_cycling(frame.server.t, sum);
+}
+
 update :: (scene: Scene, camera: *Camera, dt: float32) {
+	player_locked := find_by_player_id(scene, camera.locked_to);
+	if player_locked && camera.locked {
+		center := camera.target;
+		low := camera.target - V3f.{ 0.5, 0.25, 0.0 };
+		high := camera.target + V3f.{ 0.5, 0.5, 0.0 };
+
+		within_aabb := closest_aabb(player_locked.client.position, low, high);
+		dt := player_locked.client.position - within_aabb;
+		camera.target_target += dt;
+	}
+
 	camera.target = damp(camera.target, camera.target_target, 20.0, dt);
 	target_to_position := camera.position - camera.target;
 	target_to_position += (camera.wanted_target_to_position - target_to_position) * 1.0;
@@ -510,7 +641,7 @@ update :: (scene: Scene, coin: *Coin, dt: float32) {
 
 update :: (scene: Scene, player: *Player, dt: float32) {
 	if !scene.is_server
-		interpolate_to_server(player);
+		interpolate_to_server(player, dt);
 
 	if player.server.dead
 		return;
@@ -618,7 +749,9 @@ process_server_only :: (scene: *Scene, command: Command, response: *Process_Resp
 			coin.id = scene.coin_generation;
 			coin.sender = player.id;
 			coin.server.position = player.server.position;
-			coin.server.direction = player.server.direction;
+			coin.server.direction = V3f.{ 0, 0, 0 };
+			if player.server.slipping
+				coin.server.direction = player.server.direction;
 			array_add(*scene.coins, coin);
 
 			cmd: Command.Spawn_Coin;
@@ -673,6 +806,16 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		}
 	}
 
+	sync_moving_frame: *Command.Sync_Moving_Frame = isa(command.payload, Command.Sync_Moving_Frame);
+	if sync_moving_frame {
+		frame := find_by_frame_id(scene, sync_moving_frame.frame_id);
+		if frame {
+			frame.server.t = sync_moving_frame.t;
+			return true;
+		}
+	}
+
+
 	return false;
 }
 
@@ -695,6 +838,7 @@ process :: (scene: *Scene, command: Command, response: *Process_Response) -> boo
 			dt := scene.camera.position - scene.camera.target;
 			scene.camera.target = player.server.position;
 			scene.camera.position = scene.camera.target + dt;
+			scene.camera.locked_to = scene.controlled_player_id;
 		}
 
 		array_add(*scene.players, player);
@@ -935,98 +1079,184 @@ render :: (scene: Scene, terrain: Terrain) {
 	V := look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
 	P := perspective(scene.camera);
 
-	Render.set_uniform(scene.model_shader, "V", V);
-	Render.set_uniform(scene.model_shader, "P", P);
-	Render.set_uniform(scene.texture_shader, "V", V);
-	Render.set_uniform(scene.texture_shader, "P", P);
+	Render.set_uniform(*scene.model_shader, "V", V);
+	Render.set_uniform(*scene.model_shader, "P", P);
+	Render.set_uniform(*scene.texture_shader, "V", V);
+	Render.set_uniform(*scene.texture_shader, "P", P);
+	Render.set_uniform(*scene.tile_shader, "V", V);
+	Render.set_uniform(*scene.tile_shader, "P", P);
 
-	Render.set_uniform(scene.texture_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
-	Render.set_uniform(scene.texture_shader, "texture_sampler", scene.ice_texture, 0);
-	Render.set_uniform(scene.texture_shader, "texture_offset", V2f.{ 0, 0 });
+	Render.set_uniform(*scene.texture_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
+	Render.set_uniform(*scene.texture_shader, "texture_sampler", scene.ice_texture, 0);
+	Render.set_uniform(*scene.texture_shader, "texture_offset", V2f.{ 0, 0 });
 
 	used_texture := *scene.ice_texture;
+	render_terrain(scene, scene.current_terrain);
 
-	for y: 0..terrain.tiles_count.y - 1 {
-		for x: 0..terrain.tiles_count.x - 1 {
-			tile := terrain.tiles[x + y * terrain.tiles_count.x];
-
-			wanted_texture := *scene.ice_texture;
-			if #complete tile.kind == {
-				case .None;
-					continue;
-				case .Ice;
-					wanted_texture = *scene.ice_texture;
-				case .Grass;
-					wanted_texture = *scene.grass_texture;
-				case .Slippy_Ice;
-					wanted_texture = *scene.slippy_ice_texture;
-				case .Dirt;
-					continue;
-			}
-
-			if wanted_texture != used_texture {
-				Render.set_uniform(scene.texture_shader, "texture_sampler", wanted_texture.*, 0);
-				used_texture = wanted_texture;
-			}
-
-			M := M4f.translate(.{ cast(float32) x, cast(float32) y, 0 });
-			Render.set_uniform(scene.texture_shader, "M", M);
-			Render.render(scene.tile_geometry, scene.texture_shader);
-		}
-	}
-
-	Render.set_uniform(scene.texture_shader, "texture_sampler", scene.coin_texture, 0);
-	for scene.coins {
+	Render.set_uniform(*scene.texture_shader, "texture_sampler", scene.coin_texture, 0);
+	for * scene.coins {
 		R := to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, it.client.theta));
 
 		M := M4f.translate(it.client.position) * R;
-		Render.set_uniform(scene.texture_shader, "M", M);
+		Render.set_uniform(*scene.texture_shader, "M", M);
 		Render.render(scene.coin_geometry, scene.texture_shader);
 	}
 
-	Render.set_uniform(scene.model_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
-	for scene.keys {
+	Render.set_uniform(*scene.model_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
+	for * scene.keys {
 		p := it.client.position;
 		if it.holder >= 0
 			p.z += 1;
 
 		M := M4f.translate(p);
-		Render.set_uniform(scene.model_shader, "M", M);
+		Render.set_uniform(*scene.model_shader, "M", M);
 		Render.render(scene.key_geometry, scene.model_shader);
 	}
 
-	Render.set_uniform(scene.model_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
-	for scene.skulls {
-		M := compute_skull_matrix(scene, it);
-		Render.set_uniform(scene.model_shader, "M", M);
-		Render.render(scene.skull_geometry, scene.model_shader);
+	render_players(scene);
+	render_skulls(scene);
+	render_shurikens(scene);
+
+	for * scene.tombstones {
+		M := M4f.translate(it.position);
+
+		Render.set_uniform(*scene.model_shader, "M", M);
+		Render.render(scene.tombstone_geometry, scene.model_shader);
 	}
 
-	if to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time) < 0.8 {
-		Render.set_uniform(scene.texture_shader, "texture_sampler", scene.mark_texture, 0);
-		M := M4f.translate(scene.mark_clicked_pos);
-		Render.set_uniform(scene.texture_shader, "M", M);
-		t := to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time);
-		t /= 0.8;
-		t = 1 - ((1 - t) * (1 - t) * (1 - t) * (1 - t) * (1 - t));
-		offset := V2f.{ 0, xx -t };
-		Render.set_uniform(scene.texture_shader, "texture_offset", offset);
-		context.rhi.glDisable(GL_CULL_FACE);
-		Render.render(scene.mark_geometry, scene.texture_shader);
-		context.rhi.glEnable(GL_CULL_FACE);
-	}
-
-	for scene.gates {
+	for * scene.gates {
 		R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, it.direction));
 
 		M := M4f.translate(it.position) * R;
-		Render.set_uniform(scene.model_shader, "M", M);
+		Render.set_uniform(*scene.model_shader, "M", M);
 		Render.render(scene.gate_geometry, scene.model_shader);
 
 		if it.is_closed {
 			Render.render(scene.gate_close_geometry, scene.model_shader);
 		}
 	}
+
+	if to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time) < 0.8 {
+		Render.set_uniform(*scene.texture_shader, "texture_sampler", scene.mark_texture, 0);
+		M := M4f.translate(scene.mark_clicked_pos);
+		Render.set_uniform(*scene.texture_shader, "M", M);
+		t := to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time);
+		t /= 0.8;
+		t = 1 - ((1 - t) * (1 - t) * (1 - t) * (1 - t) * (1 - t));
+		offset := V2f.{ 0, xx -t };
+		Render.set_uniform(*scene.texture_shader, "texture_offset", offset);
+		context.rhi.glDisable(GL_CULL_FACE);
+		Render.render(scene.mark_geometry, scene.texture_shader);
+		context.rhi.glEnable(GL_CULL_FACE);
+	}
+}
+
+render_players :: (scene: Scene) {
+	colors :: V3f.[
+		V3f.{ 1.0, 0.8, 0.8 },
+		V3f.{ 0.8, 1.0, 0.8 },
+		V3f.{ 0.8, 0.8, 1.0 },
+		V3f.{ 1.0, 1.0, 0.8 },
+		V3f.{ 1.0, 0.8, 1.0 },
+		V3f.{ 0.8, 1.0, 1.0 },
+		V3f.{ 1.0, 1.0, 1.0 }
+	];
+	for * scene.players {
+		if !it.server.dead {
+			M := M4f.identity();
+
+			q := from_unit_vectors(V3f.{ 1, 0, 0 }, it.client.direction);
+			M = to_rotation_matrix(q);
+
+			M = M4f.translate(it.client.position) * M;
+
+			Render.set_uniform(*scene.model_shader, "M", M);
+			Render.set_uniform(*scene.model_shader, "tint", colors[it.id % colors.count]);
+			Render.render(scene.player_geometry, scene.model_shader);
+		}
+	}
+	Render.set_uniform(*scene.model_shader, "tint", V3f.{ 1, 1, 1 });
+}
+
+render_shurikens :: (scene: Scene) {
+	instanced := NewArray(
+		scene.shurikens.count, Render.Geometry.Instance_Data, initialized = false,, temp
+	);
+
+	for * scene.shurikens {
+		M := compute_moving_frame_server_world_matrix(scene, find_by_frame_id(scene, it.frame_id));
+		M *= M4f.translate(it.server.position) * to_rotation_matrix(
+			axis_angle(V3f.{ 0, 0, 1 }, it.client.theta)
+		);
+		instance := *instanced[it_index];
+		instance.kind = -1;
+		instance.M = M;
+	}
+
+	Render.add_instance(*scene.shuriken_geometry, .{
+		data = xx instanced.data,
+		count = instanced.count * size_of(Render.Geometry.Instance_Data)
+	});
+
+	Render.enable_instanced_attributes(3);
+	Render.render_instanced(scene.shuriken_geometry, scene.tile_shader, instanced.count);
+}
+
+render_skulls :: (scene: Scene) {
+	instanced := NewArray(
+		scene.skulls.count, Render.Geometry.Instance_Data, initialized = false,, temp
+	);
+
+	for * skull: scene.skulls {
+		instance := *instanced[it_index];
+		instance.kind = -1;
+		instance.M = compute_skull_matrix(scene, skull);
+	}
+
+	Render.add_instance(*scene.skull_geometry, .{
+		data = xx instanced.data,
+		count = instanced.count * size_of(Render.Geometry.Instance_Data)
+	});
+
+	Render.enable_instanced_attributes(3);
+	Render.render_instanced(scene.skull_geometry, scene.tile_shader, instanced.count);
+}
+
+render_terrain :: (scene: Scene, terrain: *Terrain) {
+	if terrain.tiles_count.x <= 0 || terrain.tiles_count.y <= 0
+		return;
+
+	instanced := NewArray(
+		terrain.tiles.count, Render.Geometry.Instance_Data, initialized = false,, temp
+	);
+
+	for 0..4 {
+		if !scene.tile_kind_to_shader[it]
+			continue;
+
+		name := sprint("samplers[%]", it);
+		Render.set_uniform(
+			*scene.tile_shader, name, scene.tile_kind_to_shader[it], it
+		);
+		free(name);
+	}
+
+	for * tile: terrain.tiles {
+		x := it_index % terrain.tiles_count.x;
+		y := it_index / terrain.tiles_count.x;
+
+		instance := *instanced[it_index];
+		instance.kind = xx tile.kind;
+		instance.M = M4f.translate(.{ cast(float32) x, cast(float32) y, 0 });
+	}
+
+	Render.add_instance(*scene.tile_geometry, .{
+		data = xx instanced.data,
+		count = terrain.tiles.count * size_of(Render.Geometry.Instance_Data)
+	});
+
+	Render.enable_instanced_attributes(3);
+	Render.render_instanced(scene.tile_geometry, scene.tile_shader, terrain.tiles.count);
 }
 
 compute_skull_matrix :: (scene: Scene, skull: Skull) -> M4f {
@@ -1063,6 +1293,53 @@ compute_skull_pos :: (scene: Scene, skull: Skull) -> V3f {
 	t -= floor(t);
 
 	return pos_before + (pos_after - pos_before) * t;
+}
+
+compute_moving_frame_server_world_matrix :: (scene: Scene, frame: Moving_Frame) -> M4f {
+	if frame.keys.count == 0 {
+		return M4f.identity();
+	}
+	if frame.keys.count <= 1 {
+		return M4f.translate(frame.keys[0].pos) * to_rotation_matrix(
+			axis_angle(V3f.{ 0, 0, 1 }, frame.keys[0].theta)
+		);
+	}
+
+	t_left := frame.server.t;
+
+	before_idx := 0;
+	for i: 0..frame.keys.count - 1 {
+		if t_left < frame.keys[i].period {
+			before_idx = i;
+			break;
+		}
+		t_left -= frame.keys[i].period;
+	}
+
+	if (before_idx + 1) >= frame.keys.count {
+		before_idx = frame.keys.count - 2;
+	}
+
+	curr := frame.keys[before_idx + 0];
+	next := frame.keys[before_idx + 1];
+
+	t := t_left / curr.period;
+
+	return M4f.translate(
+		curr.pos + (next.pos - curr.pos) * t
+	) * to_rotation_matrix(
+		axis_angle(V3f.{ 0, 0, 1 }, curr.theta + (next.theta - curr.theta) * t)
+	);
+}
+
+compute_shuriken_server_world_pos :: (scene: Scene, shuriken: Shuriken) -> V3f {
+	frame := find_by_frame_id(scene, shuriken.frame_id);
+	if !frame {
+		return shuriken.server.position;
+	}
+
+	M := compute_moving_frame_server_world_matrix(scene, frame);
+	return v3(M * v4(shuriken.server.position, 1.0));
 }
 
 spawn_into :: (player: *Player, terrain: Terrain) {

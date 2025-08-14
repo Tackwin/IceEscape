@@ -50,6 +50,7 @@ VERTEX;
 
 FONT_FRAGMENT :: #string FRAGMENT
 #version 300 es
+#extension GL_OES_standard_derivatives : enable
 precision highp float;
 
 in vec3 vColor;
@@ -61,11 +62,18 @@ out vec4 fragColor;
 
 void main() {
 	vec4 texture_color = texture(font_sampler, vTex);
+
+	float dist = 0.5 - texture_color.w;
+
+	vec2 dtDist = vec2(dFdx(dist), dFdy(dist));
+
+	float constantDist = dist / length(dtDist);
+
 	fragColor = vec4(
 		vColor.x * texture_color.x,
 		vColor.y * texture_color.y,
 		vColor.z * texture_color.z,
-		smoothstep(0.45, 0.55, texture_color.w)
+		clamp(0.5 - constantDist, 0.0, 1.0)
 	);
 }
 FRAGMENT;
@@ -82,6 +90,28 @@ out vec3 fworld_nor;
 out vec2 ftex;
 
 uniform mat4 M;
+uniform mat4 V;
+uniform mat4 P;
+
+void main() {
+	gl_Position = P * V * M * vec4(vmodel_pos, 1.0);
+	ftex = vtex;
+	ftex.y = 1.0 - ftex.y;
+	fworld_pos = (M * vec4(vmodel_pos, 1.0)).xyz;
+	fworld_nor = normalize((M * vec4(vmodel_nor, 0.0)).xyz);
+}
+VERTEX;
+INSTANCED_VERTEX :: #string VERTEX
+#version 300 es
+in vec3 vmodel_pos;
+in vec3 vmodel_nor;
+in vec2 vtex;
+in mat4 M;
+
+out vec3 fworld_pos;
+out vec3 fworld_nor;
+out vec2 ftex;
+
 uniform mat4 V;
 uniform mat4 P;
 
@@ -112,6 +142,77 @@ void main() {
 }
 FRAGMENT;
 
+TILE_VERTEX :: #string VERTEX
+#version 300 es
+in vec3 vmodel_pos;
+in vec3 vmodel_nor;
+in vec2 vtex;
+in mat4 M;
+in int  tile_kind;
+
+out vec3 fworld_pos;
+out vec3 fworld_nor;
+out vec2 ftex;
+flat out int  ftile_kind;
+
+uniform mat4 V;
+uniform mat4 P;
+
+void main() {
+	gl_Position = P * V * M * vec4(vmodel_pos, 1.0);
+	ftex = vtex;
+	ftex.y = 1.0 - ftex.y;
+	fworld_pos = (M * vec4(vmodel_pos, 1.0)).xyz;
+	fworld_nor = normalize((M * vec4(vmodel_nor, 0.0)).xyz);
+	ftile_kind = tile_kind;
+}
+VERTEX;
+
+TILE_FRAGMENT :: #string FRAGMENT
+#version 300 es
+precision mediump float;
+
+in vec3 fworld_pos;
+in vec3 fworld_nor;
+in vec2 ftex;
+flat in int  ftile_kind;
+
+out vec4 outColor;
+
+uniform sampler2D samplers[16];
+
+void main() {
+	float d = dot(fworld_nor, vec3(0.0, 0.0, 1.0)) * 0.5 + 0.5;
+
+	// What a stupid restriction...
+	vec4 texture_color = vec4(1.0);
+	if (ftile_kind == 0)
+		texture_color = texture(samplers[0], ftex);
+	else if (ftile_kind == 1)
+		texture_color = texture(samplers[1], ftex);
+	else if (ftile_kind == 2)
+		texture_color = texture(samplers[2], ftex);
+	else if (ftile_kind == 3)
+		texture_color = texture(samplers[3], ftex);
+	else if (ftile_kind == 4)
+		texture_color = texture(samplers[4], ftex);
+	else if (ftile_kind == 5)
+		texture_color = texture(samplers[5], ftex);
+	else if (ftile_kind == 6)
+		texture_color = texture(samplers[6], ftex);
+	else if (ftile_kind == 7)
+		texture_color = texture(samplers[7], ftex);
+
+	outColor = vec4(
+		texture_color.r * d,
+		texture_color.g * d,
+		texture_color.b * d,
+		texture_color.a
+	);
+}
+FRAGMENT;
+
+
 TEXTURE_FRAGMENT :: #string FRAGMENT
 #version 300 es
 precision mediump float;
@@ -141,11 +242,13 @@ FRAGMENT;
 
 CAR_OBJ :: #run,host -> string {
 	#import "Basic";
-	read_ct_file :: (path: string) -> string {
+	read_ct_file :: (path: string) -> string {{
 		CT_File :: #import "File";
 
 		str, ok := CT_File.read_entire_file(path);
 		return str;
+		
+	}
 	}
 
 	return read_ct_file(tprint("%/../assets/car.obj", #filepath));
@@ -222,6 +325,7 @@ GATE_OBJ :: #run,host -> string {
 
 	return read_ct_file(tprint("%/../assets/gate.obj", #filepath));
 };
+
 GATE_CLOSE_OBJ :: #run,host -> string {
 	#import "Basic";
 	read_ct_file :: (path: string) -> string {
@@ -232,6 +336,18 @@ GATE_CLOSE_OBJ :: #run,host -> string {
 	}
 
 	return read_ct_file(tprint("%/../assets/gate_close.obj", #filepath));
+};
+
+SHURIKEN_OBJ :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+		return str;
+	}
+
+	return read_ct_file(tprint("%/../assets/shuriken.obj", #filepath));
 };
 
 Image :: struct {

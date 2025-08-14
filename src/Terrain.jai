@@ -118,7 +118,7 @@ TERRAIN
 	for 0..3 {
 		skull: Skull;
 		skull.path_id = 0;
-		skull.server.speed = 1.0;
+		skull.server.speed = 1.1;
 		skull.id = scene.skulls.count;
 		skull.server.t = it * 2.0;
 		skull.client.t = skull.server.t;
@@ -127,7 +127,7 @@ TERRAIN
 	for 0..3 {
 		skull: Skull;
 		skull.path_id = 1;
-		skull.server.speed = 1.0;
+		skull.server.speed = 1.1;
 		skull.id = scene.skulls.count;
 		skull.server.t = it * 2.0 + 1.0;
 		skull.client.t = skull.server.t;
@@ -137,7 +137,7 @@ TERRAIN
 	{
 		skull: Skull;
 		skull.path_id = 2;
-		skull.server.speed = 0.5;
+		skull.server.speed = 0.75;
 		skull.id = scene.skulls.count;
 		skull.server.t = 0;
 		skull.client.t = 0;
@@ -166,5 +166,109 @@ TERRAIN
 		key.id = 2;
 		key.server.position = .{ 47, 17, 0 };
 		array_add(*scene.keys, key);
+	}
+
+	scene.moving_frames.count = 0;
+	{
+		frame: Moving_Frame;
+		array_add(*frame.keys, Moving_Frame.Key.{
+			pos = .{ 21.5, 22.5, 0 },
+			theta = 0,
+			period = 7
+		});
+		array_add(*frame.keys, Moving_Frame.Key.{
+			pos = .{ 21.5 + 18, 22.5, 0 },
+			theta = xx (3.1415926 * 2 * 1.5),
+			period = 7
+		});
+		array_add(*frame.keys, Moving_Frame.Key.{
+			pos = .{ 21.5, 22.5, 0 },
+			theta = xx (3.1415926 * 2 * 3),
+			period = 0.0
+		});
+		frame.id = 1;
+		frame.server.t = 0.0;
+		frame.server.speed = 0.8;
+		array_add(*scene.moving_frames, frame);
+	}
+
+	scene.shurikens.count = 0;
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ 0, 0, 0 };
+		array_add(*scene.shurikens, shuriken);
+	}
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ 1.75, 0, 0 };
+		array_add(*scene.shurikens, shuriken);
+	}
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ -1.75, 0, 0 };
+		array_add(*scene.shurikens, shuriken);
+	}
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ 3.5, 0, 0 };
+		array_add(*scene.shurikens, shuriken);
+	}
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ -3.5, 0, 0 };
+		array_add(*scene.shurikens, shuriken);
+	}
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ 0, 1.75, 0 };
+		array_add(*scene.shurikens, shuriken);
+	}
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ 0, -1.75, 0 };
+		array_add(*scene.shurikens, shuriken);
+	}
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ 0, 3.5, 0 };
+		array_add(*scene.shurikens, shuriken);
+	}
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ 0, -3.5, 0 };
+		array_add(*scene.shurikens, shuriken);
+	}
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ 0, 7, 0 };
+		array_add(*scene.shurikens, shuriken);
+	}
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ 0, -7, 0 };
+		array_add(*scene.shurikens, shuriken);
+	}
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ 7, 0, 0 };
+		array_add(*scene.shurikens, shuriken);
+	}
+	{
+		shuriken: Shuriken;
+		shuriken.frame_id = 1;
+		shuriken.server.position = .{ -7, 0, 0 };
+		array_add(*scene.shurikens, shuriken);
 	}
 }

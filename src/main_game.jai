@@ -6,15 +6,29 @@ Terrain :: #import "Terrain";
 #import "Basic";
 #import "Algebra";
 #import "Platform";
+#import "Default_Allocator";
 #import "Communication";
+#import "WAllocator";
+#import "Utils";
 Scene :: #import "Scene";
 Render :: #import "Render";
 Assets :: #import "Assets";
 
 show_inspector := false;    // Wish we could declare static variables inside functions.
 
-send_web_message :: (platform: Platform, command: Command) {
-	payload := NewArray(size_of(Command) + 8, u8, false,, temp);
+State :: struct {
+	scene: Scene.Scene;
+
+	ntp_period: Period(0.5);
+}
+
+send_web_message :: (platform: Platform, _command: Command) {
+	command := _command;
+	command.sent_timestamp = to_float64_seconds(current_time_monotonic());
+	payload := NewArray(size_of(Command) + 8, u8, false);
+	defer {
+		array_free(payload);
+	}
 	(cast(*u64)payload.data).* = size_of(Command);
 	memcpy(payload.data + 8, cast(*void)*command, size_of(Command));
 	platform.send_web_message(payload);
@@ -23,7 +37,7 @@ send_web_message :: (platform: Platform, command: Command) {
 // 				Scene.process(scene, *scene.player, Scene.make_player_command(command));
 
 parse_web_message :: (frame_info: Frame_Info) -> [] Command {
-	commands := NewArray(frame_info.message_received_count, Command, false,, temp);
+	commands := NewArray(frame_info.message_received_count, Command, false);
 
 	cursor := 0;
 	for 0..frame_info.message_received_count - 1 {
@@ -46,6 +60,8 @@ parse_web_message :: (frame_info: Frame_Info) -> [] Command {
 }
 
 main :: () {
+	context.allocator = .{ wallocator_proc, null };
+	context.temporary_storage.overflow_allocator = context.allocator;
 	platform := init_platform();
 	rhi := platform.rhi;
 
@@ -56,7 +72,8 @@ main :: () {
 
 	clear_color := V4f.{0.45, 0.55, 0.60, 1.00};
 
-	scene: Scene.Scene;
+	state: State;
+	scene := *state.scene;
 
 	scene.camera.position = .{ 0, -4, 8 };
 	scene.camera.target = .{ 0, 0, 0 };
@@ -64,13 +81,19 @@ main :: () {
 	scene.camera.wanted_target_to_position = scene.camera.position - scene.camera.target;
 	scene.camera.fov = 55;
 	scene.model_shader = Render.Shader.make(
-		context.allocator, Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT
+		Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT
 	);
 	scene.texture_shader = Render.Shader.make(
-		context.allocator, Assets.PLAIN_VERTEX, Assets.TEXTURE_FRAGMENT
+		Assets.PLAIN_VERTEX, Assets.TEXTURE_FRAGMENT
 	);
 	scene.font_shader = Render.Shader.make(
-		context.allocator, Assets.FONT_VERTEX, Assets.FONT_FRAGMENT
+		Assets.FONT_VERTEX, Assets.FONT_FRAGMENT
+	);
+	scene.instance_shader = Render.Shader.make(
+		Assets.INSTANCED_VERTEX, Assets.TEXTURE_FRAGMENT
+	);
+	scene.tile_shader = Render.Shader.make(
+		Assets.TILE_VERTEX, Assets.TILE_FRAGMENT
 	);
 	scene.ice_texture = Render.Texture.make_from_image(Assets.ICE_TEXTURE);
 	scene.coin_texture = Render.Texture.make_from_image(Assets.COIN_TEXTURE);
@@ -78,19 +101,26 @@ main :: () {
 	scene.grass_texture = Render.Texture.make_from_image(Assets.GRASS_TEXTURE);
 	scene.slippy_ice_texture = Render.Texture.make_from_image(Assets.SLIPPY_ICE_TEXTURE);
 	scene.tile_geometry = Render.Geometry.make_square(
-		context.allocator, .{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
+		.{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
 	);
 	scene.mark_texture = Render.Texture.make_from_image(Assets.MARK_TEXTURE);
 	Render.set_parameter(scene.mark_texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	geometry := Render.Geometry.make_from_obj(context.allocator, Assets.CAR_OBJ);
-	tombstone_geometry := Render.Geometry.make_from_obj(context.allocator, Assets.TOMBSTONE_OBJ);
-	scene.coin_geometry = Render.Geometry.make_from_obj(context.allocator, Assets.COIN_OBJ);
-	scene.skull_geometry = Render.Geometry.make_from_obj(context.allocator, Assets.SKULL_OBJ);
-	scene.key_geometry = Render.Geometry.make_from_obj(context.allocator, Assets.KEY_OBJ);
-	scene.mark_geometry = Render.Geometry.make_from_obj(context.allocator, Assets.MARK_OBJ);
-	scene.gate_geometry = Render.Geometry.make_from_obj(context.allocator, Assets.GATE_OBJ);
-	scene.gate_close_geometry = Render.Geometry.make_from_obj(context.allocator, Assets.GATE_CLOSE_OBJ);
+	scene.player_geometry = Render.Geometry.make_from_obj(Assets.CAR_OBJ);
+	scene.tombstone_geometry = Render.Geometry.make_from_obj(Assets.TOMBSTONE_OBJ);
+	scene.coin_geometry = Render.Geometry.make_from_obj(Assets.COIN_OBJ);
+	scene.skull_geometry = Render.Geometry.make_from_obj(Assets.SKULL_OBJ);
+	scene.key_geometry = Render.Geometry.make_from_obj(Assets.KEY_OBJ);
+	scene.mark_geometry = Render.Geometry.make_from_obj(Assets.MARK_OBJ);
+	scene.gate_geometry = Render.Geometry.make_from_obj(Assets.GATE_OBJ);
+	scene.gate_close_geometry = Render.Geometry.make_from_obj(Assets.GATE_CLOSE_OBJ);
+	scene.shuriken_geometry = Render.Geometry.make_from_obj(Assets.SHURIKEN_OBJ);
+
+	scene.tile_kind_to_shader[xx Scene.Tile.Kind.None] = null;
+	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Ice] = *scene.ice_texture;
+	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Grass] = *scene.grass_texture;
+	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Slippy_Ice] = *scene.slippy_ice_texture;
+	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Dirt] = *scene.dirt_texture;
 
 	just_pressed: [Key_COUNT] bool;
 	just_released: [Key_COUNT] bool;
@@ -100,17 +130,8 @@ main :: () {
 
 	// terrain := Scene.load_terrain_from_ascii(STARTER_TERRAIN_ASCII);
 	// scene.current_terrain = *terrain;
-	Terrain.init_roundabout(*scene);
+	Terrain.init_roundabout(scene);
 
-	colors :: V3f.[
-		V3f.{ 1.0, 0.9, 0.9 },
-		V3f.{ 0.9, 1.0, 0.9 },
-		V3f.{ 0.9, 0.9, 1.0 },
-		V3f.{ 1.0, 1.0, 0.9 },
-		V3f.{ 1.0, 0.9, 1.0 },
-		V3f.{ 0.9, 1.0, 1.0 },
-		V3f.{ 1.0, 1.0, 1.0 }
-	];
 
 	history_dt: [100] float;
 	history_cursor := 0;
@@ -122,7 +143,9 @@ main :: () {
 	// Main loop
 	done := false;
 	while !done {
+		auto_release_temp();
 
+		t00 := current_time_monotonic();
 		frame_info := platform.get_frame_info();
 		history_dt[history_cursor % history_dt.count] = frame_info.delta_time;
 		history_cursor += 1;
@@ -155,21 +178,27 @@ main :: () {
 		}
 
 		any_camera_move := false;
+		dt := V3f.{ 0, 0, 0 };
 		if pressed[Key.Q] {
-			scene.camera.target_target.x -= scene.camera.speed * frame_info.delta_time;
+			dt.x -= scene.camera.speed * frame_info.delta_time;
 			any_camera_move = true;
 		}
 		if pressed[Key.D] {
-			scene.camera.target_target.x += scene.camera.speed * frame_info.delta_time;
+			dt.x += scene.camera.speed * frame_info.delta_time;
 			any_camera_move = true;
 		}
 		if pressed[Key.S] {
-			scene.camera.target_target.y -= scene.camera.speed * frame_info.delta_time;
+			dt.y -= scene.camera.speed * frame_info.delta_time;
 			any_camera_move = true;
 		}
 		if pressed[Key.Z] {
-			scene.camera.target_target.y += scene.camera.speed * frame_info.delta_time;
+			dt.y += scene.camera.speed * frame_info.delta_time;
 			any_camera_move = true;
+		}
+		scene.camera.locked = pressed[Key.Space];
+		scene.camera.target_target += dt;
+		if scene.camera.locked {
+			scene.camera.target += dt;
 		}
 
 		if !any_camera_move {
@@ -180,7 +209,7 @@ main :: () {
 			render_fps = !render_fps;
 		}
 
-		if scene.succeed && to_float64_seconds(current_time_monotonic() - last_yes) > 0.25 {
+		if scene.succeed && to_float64_seconds(current_time_monotonic() - last_yes) > 0.175 {
 			p := V2f.{ 0, 0 };
 			if yes.count > 0 {
 				p = yes[yes.count - 1];
@@ -228,10 +257,13 @@ main :: () {
 		}
 
 		commands := parse_web_message(frame_info);
-		for commands {
-			Scene.process(*scene, it, null);
+		defer {
+			array_free(commands);
 		}
-		Scene.update(*scene, frame_info.delta_time, null);
+		for commands {
+			Scene.process(scene, it, null);
+		}
+		Scene.update(scene, frame_info.delta_time, null);
 
 		rhi.glViewport(0, 0, xx frame_info.framebuffer_size.x, xx frame_info.framebuffer_size.y);
 		rhi.glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
@@ -241,32 +273,6 @@ main :: () {
 		rhi.glEnable(GL_CULL_FACE);
 		rhi.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		Render.set_uniform(scene.model_shader, "V", V);
-		Render.set_uniform(scene.model_shader, "P", P);
-		for * scene.players {
-
-			if !it.server.dead {
-				M := M4f.identity();
-
-				q := from_unit_vectors(V3f.{ 1, 0, 0 }, it.client.direction);
-				M = to_rotation_matrix(q);
-
-				M = M4f.translate(it.client.position) * M;
-
-				Render.set_uniform(scene.model_shader, "M", M);
-				Render.set_uniform(scene.model_shader, "tint", colors[it.id % colors.count]);
-				Render.render(geometry, scene.model_shader);
-			}
-		}
-
-		Render.set_uniform(scene.model_shader, "tint", V3f.{ 1, 1, 1 });
-		for * scene.tombstones {
-			M := M4f.translate(it.position);
-
-			Render.set_uniform(scene.model_shader, "M", M);
-			Render.render(tombstone_geometry, scene.model_shader);
-		}
-
 		Scene.render(scene, scene.current_terrain);
 
 		for yes {
@@ -274,6 +280,14 @@ main :: () {
 		}
 
 		if render_fps {
+			fps_text := tprint("FPS: %", 1.0 / frame_info.delta_time);
+			Render.push_text(fps_text, .{ 10, frame_info.framebuffer_size.y - 100 }, 32);
+
+			for 0..10 {
+				Render.push_text(
+					"Portez ce vieux whisky au juge blond qui fume", .{ 500, 200 + it * 50.0 }, 16.0 + it * 4
+				);
+			}
 
 			Render.push_quad(.{
 				pos = .{ -0.95, -0.95 },
@@ -301,6 +315,30 @@ main :: () {
 				color = .{ 0.0, 1.0, 0.0 },
 				z = -0.2
 			});
+
+			#if OS == .WASM {
+				header := get_header();
+				bit_array := cast(*u8)(header + 1);
+				for 0..header.total_number_of_pages_allocated-1 {
+					x := it % 300;
+					y := it / 300;
+
+					B := it / 8;
+					b := it % 8;
+
+					x *= 4;
+					y *= 4;
+					x += 200;
+					y += 200;
+					color := ifx (bit_array[B] & (1 << b)) != 0 then V3f.{ 0.0, 1.0, 0.0 } else V3f.{ 1.0, 0.0, 0.0 };
+					Render.push_quad_screen(
+						V2f.{ xx x, xx y },
+						V2f.{ xx 3, xx 3 },
+						color,
+						-0.2
+					);
+				}
+			}
 		}
 		Render.render_im();
 
