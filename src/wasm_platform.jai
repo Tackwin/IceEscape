@@ -1,5 +1,6 @@
 #import "Window_Creation";
 #import "Input";
+#import "Basic";
 #import "String";
 WebGL :: #import "Toolchains/Web/WebGL";
 
@@ -104,6 +105,7 @@ wasm_get_frame_info :: () -> Frame_Info {
 	wx, wy, ww, wh := get_dimensions(window, false);
 	info.framebuffer_size = .{ xx ww, xx wh };
 	info.window_size = .{ xx ww, xx wh };
+	info.mouse_position.y = info.window_size.y - info.mouse_position.y;
 
 	for * info.key_pressed {
 		it.* = pressed[it_index];
@@ -120,12 +122,11 @@ wasm_get_frame_info :: () -> Frame_Info {
 			next_message_length := (cast(*u64)(web_buffer.data + cursor)).*;
 
 			msg: Web_Message;
-			msg.data = web_buffer.data + cursor + 8;
+			msg.data = web_buffer.data + cursor;
 			msg.count = xx next_message_length;
 			info.message_received[info.message_received_count] = msg;
 			info.message_received_count += 1;
 
-			cursor += 8;
 			cursor += xx next_message_length;
 			n += 1;
 		}
@@ -220,3 +221,143 @@ init_platform :: () -> Platform {
 exit_platform :: (platform: Platform) {
 	
 }
+
+get_type_name :: (info: *Type_Info) -> string {
+    if info.type == {
+        case .INTEGER;
+            int_info := cast(*Type_Info_Integer) info;
+            if int_info.signed {
+                if int_info.runtime_size == 1 return "s8";
+                if int_info.runtime_size == 2 return "s16";
+                if int_info.runtime_size == 4 return "s32";
+                if int_info.runtime_size == 8 return "s64";
+                return "int";
+            } else {
+                if int_info.runtime_size == 1 return "u8";
+                if int_info.runtime_size == 2 return "u16";
+                if int_info.runtime_size == 4 return "u32";
+                if int_info.runtime_size == 8 return "u64";
+                return "uint";
+            }
+        case .FLOAT;
+            float_info := cast(*Type_Info_Float) info;
+            if float_info.runtime_size == 4 return "float32";
+            if float_info.runtime_size == 8 return "float64";
+            return "float";
+        case .BOOL;
+            return "bool";
+        case .STRING;
+            return "string";
+        case .POINTER;
+            pointer_info := cast(*Type_Info_Pointer) info;
+            pointee_name := get_type_name(pointer_info.pointer_to);
+            return tprint("*%", pointee_name);
+        case .ARRAY;
+            array_info := cast(*Type_Info_Array) info;
+            element_name := get_type_name(array_info.element_type);
+            if array_info.array_type == .FIXED {
+                return tprint("[%]%", array_info.array_count, element_name);
+            } else {
+                return tprint("[]%", element_name);
+            }
+        case .STRUCT;
+            struct_info := cast(*Type_Info_Struct) info;
+            return struct_info.name;
+        case .ENUM;
+            enum_info := cast(*Type_Info_Enum) info;
+            return enum_info.name;
+        case .PROCEDURE;
+            return "procedure"; // Could recursively call procedure_type_to_string here
+        case .VOID;
+            return "void";
+    }
+    
+    return "unknown_type";
+}
+
+header_proc :: (info: *Type_Info_Procedure) -> string {
+    sb: String_Builder;
+    
+    // Start with opening parenthesis
+    append(*sb, "(");
+    
+    // Add arguments
+    for i: 0..info.argument_types.count-1 {
+        if i > 0 append(*sb, ", ");
+        
+        // Add argument type
+        type_name := get_type_name(info.argument_types[i]);
+        append(*sb, type_name);
+    }
+    
+    append(*sb, ")");
+    
+    // Add return type if present
+    if info.return_types.count > 0 {
+        append(*sb, " -> ");
+        
+        if info.return_types.count == 1 {
+            type_name := get_type_name(info.return_types[0]);
+            append(*sb, type_name);
+        } else {
+            // Multiple return types - need parentheses
+            append(*sb, "(");
+            for i: 0..info.return_types.count-1 {
+                if i > 0 append(*sb, ", ");
+                type_name := get_type_name(info.return_types[i]);
+                append(*sb, type_name);
+            }
+            append(*sb, ")");
+        }
+    }
+    
+    return builder_to_string(*sb);
+}
+
+// wgpu_functions :: string.[
+// 	"WGPUProcInstanceRequestAdapter"
+// ];
+
+// #run {
+// 	WGPU_Function_Entry :: struct {
+// 		name: string;
+// 		info: *Type_Info_Procedure;
+// 	}
+
+// 	#insert #run -> string {
+// 		sb: String_Builder;
+// 		print_to_builder(
+// 			*sb, "wgpu_functions_types := NewArray(%, WGPU_Function_Entry);\n", wgpu_functions.count
+// 		);
+// 		for wgpu_functions {
+// 			print_to_builder(*sb, "wgpu_functions_types[%].name = \"%\";\n", it_index, it);
+// 			// print_to_builder(*sb, "wgpu_functions_types[%].type = %;\n", it_index, it);
+// 			print_to_builder(*sb, "wgpu_functions_types[%].info = type_info(%);\n", it_index, it);
+// 		}
+// 		return builder_to_string(*sb);
+// 	};
+
+// 	sb: String_Builder;
+// 	for wgpu_functions_types {
+// 		type_proc_name := copy_string(it.name);
+// 		type_proc_name.data += 8;
+// 		type_proc_name.count -= 8;
+// 		type_proc_name[0] = to_lower(type_proc_name[0]);
+
+// 		print_to_builder(*sb, "% :: % {\n", type_proc_name, header_proc(it.info));
+// 		print_to_builder(*sb, "    ")
+// 	}
+
+// 	str := builder_to_string(*sb);
+// 	print(str);
+// }
+
+// #insert #run -> string {
+// 	sb: String_Builder;
+// 	for wgpu_functions {
+// 		print_to_builder(*sb, "type_info(%)\n", it);
+// 	}
+// 	return builder_to_string(*sb);
+// };
+
+

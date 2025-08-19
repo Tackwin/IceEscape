@@ -1,16 +1,24 @@
-// raddbg 0.9.20 project file
+// raddbg 0.9.21 project file
 
-recent_file: path: "src/win32_platform.jai"
-recent_file: path: "src/Render.jai"
+recent_file: path: "src/main_server.jai"
+recent_file: path: "src/Scene.jai"
+recent_file: path: "src/main_game.jai"
+recent_file: path: "src/Terrain.jai"
 recent_file: path: "../jai/modules/hash_table.jai"
 recent_file: path: "../jai/modules/runtime_support.jai"
+recent_file: path: "../jai/modules/Basic/Array.jai"
+recent_file: path: "../jai/modules/String/module.jai"
+recent_file: path: "src/Store.jai"
+recent_file: path: "src/win32_platform.jai"
+recent_file: path: "src/Communication.jai"
+recent_file: path: "src/Graphics.jai"
+recent_file: path: "../jai/modules/Reflection.jai"
+recent_file: path: "src/Render.jai"
+recent_file: path: "src/GUI.jai"
 recent_file: path: "src/wallocator.jai"
-recent_file: path: "src/Scene.jai"
 recent_file: path: "../jai/modules/basic/module.jai"
 recent_file: path: "../jai/modules/basic/print.jai"
-recent_file: path: "src/main_game.jai"
 recent_file: path: "src/algebra.jai"
-recent_file: path: "src/main_server.jai"
 recent_file: path: "../jai/modules/basic/int128.jai"
 recent_file: path: "src/websocket/websocket.jai"
 recent_file: path: "src/websocket/module.jai"
@@ -19,25 +27,13 @@ recent_file: path: "../jai/modules/gl/gl.jai"
 recent_file: path: "../jai/modules/preload.jai"
 target:
 {
-  executable: "bin/server/IceEscape_Server.exe"
-  working_directory: "bin/server"
-  enabled: 0
-}
-target:
-{
   executable: "bin/IceEscape.exe"
   working_directory: bin
   enabled: 1
 }
-breakpoint:
+target:
 {
-  address_location: 0x21a0080
-  break_on_read: 0
-  break_on_write: 1
-  hit_count: 0
-}
-breakpoint:
-{
-  source_location: "src/win32_platform.jai:77:1"
-  hit_count: 1
+  executable: "bin/server/IceEscape_Server.exe"
+  working_directory: "bin/server"
+  enabled: 0
 }

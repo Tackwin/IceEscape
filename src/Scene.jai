@@ -6,43 +6,20 @@
 Render :: #import "Render";
 #import "Tagged_Union";
 #import "Communication";
+#import "Pool";
+#import "Hash_Table";
+#import "Store";
 
 #scope_export
 
-
 Scene :: struct {
+	id := 1;
+
 	is_server := false;
 
-	terrain_vao: GLint = -1;
-	terrain_tile_buffer: GLint = -1;
-
-	font_shader: Render.Shader;
-	model_shader: Render.Shader;
-	texture_shader: Render.Shader;
-	instance_shader: Render.Shader;
-	tile_shader: Render.Shader;
-
-	ice_texture: Render.Texture;
-	coin_texture: Render.Texture;
-	slippy_ice_texture: Render.Texture;
-	grass_texture: Render.Texture;
-	dirt_texture: Render.Texture;
-	mark_texture: Render.Texture;
-
-	tile_kind_to_shader: [64] *Render.Texture;
-
-	player_geometry: Render.Geometry;
-	tombstone_geometry: Render.Geometry;
-	tile_geometry: Render.Geometry;
-	skull_geometry: Render.Geometry;
-	coin_geometry: Render.Geometry;
-	key_geometry: Render.Geometry;
-	mark_geometry: Render.Geometry;
-	gate_geometry: Render.Geometry;
-	gate_close_geometry: Render.Geometry;
-	shuriken_geometry: Render.Geometry;
-
+	store: *Store;
 	camera: Camera;
+	tile_kind_to_shader: [64] *Render.Texture;
 
 	// >TODO put all allocation relating to the map in the same pool.
 	players: [..] Player;
@@ -55,44 +32,104 @@ Scene :: struct {
 	gates: [..] Gate;
 	moving_frames: [..] Moving_Frame;
 	shurikens: [..] Shuriken;
+	stand_in: [..] Stand_In;
+	trigger_zones: [..] Trigger_Zone;
+	terrain: Terrain;
 
 	coin_generation := 0;
-
-	current_terrain: *Terrain;
 
 	mark_clicked_time: Apollo_Time;
 	mark_clicked_pos: V3f;
 
 	succeed := false;
 }
+clear :: (scene: *Scene) {
+	scene.tombstones.count = 0;
+	scene.skulls.count = 0;
+	scene.coins.count = 0;
+	scene.keys.count = 0;
+	scene.gates.count = 0;
+	scene.moving_frames.count = 0;
+	scene.shurikens.count = 0;
+	scene.stand_in.count = 0;
+	scene.trigger_zones.count = 0;
+}
+
+make_sync :: (scene: *Scene) -> Command.Sync_Scene {
+	sync_scene: Command.Sync_Scene;
+	sync_scene.terrain = scene.terrain.text;
+	sync_scene.players = NewArray(scene.players.count, Command.Sync_Player, false,, temp);
+	sync_scene.skulls = NewArray(scene.skulls.count, Command.Sync_Skull, false,, temp);
+	sync_scene.moving_frames = NewArray(scene.moving_frames.count, Command.Sync_Moving_Frame, false,, temp);
+	for * sync_scene.players {
+		it.* = make_sync(*scene.players[it_index]);
+	}
+	for * sync_scene.skulls {
+		it.* = make_sync(*scene.skulls[it_index]);
+	}
+	for * sync_scene.moving_frames {
+		it.* = make_sync(*scene.moving_frames[it_index]);
+	}
+	return sync_scene;
+}
+
+make_sync :: (player: *Player) -> Command.Sync_Player {
+	sync_player: Command.Sync_Player;
+	sync_player.player_id = player.id;
+	sync_player.position = player.server.position;
+	sync_player.direction = player.server.direction;
+	sync_player.dead = player.server.dead;
+	sync_player.model_id = player.server.model_id;
+	return sync_player;
+}
+
+make_sync :: (skull: *Skull) -> Command.Sync_Skull {
+	sync_skull: Command.Sync_Skull;
+	sync_skull.skull_id = skull.id;
+	sync_skull.t = skull.server.t;
+	return sync_skull;
+}
+
+make_sync :: (moving_frame: *Moving_Frame) -> Command.Sync_Moving_Frame {
+	sync_moving_frame: Command.Sync_Moving_Frame;
+	sync_moving_frame.frame_id = moving_frame.id;
+	sync_moving_frame.t = moving_frame.server.t;
+	return sync_moving_frame;
+}
 
 Frame_Result :: struct {
 	died: [..] Command.Die;
 	respawn: [..] Command.Respawn;
 	sync_gate: [..] Command.Sync_Gate;
+	move_to_player_world: [..] Command.Move_To_Play_World;
 }
 free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.died);
 	array_free(frame_result.respawn);
 	array_free(frame_result.sync_gate);
+	array_free(frame_result.move_to_player_world);
 }
 clear :: (frame_result: *Frame_Result) {
 	frame_result.died.count = 0;
 	frame_result.respawn.count = 0;
 	frame_result.sync_gate.count = 0;
+	frame_result.move_to_player_world.count = 0;
 }
 
 Process_Response :: struct {
 	move: [..] Command.Move;
 	coin_spawn: [..] Command.Spawn_Coin;
+	ntp: [..] Command.NTP;
 }
 free :: (process_response: *Process_Response) {
 	array_free(process_response.move);
 	array_free(process_response.coin_spawn);
+	array_free(process_response.ntp);
 }
 clear :: (response: *Process_Response) {
 	response.move.count = 0;
 	response.coin_spawn.count = 0;
+	response.ntp.count = 0;
 }
 
 Camera :: struct {
@@ -166,6 +203,28 @@ unproject_ndc :: (ndc: V2f, V: M4f, P: M4f) -> V3f {
 
 	ray_world := v3(inverse(V) * ray_eye);
 	return normalize(ray_world);
+}
+
+Trigger :: enum {
+	Move_To_Play_World :: 0;
+}
+
+Trigger_Zone :: struct {
+	id: int;
+	accept_player_id := -1; // -1 means accept all players
+	trigger: Trigger;
+
+	pos: V3f;
+	radius: float;
+
+	model_id := -1;
+}
+
+Stand_In :: struct {
+	id: int;
+	model_id: int;
+	position: V3f;
+	orientation: Qf;
 }
 
 Moving_Frame :: struct {
@@ -266,6 +325,12 @@ Gate :: struct {
 }
 
 Player :: struct {
+	Model :: enum {
+		Racer :: 0;
+		SUV :: 1;
+		Speedster :: 2;
+	}
+
 	id := 0;
 
 	// This is the stuff that gets overwritten as soon as we get information from the server.
@@ -287,6 +352,8 @@ Player :: struct {
 		radius_hitbox_confirmed := 0.15;
 
 		confirmed_tile := Tile.Kind.Grass;
+
+		model_id := 0;
 	};
 
 	// This is the stuff that gets optimistically updated by the client. For rendering
@@ -440,6 +507,32 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 
 	if scene.is_server && result {
 
+		// >RULE Trigger zone check
+		for * scene.trigger_zones {
+			tpos := it.pos;
+
+			for * player: scene.players {
+				if player.server.dead
+					continue;
+
+				if it.accept_player_id != -1 && it.accept_player_id != player.id
+					continue;
+
+				d := norm(tpos - player.server.position);
+
+				if d < it.radius {
+					if #complete it.trigger == {
+					case .Move_To_Play_World;
+						move: Command.Move_To_Play_World;
+						move.player_id = player.id;
+						move.model_id = it.model_id;
+						move.play_world_id = 0;
+						array_add(*result.move_to_player_world, move);
+					}
+				}
+			}
+		}
+
 		// >RULE Coin revive dead player on tombstone collision
 		for * scene.coins {
 			pos := it.server.position;
@@ -459,7 +552,7 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 						player_to_respawn := find_by_player_id(scene, tombstone.player_id);
 						if player_to_respawn {
 							player_to_respawn.server.dead = false;
-							spawn_into(player_to_respawn, scene.current_terrain);
+							spawn_into(player_to_respawn, scene.terrain);
 						}
 
 						remove it;
@@ -473,7 +566,7 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 		// >RULE Player die when not under any tile or under a dirt tile
 		for * scene.players {
 			if !it.server.dead {
-				tile, ok := tile_under(scene.current_terrain, it.server.position);
+				tile, ok := tile_under(scene.terrain, it.server.position);
 				if !ok || tile.kind == .Dirt {
 					server_die(scene, it, result);
 					continue;
@@ -496,7 +589,7 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 						player_to_respawn := find_by_player_id(scene, tomb.player_id);
 						if player_to_respawn {
 							player_to_respawn.server.dead = false;
-							spawn_into(player_to_respawn, scene.current_terrain);
+							spawn_into(player_to_respawn, scene.terrain);
 						}
 
 						remove tomb;
@@ -622,7 +715,7 @@ update :: (scene: Scene, skull: *Skull, dt: float32) {
 
 	skull.server.t += skull.server.speed * dt;
 
-	path: *Path = *scene.current_terrain.paths[skull.path_id];
+	path: *Path = *scene.terrain.paths[skull.path_id];
 	if path.checkpoints_count > 0 {
 		t := fmod_cycling(skull.client.t, path.checkpoints_count - 1.0);
 		pos_before := path.checkpoints[cast(int) (floor(t) + 0)];
@@ -646,14 +739,14 @@ update :: (scene: Scene, player: *Player, dt: float32) {
 	if player.server.dead
 		return;
 
-	tile, ok := tile_under(scene.current_terrain, player.server.position);
+	tile, ok := tile_under(scene.terrain, player.server.position);
 	if !ok {
 		return;
 	}
 
 	// Let's see if we are still on a tile of the same kind of our confirmed tile.
 	is_still_on := touch_a_tile(
-		scene.current_terrain,
+		scene.terrain,
 		player.server.position,
 		player.server.radius_hitbox_confirmed,
 		player.server.confirmed_tile
@@ -741,6 +834,7 @@ process_server_only :: (scene: *Scene, command: Command, response: *Process_Resp
 	if !scene.is_server
 		return false;
 
+
 	spawn_coin: *Command.Spawn_Coin = isa(command.payload, Command.Spawn_Coin);
 	if spawn_coin {
 		player := find_by_player_id(scene, spawn_coin.sender);
@@ -815,7 +909,6 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		}
 	}
 
-
 	return false;
 }
 
@@ -828,11 +921,16 @@ process :: (scene: *Scene, command: Command, response: *Process_Response) -> boo
 
 	spawn: *Command.Spawn = isa(command.payload, Command.Spawn);
 	if spawn {
-		player: Player;
-		player.id = spawn.player_id;
+		player := find_by_player_id(scene, spawn.player_id);
 
-		
-		spawn_into(*player, scene.current_terrain);
+		if !player {
+			new_player: Player;
+			new_player.id = spawn.player_id;
+			array_add(*scene.players, new_player);
+			player = *scene.players[scene.players.count - 1];
+		}
+
+		spawn_into(player, scene.terrain);
 		if spawn.its_you {
 			scene.controlled_player_id = spawn.player_id;
 			dt := scene.camera.position - scene.camera.target;
@@ -841,7 +939,6 @@ process :: (scene: *Scene, command: Command, response: *Process_Response) -> boo
 			scene.camera.locked_to = scene.controlled_player_id;
 		}
 
-		array_add(*scene.players, player);
 		return true;
 	}
 
@@ -858,9 +955,10 @@ process :: (scene: *Scene, command: Command, response: *Process_Response) -> boo
 			if it.player_id == respawn.player_id {
 
 				player := find_by_player_id(scene, it.player_id);
-				player.server.dead = false;
-				spawn_into(player, scene.current_terrain);
-
+				if player {
+					player.server.dead = false;
+					spawn_into(player, scene.terrain);
+				}
 				remove it;
 			}
 		}
@@ -932,7 +1030,7 @@ process :: (scene: Scene, player: *Player, command: Command, response: *Process_
 			case .Dirt;
 		}
 
-		if response {
+		if scene.is_server && response {
 			reply: Command.Move;
 			reply.player_id = player.id;
 			reply.ground_target = move.ground_target;
@@ -945,10 +1043,10 @@ process :: (scene: Scene, player: *Player, command: Command, response: *Process_
 	sync: *Command.Sync_Player = isa(command.payload, Command.Sync_Player);
 	if sync {
 		for * scene.players if it.id == sync.player_id {
-
 			it.server.direction = sync.direction;
 			it.server.position = sync.position;
 			it.server.dead = sync.dead;
+			it.server.model_id = sync.model_id;
 		}
 	}
 
@@ -969,6 +1067,8 @@ Tile :: struct {
 }
 
 Terrain :: struct {
+	text: string;
+
 	tiles_count: V2i;
 	spawn_tile: V2i;
 
@@ -978,6 +1078,7 @@ Terrain :: struct {
 free :: (terrain: *Terrain) {
 	array_free(terrain.tiles);
 	array_free(terrain.paths);
+	free(terrain.text);
 }
 
 load_terrain_from_ascii :: (ascii: string) -> Terrain {
@@ -1075,44 +1176,46 @@ touch_a_tile :: (terrain: Terrain, spot: V3f, radius: float, kind: Tile.Kind) ->
 	return false;
 }
 
-render :: (scene: Scene, terrain: Terrain) {
+render :: (scene: Scene) {
+	store := scene.store;
 	V := look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
 	P := perspective(scene.camera);
 
-	Render.set_uniform(*scene.model_shader, "V", V);
-	Render.set_uniform(*scene.model_shader, "P", P);
-	Render.set_uniform(*scene.texture_shader, "V", V);
-	Render.set_uniform(*scene.texture_shader, "P", P);
-	Render.set_uniform(*scene.tile_shader, "V", V);
-	Render.set_uniform(*scene.tile_shader, "P", P);
+	Render.set_uniform(*store.model_shader, "V", V);
+	Render.set_uniform(*store.model_shader, "P", P);
+	Render.set_uniform(*store.texture_shader, "V", V);
+	Render.set_uniform(*store.texture_shader, "P", P);
+	Render.set_uniform(*store.tile_shader, "V", V);
+	Render.set_uniform(*store.tile_shader, "P", P);
 
-	Render.set_uniform(*scene.texture_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
-	Render.set_uniform(*scene.texture_shader, "texture_sampler", scene.ice_texture, 0);
-	Render.set_uniform(*scene.texture_shader, "texture_offset", V2f.{ 0, 0 });
+	Render.set_uniform(*store.texture_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
+	Render.set_uniform(*store.texture_shader, "texture_sampler", store.ice_texture, 0);
+	Render.set_uniform(*store.texture_shader, "texture_offset", V2f.{ 0, 0 });
 
-	used_texture := *scene.ice_texture;
-	render_terrain(scene, scene.current_terrain);
+	used_texture := *store.ice_texture;
+	render_terrain(scene, *scene.terrain);
 
-	Render.set_uniform(*scene.texture_shader, "texture_sampler", scene.coin_texture, 0);
+	Render.set_uniform(*store.texture_shader, "texture_sampler", store.coin_texture, 0);
 	for * scene.coins {
 		R := to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, it.client.theta));
 
 		M := M4f.translate(it.client.position) * R;
-		Render.set_uniform(*scene.texture_shader, "M", M);
-		Render.render(scene.coin_geometry, scene.texture_shader);
+		Render.set_uniform(*store.texture_shader, "M", M);
+		Render.render(store.coin_geometry, store.texture_shader);
 	}
 
-	Render.set_uniform(*scene.model_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
+	Render.set_uniform(*store.model_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
 	for * scene.keys {
 		p := it.client.position;
 		if it.holder >= 0
 			p.z += 1;
 
 		M := M4f.translate(p);
-		Render.set_uniform(*scene.model_shader, "M", M);
-		Render.render(scene.key_geometry, scene.model_shader);
+		Render.set_uniform(*store.model_shader, "M", M);
+		Render.render(store.key_geometry, store.model_shader);
 	}
 
+	render_standin(scene);
 	render_players(scene);
 	render_skulls(scene);
 	render_shurikens(scene);
@@ -1120,38 +1223,54 @@ render :: (scene: Scene, terrain: Terrain) {
 	for * scene.tombstones {
 		M := M4f.translate(it.position);
 
-		Render.set_uniform(*scene.model_shader, "M", M);
-		Render.render(scene.tombstone_geometry, scene.model_shader);
+		Render.set_uniform(*store.model_shader, "M", M);
+		Render.render(store.tombstone_geometry, store.model_shader);
 	}
 
 	for * scene.gates {
 		R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, it.direction));
 
 		M := M4f.translate(it.position) * R;
-		Render.set_uniform(*scene.model_shader, "M", M);
-		Render.render(scene.gate_geometry, scene.model_shader);
+		Render.set_uniform(*store.model_shader, "M", M);
+		Render.render(store.gate_geometry, store.model_shader);
 
 		if it.is_closed {
-			Render.render(scene.gate_close_geometry, scene.model_shader);
+			Render.render(store.gate_close_geometry, store.model_shader);
 		}
 	}
 
 	if to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time) < 0.8 {
-		Render.set_uniform(*scene.texture_shader, "texture_sampler", scene.mark_texture, 0);
+		Render.set_uniform(*store.texture_shader, "texture_sampler", store.mark_texture, 0);
 		M := M4f.translate(scene.mark_clicked_pos);
-		Render.set_uniform(*scene.texture_shader, "M", M);
+		Render.set_uniform(*store.texture_shader, "M", M);
 		t := to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time);
 		t /= 0.8;
 		t = 1 - ((1 - t) * (1 - t) * (1 - t) * (1 - t) * (1 - t));
 		offset := V2f.{ 0, xx -t };
-		Render.set_uniform(*scene.texture_shader, "texture_offset", offset);
+		Render.set_uniform(*store.texture_shader, "texture_offset", offset);
 		context.rhi.glDisable(GL_CULL_FACE);
-		Render.render(scene.mark_geometry, scene.texture_shader);
+		Render.render(store.mark_geometry, store.texture_shader);
 		context.rhi.glEnable(GL_CULL_FACE);
 	}
 }
 
+render_standin :: (scene: Scene) {
+	store := scene.store;
+	for * scene.stand_in {
+		M := M4f.translate(it.position);
+		M = M * to_rotation_matrix(it.orientation);
+		Render.set_uniform(*store.texture_shader, "M", M);
+		geometry := get_geometry(scene.store, it.model_id);
+		if !geometry {
+			geometry = *store.spirit_geometry;
+		}
+		Render.set_uniform(*store.texture_shader, "texture_sampler", store.vehicle_colormap, 0);
+		Render.render(geometry.*, store.texture_shader);
+	}
+}
+
 render_players :: (scene: Scene) {
+	store := scene.store;
 	colors :: V3f.[
 		V3f.{ 1.0, 0.8, 0.8 },
 		V3f.{ 0.8, 1.0, 0.8 },
@@ -1161,6 +1280,7 @@ render_players :: (scene: Scene) {
 		V3f.{ 0.8, 1.0, 1.0 },
 		V3f.{ 1.0, 1.0, 1.0 }
 	];
+	Render.set_uniform(*store.texture_shader, "texture_offset", V2f.{ 0, 0 });
 	for * scene.players {
 		if !it.server.dead {
 			M := M4f.identity();
@@ -1170,15 +1290,23 @@ render_players :: (scene: Scene) {
 
 			M = M4f.translate(it.client.position) * M;
 
-			Render.set_uniform(*scene.model_shader, "M", M);
-			Render.set_uniform(*scene.model_shader, "tint", colors[it.id % colors.count]);
-			Render.render(scene.player_geometry, scene.model_shader);
+			Render.set_uniform(*store.texture_shader, "M", M);
+			// Render.set_uniform(*scene.texture_shader, "tint", colors[it.id % colors.count]);
+			Render.set_uniform(*store.texture_shader, "texture_sampler", store.vehicle_colormap, 0);
+
+			geometry := get_geometry(scene.store, it.server.model_id);
+			if !geometry {
+				geometry = *store.spirit_geometry;
+			}
+
+			Render.render(geometry.*, store.texture_shader);
 		}
 	}
-	Render.set_uniform(*scene.model_shader, "tint", V3f.{ 1, 1, 1 });
+	// Render.set_uniform(*scene.model_shader, "tint", V3f.{ 1, 1, 1 });
 }
 
 render_shurikens :: (scene: Scene) {
+	store := scene.store;
 	instanced := NewArray(
 		scene.shurikens.count, Render.Geometry.Instance_Data, initialized = false,, temp
 	);
@@ -1193,16 +1321,17 @@ render_shurikens :: (scene: Scene) {
 		instance.M = M;
 	}
 
-	Render.add_instance(*scene.shuriken_geometry, .{
+	Render.add_instance(*store.shuriken_geometry, .{
 		data = xx instanced.data,
 		count = instanced.count * size_of(Render.Geometry.Instance_Data)
 	});
 
 	Render.enable_instanced_attributes(3);
-	Render.render_instanced(scene.shuriken_geometry, scene.tile_shader, instanced.count);
+	Render.render_instanced(store.shuriken_geometry, store.tile_shader, instanced.count);
 }
 
 render_skulls :: (scene: Scene) {
+	store := scene.store;
 	instanced := NewArray(
 		scene.skulls.count, Render.Geometry.Instance_Data, initialized = false,, temp
 	);
@@ -1213,16 +1342,17 @@ render_skulls :: (scene: Scene) {
 		instance.M = compute_skull_matrix(scene, skull);
 	}
 
-	Render.add_instance(*scene.skull_geometry, .{
+	Render.add_instance(*store.skull_geometry, .{
 		data = xx instanced.data,
 		count = instanced.count * size_of(Render.Geometry.Instance_Data)
 	});
 
 	Render.enable_instanced_attributes(3);
-	Render.render_instanced(scene.skull_geometry, scene.tile_shader, instanced.count);
+	Render.render_instanced(store.skull_geometry, store.tile_shader, instanced.count);
 }
 
 render_terrain :: (scene: Scene, terrain: *Terrain) {
+	store := scene.store;
 	if terrain.tiles_count.x <= 0 || terrain.tiles_count.y <= 0
 		return;
 
@@ -1236,7 +1366,7 @@ render_terrain :: (scene: Scene, terrain: *Terrain) {
 
 		name := sprint("samplers[%]", it);
 		Render.set_uniform(
-			*scene.tile_shader, name, scene.tile_kind_to_shader[it], it
+			*store.tile_shader, name, scene.tile_kind_to_shader[it], it
 		);
 		free(name);
 	}
@@ -1250,20 +1380,20 @@ render_terrain :: (scene: Scene, terrain: *Terrain) {
 		instance.M = M4f.translate(.{ cast(float32) x, cast(float32) y, 0 });
 	}
 
-	Render.add_instance(*scene.tile_geometry, .{
+	Render.add_instance(*store.tile_geometry, .{
 		data = xx instanced.data,
 		count = terrain.tiles.count * size_of(Render.Geometry.Instance_Data)
 	});
 
 	Render.enable_instanced_attributes(3);
-	Render.render_instanced(scene.tile_geometry, scene.tile_shader, terrain.tiles.count);
+	Render.render_instanced(store.tile_geometry, store.tile_shader, terrain.tiles.count);
 }
 
 compute_skull_matrix :: (scene: Scene, skull: Skull) -> M4f {
-	if skull.path_id >= scene.current_terrain.paths.count
+	if skull.path_id >= scene.terrain.paths.count
 		return M4f.identity();
 
-	path: *Path = *scene.current_terrain.paths[skull.path_id];
+	path: *Path = *scene.terrain.paths[skull.path_id];
 	if path.checkpoints_count == 0
 		return M4f.identity();
 
@@ -1280,10 +1410,10 @@ compute_skull_matrix :: (scene: Scene, skull: Skull) -> M4f {
 }
 
 compute_skull_pos :: (scene: Scene, skull: Skull) -> V3f {
-	if skull.path_id >= scene.current_terrain.paths.count
+	if skull.path_id >= scene.terrain.paths.count
 		return .{ 0, 0, 0 };
 
-	path: *Path = *scene.current_terrain.paths[skull.path_id];
+	path: *Path = *scene.terrain.paths[skull.path_id];
 	if path.checkpoints_count == 0
 		return .{ 0, 0, 0 };
 

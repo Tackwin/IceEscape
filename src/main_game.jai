@@ -1,62 +1,158 @@
-#if OS == .WINDOWS {
-	#import "imgui_sdl_gl";
-}
 Terrain :: #import "Terrain";
 #import "Math";
 #import "Basic";
+#import "Store";
 #import "Algebra";
 #import "Platform";
 #import "Default_Allocator";
 #import "Communication";
 #import "WAllocator";
 #import "Utils";
-Scene :: #import "Scene";
+#import "Hash_Table";
 Render :: #import "Render";
+Scene :: #import "Scene";
 Assets :: #import "Assets";
+GUI :: #import "GUI";
 
 show_inspector := false;    // Wish we could declare static variables inside functions.
 
 State :: struct {
 	scene: Scene.Scene;
 
-	ntp_period: Period(0.5);
+	ntp_period: Period(0.15);
+	NTP_Result :: struct {
+		offset: float64 = 0;
+		ping: float64 = 0;
+		time: float64 = 0;
+	}
+
+	ntp_history: [64] NTP_Result;
+	ntp_history_cursor := 0;
+
+	received_command_history: [..] Command.payload.Kind;
+}
+
+process_complete_ntp :: (state: *State, ntp: Command.NTP) {
+	result: State.NTP_Result;
+	result.offset = (ntp.t1 + ntp.t2) / 2 - (ntp.t0 + ntp.t3) / 2;
+	result.ping = (ntp.t3 - ntp.t0) - (ntp.t2 - ntp.t1);
+	result.time = to_float64_seconds(current_time_monotonic());
+	state.ntp_history[state.ntp_history_cursor] = result;
+	state.ntp_history_cursor += 1;
+	state.ntp_history_cursor %= state.ntp_history.count;
+}
+
+process :: (state: *State, command: Command, response: *Scene.Process_Response) ->  bool {
+	ntp: *Command.NTP = isa(command.payload, Command.NTP);
+	if ntp {
+		is_over := false;
+		send_back := false;
+		reply := ntp.*;
+		if reply.t0 == FLOAT64_MAX {
+			reply.t0 = to_float64_seconds(current_time_monotonic());
+			is_over = false;
+			send_back = true;
+		} else if reply.t1 == FLOAT64_MAX {
+			reply.t1 = to_float64_seconds(current_time_monotonic());
+			is_over = false;
+			send_back = true;
+		} else if reply.t2 == FLOAT64_MAX {
+			reply.t2 = to_float64_seconds(current_time_monotonic());
+			is_over = false;
+			send_back = true;
+		} else if reply.t3 == FLOAT64_MAX {
+			reply.t3 = to_float64_seconds(current_time_monotonic());
+			is_over = true;
+			send_back = true;
+		} else if reply.t4 == FLOAT64_MAX {
+			reply.t4 = to_float64_seconds(current_time_monotonic());
+			is_over = true;
+			send_back = true; // We still send back one last time to optimize the number of packets.
+		} else {
+			// Should never happen, the server's last send back was when t3 == FLOAT64_MAX
+			is_over = false;
+			send_back = false;
+		}
+
+		if send_back && response
+			array_add(*response.ntp, reply);
+
+		if is_over
+			process_complete_ntp(state, reply);
+
+		return true;
+	}
+
+	sync_scene: *Command.Sync_Scene = isa(command.payload, Command.Sync_Scene);
+	if sync_scene {
+		Terrain.parse_terrain(sync_scene.terrain, *state.scene);
+		// Remove all players not present in the sync.
+		for * state.scene.players {
+			found := false;
+			for s: sync_scene.players {
+				if it.id == s.player_id {
+					found = true;
+					break;
+				}
+			}
+
+			if !found
+				remove it;
+		}
+
+		// Add all new players.
+		for sync_scene.players {
+			player := Scene.find_by_player_id(state.scene, it.player_id);
+
+			if !player {
+				player: Scene.Player;
+				player.id = it.player_id;
+				array_add(*state.scene.players, player);
+			}
+
+			Scene.process(*state.scene, make_command(it), response);
+		}
+
+		return true;
+	}
+	return false;
 }
 
 send_web_message :: (platform: Platform, _command: Command) {
 	command := _command;
 	command.sent_timestamp = to_float64_seconds(current_time_monotonic());
-	payload := NewArray(size_of(Command) + 8, u8, false);
-	defer {
-		array_free(payload);
-	}
-	(cast(*u64)payload.data).* = size_of(Command);
-	memcpy(payload.data + 8, cast(*void)*command, size_of(Command));
-	platform.send_web_message(payload);
+	buffer: [..] u8;
+	buffer.allocator = temp;
+	serialize(command, *buffer);
+	platform.send_web_message(buffer);
 }
 
 // 				Scene.process(scene, *scene.player, Scene.make_player_command(command));
 
-parse_web_message :: (frame_info: Frame_Info) -> [] Command {
-	commands := NewArray(frame_info.message_received_count, Command, false);
+parse_web_message :: (state: *State, frame_info: Frame_Info) -> [] Command {
+	commands := NewArray(frame_info.message_received_count, Command, false,, temp);
 
 	cursor := 0;
 	for 0..frame_info.message_received_count - 1 {
-		if frame_info.message_received[it].count != size_of(Command)
-			continue;
-
-		command: Command;
-		memcpy(
-			cast(*void)*command,
-			frame_info.message_received[it].data,
-			size_of(Command)
-		);
-
-		commands[cursor] = command;
-		cursor += 1;
+		cmd, ok := deserialize(frame_info.message_received[it]);
+		if ok {
+			array_add(*state.received_command_history, cmd.payload.kind);
+			commands[cursor] = cmd;
+			cursor += 1;
+		} else {
+			print("Failed to deserialize message\n");
+		}
 	}
 
 	commands.count = cursor;
 	return commands;
+}
+
+respond :: (platform: Platform, response: Scene.Process_Response) {
+	for * response.ntp {
+		cmd := make_command(it.*);
+		send_web_message(platform, cmd);
+	}
 }
 
 main :: () {
@@ -65,62 +161,26 @@ main :: () {
 	platform := init_platform();
 	rhi := platform.rhi;
 
-	#if OS == .WINDOWS {
-		imgui_context := ImGui.CreateContext();
-		ImGui.StyleColorsClassic();
-	}
+	store: Store;
+	init_store(*store);
 
 	clear_color := V4f.{0.45, 0.55, 0.60, 1.00};
 
 	state: State;
 	scene := *state.scene;
+	scene.store = *store;
 
 	scene.camera.position = .{ 0, -4, 8 };
 	scene.camera.target = .{ 0, 0, 0 };
 	scene.camera.target_target = scene.camera.target;
 	scene.camera.wanted_target_to_position = scene.camera.position - scene.camera.target;
 	scene.camera.fov = 55;
-	scene.model_shader = Render.Shader.make(
-		Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT
-	);
-	scene.texture_shader = Render.Shader.make(
-		Assets.PLAIN_VERTEX, Assets.TEXTURE_FRAGMENT
-	);
-	scene.font_shader = Render.Shader.make(
-		Assets.FONT_VERTEX, Assets.FONT_FRAGMENT
-	);
-	scene.instance_shader = Render.Shader.make(
-		Assets.INSTANCED_VERTEX, Assets.TEXTURE_FRAGMENT
-	);
-	scene.tile_shader = Render.Shader.make(
-		Assets.TILE_VERTEX, Assets.TILE_FRAGMENT
-	);
-	scene.ice_texture = Render.Texture.make_from_image(Assets.ICE_TEXTURE);
-	scene.coin_texture = Render.Texture.make_from_image(Assets.COIN_TEXTURE);
-	scene.dirt_texture = Render.Texture.make_from_image(Assets.DIRT_TEXTURE);
-	scene.grass_texture = Render.Texture.make_from_image(Assets.GRASS_TEXTURE);
-	scene.slippy_ice_texture = Render.Texture.make_from_image(Assets.SLIPPY_ICE_TEXTURE);
-	scene.tile_geometry = Render.Geometry.make_square(
-		.{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
-	);
-	scene.mark_texture = Render.Texture.make_from_image(Assets.MARK_TEXTURE);
-	Render.set_parameter(scene.mark_texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-	scene.player_geometry = Render.Geometry.make_from_obj(Assets.CAR_OBJ);
-	scene.tombstone_geometry = Render.Geometry.make_from_obj(Assets.TOMBSTONE_OBJ);
-	scene.coin_geometry = Render.Geometry.make_from_obj(Assets.COIN_OBJ);
-	scene.skull_geometry = Render.Geometry.make_from_obj(Assets.SKULL_OBJ);
-	scene.key_geometry = Render.Geometry.make_from_obj(Assets.KEY_OBJ);
-	scene.mark_geometry = Render.Geometry.make_from_obj(Assets.MARK_OBJ);
-	scene.gate_geometry = Render.Geometry.make_from_obj(Assets.GATE_OBJ);
-	scene.gate_close_geometry = Render.Geometry.make_from_obj(Assets.GATE_CLOSE_OBJ);
-	scene.shuriken_geometry = Render.Geometry.make_from_obj(Assets.SHURIKEN_OBJ);
 
 	scene.tile_kind_to_shader[xx Scene.Tile.Kind.None] = null;
-	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Ice] = *scene.ice_texture;
-	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Grass] = *scene.grass_texture;
-	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Slippy_Ice] = *scene.slippy_ice_texture;
-	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Dirt] = *scene.dirt_texture;
+	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Ice] = *store.ice_texture;
+	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Grass] = *store.grass_texture;
+	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Slippy_Ice] = *store.slippy_ice_texture;
+	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Dirt] = *store.dirt_texture;
 
 	just_pressed: [Key_COUNT] bool;
 	just_released: [Key_COUNT] bool;
@@ -128,17 +188,21 @@ main :: () {
 
 	T := 0;
 
-	// terrain := Scene.load_terrain_from_ascii(STARTER_TERRAIN_ASCII);
-	// scene.current_terrain = *terrain;
-	Terrain.init_roundabout(scene);
-
-
 	history_dt: [100] float;
 	history_cursor := 0;
 	render_fps := false;
+	render_command_debug := false;
+	filter_command_debug: [#run enum_highest_value(Command.payload.Kind) + 1] bool;
+	for * filter_command_debug
+		it.* = true;
+	filter_command_debug[xx Command.payload.Kind.Sync_Player] = false;
+	filter_command_debug[xx Command.payload.Kind.NTP] = false;
 
 	yes: [..] V2f;
 	last_yes: Apollo_Time;
+
+
+	process_response: Scene.Process_Response;
 
 	// Main loop
 	done := false;
@@ -147,8 +211,11 @@ main :: () {
 
 		t00 := current_time_monotonic();
 		frame_info := platform.get_frame_info();
-		history_dt[history_cursor % history_dt.count] = frame_info.delta_time;
-		history_cursor += 1;
+		defer {
+			history_cursor += 1;
+			history_cursor %= history_dt.count;
+		}
+		history_dt[history_cursor] = frame_info.delta_time;
 		Render.IM.display_size = frame_info.framebuffer_size;
 
 		if frame_info.quit
@@ -168,14 +235,11 @@ main :: () {
 		for * pressed {
 			it.* = frame_info.key_pressed[it_index];
 		}
+		Render.handle_frame_info(frame_info);
 
 		V := Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
 		P := Scene.perspective(scene.camera);
 
-		#if OS == .WINDOWS {
-			ImGui_Impl_NewFrame(frame_info, platform);
-			ImGui.NewFrame();
-		}
 
 		any_camera_move := false;
 		dt := V3f.{ 0, 0, 0 };
@@ -208,6 +272,9 @@ main :: () {
 		if just_pressed[Key.H] {
 			render_fps = !render_fps;
 		}
+		if just_pressed[Key.P] {
+			render_command_debug = !render_command_debug;
+		}
 
 		if scene.succeed && to_float64_seconds(current_time_monotonic() - last_yes) > 0.175 {
 			p := V2f.{ 0, 0 };
@@ -230,7 +297,7 @@ main :: () {
 			r := Scene.unproject_ndc(
 				.{
 					frame_info.mouse_position.x / frame_info.window_size.x * 2 - 1,
-					1 - frame_info.mouse_position.y / frame_info.window_size.y * 2
+					frame_info.mouse_position.y / frame_info.window_size.y * 2 - 1
 				},
 				V,
 				P
@@ -256,13 +323,24 @@ main :: () {
 			}
 		}
 
-		commands := parse_web_message(frame_info);
-		defer {
-			array_free(commands);
-		}
+		Scene.clear(*process_response);
+		commands := parse_web_message(*state, frame_info);
 		for commands {
-			Scene.process(scene, it, null);
+			if process(*state, it, *process_response)
+				continue;
+			if Scene.process(scene, it, *process_response)
+				continue;
 		}
+		if check(*state.ntp_period) {
+			ntp: Command.NTP;
+			ntp.player_id = scene.controlled_player_id;
+			ntp.t0 = to_float64_seconds(current_time_monotonic());
+			ntp.t1 = FLOAT64_MAX;
+			ntp.t2 = FLOAT64_MAX;
+			ntp.t3 = FLOAT64_MAX;
+			array_add(*process_response.ntp, ntp);
+		}
+		respond(platform, process_response);
 		Scene.update(scene, frame_info.delta_time, null);
 
 		rhi.glViewport(0, 0, xx frame_info.framebuffer_size.x, xx frame_info.framebuffer_size.y);
@@ -273,48 +351,51 @@ main :: () {
 		rhi.glEnable(GL_CULL_FACE);
 		rhi.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		Scene.render(scene, scene.current_terrain);
+		Scene.render(scene);
 
 		for yes {
 			Render.push_text("GG, you won !", it, 24);
 		}
 
-		if render_fps {
-			fps_text := tprint("FPS: %", 1.0 / frame_info.delta_time);
-			Render.push_text(fps_text, .{ 10, frame_info.framebuffer_size.y - 100 }, 32);
+		if render_command_debug {
+			n := min(100, state.received_command_history.count);
+			y := 0;
+			cursor := 0;
+			while y < n && cursor < state.received_command_history.count {
+				kind := state.received_command_history[
+					state.received_command_history.count - 1 - cursor
+				];
+				cursor += 1;
+				kind_idx := kind.(int);
+				if !filter_command_debug[kind_idx]
+					continue;
 
-			for 0..10 {
+				Render.push_text(tprint("%", kind), V2f.{ 200.0, 10.0 + y * 20.0 }, 18);
+				y += 1;
+			}
+
+			for * filter_command_debug {
 				Render.push_text(
-					"Portez ce vieux whisky au juge blond qui fume", .{ 500, 200 + it * 50.0 }, 16.0 + it * 4
+					tprint("%", it_index.(Command.payload.Kind)),
+					V2f.{ 10.0, 10.0 + it_index * 20.0 },
+					18
 				);
+				if Render.push_checkbox(
+					V2f.{ 175, 20.0 + it_index * 20.0 }, 18, filter_command_debug[it_index]
+				)
+					filter_command_debug[it_index] = !filter_command_debug[it_index];
 			}
+		}
 
-			Render.push_quad(.{
-				pos = .{ -0.95, -0.95 },
-				size = .{ 0.75, 0.4 },
-				color = .{ 0.0, 0.0, 0.0 },
-				z = 0.0
-			});
-			n := history_dt.count;
-			for history_dt {
-				fps := 1.0 / it;
+		if render_fps {
+			GUI.render_fps_histogram(.{ 10, 10 }, .{ 300, 150 }, history_dt, history_cursor);
 
-				h := min(fps, 300);
-				h /= 300;
-
-				Render.push_quad(.{
-					pos = .{ -0.95 + it_index * 0.75 / n, -0.94 },
-					size = .{ 0.73 / n, 0.38 * h },
-					color = .{ 1.0, 1.0, 1.0 },
-					z = -0.1
-				});
+			history_ping := NewArray(state.ntp_history.count, float32, false,, temp);
+			for * history_ping {
+				it.* = xx state.ntp_history[it_index].ping;
 			}
-			Render.push_quad(.{
-				pos = .{ -0.95, -0.94 + 0.38 * (60.0 / 300) },
-				size = .{ 0.75, 0.002 },
-				color = .{ 0.0, 1.0, 0.0 },
-				z = -0.2
-			});
+			ping_cursor := (state.ntp_history_cursor + history_ping.count - 1) % history_ping.count;
+			GUI.render_ping_histogram(.{ 10, 170 }, .{ 300, 150 }, history_ping, ping_cursor);
 
 			#if OS == .WASM {
 				header := get_header();
@@ -342,15 +423,7 @@ main :: () {
 		}
 		Render.render_im();
 
-		#if OS == .WINDOWS {
-			ImGui.Render();
-			ImGui_ImplSdl_RenderDrawLists(platform.rhi, ImGui.GetDrawData());
-		}
 		platform.end_frame();
-	}
-	#if OS == .WINDOWS {
-		ImGui_Impl_Shutdown(platform);
-		ImGui.DestroyContext(imgui_context);
 	}
 	exit_platform(platform);
 }

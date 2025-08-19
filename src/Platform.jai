@@ -899,9 +899,11 @@ RHI_proc :: struct {
 
 #if OS == .WASM {
 	#load "wasm_platform.jai";
+	#load "webgpu_type.jai";
 }
 #if OS == .WINDOWS {
 	#load "win32_platform.jai";
+	#load "webgpu_win32.jai";
 }
 
 #add_context rhi: RHI_proc;

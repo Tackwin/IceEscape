@@ -2,6 +2,7 @@
 #import "Process";
 #import "Basic";
 #import "String";
+#import "Bindings_Generator";
 
 build_win32 :: () -> Workspace {
 	w := compiler_create_workspace("Win32");
@@ -18,6 +19,17 @@ build_win32 :: () -> Workspace {
 	paths.allocator = temp;
 	array_add(*paths, ..opts.import_path);
 	array_add(*paths, "./src/");
+	array_add(*paths, "./lib/");
+	opts.additional_linker_arguments = NewArray(8, string);
+	opts.additional_linker_arguments[0] = "Userenv.lib";
+	opts.additional_linker_arguments[1] = "Ntdll.lib";
+	opts.additional_linker_arguments[2] = "Propsys.lib";
+	opts.additional_linker_arguments[3] = "Ole32.lib";
+	opts.additional_linker_arguments[4] = "Gdi32.lib";
+	opts.additional_linker_arguments[5] = "OleAut32.lib";
+	opts.additional_linker_arguments[6] = "d3dcompiler.lib";
+	opts.additional_linker_arguments[7] = "RuntimeObject.lib";
+	opts.additional_linker_arguments.count = 8;
 	opts.import_path = paths;
 
 	#if #exists(JAILS_DIAGNOSTICS_BUILD) {
@@ -89,10 +101,24 @@ build :: () {
 	linux := false;
 	server := false;
 	wasm := false;
+	bindings := false;
 	for args {
 		linux |= compare(it, "linux") == 0;
 		server |= compare(it, "server") == 0;
 		wasm |= compare(it, "wasm") == 0;
+		bindings |= compare(it, "bindings") == 0;
+	}
+
+	if bindings {
+		opts: Generate_Bindings_Options;
+		opts.log_stripped_declarations = false;
+		array_add(*opts.source_files, "./src/c/webgpu/webgpu.h");
+		array_add(*opts.source_files, "./src/c/webgpu/wgpu.h");
+		generate_bindings(opts, "./src/webgpu_type.jai");
+		opts.log_stripped_declarations = true;
+		array_add(*opts.libnames, "wgpu_native.dll");
+		array_add(*opts.libpaths, "./lib");
+		generate_bindings(opts, "./src/webgpu_win32.jai");
 	}
 
 	win32_game := build_win32();

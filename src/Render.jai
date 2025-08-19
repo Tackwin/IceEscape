@@ -43,6 +43,59 @@ IM: struct {
 	char_shader: Shader;
 	char_texture: Texture;
 
+	Checkbox :: struct {
+		pos: V2f;
+		size: V2f;
+		checked: bool;
+	}
+
+	frame_info: Frame_Info;
+	just_pressed: [Key_COUNT] bool;
+	just_released: [Key_COUNT] bool;
+	pressed: [Key_COUNT] bool;
+
+	mouse_pos: V2f;
+}
+
+handle_frame_info :: (info: Frame_Info) {
+	for * IM.just_pressed {
+		if info.key_pressed[it_index] && !IM.pressed[it_index]
+			it.* = true;
+		else
+			it.* = false;
+	}
+	for * IM.just_released {
+		if !info.key_pressed[it_index] && IM.pressed[it_index]
+			it.* = true;
+		else
+			it.* = false;
+	}
+	for * IM.pressed {
+		it.* = info.key_pressed[it_index];
+	}
+	IM.mouse_pos.x = info.mouse_position.x;
+	IM.mouse_pos.y = info.mouse_position.y;
+}
+
+push_checkbox :: (
+	center: V2f, size: float, checked: bool
+) -> bool {
+	push_quad_screen(center - V2f.{ size / 2, size / 2 }, V2f.{ size, size }, .{ 0, 0, 0 }, 0.0);
+	color := V3f.{ 0.1, 0.1, 0.1 };
+	if checked {
+		color = .{ 0, 1, 0 };
+	}
+	push_quad_screen(
+		center - V2f.{ size / 2 - 2, size / 2 - 2 }, V2f.{ size - 4, size - 4 }, color, -0.1
+	);
+
+	low := center - V2f.{ size / 2 - 1, size / 2 - 1 };
+	high := center + V2f.{ size / 2 - 1, size / 2 - 1 };
+
+	if IM.just_pressed[Key.MouseLeft] && point_aabb(IM.mouse_pos, low, high) {
+		return true;
+	}
+	return false;
 }
 
 push_quad :: (quad: IM.Quad) {
@@ -489,14 +542,22 @@ Geometry :: struct {
 			line.data = obj.data + cursor;
 			line.count = next_cursor - cursor;
 			cursor = next_cursor + 1;
+			if line.count == 0
+				continue;
 
 			x: float32;
 			y: float32;
 			z: float32;
+			r: float32;
+			g: float32;
+			b: float32;
 
 			i: [9] u32;
 
 			if scan2(line, "v % % %", *x, *y, *z) {
+				array_add(*vertices, .{ x = x, y = y, z = z });
+			}
+			if scan2(line, "v % % % % % %", *x, *y, *z, *r, *g, *b) {
 				array_add(*vertices, .{ x = x, y = y, z = z });
 			}
 			if scan2(line, "vn % % %", *x, *y, *z) {
@@ -726,4 +787,12 @@ upload :: (texture: *Texture, data: [] u8, has_alpha := false) {
 set_parameter :: (texture: Texture, parameter: GLenum, value: GLint) {
 	context.rhi.glBindTexture(GL_TEXTURE_2D, texture.id);
 	context.rhi.glTexParameteri(GL_TEXTURE_2D, parameter, value);
+}
+set_clamp :: (texture: Texture, dir: enum { S; T; }) {
+	context.rhi.glBindTexture(GL_TEXTURE_2D, texture.id);
+	context.rhi.glTexParameteri(
+		GL_TEXTURE_2D,
+		xx (ifx dir == .S then GL_TEXTURE_WRAP_S else GL_TEXTURE_WRAP_T),
+		GL_CLAMP_TO_EDGE
+	);
 }

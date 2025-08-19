@@ -488,3 +488,7 @@ line_aabb :: (a1: V2($T), b: V2(T), low: V2(T), high: V2(T)) -> bool {
 		V2(T).{ high.x, low.y }, low
 	);
 }
+
+point_aabb :: (p: V2($T), low: V2(T), high: V2(T)) -> bool {
+	return p.x >= low.x && p.x <= high.x && p.y >= low.y && p.y <= high.y;
+}

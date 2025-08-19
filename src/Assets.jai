@@ -290,6 +290,18 @@ COIN_OBJ :: #run,host -> string {
 	return read_ct_file(tprint("%/../assets/coin.obj", #filepath));
 };
 
+SPIRIT_OBJ :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+		return str;
+	}
+
+	return read_ct_file(tprint("%/../assets/spirit.obj", #filepath));
+};
+
 KEY_OBJ :: #run,host -> string {
 	#import "Basic";
 	read_ct_file :: (path: string) -> string {
@@ -350,6 +362,49 @@ SHURIKEN_OBJ :: #run,host -> string {
 	return read_ct_file(tprint("%/../assets/shuriken.obj", #filepath));
 };
 
+VEHICLE_RACER_OBJ :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+		if !ok {
+			print("Could not read vehicle-racer.obj\n");
+		}
+		return str;
+	}
+
+	return read_ct_file(tprint("%/../assets/vehicle-racer.obj", #filepath));
+};
+VEHICLE_SUV_OBJ :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+		if !ok {
+			print("Could not read vehicle-suv.obj\n");
+		}
+		return str;
+	}
+
+	return read_ct_file(tprint("%/../assets/vehicle-suv.obj", #filepath));
+};
+VEHICLE_SPEEDSTER_OBJ :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+		if !ok {
+			print("Could not read vehicle-speedster.obj\n");
+		}
+		return str;
+	}
+
+	return read_ct_file(tprint("%/../assets/vehicle-speedster.obj", #filepath));
+};
+
 Image :: struct {
 	width: u32;
 	height: u32;
@@ -385,6 +440,56 @@ decode_image :: (path: string) -> Image {
 
 	return image;
 }
+
+vehicle_colormap_texture_help :: () -> Image {
+	a, b, c := #run, host -> [] u8, int, int {
+
+		Image :: struct {
+			width: u32;
+			height: u32;
+			data: [] u8;
+		}
+
+		decode_image :: (path: string) -> Image {
+			image: Image;
+			CT_File :: #import "File";
+			CT_STB :: #import "stb_image";
+			#import "Basic";
+
+			file, ok := CT_File.read_entire_file(path);
+			if !ok {
+				print("Failed to load vehicle_colormap.png\n");
+				return image;
+			}
+
+			x: s32;
+			y: s32;
+			c: s32;
+			image.data.data = CT_STB.stbi_load_from_memory(file.data, xx file.count, *x, *y, *c, 3);
+			image.data.count = x * y * 3;
+			image.width = xx x;
+			image.height = xx y;
+
+			if !image.data.data {
+				cstr: *u8 = CT_STB.stbi_failure_reason();
+				str: string;
+				str.data = cstr;
+				str.count = c_style_strlen(cstr);
+				print("Failed to load vehicle_colormap.png: %\n", str);
+				return image;
+			}
+
+			return image;
+		}
+		#import "Basic";
+
+		image := decode_image(tprint("%/../assets/vehicle_colormap.png", #filepath));
+		return image.data, image.width, image.height;
+	};
+	return .{ width = xx b, height = xx c, data = a };
+}
+
+VEHICLE_COLORMAP_TEXTURE :: #run vehicle_colormap_texture_help();
 
 ice_texture_help :: () -> Image {
 	a, b, c := #run, host -> [] u8, int, int {

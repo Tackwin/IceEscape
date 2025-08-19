@@ -17,7 +17,7 @@ curl: *CURL;
 curl_errbuf: [CURL_ERROR_SIZE] u8;
 curl_buffer: [] u8;
 
-fake_one_way_ping := 300.0;
+fake_one_way_ping := 0.0;
 
 map_sdl_to_key :: (key: int) -> int {
 	if key == {
@@ -106,7 +106,7 @@ win32_get_frame_info :: () -> Frame_Info {
 	mx, my: s32;
 	mouseMask := SDL_GetMouseState(*mx, *my);
 	info.mouse_position.x = xx mx;
-	info.mouse_position.y = xx my;
+	info.mouse_position.y = xx (info.window_size.y - my);
 	info.window_focused =  (SDL_GetWindowFlags(sdl_window) & SDL_WINDOW_MOUSE_FOCUS) > 0;
 
 	event: SDL_Event;
@@ -180,11 +180,10 @@ win32_get_frame_info :: () -> Frame_Info {
 
 		msg: Message;
 		array_resize(*msg.data, xx next_message_length);
-		memcpy(msg.data.data, curl_buffer.data + cursor + 8, xx next_message_length);
+		memcpy(msg.data.data, curl_buffer.data + cursor, xx next_message_length);
 		msg.sent_time = current_time_monotonic();
 		array_add(*message_arrived, msg);
 
-		cursor += 8;
 		cursor += xx next_message_length;
 	}
 
@@ -193,7 +192,7 @@ win32_get_frame_info :: () -> Frame_Info {
 	for * message_arrived {
 		dt := to_float64_seconds(current_time_monotonic() - it.sent_time);
 
-		if 1000 * dt > fake_one_way_ping {
+		if 1000 * dt >= fake_one_way_ping {
 			info.message_received_count += 1;
 			info.message_received[info.message_received_count - 1] = NewArray(
 				it.data.count, u8, initialized = false,, temp
@@ -219,7 +218,7 @@ win32_end_frame :: () {
 	cursor := 0;
 	for * messages_pending {
 		dt := to_float64_seconds(current_time_monotonic() - it.sent_time);
-		if dt * 1000 > fake_one_way_ping {
+		if dt * 1000 >= fake_one_way_ping {
 			sent: u64 = 0;
 			code := curl_ws_send(curl, it.data.data, xx it.data.count, *sent, 0, CURLWS_TEXT);
 			if code {
