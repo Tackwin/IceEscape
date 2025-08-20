@@ -2,6 +2,7 @@
 #import "Window_Creation";
 #import "Input";
 #import "Basic";
+#import "String";
 GL :: #import "GL";
 #import "SDL";
 #import "Reflection";
@@ -79,6 +80,25 @@ send_web_message :: (msg: [] u8) {
 	memcpy(message.data.data, msg.data, msg.count);
 	message.sent_time = current_time_monotonic();
 	array_add(*messages_pending, message);
+}
+
+win32_get_token :: () -> int {
+	args := get_command_line_arguments();
+
+	for 1..args.count-1 {
+		if compare(args[it - 1], "-token") == 0 {
+			token := 0;
+			if scan2(args[it], "%", *token) {
+				return token;
+			}
+		}
+	}
+
+	return 1;
+}
+
+win32_set_token :: (token: int) {
+	// no-op
 }
 
 win32_get_frame_info :: () -> Frame_Info {
@@ -277,6 +297,8 @@ init_platform :: () -> Platform {
 	platform.get_frame_info = win32_get_frame_info;
 	platform.end_frame = win32_end_frame;
 	platform.send_web_message = send_web_message;
+	platform.get_token = win32_get_token;
+	platform.set_token = win32_set_token;
 	GL.gl_load(*GL.gl, SDL_GL_GetProcAddress);
 
 	meta_run :: () -> string {

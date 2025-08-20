@@ -928,9 +928,9 @@ process :: (scene: *Scene, command: Command, response: *Process_Response) -> boo
 			new_player.id = spawn.player_id;
 			array_add(*scene.players, new_player);
 			player = *scene.players[scene.players.count - 1];
+			spawn_into(player, scene.terrain);
 		}
 
-		spawn_into(player, scene.terrain);
 		if spawn.its_you {
 			scene.controlled_player_id = spawn.player_id;
 			dt := scene.camera.position - scene.camera.target;

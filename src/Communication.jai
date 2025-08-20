@@ -136,7 +136,7 @@ set :: (s: *Sum_Type, value: $T) {
 			}
 		}
 
-		assert(found);
+		assert(found, "Type % not found\n", T);
 	}
 
 	s.kind = #insert #run -> string { return sprint(".%;", T); };

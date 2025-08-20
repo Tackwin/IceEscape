@@ -82,10 +82,11 @@ Frame_Info :: struct {
 Platform :: struct {
 	rhi: RHI_proc;
 
-	get_frame_info: () -> Frame_Info = null;
-	end_frame: #type () = null;
-
-	send_web_message: #type (msg: [] u8) = null;
+	get_token:        #type () -> int        = null;
+	set_token:        #type (token: int)     = null;
+	get_frame_info:   #type () -> Frame_Info = null;
+	end_frame:        #type ()               = null;
+	send_web_message: #type (msg: [] u8)     = null;
 }
 
 GLenum :: u32;

@@ -8,7 +8,7 @@ Scene :: #import "Scene";
 #import "Hash_Table";
 #import "Utils";
 
-TIMEOUT_DURATION := 3.0;
+TIMEOUT_DURATION := 10.0;
 
 prepare_typed_message :: (_payload: $T) -> [] u8 {
 	payload := _payload;
@@ -56,18 +56,11 @@ User :: struct {
 	last_ping: Apollo_Time;
 }
 
-New_Connection :: struct {
-	socket: *Websocket;
-	token: int;
-}
-
 State :: struct {
 	server: *Websocket_Server = null;
 	last_sync_sent_time: Apollo_Time;
 
 	users: [..] User;
-	new_connections: [..] New_Connection;
-	new_connections_semaphore: Semaphore;
 
 	sync_count_player: Counter(1);
 	sync_count_skull: Counter(20);
@@ -75,10 +68,9 @@ State :: struct {
 	sync_count_key: Counter(50);
 
 	player_generation := 0;
+	user_generation := 0;
 
-	socket_to_player_id: Table(*Websocket, int);
 	socket_to_token_id: Table(*Websocket, int);
-	player_id_to_socket: Table(int, *Websocket);
 
 	Queue :: struct(N: int) {
 		commands : [N] Command;
@@ -110,6 +102,14 @@ State :: struct {
 }
 state: State;
 
+find_user_by_player_id :: (player_id: int) -> *User {
+	for * user: state.users {
+		if user.player_id == player_id
+			return user;
+	}
+	return null;
+}
+
 find_by_scene_id :: (scene_id: int) -> *Scene.Scene {
 	for * state.scenes {
 		if it.id == scene_id
@@ -140,6 +140,17 @@ append_received :: (cmd: Command, socket: *Websocket) {
 		signal(*state.received_semaphore);
 	}
 
+	if state.received.count >= state.received.N {
+		print("Received queue overflow!\n");
+		return;
+	}
+
+	state.received.socket[state.received.count] = socket;
+	state.received.commands[state.received.count] = cmd;
+	state.received.count += 1;
+}
+
+append_received_sync :: (cmd: Command, socket: *Websocket) {
 	if state.received.count >= state.received.N {
 		print("Received queue overflow!\n");
 		return;
@@ -217,96 +228,9 @@ sync :: (state: State) {
 process_response: Scene.Process_Response;
 frame_result: Scene.Frame_Result;
 
-handle_new_connections :: () {
-
-	wait_for(*state.new_connections_semaphore);
-	defer {
-		signal(*state.new_connections_semaphore);
-	}
-
-	for * state.new_connections {
-		state.player_generation += 1;
-
-		// If the token is invalid we need to create one.
-		if it.token < 0 {
-			it.token = state.player_generation;
-		}
-
-		// Let's check the token to see if the user has an history here.
-		user: *User = null;
-		for * u: state.users {
-			if u.token == it.token {
-				// We are going to hijack this user to point to the new connection.
-				u.websocket = it.socket;
-				u.last_ping = current_time_monotonic();
-				user = u;
-				break;
-			}
-		}
-
-		// If we didn't find a user with the same token, we need to create a new one.
-		if !user {
-			new_user: User;
-			new_user.token = state.player_generation;
-			new_user.player_id = state.player_generation;
-			new_user.scene_id = state.pick_scene_id;
-			new_user.last_ping = current_time_monotonic();
-			new_user.websocket = it.socket;
-			array_add(*state.users, new_user);
-			user = *state.users[state.users.count - 1];
-		}
-
-		for state.users {
-			// Notify the existing player of a new player
-			if it.scene_id != user.scene_id
-				continue;
-			// Don't notify the new player about themselves
-			if it.player_id == user.player_id
-				continue;
-
-			spawn: Command.Spawn;
-			spawn.player_id = user.player_id;
-			spawn.its_you = false;
-			append_queue(spawn, it.websocket);
-		}
-		// Also let's do a virtual message to tell the server a new guy just connected
-		spawn: Command.Spawn;
-		spawn.player_id = user.player_id;
-		spawn.its_you = false;
-		append_received(make_command(spawn), null);
-
-		// Then we serve the state of the scene to the new player.
-		scene := find_by_scene_id(user.scene_id);
-		if scene
-			append_queue(Scene.make_sync(scene), user.websocket);
-
-		// We also need to tell the new player about their own spawn
-		spawn.its_you = true;
-		append_queue(spawn, user.websocket);
-
-		// Some bookkeeping
-		table_set(*state.socket_to_token_id, it.socket, user.token);
-		table_add(*state.socket_to_player_id, user.websocket, user.player_id);
-		table_add(*state.player_id_to_socket, user.player_id, user.websocket);
-	}
-
-	state.new_connections.count = 0; // Clear the new connections after processing.
-
-		// // Tell the new player about everyone else
-		// for * state.users {
-		// 	if it.scene_id != user.scene_id
-		// 		continue;
-
-		// 	spawn: Command.Spawn;
-		// 	spawn.player_id = it.player_id;
-		// 	spawn.its_you = false;
-		// 	append_queue(spawn, ws);
-		// }
-
-}
-
 quit_user :: (user: *User) {
 	id := user.player_id;
+	table_remove(*state.socket_to_token_id, user.websocket);
 	for state.users {
 		if it.websocket == user.websocket {
 			remove it;
@@ -314,7 +238,6 @@ quit_user :: (user: *User) {
 		}
 	}
 
-	table_remove(*state.player_id_to_socket, id);
 
 	for * scene: state.scenes {
 		for * player, player_idx: scene.players {
@@ -338,8 +261,6 @@ quit_user :: (user: *User) {
 tick :: (state: *State) {
 	reset_temporary_storage();
 
-	handle_new_connections();
-
 	Scene.clear(*process_response);
 	Scene.clear(*frame_result);
 
@@ -350,14 +271,20 @@ tick :: (state: *State) {
 			signal(*state.received_semaphore);
 		}
 
-		for 0..state.received.count - 1 {
-			cmd := state.received.commands[it];
+		cursor := 0;
+		while true {
+			defer cursor += 1;
+			if cursor >= state.received.count
+				break;
 
-			if process(state, cmd, *process_response)
+			cmd := state.received.commands[cursor];
+			socket := state.received.socket[cursor];
+
+			if process(state, cmd, socket, *process_response)
 				continue;
 			for * scene: state.scenes {
 				if Scene.process(scene, cmd, *process_response)
-					continue it;
+					break scene;
 			}
 		}
 
@@ -374,9 +301,9 @@ tick :: (state: *State) {
 		if it.player_id < 0 {
 			broadcast(state.server, make_command(it));
 		} else {
-			ok, socket := table_find_new(*state.player_id_to_socket, it.player_id);
-			if ok {
-				send(socket, make_command(it));
+			user := find_user_by_player_id(it.player_id);
+			if user {
+				send(user.websocket, make_command(it));
 			}
 		}
 	}
@@ -388,8 +315,8 @@ tick :: (state: *State) {
 	for frame_result.move_to_player_world {
 		move_player_to_scene(it.player_id, state.first_world_id);
 
-		ok, socket := table_find_new(*state.player_id_to_socket, it.player_id);
-		if ok {
+		user := find_user_by_player_id(it.player_id);
+		if user {
 			scene := find_by_scene_id(state.first_world_id);
 			if scene {
 				player := Scene.find_by_player_id(scene, it.player_id);
@@ -399,7 +326,7 @@ tick :: (state: *State) {
 
 				sync_scene := Scene.make_sync(scene);
 
-				send(socket, make_command(sync_scene));
+				send(user.websocket, make_command(sync_scene));
 			}
 		}
 
@@ -434,7 +361,9 @@ process_complete_ntp :: (state: *State, ntp: Command.NTP) {
 }
 
 
-process :: (state: *State, command: Command, response: *Scene.Process_Response) -> bool {
+process :: (
+	state: *State, command: Command, socket: *Websocket, response: *Scene.Process_Response
+) -> bool {
 	ntp: *Command.NTP = isa(command.payload, Command.NTP);
 	if ntp {
 		is_over := false;
@@ -475,6 +404,78 @@ process :: (state: *State, command: Command, response: *Scene.Process_Response) 
 
 	connect: *Command.Connect = isa(command.payload, Command.Connect);
 	if connect {
+		state.user_generation += 1;
+
+		if connect.token < 0 {
+			// The client didn't provide a token, so we generate one for him.
+			connect.token = state.user_generation;
+		}
+
+		// Let's check the token to see if the user has an history here.
+		user: *User = null;
+		for * u: state.users {
+			if u.token == connect.token {
+				// We are going to hijack this user to point to the new connection.
+				u.websocket = socket;
+				u.last_ping = current_time_monotonic();
+				user = u;
+				break;
+			}
+		}
+
+		// If we didn't find a user with the same token, we need to create a new one.
+		if !user {
+			state.player_generation += 1;
+
+			new_user: User;
+			new_user.token = connect.token;
+			new_user.player_id = state.player_generation;
+			new_user.scene_id = state.pick_scene_id;
+			new_user.last_ping = current_time_monotonic();
+			new_user.websocket = socket;
+			array_add(*state.users, new_user);
+			user = *state.users[state.users.count - 1];
+
+			for state.users {
+				// Notify the existing player of a new player
+				if it.scene_id != user.scene_id
+					continue;
+				// Don't notify the new player about themselves
+				if it.player_id == user.player_id
+					continue;
+
+				spawn: Command.Spawn;
+				spawn.player_id = user.player_id;
+				spawn.its_you = false;
+				append_queue(spawn, it.websocket);
+			}
+
+			// Also let's do a virtual message to tell the server a new guy just connected
+			spawn: Command.Spawn;
+			spawn.player_id = user.player_id;
+			spawn.its_you = false;
+			append_received_sync(make_command(spawn), null);
+		}
+
+		// Then we serve the state of the scene to the new player.
+		scene := find_by_scene_id(user.scene_id);
+		if scene
+			append_queue(Scene.make_sync(scene), user.websocket);
+
+		// We also need to tell the new player about their own spawn
+		spawn: Command.Spawn;
+		spawn.player_id = user.player_id;
+		spawn.its_you = true;
+		append_queue(spawn, user.websocket);
+
+		// And finally we can respond to the user with the connection token
+		connect_response: Command.Connect;
+		connect_response.token = connect.token;
+		append_queue(connect_response, user.websocket);
+
+		// bookkeep the socket to token mapping
+		table_set(*state.socket_to_token_id, socket, connect.token);
+		return true;
 	}
 
 	return false;
@@ -522,7 +523,6 @@ main :: () {
 
 	init(*state.queue_semaphore, 1);
 	init(*state.received_semaphore, 1);
-	init(*state.new_connections_semaphore, 1);
 
 	state.sync_period.last = current_time_monotonic();
 	state.tick_period.last = current_time_monotonic();
@@ -533,13 +533,6 @@ main :: () {
 
 	server := websocket_listen("/ws");
 	server.onopen = (ws: *Websocket) {
-		new_connection: New_Connection;
-		new_connection.socket = ws;
-		new_connection.token = -1;
-		wait_for(*state.new_connections_semaphore);
-		table_set(*state.socket_to_token_id, ws, state.player_generation + 1);
-		array_add(*state.new_connections, new_connection);
-		signal(*state.new_connections_semaphore);
 	};
 	server.onmsg = (ws: *Websocket, msg: string) {
 		ok, token := table_find_new(*state.socket_to_token_id, ws);
@@ -560,34 +553,7 @@ main :: () {
 		}
 	};
 	server.onclose = (ws: *Websocket) {
-		for state.users {
-			if it.websocket == ws {
-				remove it;
-			}
-		}
-
-		found, id := table_find_new(*state.socket_to_player_id, ws);
-		if found {
-			table_remove(*state.socket_to_player_id, ws);
-			table_remove(*state.player_id_to_socket, id);
-
-			for * scene: state.scenes {
-				for * scene.players {
-					if it.id == id {
-						remove it;
-						break;
-					}
-				}
-			}
-
-			for ws.server.websockets {
-				if it != ws {
-					quit: Command.Quit;
-					quit.player_id = id;
-					append_queue(quit, it);
-				}
-			}
-		}
+		table_remove(*state.socket_to_token_id, ws);
 	};
 
 	state.server = server;

@@ -2,6 +2,7 @@ Terrain :: #import "Terrain";
 #import "Math";
 #import "Basic";
 #import "Store";
+#import "String";
 #import "Algebra";
 #import "Platform";
 #import "Default_Allocator";
@@ -17,7 +18,11 @@ GUI :: #import "GUI";
 show_inspector := false;    // Wish we could declare static variables inside functions.
 
 State :: struct {
+	platform: *Platform;
 	scene: Scene.Scene;
+
+	is_connected := false;
+	connected_last_try: Apollo_Time;
 
 	ntp_period: Period(0.15);
 	NTP_Result :: struct {
@@ -115,6 +120,14 @@ process :: (state: *State, command: Command, response: *Scene.Process_Response) 
 
 		return true;
 	}
+
+	connect: *Command.Connect = isa(command.payload, Command.Connect);
+	if connect {
+		state.is_connected = true;
+		state.platform.set_token(connect.token);
+		return true;
+	}
+
 	return false;
 }
 
@@ -167,8 +180,16 @@ main :: () {
 	clear_color := V4f.{0.45, 0.55, 0.60, 1.00};
 
 	state: State;
+	state.platform = *platform;
 	scene := *state.scene;
 	scene.store = *store;
+	{
+		connect: Command.Connect;
+		connect.token =  platform.get_token();
+		send_web_message(platform, make_command(connect));
+		state.connected_last_try = current_time_monotonic();
+	}
+
 
 	scene.camera.position = .{ 0, -4, 8 };
 	scene.camera.target = .{ 0, 0, 0 };
@@ -210,6 +231,15 @@ main :: () {
 		auto_release_temp();
 
 		t00 := current_time_monotonic();
+
+		if !state.is_connected && to_float64_seconds(t00 - state.connected_last_try) > 0.5 {
+			connect: Command.Connect;
+			connect.token =  platform.get_token();
+			send_web_message(platform, make_command(connect));
+			state.connected_last_try = current_time_monotonic();
+		}
+
+
 		frame_info := platform.get_frame_info();
 		defer {
 			history_cursor += 1;

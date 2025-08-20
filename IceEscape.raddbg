@@ -1,8 +1,10 @@
 // raddbg 0.9.21 project file
 
-recent_file: path: "src/main_server.jai"
-recent_file: path: "src/Scene.jai"
 recent_file: path: "src/main_game.jai"
+recent_file: path: "src/Scene.jai"
+recent_file: path: "src/main_server.jai"
+recent_file: path: "src/Communication.jai"
+recent_file: path: "../jai/modules/Thread/primitives.jai"
 recent_file: path: "src/Terrain.jai"
 recent_file: path: "../jai/modules/hash_table.jai"
 recent_file: path: "../jai/modules/runtime_support.jai"
@@ -10,7 +12,6 @@ recent_file: path: "../jai/modules/Basic/Array.jai"
 recent_file: path: "../jai/modules/String/module.jai"
 recent_file: path: "src/Store.jai"
 recent_file: path: "src/win32_platform.jai"
-recent_file: path: "src/Communication.jai"
 recent_file: path: "src/Graphics.jai"
 recent_file: path: "../jai/modules/Reflection.jai"
 recent_file: path: "src/Render.jai"
@@ -36,4 +37,9 @@ target:
   executable: "bin/server/IceEscape_Server.exe"
   working_directory: "bin/server"
   enabled: 0
+}
+breakpoint:
+{
+  source_location: "src/Scene.jai:947:1"
+  hit_count: 0
 }

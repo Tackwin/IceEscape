@@ -154,6 +154,8 @@ init_platform :: () -> Platform {
 	platform.get_frame_info = wasm_get_frame_info;
 	platform.end_frame = wasm_end_frame;
 	platform.send_web_message = send_web_message;
+	platform.get_token = get_token;
+	platform.set_token = set_token;
 
 	meta_run :: () -> string {
 		sb: String_Builder;
@@ -220,6 +222,19 @@ init_platform :: () -> Platform {
 
 exit_platform :: (platform: Platform) {
 	
+}
+
+get_token :: () -> int {
+	js_get_token :: () -> s32 #foreign;
+	return js_get_token();
+}
+
+set_token :: (token: int) {
+	js_set_token :: (window: s32) #foreign;
+	js_set_token(xx token);
+
+	// js_set_token :: #type (token: s32) #foreign;
+	// js_set_token(token);
 }
 
 get_type_name :: (info: *Type_Info) -> string {
