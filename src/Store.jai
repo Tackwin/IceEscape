@@ -1,6 +1,7 @@
 #scope_file
 Render :: #import "Render";
 Assets :: #import "Assets";
+Platform :: #import "Platform";
 
 #scope_export
 
@@ -39,6 +40,13 @@ Shader_Id :: enum {
 }
 
 Store :: struct {
+	loser_ogg: Platform.Audio;
+	footstep_0_ogg: Platform.Audio;
+	footstep_1_ogg: Platform.Audio;
+	footstep_2_ogg: Platform.Audio;
+	footstep_3_ogg: Platform.Audio;
+	footstep_4_ogg: Platform.Audio;
+
 	font_shader: Render.Shader;
 	model_shader: Render.Shader;
 	texture_shader: Render.Shader;
@@ -115,8 +123,29 @@ get_shader :: (store: Store, id: Shader_Id) -> *Render.Shader {
 	return null;
 }
 
-init_store :: (store: *Store) {
-	
+get_footstep_sound :: (store: Store, index: int) -> *Platform.Audio {
+	if index == 0 {
+		return *store.footstep_0_ogg;
+	} else if index == 1 {
+		return *store.footstep_1_ogg;
+	} else if index == 2 {
+		return *store.footstep_2_ogg;
+	} else if index == 3 {
+		return *store.footstep_3_ogg;
+	} else if index == 4 {
+		return *store.footstep_4_ogg;
+	}
+	return null;
+}
+
+init_store :: (platform: Platform.Platform, store: *Store) {
+	store.loser_ogg = platform.load_audio(Assets.LOSER_OGG);
+	store.footstep_0_ogg = platform.load_audio(Assets.FOOTSTEP_0_OGG);
+	store.footstep_1_ogg = platform.load_audio(Assets.FOOTSTEP_1_OGG);
+	store.footstep_2_ogg = platform.load_audio(Assets.FOOTSTEP_2_OGG);
+	store.footstep_3_ogg = platform.load_audio(Assets.FOOTSTEP_3_OGG);
+	store.footstep_4_ogg = platform.load_audio(Assets.FOOTSTEP_4_OGG);
+
 	store.model_shader = Render.Shader.make(
 		Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT
 	);
@@ -157,4 +186,6 @@ init_store :: (store: *Store) {
 	store.gate_close_geometry = Render.Geometry.make_from_obj(Assets.GATE_CLOSE_OBJ);
 	store.shuriken_geometry = Render.Geometry.make_from_obj(Assets.SHURIKEN_OBJ);
 	store.spirit_geometry = Render.Geometry.make_from_obj(Assets.SPIRIT_OBJ);
+
+	
 }

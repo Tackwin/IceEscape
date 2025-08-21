@@ -168,14 +168,19 @@ respond :: (platform: Platform, response: Scene.Process_Response) {
 	}
 }
 
+#add_context _platform: Platform;
+
 main :: () {
-	context.allocator = .{ wallocator_proc, null };
-	context.temporary_storage.overflow_allocator = context.allocator;
+	#if OS == .WASM {
+		context.allocator = .{ wallocator_proc, null };
+		context.temporary_storage.overflow_allocator = context.allocator;
+	}
 	platform := init_platform();
+	context._platform = platform;
 	rhi := platform.rhi;
 
 	store: Store;
-	init_store(*store);
+	init_store(platform, *store);
 
 	clear_color := V4f.{0.45, 0.55, 0.60, 1.00};
 
@@ -189,7 +194,6 @@ main :: () {
 		send_web_message(platform, make_command(connect));
 		state.connected_last_try = current_time_monotonic();
 	}
-
 
 	scene.camera.position = .{ 0, -4, 8 };
 	scene.camera.target = .{ 0, 0, 0 };
@@ -222,7 +226,7 @@ main :: () {
 	yes: [..] V2f;
 	last_yes: Apollo_Time;
 
-
+	footstep_trigger_index := 0;
 	process_response: Scene.Process_Response;
 
 	// Main loop
@@ -335,6 +339,12 @@ main :: () {
 
 			target, ok := ray_plane(scene.camera.position, r, .{ 0, 0, 1 });
 			if ok {
+				footstep_trigger_index *= 3;
+				footstep_trigger_index += 17;
+				index := footstep_trigger_index % 5;
+				footstep_sound := get_footstep_sound(store, index);
+				platform.play_audio(footstep_sound);
+
 				command: Command.Move;
 				command.ground_target = v2(target);
 				command.player_id = scene.controlled_player_id;

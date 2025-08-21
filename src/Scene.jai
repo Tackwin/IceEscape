@@ -880,6 +880,10 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		player := find_by_player_id(scene, died.player_id);
 		if player
 		{
+			if player.id == scene.controlled_player_id {
+				context._platform.play_audio(*scene.store.loser_ogg);
+			}
+
 			player.server.dead = true;
 			tombstone: Tombstone;
 			tombstone.player_id = died.player_id;
@@ -1219,25 +1223,8 @@ render :: (scene: Scene) {
 	render_players(scene);
 	render_skulls(scene);
 	render_shurikens(scene);
-
-	for * scene.tombstones {
-		M := M4f.translate(it.position);
-
-		Render.set_uniform(*store.model_shader, "M", M);
-		Render.render(store.tombstone_geometry, store.model_shader);
-	}
-
-	for * scene.gates {
-		R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, it.direction));
-
-		M := M4f.translate(it.position) * R;
-		Render.set_uniform(*store.model_shader, "M", M);
-		Render.render(store.gate_geometry, store.model_shader);
-
-		if it.is_closed {
-			Render.render(store.gate_close_geometry, store.model_shader);
-		}
-	}
+	render_gates(scene);
+	render_tombstones(scene);
 
 	if to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time) < 0.8 {
 		Render.set_uniform(*store.texture_shader, "texture_sampler", store.mark_texture, 0);
@@ -1251,6 +1238,33 @@ render :: (scene: Scene) {
 		context.rhi.glDisable(GL_CULL_FACE);
 		Render.render(store.mark_geometry, store.texture_shader);
 		context.rhi.glEnable(GL_CULL_FACE);
+	}
+}
+
+render_tombstones :: (scene: Scene) {
+	store := scene.store;
+	Render.set_uniform(*store.texture_shader, "texture_sampler", store.vehicle_colormap, 0);
+	for * scene.tombstones {
+		M := M4f.translate(it.position);
+		Render.set_uniform(*store.texture_shader, "M", M);
+		Render.render(store.tombstone_geometry, store.texture_shader);
+	}
+}
+
+render_gates :: (scene: Scene) {
+	store := scene.store;
+	Render.set_uniform(*store.texture_shader, "texture_sampler", store.vehicle_colormap, 0);
+	for * scene.gates {
+		R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, it.direction));
+
+		M := M4f.translate(it.position) * R;
+		Render.set_uniform(*store.texture_shader, "M", M);
+
+		if it.is_closed {
+			Render.render(store.gate_close_geometry, store.texture_shader);
+		} else {
+			Render.render(store.gate_geometry, store.texture_shader);
+		}
 	}
 }
 

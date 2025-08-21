@@ -2,6 +2,8 @@
 #import "Input";
 #import "Basic";
 #import "String";
+#import "Hash_Table";
+Sound :: #import "Sound_Player";
 WebGL :: #import "Toolchains/Web/WebGL";
 
 window: Window_Type;
@@ -135,9 +137,44 @@ wasm_get_frame_info :: () -> Frame_Info {
 	return info;
 }
 
+audio_table: Table(int, *Sound.Sound_Data);
+audio_counter := 0;
+
+load_audio :: (data: string) -> Audio {
+	audio_counter += 1;
+
+	audio: Audio;
+	audio.id = audio_counter;
+	// Load audio data
+	sound := Sound.load_audio_data("Machin", data);
+	sound_ptr := New(Sound.Sound_Data,, context.default_allocator);
+	sound_ptr.* = sound;
+	table_set(*audio_table, audio.id, sound_ptr);
+
+	return audio;
+}
+play_audio :: (audio: *Audio) {
+	ok, sound := table_find_new(*audio_table, audio.id);
+	if ok {
+		stream: *Sound.Sound_Stream;
+		if audio.kind == {
+			case .Music;
+				stream = Sound.make_stream(sound, .MUSIC);
+			case .Sound;
+				stream = Sound.make_stream(sound, .GENERAL_SFX);
+		}
+
+		Sound.start_playing(stream);
+	}
+}
+query_audio :: (audio: *Audio) -> bool {
+	return false;
+}
+
 wasm_end_frame ::  () {
 	js_webgl_swap_buffers :: (window: Window_Type, vsync: bool) #foreign;
 	js_webgl_swap_buffers(window, false);
+	Sound.update(,, context.default_allocator);
 }
 
 init_platform :: () -> Platform {
@@ -147,6 +184,7 @@ init_platform :: () -> Platform {
 	js_webgl_swap_buffers :: (window: Window_Type, vsync: bool) #foreign;
 	js_webgl_swap_buffers(window, false);
 
+	Sound.sound_player_init(.{ audible_when_window_is_not_in_focus = true });
 	web_buffer = NewArray(1024*1024*32, u8, false);
 
 	platform: Platform;
@@ -156,6 +194,9 @@ init_platform :: () -> Platform {
 	platform.send_web_message = send_web_message;
 	platform.get_token = get_token;
 	platform.set_token = set_token;
+	platform.query_audio = query_audio;
+	platform.load_audio = load_audio;
+	platform.play_audio = play_audio;
 
 	meta_run :: () -> string {
 		sb: String_Builder;

@@ -1,7 +1,9 @@
 #import "Platform";
 #import "Window_Creation";
 #import "Input";
+Sound :: #import "Sound_Player";
 #import "Basic";
+#import "Hash_Table";
 #import "String";
 GL :: #import "GL";
 #import "SDL";
@@ -105,8 +107,8 @@ win32_get_frame_info :: () -> Frame_Info {
 	info: Frame_Info;
 	// Setup display size (every frame to accommodate for window resizing)
 	w, h: s32;
-	display_w, display_h: s32;
 	SDL_GetWindowSize(sdl_window, *w, *h);
+	display_w, display_h: s32;
 	SDL_GL_GetDrawableSize(sdl_window, *display_w, *display_h);
 
 	info.window_size = .{ xx w, xx h };
@@ -256,6 +258,40 @@ win32_end_frame :: () {
 	}
 
 	messages_pending.count = cursor;
+	Sound.update(,, context.default_allocator);
+}
+
+audio_table: Table(int, *Sound.Sound_Data);
+audio_counter := 0;
+
+load_audio :: (data: string) -> Audio {
+	audio_counter += 1;
+
+	audio: Audio;
+	audio.id = audio_counter;
+	// Load audio data
+	sound := Sound.load_audio_data("Machin", data);
+	sound_ptr := New(Sound.Sound_Data,, context.default_allocator);
+	sound_ptr.* = sound;
+	table_set(*audio_table, audio.id, sound_ptr);
+
+	return audio;
+}
+play_audio :: (audio: *Audio) {
+	ok, sound := table_find_new(*audio_table, audio.id);
+	if ok {
+		stream: *Sound.Sound_Stream;
+		if audio.kind == {
+			case .Music;
+				stream = Sound.make_stream(sound, .MUSIC);
+			case .Sound;
+				stream = Sound.make_stream(sound, .GENERAL_SFX);
+		}
+		Sound.start_playing(stream);
+	}
+}
+query_audio :: (audio: *Audio) -> bool {
+	return false;
 }
 
 init_platform :: () -> Platform {
@@ -269,6 +305,8 @@ init_platform :: () -> Platform {
 	curl_easy_setopt(curl, .ERRORBUFFER, curl_errbuf.data);
 	curl_easy_setopt(curl, .CONNECT_ONLY, 2);
 	curl_code := curl_easy_perform(curl);
+
+	Sound.sound_player_init(.{ audible_when_window_is_not_in_focus = true });
 
 	curl_buffer = NewArray(1024*1024*32, u8, false);
 
@@ -287,6 +325,8 @@ init_platform :: () -> Platform {
 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, xx SDL_GL_CONTEXT_PROFILE_CORE);
 
 	sdl_gl_context = SDL_GL_CreateContext(sdl_window);
@@ -299,6 +339,10 @@ init_platform :: () -> Platform {
 	platform.send_web_message = send_web_message;
 	platform.get_token = win32_get_token;
 	platform.set_token = win32_set_token;
+	platform.query_audio = query_audio;
+	platform.load_audio = load_audio;
+	platform.play_audio = play_audio;
+
 	GL.gl_load(*GL.gl, SDL_GL_GetProcAddress);
 
 	meta_run :: () -> string {

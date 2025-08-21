@@ -7,6 +7,7 @@ Scene :: #import "Scene";
 #import "Thread";
 #import "Hash_Table";
 #import "Utils";
+Platform :: #import "Platform";
 
 TIMEOUT_DURATION := 10.0;
 
@@ -519,6 +520,7 @@ move_player_to_scene :: (player_id: int, scene_id: int) {
 	Scene.process(new_scene, make_command(spawn), null);
 }
 
+#add_context _platform: Platform.Platform;
 main :: () {
 
 	init(*state.queue_semaphore, 1);

@@ -79,6 +79,20 @@ Frame_Info :: struct {
 	message_received_count := 0;
 }
 
+Audio :: struct {
+	id: int;
+
+	kind: enum {
+		Sound;
+		Music;
+	} = .Sound;
+
+	repeating: bool;
+
+	loaded: bool;
+	playing: bool;
+}
+
 Platform :: struct {
 	rhi: RHI_proc;
 
@@ -87,6 +101,10 @@ Platform :: struct {
 	get_frame_info:   #type () -> Frame_Info = null;
 	end_frame:        #type ()               = null;
 	send_web_message: #type (msg: [] u8)     = null;
+
+	load_audio: #type (data: string) -> Audio = null;
+	play_audio: #type (audio: *Audio) = null;
+	query_audio: #type (audio: *Audio) -> bool = null;
 }
 
 GLenum :: u32;

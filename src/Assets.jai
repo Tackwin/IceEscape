@@ -240,6 +240,90 @@ void main() {
 }
 FRAGMENT;
 
+FOOTSTEP_0_OGG :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {{
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+		return str;
+		
+	}
+	}
+
+	return read_ct_file(tprint("%/../assets/footstep_snow_000.ogg", #filepath));
+}
+
+FOOTSTEP_1_OGG :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {{
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+		return str;
+		
+	}
+	}
+
+	return read_ct_file(tprint("%/../assets/footstep_snow_001.ogg", #filepath));
+}
+
+FOOTSTEP_2_OGG :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {{
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+		return str;
+		
+	}
+	}
+
+	return read_ct_file(tprint("%/../assets/footstep_snow_002.ogg", #filepath));
+}
+
+FOOTSTEP_3_OGG :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {{
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+		return str;
+		
+	}
+	}
+
+	return read_ct_file(tprint("%/../assets/footstep_snow_003.ogg", #filepath));
+}
+
+FOOTSTEP_4_OGG :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {{
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+		return str;
+		
+	}
+	}
+
+	return read_ct_file(tprint("%/../assets/footstep_snow_004.ogg", #filepath));
+}
+
+LOSER_OGG :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {{
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+		return str;
+		
+	}
+	}
+
+	return read_ct_file(tprint("%/../assets/loser.ogg", #filepath));
+};
+
 CAR_OBJ :: #run,host -> string {
 	#import "Basic";
 	read_ct_file :: (path: string) -> string {{
