@@ -87,6 +87,8 @@ Audio :: struct {
 		Music;
 	} = .Sound;
 
+	volume := 1.0;
+
 	repeating: bool;
 
 	loaded: bool;
@@ -914,6 +916,7 @@ RHI_proc :: struct {
 	glBindBufferBase : (target: GLenum, index: GLuint, buffer: GLuint) #c_call;
 	glVertexAttribIPointer : (index: GLuint, size: GLint, type: GLenum, stride: GLsizei, pointer: *void) #c_call;
 	glVertexAttribDivisor : (index: GLuint, divisor: GLuint) #c_call;
+	glDepthMask : (flag: GLboolean) #c_call;
 }
 
 #if OS == .WASM {

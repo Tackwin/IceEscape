@@ -492,3 +492,17 @@ line_aabb :: (a1: V2($T), b: V2(T), low: V2(T), high: V2(T)) -> bool {
 point_aabb :: (p: V2($T), low: V2(T), high: V2(T)) -> bool {
 	return p.x >= low.x && p.x <= high.x && p.y >= low.y && p.y <= high.y;
 }
+
+ease_quad :: (x: float) -> float {
+	return x * x;
+}
+
+ease_out_quad :: (x: float) -> float {
+	return 1 - (1 - x) * (1 - x);
+}
+
+ease_up_and_back :: (x: float) -> float {
+	if x < 0.5
+		return 2 * x;
+	return 2 * (1 - x);
+}

@@ -1,7 +1,7 @@
 #import "Platform";
 #import "Window_Creation";
 #import "Input";
-Sound :: #import "Sound_Player";
+Sound :: #import "Sound_Player"(VERBOSE = false);
 #import "Basic";
 #import "Hash_Table";
 #import "String";
@@ -287,6 +287,9 @@ play_audio :: (audio: *Audio) {
 			case .Sound;
 				stream = Sound.make_stream(sound, .GENERAL_SFX);
 		}
+		stream.user_volume_scale = audio.volume;
+		stream.internal_flags &= ~.WAITING_FOR_INITIAL_DECODER_PAGES;
+		Sound.set_repeating(stream, audio.repeating);
 		Sound.start_playing(stream);
 	}
 }
@@ -306,7 +309,10 @@ init_platform :: () -> Platform {
 	curl_easy_setopt(curl, .CONNECT_ONLY, 2);
 	curl_code := curl_easy_perform(curl);
 
-	Sound.sound_player_init(.{ audible_when_window_is_not_in_focus = true });
+	Sound.sound_player_init(.{
+		audible_when_window_is_not_in_focus = true,
+		update_from_a_thread = false
+	});
 
 	curl_buffer = NewArray(1024*1024*32, u8, false);
 

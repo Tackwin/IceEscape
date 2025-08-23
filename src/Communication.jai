@@ -112,10 +112,13 @@ Command :: struct {
 		skulls: [] Sync_Skull;
 		moving_frames: [] Sync_Moving_Frame;
 	}
+	Wipe_Scene :: struct {
+	}
 
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
-		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect
+		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
+		Wipe_Scene
 	);
 	sent_timestamp: float64;
 }
@@ -160,6 +163,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 	}
 
 	for label: 0.. 0 if #complete cmd.payload.kind == {
+		case .Wipe_Scene; #through;
 		case .Move; #through;
 		case .Spawn; #through;
 		case .Connect; #through;
@@ -236,6 +240,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 	cursor := 8 + size_of(type_of(cmd));
 
 	if #complete cmd.payload.kind == {
+		case .Wipe_Scene; #through;
 		case .Move; #through;
 		case .Spawn; #through;
 		case .Connect; #through;

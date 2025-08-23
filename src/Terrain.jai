@@ -280,10 +280,11 @@ parse_terrain :: (text: string, scene: *Scene) {
 	if ascii_tiles.count > 0 && ascii_tiles[ascii_tiles.count - 1] == #char "\n"
 		ascii_tiles.count -= 1;
 
+	new_terrain := load_terrain_from_ascii(ascii_tiles);
+	new_terrain.text = alloc_string(text.count);
+	memcpy(new_terrain.text.data, text.data, text.count);
 	free(*scene.terrain);
-	scene.terrain = load_terrain_from_ascii(ascii_tiles);
-	scene.terrain.text = alloc_string(text.count);
-	memcpy(scene.terrain.text.data, text.data, text.count);
+	scene.terrain = new_terrain;
 
 	while cursor < lines.count {
 		defer cursor += 1;

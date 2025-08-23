@@ -2,12 +2,12 @@ Terrain :: #import "Terrain";
 #import "Math";
 #import "Basic";
 #import "Store";
+#import "Random";
 #import "String";
 #import "Algebra";
 #import "Platform";
 #import "Default_Allocator";
 #import "Communication";
-#import "WAllocator";
 #import "Utils";
 #import "Hash_Table";
 Render :: #import "Render";
@@ -171,10 +171,6 @@ respond :: (platform: Platform, response: Scene.Process_Response) {
 #add_context _platform: Platform;
 
 main :: () {
-	#if OS == .WASM {
-		context.allocator = .{ wallocator_proc, null };
-		context.temporary_storage.overflow_allocator = context.allocator;
-	}
 	platform := init_platform();
 	context._platform = platform;
 	rhi := platform.rhi;
@@ -228,6 +224,12 @@ main :: () {
 
 	footstep_trigger_index := 0;
 	process_response: Scene.Process_Response;
+	{
+		store.snowflakes_and_lights_ogg.repeating = true;
+		store.snowflakes_and_lights_ogg.volume = 0.15;
+		platform.play_audio(*store.snowflakes_and_lights_ogg);
+	}
+
 
 	// Main loop
 	done := false;
@@ -338,13 +340,16 @@ main :: () {
 			);
 
 			target, ok := ray_plane(scene.camera.position, r, .{ 0, 0, 1 });
-			if ok {
-				footstep_trigger_index *= 3;
-				footstep_trigger_index += 17;
-				index := footstep_trigger_index % 5;
-				footstep_sound := get_footstep_sound(store, index);
-				platform.play_audio(footstep_sound);
-
+			if ok && scene.state == .Normal {
+				if true {
+					footstep_trigger_index *= 3;
+					footstep_trigger_index += 17;
+					index := footstep_trigger_index % 5;
+					footstep_trigger_index %= 5 * 1024 * 1024;
+					footstep_sound := get_footstep_sound(store, index);
+					footstep_sound.volume = (random_get_zero_to_one_new() * 0.2 + 0.1).(float);
+					platform.play_audio(footstep_sound);
+				}
 				command: Command.Move;
 				command.ground_target = v2(target);
 				command.player_id = scene.controlled_player_id;

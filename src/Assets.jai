@@ -7,9 +7,9 @@ QUAD_VERTEX :: #string VERTEX
 precision highp float;
 
 in vec3 pos;
-in vec3 color;
+in vec4 color;
 
-out vec3 vColor;
+out vec4 vColor;
 
 void main() {
 	gl_Position = vec4(pos, 1.0);
@@ -21,12 +21,12 @@ QUAD_FRAGMENT :: #string FRAGMENT
 #version 300 es
 precision highp float;
 
-in vec3 vColor;
+in vec4 vColor;
 
 out vec4 fragColor;
 
 void main() {
-	fragColor = vec4(vColor, 1.0);
+	fragColor = vColor;
 }
 FRAGMENT;
 
@@ -240,7 +240,7 @@ void main() {
 }
 FRAGMENT;
 
-FOOTSTEP_0_OGG :: #run,host -> string {
+CLICK_WAV :: #run,host -> string {
 	#import "Basic";
 	read_ct_file :: (path: string) -> string {{
 		CT_File :: #import "File";
@@ -251,7 +251,42 @@ FOOTSTEP_0_OGG :: #run,host -> string {
 	}
 	}
 
-	return read_ct_file(tprint("%/../assets/footstep_snow_000.ogg", #filepath));
+	return read_ct_file(tprint("%/../assets/click.wav", #filepath));
+}
+SNOWFLAKES_AND_LIGHTS_OGG :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {{
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+
+		if !ok {
+			print("Failed to read file: %\n", path);
+		}
+		return str;
+		
+	}
+	}
+
+	return read_ct_file(tprint("%/../assets/Snowflakes and Lights.ogg", #filepath));
+}
+
+FOOTSTEP_0_OGG :: #run,host -> string {
+	#import "Basic";
+	read_ct_file :: (path: string) -> string {{
+		CT_File :: #import "File";
+
+		str, ok := CT_File.read_entire_file(path);
+
+		if !ok {
+			print("Failed to read file: %\n", path);
+		}
+		return str;
+		
+	}
+	}
+
+	return read_ct_file(tprint("%/../assets/footstep_snow_000-converted.ogg", #filepath));
 }
 
 FOOTSTEP_1_OGG :: #run,host -> string {

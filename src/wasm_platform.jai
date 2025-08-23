@@ -1,4 +1,5 @@
 #import "Window_Creation";
+#import "WAllocator";
 #import "Input";
 #import "Basic";
 #import "String";
@@ -163,7 +164,9 @@ play_audio :: (audio: *Audio) {
 			case .Sound;
 				stream = Sound.make_stream(sound, .GENERAL_SFX);
 		}
-
+		stream.user_volume_scale = audio.volume;
+		stream.internal_flags &= ~.WAITING_FOR_INITIAL_DECODER_PAGES;
+		Sound.set_repeating(stream, audio.repeating);
 		Sound.start_playing(stream);
 	}
 }
@@ -178,6 +181,9 @@ wasm_end_frame ::  () {
 }
 
 init_platform :: () -> Platform {
+	context.allocator = .{ wallocator_proc, null };
+	context.temporary_storage.overflow_allocator = context.allocator;
+
 	window := create_window(1366, 768, "Ice Escape");
 	for * pressed
 		it.* = false;

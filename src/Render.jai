@@ -13,7 +13,7 @@ IM: struct {
 	Quad :: struct {
 		pos: V2f;
 		size: V2f;
-		color: V3f;
+		color: V4f;
 		z: float = 0.0;
 	}
 
@@ -37,6 +37,7 @@ IM: struct {
 	char_buffer: GLuint = 0;
 
 	quads: [..] Quad;
+	quads_late: [..] Quad;
 	quad_shader: Shader;
 
 	chars: [..] Char;
@@ -108,10 +109,23 @@ push_quad_screen :: (pos: V2f, size: V2f, color: V3f, z := 0.0) {
 	quad.pos.y = pos.y / IM.display_size.y * 2 - 1.0;
 	quad.size.x = size.x / IM.display_size.x * 2;
 	quad.size.y = size.y / IM.display_size.y * 2;
-	quad.color = color;
+	quad.color = .{ color.x, color.y, color.z, 1.0 };
 	quad.z = z;
 
 	array_add(*IM.quads, quad);
+}
+
+push_late_quad_screen :: (pos: V2f, size: V2f, color: V4f, z := 0.0) {
+	quad: IM.Quad;
+	// IM.display_size
+	quad.pos.x = pos.x / IM.display_size.x * 2 - 1.0;
+	quad.pos.y = pos.y / IM.display_size.y * 2 - 1.0;
+	quad.size.x = size.x / IM.display_size.x * 2;
+	quad.size.y = size.y / IM.display_size.y * 2;
+	quad.color = color;
+	quad.z = z;
+
+	array_add(*IM.quads_late, quad);
 }
 
 push_text :: (text: string, pos: V2f, height := 12.0, z := 0.0) {
@@ -133,9 +147,6 @@ push_text :: (text: string, pos: V2f, height := 12.0, z := 0.0) {
 }
 
 render_im_quad :: () {
-	if IM.quads.count == 0
-		return;
-
 	if !ok(IM.quad_shader) {
 		IM.quad_shader = Shader.make(QUAD_VERTEX, QUAD_FRAGMENT);
 	}
@@ -153,7 +164,7 @@ render_im_quad :: () {
 
 	Quad_Vertex :: struct {
 		pos: V3f;
-		color: V3f;
+		color: V4f;
 	}
 
 	vertices := NewArray(
@@ -190,19 +201,62 @@ render_im_quad :: () {
 
 	context.rhi.glEnableVertexAttribArray(0); // Position
 	context.rhi.glVertexAttribPointer(
-		0, 3, GL_FLOAT, GL_FALSE,
-		size_of(Quad_Vertex), xx offset_of(Quad_Vertex, "pos")
+		0, 3, GL_FLOAT, GL_FALSE, size_of(Quad_Vertex), xx offset_of(Quad_Vertex, "pos")
 	);
 
 	context.rhi.glEnableVertexAttribArray(1); // Color
 	context.rhi.glVertexAttribPointer(
-		1, 3, GL_FLOAT, GL_FALSE,
-		size_of(Quad_Vertex), xx offset_of(Quad_Vertex, "color")
+		1, 4, GL_FLOAT, GL_FALSE, size_of(Quad_Vertex), xx offset_of(Quad_Vertex, "color")
 	);
 
 	context.rhi.glDrawArrays(GL_TRIANGLES, 0, xx vertices.count);
 
 	IM.quads.count = 0;
+
+	vertices = NewArray(IM.quads_late.count * 6, Quad_Vertex, false,, temp);
+	for IM.quads_late {
+		vertices[it_index * 6 + 0].pos = .{ it.pos.x, it.pos.y, it.z };
+		vertices[it_index * 6 + 0].color = it.color;
+
+		vertices[it_index * 6 + 1].pos = .{ it.pos.x + it.size.x, it.pos.y, it.z };
+		vertices[it_index * 6 + 1].color = it.color;
+
+		vertices[it_index * 6 + 2].pos = .{ it.pos.x + it.size.x, it.pos.y + it.size.y, it.z };
+		vertices[it_index * 6 + 2].color = it.color;
+
+		vertices[it_index * 6 + 3].pos = .{ it.pos.x, it.pos.y, it.z };
+		vertices[it_index * 6 + 3].color = it.color;
+
+		vertices[it_index * 6 + 4].pos = .{ it.pos.x + it.size.x, it.pos.y + it.size.y, it.z };
+		vertices[it_index * 6 + 4].color = it.color;
+
+		vertices[it_index * 6 + 5].pos = .{ it.pos.x, it.pos.y + it.size.y, it.z };
+		vertices[it_index * 6 + 5].color = it.color;
+	}
+
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, IM.quad_buffer);
+	context.rhi.glBufferData(
+		GL_ARRAY_BUFFER,
+		vertices.count * size_of(Quad_Vertex),
+		vertices.data,
+		GL_DYNAMIC_DRAW
+	);
+
+	context.rhi.glEnableVertexAttribArray(0); // Position
+	context.rhi.glVertexAttribPointer(
+		0, 3, GL_FLOAT, GL_FALSE, size_of(Quad_Vertex), xx offset_of(Quad_Vertex, "pos")
+	);
+
+	context.rhi.glEnableVertexAttribArray(1); // Color
+	context.rhi.glVertexAttribPointer(
+		1, 4, GL_FLOAT, GL_FALSE, size_of(Quad_Vertex), xx offset_of(Quad_Vertex, "color")
+	);
+
+	context.rhi.glDepthMask(GL_FALSE);
+	context.rhi.glDrawArrays(GL_TRIANGLES, 0, xx vertices.count);
+	context.rhi.glDepthMask(GL_TRUE);
+
+	IM.quads_late.count = 0;
 }
 
 

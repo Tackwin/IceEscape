@@ -9,10 +9,18 @@ Render :: #import "Render";
 #import "Pool";
 #import "Hash_Table";
 #import "Store";
+#import "Terrain";
 
 #scope_export
 
 Scene :: struct {
+	State :: enum {
+		Normal :: 0;
+		Wipe_Fade_In :: 1;
+		Wipe_Fade_Out :: 2;
+	}
+	state: State;
+
 	id := 1;
 
 	is_server := false;
@@ -40,6 +48,15 @@ Scene :: struct {
 
 	mark_clicked_time: Apollo_Time;
 	mark_clicked_pos: V3f;
+
+	Fade_Screen :: struct {
+		color: V3f;
+		start: Apollo_Time;
+		period := 1.0;
+	}
+
+	fade_screen: Fade_Screen;
+	fading := false;
 
 	succeed := false;
 }
@@ -102,18 +119,21 @@ Frame_Result :: struct {
 	respawn: [..] Command.Respawn;
 	sync_gate: [..] Command.Sync_Gate;
 	move_to_player_world: [..] Command.Move_To_Play_World;
+	wipe_scene: [..] Command.Wipe_Scene;
 }
 free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.died);
 	array_free(frame_result.respawn);
 	array_free(frame_result.sync_gate);
 	array_free(frame_result.move_to_player_world);
+	array_free(frame_result.wipe_scene);
 }
 clear :: (frame_result: *Frame_Result) {
 	frame_result.died.count = 0;
 	frame_result.respawn.count = 0;
 	frame_result.sync_gate.count = 0;
 	frame_result.move_to_player_world.count = 0;
+	frame_result.wipe_scene.count = 0;
 }
 
 Process_Response :: struct {
@@ -431,7 +451,63 @@ interpolate_to_server :: (key: *Key, dt: float32) {
 	key.client.position = damp(key.client.position, key.server.position, 10.0, dt);
 }
 
+restart :: (scene: *Scene) {
+	parse_terrain(scene.terrain.text, scene);
+	for * player: scene.players {
+		spawn_into(player, scene.terrain);
+	}
+}
+
 update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
+	if #complete scene.state == {
+		case .Normal;
+			update_normal(scene, dt, result);
+		case .Wipe_Fade_In;
+			t := to_float64_seconds(current_time_monotonic() - scene.fade_screen.start).(float32);
+			if t < scene.fade_screen.period {
+				alpha := ease_quad(t / scene.fade_screen.period);
+				color := V4f.{
+					scene.fade_screen.color.x,
+					scene.fade_screen.color.y,
+					scene.fade_screen.color.z,
+					clamp(alpha, 0.0, 1.0)
+				};
+
+				Render.push_late_quad_screen(
+					.{ 0, 0 },
+					Render.IM.display_size,
+					color,
+					-1.0
+				);
+			} else {
+				scene.state = .Wipe_Fade_Out;
+				restart(scene);
+			}
+		case .Wipe_Fade_Out;
+			t := to_float64_seconds(current_time_monotonic() - scene.fade_screen.start).(float32);
+			if t >= 2 * scene.fade_screen.period {
+				scene.state = .Normal;
+				return;
+			} else {
+				alpha := ease_out_quad(2.0 - t / scene.fade_screen.period);
+				color := V4f.{
+					scene.fade_screen.color.x,
+					scene.fade_screen.color.y,
+					scene.fade_screen.color.z,
+					clamp(alpha, 0.0, 1.0)
+				};
+
+				Render.push_late_quad_screen(
+					.{ 0, 0 },
+					Render.IM.display_size,
+					color,
+					-1.0
+				);
+			}
+	}
+}
+
+update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	update(scene, *scene.camera, dt);
 
 	for * scene.players {
@@ -551,7 +627,6 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 
 						player_to_respawn := find_by_player_id(scene, tombstone.player_id);
 						if player_to_respawn {
-							player_to_respawn.server.dead = false;
 							spawn_into(player_to_respawn, scene.terrain);
 						}
 
@@ -588,7 +663,6 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 
 						player_to_respawn := find_by_player_id(scene, tomb.player_id);
 						if player_to_respawn {
-							player_to_respawn.server.dead = false;
 							spawn_into(player_to_respawn, scene.terrain);
 						}
 
@@ -658,7 +732,7 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	}
 }
 
-server_die :: (scene: Scene, player: *Player, result: *Frame_Result) {
+server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 	died: Command.Die;
 	died.player_id = player.id;
 	died.position = player.server.position;
@@ -674,6 +748,19 @@ server_die :: (scene: Scene, player: *Player, result: *Frame_Result) {
 
 	for keys {
 		it.holder = -1;
+	}
+
+	any_alive := false;
+	for scene.players {
+		if !it.server.dead {
+			any_alive = true;
+			break;
+		}
+	}
+
+	if !any_alive {
+		array_add(*result.wipe_scene, .{});
+		restart(scene);
 	}
 }
 
@@ -864,6 +951,12 @@ process_server_only :: (scene: *Scene, command: Command, response: *Process_Resp
 }
 
 process_client_only :: (scene: *Scene, command: Command, response: *Process_Response) -> bool {
+	wipe_scene: *Command.Wipe_Scene = isa(command.payload, Command.Wipe_Scene);
+	if wipe_scene {
+		scene.fade_screen.start = current_time_monotonic();
+		scene.state = .Wipe_Fade_In;
+		return true;
+	}
 	spawn_coin: *Command.Spawn_Coin = isa(command.payload, Command.Spawn_Coin);
 	if spawn_coin {
 		coin: Coin;
@@ -960,7 +1053,6 @@ process :: (scene: *Scene, command: Command, response: *Process_Response) -> boo
 
 				player := find_by_player_id(scene, it.player_id);
 				if player {
-					player.server.dead = false;
 					spawn_into(player, scene.terrain);
 				}
 				remove it;
@@ -1208,19 +1300,10 @@ render :: (scene: Scene) {
 		Render.render(store.coin_geometry, store.texture_shader);
 	}
 
-	Render.set_uniform(*store.model_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
-	for * scene.keys {
-		p := it.client.position;
-		if it.holder >= 0
-			p.z += 1;
-
-		M := M4f.translate(p);
-		Render.set_uniform(*store.model_shader, "M", M);
-		Render.render(store.key_geometry, store.model_shader);
-	}
-
+	render_keys(scene);
 	render_standin(scene);
-	render_players(scene);
+	if scene.state != .Wipe_Fade_In
+		render_players(scene);
 	render_skulls(scene);
 	render_shurikens(scene);
 	render_gates(scene);
@@ -1238,6 +1321,20 @@ render :: (scene: Scene) {
 		context.rhi.glDisable(GL_CULL_FACE);
 		Render.render(store.mark_geometry, store.texture_shader);
 		context.rhi.glEnable(GL_CULL_FACE);
+	}
+}
+
+render_keys :: (scene: Scene) {
+	store := scene.store;
+	Render.set_uniform(*store.texture_shader, "texture_sampler", store.vehicle_colormap, 0);
+	for * scene.keys {
+		p := it.client.position;
+		if it.holder >= 0
+			p.z += 1;
+
+		M := M4f.translate(p);
+		Render.set_uniform(*store.texture_shader, "M", M);
+		Render.render(store.key_geometry, store.texture_shader);
 	}
 }
 
@@ -1378,11 +1475,10 @@ render_terrain :: (scene: Scene, terrain: *Terrain) {
 		if !scene.tile_kind_to_shader[it]
 			continue;
 
-		name := sprint("samplers[%]", it);
+		name := tprint("samplers[%]\0", it);
 		Render.set_uniform(
 			*store.tile_shader, name, scene.tile_kind_to_shader[it], it
 		);
-		free(name);
 	}
 
 	for * tile: terrain.tiles {

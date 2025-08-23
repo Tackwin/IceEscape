@@ -342,6 +342,9 @@ tick :: (state: *State) {
 	for frame_result.sync_gate {
 		broadcast(state.server, make_command(it));
 	}
+	for frame_result.wipe_scene {
+		broadcast(state.server, make_command(it));
+	}
 
 	for * state.users {
 		if to_float64_seconds(current_time_monotonic() - it.last_ping) > TIMEOUT_DURATION {

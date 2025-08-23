@@ -198,6 +198,9 @@ wallocator_proc :: (
 			wallocator.free_nodes.count += 1;
 			wallocator.free_nodes[wallocator.free_nodes.count - 1] = new;
 		case .RESIZE;
+			if !old_memory {
+				return wallocator_proc(.ALLOCATE, size, 0, null, allocator_data);
+			}
 			new_ptr := wallocator_proc(
 				.ALLOCATE, size, old_size, old_memory, allocator_data
 			);

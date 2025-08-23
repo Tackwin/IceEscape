@@ -46,6 +46,8 @@ Store :: struct {
 	footstep_2_ogg: Platform.Audio;
 	footstep_3_ogg: Platform.Audio;
 	footstep_4_ogg: Platform.Audio;
+	click_wav: Platform.Audio;
+	snowflakes_and_lights_ogg: Platform.Audio;
 
 	font_shader: Render.Shader;
 	model_shader: Render.Shader;
@@ -145,6 +147,8 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.footstep_2_ogg = platform.load_audio(Assets.FOOTSTEP_2_OGG);
 	store.footstep_3_ogg = platform.load_audio(Assets.FOOTSTEP_3_OGG);
 	store.footstep_4_ogg = platform.load_audio(Assets.FOOTSTEP_4_OGG);
+	store.click_wav = platform.load_audio(Assets.CLICK_WAV);
+	store.snowflakes_and_lights_ogg = platform.load_audio(Assets.SNOWFLAKES_AND_LIGHTS_OGG);
 
 	store.model_shader = Render.Shader.make(
 		Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT
