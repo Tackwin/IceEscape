@@ -1,4 +1,6 @@
 #import "Basic";
+#import "Compiler";
+STB :: #import "stb_image";
 
 #scope_export
 
@@ -78,52 +80,6 @@ void main() {
 }
 FRAGMENT;
 
-// Just a plain vertex shader for opengl es 3.3
-PLAIN_VERTEX :: #string VERTEX
-#version 300 es
-in vec3 vmodel_pos;
-in vec3 vmodel_nor;
-in vec2 vtex;
-
-out vec3 fworld_pos;
-out vec3 fworld_nor;
-out vec2 ftex;
-
-uniform mat4 M;
-uniform mat4 V;
-uniform mat4 P;
-
-void main() {
-	gl_Position = P * V * M * vec4(vmodel_pos, 1.0);
-	ftex = vtex;
-	ftex.y = 1.0 - ftex.y;
-	fworld_pos = (M * vec4(vmodel_pos, 1.0)).xyz;
-	fworld_nor = normalize((M * vec4(vmodel_nor, 0.0)).xyz);
-}
-VERTEX;
-INSTANCED_VERTEX :: #string VERTEX
-#version 300 es
-in vec3 vmodel_pos;
-in vec3 vmodel_nor;
-in vec2 vtex;
-in mat4 M;
-
-out vec3 fworld_pos;
-out vec3 fworld_nor;
-out vec2 ftex;
-
-uniform mat4 V;
-uniform mat4 P;
-
-void main() {
-	gl_Position = P * V * M * vec4(vmodel_pos, 1.0);
-	ftex = vtex;
-	ftex.y = 1.0 - ftex.y;
-	fworld_pos = (M * vec4(vmodel_pos, 1.0)).xyz;
-	fworld_nor = normalize((M * vec4(vmodel_nor, 0.0)).xyz);
-}
-VERTEX;
-
 PLAIN_FRAGMENT :: #string FRAGMENT
 #version 300 es
 precision mediump float;
@@ -142,75 +98,6 @@ void main() {
 }
 FRAGMENT;
 
-TILE_VERTEX :: #string VERTEX
-#version 300 es
-in vec3 vmodel_pos;
-in vec3 vmodel_nor;
-in vec2 vtex;
-in mat4 M;
-in int  tile_kind;
-
-out vec3 fworld_pos;
-out vec3 fworld_nor;
-out vec2 ftex;
-flat out int  ftile_kind;
-
-uniform mat4 V;
-uniform mat4 P;
-
-void main() {
-	gl_Position = P * V * M * vec4(vmodel_pos, 1.0);
-	ftex = vtex;
-	ftex.y = 1.0 - ftex.y;
-	fworld_pos = (M * vec4(vmodel_pos, 1.0)).xyz;
-	fworld_nor = normalize((M * vec4(vmodel_nor, 0.0)).xyz);
-	ftile_kind = tile_kind;
-}
-VERTEX;
-
-TILE_FRAGMENT :: #string FRAGMENT
-#version 300 es
-precision mediump float;
-
-in vec3 fworld_pos;
-in vec3 fworld_nor;
-in vec2 ftex;
-flat in int  ftile_kind;
-
-out vec4 outColor;
-
-uniform sampler2D samplers[16];
-
-void main() {
-	float d = dot(fworld_nor, vec3(0.0, 0.0, 1.0)) * 0.5 + 0.5;
-
-	// What a stupid restriction...
-	vec4 texture_color = vec4(1.0);
-	if (ftile_kind == 0)
-		texture_color = texture(samplers[0], ftex);
-	else if (ftile_kind == 1)
-		texture_color = texture(samplers[1], ftex);
-	else if (ftile_kind == 2)
-		texture_color = texture(samplers[2], ftex);
-	else if (ftile_kind == 3)
-		texture_color = texture(samplers[3], ftex);
-	else if (ftile_kind == 4)
-		texture_color = texture(samplers[4], ftex);
-	else if (ftile_kind == 5)
-		texture_color = texture(samplers[5], ftex);
-	else if (ftile_kind == 6)
-		texture_color = texture(samplers[6], ftex);
-	else if (ftile_kind == 7)
-		texture_color = texture(samplers[7], ftex);
-
-	outColor = vec4(
-		texture_color.r * d,
-		texture_color.g * d,
-		texture_color.b * d,
-		texture_color.a
-	);
-}
-FRAGMENT;
 
 
 TEXTURE_FRAGMENT :: #string FRAGMENT
@@ -240,325 +127,102 @@ void main() {
 }
 FRAGMENT;
 
-CLICK_WAV :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {{
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-		
-	}
-	}
-
-	return read_ct_file(tprint("%/../assets/click.wav", #filepath));
-}
-SNOWFLAKES_AND_LIGHTS_OGG :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {{
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-
-		if !ok {
-			print("Failed to read file: %\n", path);
-		}
-		return str;
-		
-	}
-	}
-
-	return read_ct_file(tprint("%/../assets/Snowflakes and Lights.ogg", #filepath));
-}
-
-FOOTSTEP_0_OGG :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {{
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-
-		if !ok {
-			print("Failed to read file: %\n", path);
-		}
-		return str;
-		
-	}
-	}
-
-	return read_ct_file(tprint("%/../assets/footstep_snow_000-converted.ogg", #filepath));
-}
-
-FOOTSTEP_1_OGG :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {{
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-		
-	}
-	}
-
-	return read_ct_file(tprint("%/../assets/footstep_snow_001.ogg", #filepath));
-}
-
-FOOTSTEP_2_OGG :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {{
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-		
-	}
-	}
-
-	return read_ct_file(tprint("%/../assets/footstep_snow_002.ogg", #filepath));
-}
-
-FOOTSTEP_3_OGG :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {{
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-		
-	}
-	}
-
-	return read_ct_file(tprint("%/../assets/footstep_snow_003.ogg", #filepath));
-}
-
-FOOTSTEP_4_OGG :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {{
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-		
-	}
-	}
-
-	return read_ct_file(tprint("%/../assets/footstep_snow_004.ogg", #filepath));
-}
-
-LOSER_OGG :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {{
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-		
-	}
-	}
-
-	return read_ct_file(tprint("%/../assets/loser.ogg", #filepath));
-};
-
-CAR_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {{
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-		
-	}
-	}
-
-	return read_ct_file(tprint("%/../assets/car.obj", #filepath));
-};
-
-TOMBSTONE_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-	}
-
-	return read_ct_file(tprint("%/../assets/tombstone.obj", #filepath));
-};
-
-SKULL_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-	}
-
-	return read_ct_file(tprint("%/../assets/skull.obj", #filepath));
-};
-
-COIN_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-	}
-
-	return read_ct_file(tprint("%/../assets/coin.obj", #filepath));
-};
-
-SPIRIT_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-	}
-
-	return read_ct_file(tprint("%/../assets/spirit.obj", #filepath));
-};
-
-KEY_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-	}
-
-	return read_ct_file(tprint("%/../assets/key.obj", #filepath));
-};
-
-MARK_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-	}
-
-	return read_ct_file(tprint("%/../assets/mark.obj", #filepath));
-};
-
-GATE_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-	}
-
-	return read_ct_file(tprint("%/../assets/gate.obj", #filepath));
-};
-
-GATE_CLOSE_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-	}
-
-	return read_ct_file(tprint("%/../assets/gate_close.obj", #filepath));
-};
-
-SHURIKEN_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		return str;
-	}
-
-	return read_ct_file(tprint("%/../assets/shuriken.obj", #filepath));
-};
-
-VEHICLE_RACER_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		if !ok {
-			print("Could not read vehicle-racer.obj\n");
-		}
-		return str;
-	}
-
-	return read_ct_file(tprint("%/../assets/vehicle-racer.obj", #filepath));
-};
-VEHICLE_SUV_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		if !ok {
-			print("Could not read vehicle-suv.obj\n");
-		}
-		return str;
-	}
-
-	return read_ct_file(tprint("%/../assets/vehicle-suv.obj", #filepath));
-};
-VEHICLE_SPEEDSTER_OBJ :: #run,host -> string {
-	#import "Basic";
-	read_ct_file :: (path: string) -> string {
-		CT_File :: #import "File";
-
-		str, ok := CT_File.read_entire_file(path);
-		if !ok {
-			print("Could not read vehicle-speedster.obj\n");
-		}
-		return str;
-	}
-
-	return read_ct_file(tprint("%/../assets/vehicle-speedster.obj", #filepath));
-};
-
 Image :: struct {
 	width: u32;
 	height: u32;
 	data: [] u8;
-	has_alpha := false;
-}
+	channels: int = 3;
 
-decode_image :: (path: string) -> Image {
-	image: Image;
-
-	file, ok := CT_File.read_entire_file(path,, temp);
-	if !ok {
-		print("Failed to load ice_texture.png\n");
+	make_from_memory :: (data: [] u8, channels: int) -> Image {
+		image: Image;
+		x: s32;
+		y: s32;
+		c: s32;
+		image.data.data = STB.stbi_load_from_memory(
+			xx data.data, xx data.count, *x, *y, *c, xx channels
+		);
+		image.data.count = x * y * c;
+		image.width = xx x;
+		image.height = xx y;
+		image.channels = xx c;
 		return image;
 	}
+}
 
-	x: s32;
-	y: s32;
-	c: s32;
-	image.data.data = CT_STB.stbi_load_from_memory(file.data, xx file.count, *x, *y, *c, 3);
-	image.data.count = x * y * 3;
-	image.width = xx x;
-	image.height = xx y;
+embed_data :: (name: string, path: string, root: string) -> string {
+format_text :: #string FORMAT
+% ::  #run,host -> []u8 {
+	#import "Compiler";
+	#import "Basic";
+	#import "File";
 
-	if !image.data.data {
-		cstr: *u8 = CT_STB.stbi_failure_reason();
-		str: string;
-		str.data = cstr;
-		str.count = c_style_strlen(cstr);
-		print("Failed to load ice_texture.png: %\n", str);
-		return image;
+	get_data :: (path: string) -> [] u8 {
+		CT_File :: #import "File";
+
+		full_path := tprint("%/../assets/%", "%", path);
+		file, ok := CT_File.read_entire_file(full_path);
+		if !ok {
+			print("Failed to load % (%)\n", path, full_path);
+			return .[];
+		}
+
+		return xx file;
 	}
 
-	return image;
+	return add_global_data(get_data("%"), .READ_ONLY);
+};
+FORMAT;
+
+	return sprint(format_text, name, "%", "%", root, "%", "%", path);
 }
+
+#insert #run embed_data("SNOWFLAKES_AND_LIGHTS_OGG", "Snowflakes and Lights.ogg", #filepath);
+#insert #run embed_data("PLAIN_VERTEX", "Shader/plain.vert", #filepath);
+#insert #run embed_data("INSTANCE_VERTEX", "Shader/instance.vert", #filepath);
+#insert #run embed_data("INSTANCE_FRAGMENT", "Shader/instance.frag", #filepath);
+#insert #run embed_data("TILE_VERTEX", "Shader/tile.vert", #filepath);
+#insert #run embed_data("TILE_FRAGMENT", "Shader/tile.frag", #filepath);
+#insert #run embed_data("tile_cliff_albedo_png", "Tile/cliff_albedo.png", #filepath);
+#insert #run embed_data("tile_cliff_normal_png", "Tile/cliff_normal.png", #filepath);
+#insert #run embed_data("tile_cliff_height_png", "Tile/cliff_height.png", #filepath);
+#insert #run embed_data("tile_snow_albedo_png", "Tile/snow_albedo.png", #filepath);
+#insert #run embed_data("tile_snow_normal_png", "Tile/snow_normal.png", #filepath);
+#insert #run embed_data("tile_snow_height_png", "Tile/snow_height.png", #filepath);
+#insert #run embed_data("tile_grass_albedo_png", "Tile/grass_albedo.png", #filepath);
+#insert #run embed_data("tile_grass_normal_png", "Tile/grass_normal.png", #filepath);
+#insert #run embed_data("tile_grass_height_png", "Tile/grass_height.png", #filepath);
+#insert #run embed_data("tile_slippy_albedo_png", "Tile/slippy_albedo.png", #filepath);
+#insert #run embed_data("tile_slippy_normal_png", "Tile/slippy_normal.png", #filepath);
+#insert #run embed_data("tile_slippy_height_png", "Tile/slippy_height.png", #filepath);
+#insert #run embed_data("ui_atlas_png", "UI/ui_atlas.png", #filepath);
+
+#insert #run embed_data("VEHICLE_RACER_OBJ", "vehicle-racer.obj", #filepath);
+#insert #run embed_data("VEHICLE_SUV_OBJ", "vehicle-suv.obj", #filepath);
+#insert #run embed_data("VEHICLE_SPEEDSTER_OBJ", "vehicle-speedster.obj", #filepath);
+
+#insert #run embed_data("CLICK_WAV", "click.wav", #filepath);
+
+#insert #run embed_data("FOOTSTEP_0_OGG", "footstep_snow_000-converted.ogg", #filepath);
+#insert #run embed_data("FOOTSTEP_1_OGG", "footstep_snow_001.ogg", #filepath);
+#insert #run embed_data("FOOTSTEP_2_OGG", "footstep_snow_002.ogg", #filepath);
+#insert #run embed_data("FOOTSTEP_3_OGG", "footstep_snow_003.ogg", #filepath);
+#insert #run embed_data("FOOTSTEP_4_OGG", "footstep_snow_004.ogg", #filepath);
+
+#insert #run embed_data("LOSER_OGG", "loser.ogg", #filepath);
+
+#insert #run embed_data("TILE_OBJ", "tile.obj", #filepath);
+#insert #run embed_data("CAR_OBJ", "car.obj", #filepath);
+#insert #run embed_data("TOMBSTONE_OBJ", "tombstone.obj", #filepath);
+#insert #run embed_data("SKULL_OBJ", "skull.obj", #filepath);
+#insert #run embed_data("COIN_OBJ", "coin.obj", #filepath);
+#insert #run embed_data("SPIRIT_OBJ", "spirit.obj", #filepath);
+#insert #run embed_data("KEY_OBJ", "key.obj", #filepath);
+#insert #run embed_data("MARK_OBJ", "mark.obj", #filepath);
+#insert #run embed_data("GATE_OBJ", "gate.obj", #filepath);
+#insert #run embed_data("GATE_CLOSE_OBJ", "gate_close.obj", #filepath);
+#insert #run embed_data("SHURIKEN_OBJ", "shuriken.obj", #filepath);
+
+
 
 vehicle_colormap_texture_help :: () -> Image {
 	a, b, c := #run, host -> [] u8, int, int {
@@ -702,7 +366,7 @@ grass_texture_help :: () -> Image {
 		}
 		#import "Basic";
 
-		image := decode_image(tprint("%/../assets/grass_texture.png", #filepath));
+		image := decode_image(tprint("%/../assets/Elements_14-128x128.png", #filepath));
 		return image.data, image.width, image.height;
 	};
 	return .{ width = xx b, height = xx c, data = a };
@@ -753,7 +417,7 @@ slippy_ice_texture_help :: () -> Image {
 		}
 		#import "Basic";
 
-		image := decode_image(tprint("%/../assets/slippy_ice_texture.png", #filepath));
+		image := decode_image(tprint("%/../assets/Water_01.png", #filepath));
 		return image.data, image.width, image.height;
 	};
 	return .{ width = xx b, height = xx c, data = a };
@@ -804,7 +468,7 @@ dirt_texture_help :: () -> Image {
 		}
 		#import "Basic";
 
-		image := decode_image(tprint("%/../assets/dirt_texture.png", #filepath));
+		image := decode_image(tprint("%/../assets/Dirt_01.png", #filepath));
 		return image.data, image.width, image.height;
 	};
 	return .{ width = xx b, height = xx c, data = a };
@@ -907,7 +571,7 @@ mark_texture_help :: () -> Image {
 		image := decode_image(tprint("%/../assets/mark.png", #filepath));
 		return image.data, image.width, image.height;
 	};
-	return .{ width = xx b, height = xx c, data = a, has_alpha = true };
+	return .{ width = xx b, height = xx c, data = a, channels = 4 };
 }
 
 MARK_TEXTURE :: #run mark_texture_help();
@@ -995,7 +659,7 @@ ztotez_help :: () -> Font {
 		return image.data, image.width, image.height;
 	};
 	font: Font;
-	font.atlas = .{ width = xx b, height = xx c, data = a, has_alpha = true };
+	font.atlas = .{ width = xx b, height = xx c, data = a, channels = 4 };
 	font.sprites = rtpDescAtlas;
 	font.height = ATLAS_ATLAS_FONT_SIZE;
 	return font;

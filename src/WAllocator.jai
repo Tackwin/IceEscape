@@ -42,6 +42,10 @@ grow_free_list :: (wallocator: *WAllocator) {
 	wallocator.free_nodes.data = new_nodes;
 	wallocator.free_nodes_allocated = new_size;
 	wallocator.free_nodes.count = wallocator.free_nodes.count;
+
+	write_string("Needed to grow the free list to ");
+	write_nonnegative_number(xx new_size);
+	write_string(" bytes\n");
 }
 
 is_magic :: (ptr: *WAllocator.Allocation_Header) -> bool {
@@ -67,6 +71,7 @@ WAllocator :: struct {
 		magic: [8]u8 = .[ 0, 1, 2, 3, 4, 5, 6, 7 ];
 		begin: *void;
 		size: s64;
+		padding: [8]u8;
 	}
 
 	free_nodes: [] Free_Node;
@@ -76,6 +81,19 @@ WAllocator :: struct {
 	alignment : s64 = 8;
 }
 
+verbose :: false;
+
+wallocator_dump :: () {
+	write_string("===Begin Dump===\n");
+	for wallocator_g.free_nodes {
+		write_string("Free block at address ");
+		write_nonnegative_number(xx it.begin, 16);
+		write_string(" with size ");
+		write_nonnegative_number(xx it.size);
+		write_string(" bytes\n");
+	}
+	write_string("===End Dump===\n");
+}
 
 wallocator_proc :: (
 	mode: Allocator_Mode, size: s64, old_size: s64, old_memory: *void, allocator_data: *void
@@ -87,34 +105,34 @@ wallocator_proc :: (
 
 	if mode == {
 		case .ALLOCATE;
+			#if verbose {
+				write_string("Called allocate for ");
+				write_nonnegative_number(xx size);
+				write_string(" bytes\n");
+			}
+
 			if wallocator.free_nodes.count == 0 {
 				init_wallocator(wallocator);
 			}
 
 			whole_size := size + size_of(WAllocator.Allocation_Header);
 			// Align whole_size to the alignment.
-			// whole_size = (whole_size + wallocator.alignment - 1) & ~(wallocator.alignment - 1);
+			whole_size = (whole_size + wallocator.alignment - 1) & ~(wallocator.alignment - 1);
 
 			// Look for a free node
 			for * wallocator.free_nodes {
-				padding_to_align := wallocator.alignment - (it.begin.(s64) % wallocator.alignment);
-
-				if it.size >= whole_size + padding_to_align {
+				if it.size >= whole_size {
 					// If we found a free node, use it
-
 					ptr := it.begin;
-					ptr += padding_to_align;
+					// assert((it.begin % wallocator.alignment) == 0);
 					header := ptr.(*WAllocator.Allocation_Header);
 					header.* = .{};
-					header.size = whole_size + padding_to_align;
+					header.size = whole_size;
 					header.begin = it.begin;
 					ptr += size_of(WAllocator.Allocation_Header);
 
-					it.size -= padding_to_align + whole_size;
-					it.begin += padding_to_align + whole_size;
-					if it.size == 0
-						remove it;
-
+					it.size -= whole_size;
+					it.begin += whole_size;
 					memset(ptr, 0xCC, size);
 					return ptr;
 				}
@@ -127,21 +145,20 @@ wallocator_proc :: (
 			node.begin = wallocator.backing.proc(
 				.ALLOCATE, node.size, 0, null, wallocator.backing.data
 			);
+			// assert((node.begin.(u64) % wallocator.alignment) == 0);
 			if !node.begin {
 				return null;
 			}
 
-			padding_to_align := wallocator.alignment - (node.begin.(s64) % wallocator.alignment);
 			ptr := node.begin;
-			ptr += padding_to_align;
 			header := ptr.(*WAllocator.Allocation_Header);
 			header.* = .{};
 			header.begin = node.begin;
-			header.size = whole_size + padding_to_align;
+			header.size = whole_size;
 			ptr += size_of(WAllocator.Allocation_Header);
 
-			node.size -= padding_to_align + whole_size;
-			node.begin += padding_to_align + whole_size;
+			node.size -= whole_size;
+			node.begin += whole_size;
 			if node.size > 0 {
 				wallocator.free_nodes.count += 1;
 				wallocator.free_nodes[wallocator.free_nodes.count - 1] = node;
@@ -151,6 +168,13 @@ wallocator_proc :: (
 			return ptr;
 		
 		case .FREE;
+			#if verbose {
+				write_string("Called free for ");
+				write_nonnegative_number(xx old_size);
+				write_string(" on ");
+				write_nonnegative_number(xx old_memory, 16);
+				write_string(" bytes\n");
+			}
 			memset(old_memory, 0xDD, old_size);
 
 			if !old_memory {
@@ -171,9 +195,23 @@ wallocator_proc :: (
 				if it.begin + it.size == header.begin {
 					// The freed memory is right after this free node, so we can merge them.
 					it.size += header.size;
+					#if verbose {
+						write_string("Free can increase the size of the free block from ");
+						write_nonnegative_number(xx (it.size - header.size));
+						write_string(" to ");
+						write_nonnegative_number(xx it.size);
+						write_string(" bytes\n");
+					}
 					return null;
 				}
 				if header.begin + header.size == it.begin {
+					#if verbose {
+						write_string("Free can offset the start of the free block from ");
+						write_nonnegative_number(xx (it.begin), 16);
+						write_string(" to ");
+						write_nonnegative_number(xx header.begin, 16);
+						write_string(" bytes\n");
+					}
 					// The freed memory is right before this free node, so we can merge them.
 					it.begin = header.begin;
 					it.size += header.size;
@@ -197,6 +235,14 @@ wallocator_proc :: (
 			new.size = header.size;
 			wallocator.free_nodes.count += 1;
 			wallocator.free_nodes[wallocator.free_nodes.count - 1] = new;
+
+			#if verbose {
+				write_string("Added a free block at ");
+				write_nonnegative_number(xx new.begin, 16);
+				write_string(" with size ");
+				write_nonnegative_number(xx new.size);
+				write_string(" bytes\n");
+			}
 		case .RESIZE;
 			if !old_memory {
 				return wallocator_proc(.ALLOCATE, size, 0, null, allocator_data);

@@ -1,9 +1,11 @@
+#scope_file
 #import "Window_Creation";
 #import "WAllocator";
 #import "Input";
 #import "Basic";
 #import "String";
 #import "Hash_Table";
+Render :: #import "Render";
 Sound :: #import "Sound_Player";
 WebGL :: #import "Toolchains/Web/WebGL";
 
@@ -13,7 +15,6 @@ pressed: [Key_COUNT] bool;
 web_buffer: [] u8;
 last_frame: Apollo_Time;
 last_frame_init := false;
-
 map_key_to_key :: (key: int) -> int {
 	if key == {
 		case #char "A"; return xx Key.A;
@@ -68,15 +69,14 @@ send_web_message :: (msg: [] u8) {
 	js_send_web_message(msg.data, msg.count);
 }
 
-wasm_get_frame_info :: () -> Frame_Info {
+wasm_get_frame_info :: (info: *Frame_Info) {
+	info.* = .{};
 
-	info: Frame_Info;
 	info.delta_time = 1.0 / 60.0;
 	if last_frame_init {
 		info.delta_time = xx to_float64_seconds(
 			current_time_monotonic() - last_frame
 		);
-
 	}
 	last_frame = current_time_monotonic();
 	last_frame_init = true;
@@ -134,8 +134,6 @@ wasm_get_frame_info :: () -> Frame_Info {
 			n += 1;
 		}
 	}
-
-	return info;
 }
 
 audio_table: Table(int, *Sound.Sound_Data);
@@ -148,7 +146,7 @@ load_audio :: (data: string) -> Audio {
 	audio.id = audio_counter;
 	// Load audio data
 	sound := Sound.load_audio_data("Machin", data);
-	sound_ptr := New(Sound.Sound_Data,, context.default_allocator);
+	sound_ptr := New(Sound.Sound_Data);
 	sound_ptr.* = sound;
 	table_set(*audio_table, audio.id, sound_ptr);
 
@@ -177,12 +175,10 @@ query_audio :: (audio: *Audio) -> bool {
 wasm_end_frame ::  () {
 	js_webgl_swap_buffers :: (window: Window_Type, vsync: bool) #foreign;
 	js_webgl_swap_buffers(window, false);
-	Sound.update(,, context.default_allocator);
+	Sound.update();
 }
 
 init_platform :: () -> Platform {
-	context.allocator = .{ wallocator_proc, null };
-	context.temporary_storage.overflow_allocator = context.allocator;
 
 	window := create_window(1366, 768, "Ice Escape");
 	for * pressed
@@ -279,9 +275,6 @@ get_token :: () -> int {
 set_token :: (token: int) {
 	js_set_token :: (window: s32) #foreign;
 	js_set_token(xx token);
-
-	// js_set_token :: #type (token: s32) #foreign;
-	// js_set_token(token);
 }
 
 get_type_name :: (info: *Type_Info) -> string {

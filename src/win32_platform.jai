@@ -1,6 +1,7 @@
 #import "Platform";
 #import "Window_Creation";
 #import "Input";
+#import "File_Watcher";
 Sound :: #import "Sound_Player"(VERBOSE = false);
 #import "Basic";
 #import "Hash_Table";
@@ -103,8 +104,8 @@ win32_set_token :: (token: int) {
 	// no-op
 }
 
-win32_get_frame_info :: () -> Frame_Info {
-	info: Frame_Info;
+win32_get_frame_info :: (info: *Frame_Info) {
+	info.* = .{};
 	// Setup display size (every frame to accommodate for window resizing)
 	w, h: s32;
 	SDL_GetWindowSize(sdl_window, *w, *h);
@@ -231,7 +232,17 @@ win32_get_frame_info :: () -> Frame_Info {
 	}
 	message_arrived.count = cursor;
 
-	return info;
+	info.file_change_count = frame_file_change_count;
+	for 0..frame_file_change_count-1 {
+		info.file_change[it] = talloc_string(frame_file_change[it].count);
+		memcpy(
+			info.file_change[it].data,
+			frame_file_change[it].data,
+			frame_file_change[it].count
+		);
+		free(frame_file_change[it]);
+	}
+	frame_file_change_count = 0;
 }
 
 win32_end_frame :: () {
@@ -258,7 +269,8 @@ win32_end_frame :: () {
 	}
 
 	messages_pending.count = cursor;
-	Sound.update(,, context.default_allocator);
+	Sound.update();
+	process_changes(*watcher);
 }
 
 audio_table: Table(int, *Sound.Sound_Data);
@@ -271,7 +283,7 @@ load_audio :: (data: string) -> Audio {
 	audio.id = audio_counter;
 	// Load audio data
 	sound := Sound.load_audio_data("Machin", data);
-	sound_ptr := New(Sound.Sound_Data,, context.default_allocator);
+	sound_ptr := New(Sound.Sound_Data);
 	sound_ptr.* = sound;
 	table_set(*audio_table, audio.id, sound_ptr);
 
@@ -297,6 +309,10 @@ query_audio :: (audio: *Audio) -> bool {
 	return false;
 }
 
+watcher: File_Watcher(Platform);
+frame_file_change: [1024] string;
+frame_file_change_count := 0;
+
 init_platform :: () -> Platform {
 	platform: Platform;
 	for * pressed
@@ -308,6 +324,17 @@ init_platform :: () -> Platform {
 	curl_easy_setopt(curl, .ERRORBUFFER, curl_errbuf.data);
 	curl_easy_setopt(curl, .CONNECT_ONLY, 2);
 	curl_code := curl_easy_perform(curl);
+	init(*watcher, (watcher: *File_Watcher(Platform), change: *File_Change, user_data: *Platform) {
+		frame_file_change_count %= frame_file_change.count;
+		frame_file_change[frame_file_change_count] = alloc_string(change.full_path.count);
+		memcpy(
+			frame_file_change[frame_file_change_count].data,
+			change.full_path.data,
+			change.full_path.count
+		);
+		frame_file_change_count += 1;
+	}, *platform);
+	add_directories(*watcher, tprint("%/../assets/", #filepath));
 
 	Sound.sound_player_init(.{
 		audible_when_window_is_not_in_focus = true,

@@ -1,4 +1,5 @@
 Render :: #import "Render";
+Platform :: #import "Platform";
 #import "Basic";
 #import "Math";
 #import "Algebra";
@@ -142,5 +143,25 @@ render_ping_histogram :: (pos: V2f, size: V2f, data: [] float32, current_idx: in
 			color = .{ 1.0, 0.0, 0.0 },
 			z = -0.2
 		);
+	}
+}
+
+render_action_palette :: (info: *Platform.Frame_Info) {
+	Render.push_quad_screen(
+		pos = .{ 0, 0 },
+		size = .{ 128, 128 },
+		color = .{ 218/255.0, 220/255.0, 231/255.0 },
+		-0.5
+	);
+
+	for y: 0..3 {
+		for x: 0..3 {
+			Render.push_quad_screen(
+				pos = .{ x * 32.0 + 1, y * 32.0 + 1 },
+				size = .{ 30, 30 },
+				color = .{ 25/255.0, 159/255.0, 215/255.0 },
+				z = -0.6
+			);
+		}
 	}
 }

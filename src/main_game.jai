@@ -1,6 +1,7 @@
 Terrain :: #import "Terrain";
 #import "Math";
 #import "Basic";
+#import "WAllocator";
 #import "Store";
 #import "Random";
 #import "String";
@@ -171,12 +172,15 @@ respond :: (platform: Platform, response: Scene.Process_Response) {
 #add_context _platform: Platform;
 
 main :: () {
+	context.allocator = .{ wallocator_proc, null };
+	context.temporary_storage.overflow_allocator = context.allocator;
 	platform := init_platform();
 	context._platform = platform;
 	rhi := platform.rhi;
 
 	store: Store;
 	init_store(platform, *store);
+	Render.im_init();
 
 	clear_color := V4f.{0.45, 0.55, 0.60, 1.00};
 
@@ -203,9 +207,14 @@ main :: () {
 	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Slippy_Ice] = *store.slippy_ice_texture;
 	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Dirt] = *store.dirt_texture;
 
-	just_pressed: [Key_COUNT] bool;
-	just_released: [Key_COUNT] bool;
-	pressed: [Key_COUNT] bool;
+	just_pressed := NewArray(Key_COUNT, bool);
+	just_released := NewArray(Key_COUNT, bool);
+	pressed := NewArray(Key_COUNT, bool);
+	defer {
+		array_free(just_pressed);
+		array_free(just_released);
+		array_free(pressed);
+	};
 
 	T := 0;
 
@@ -230,12 +239,13 @@ main :: () {
 		platform.play_audio(*store.snowflakes_and_lights_ogg);
 	}
 
+	frame_info := New(Frame_Info);
+	defer free(frame_info);
 
 	// Main loop
 	done := false;
 	while !done {
-		auto_release_temp();
-
+		reset_temporary_storage();
 		t00 := current_time_monotonic();
 
 		if !state.is_connected && to_float64_seconds(t00 - state.connected_last_try) > 0.5 {
@@ -245,8 +255,7 @@ main :: () {
 			state.connected_last_try = current_time_monotonic();
 		}
 
-
-		frame_info := platform.get_frame_info();
+		platform.get_frame_info(frame_info);
 		defer {
 			history_cursor += 1;
 			history_cursor %= history_dt.count;
@@ -276,9 +285,14 @@ main :: () {
 		V := Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
 		P := Scene.perspective(scene.camera);
 
-
 		any_camera_move := false;
 		dt := V3f.{ 0, 0, 0 };
+		if frame_info.mouse_wheel > 0 {
+			scene.camera.wanted_target_to_position *= 0.9;
+		}
+		if frame_info.mouse_wheel < 0 {
+			scene.camera.wanted_target_to_position *= (1.0 / 0.9);
+		}
 		if pressed[Key.Q] {
 			dt.x -= scene.camera.speed * frame_info.delta_time;
 			any_camera_move = true;
@@ -368,6 +382,13 @@ main :: () {
 			}
 		}
 
+		#if OS == .WINDOWS {
+			changes: [] string;
+			changes.data = frame_info.file_change.data;
+			changes.count = frame_info.file_change_count;
+			check_change(*store, changes);
+		}
+
 		Scene.clear(*process_response);
 		commands := parse_web_message(*state, frame_info);
 		for commands {
@@ -397,6 +418,7 @@ main :: () {
 		rhi.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		Scene.render(scene);
+		GUI.render_action_palette(frame_info);
 
 		for yes {
 			Render.push_text("GG, you won !", it, 24);
@@ -445,7 +467,8 @@ main :: () {
 			#if OS == .WASM {
 				header := get_header();
 				bit_array := cast(*u8)(header + 1);
-				for 0..header.total_number_of_pages_allocated-1 {
+				n := header.total_number_of_pages_allocated;
+				for 0..n-1 {
 					x := it % 300;
 					y := it / 300;
 

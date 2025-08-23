@@ -4,6 +4,7 @@
 #import "Assets";
 #import "Platform";
 #import "Hash_Table";
+STB :: #import "stb_image";
 
 #scope_export
 
@@ -56,6 +57,13 @@ IM: struct {
 	pressed: [Key_COUNT] bool;
 
 	mouse_pos: V2f;
+}
+
+im_init :: () {
+	IM = .{};
+	IM.quads.allocator = context.allocator;
+	IM.quads_late.allocator = context.allocator;
+	IM.chars.allocator = context.allocator;
 }
 
 handle_frame_info :: (info: Frame_Info) {
@@ -378,7 +386,7 @@ Shader :: struct {
 	fragment_shader: GLuint = 0;
 	program: GLuint = 0;
 
-	locations: Table(string, int);
+	locations: Table(string, int, null, (a: string, b: string) -> bool { return compare(a, b) == 0;});
 	keys: [..] string;
 
 	make :: (from_vertex_code: string, from_fragment_code: string) -> Shader {
@@ -423,6 +431,7 @@ set_uniform :: (shader: *Shader, name: string, value: $T) {
 		memcpy(allocated_name.data, name.data, name.count);
 		array_add(*shader.keys, allocated_name);
 		table_add(*shader.locations, allocated_name, loc);
+		write_string("Uniform location not found.\n");
 	}
 
 	if loc < 0 {
@@ -432,11 +441,17 @@ set_uniform :: (shader: *Shader, name: string, value: $T) {
 	#if T == M4f {
 		context.rhi.glUniformMatrix4fv(xx loc, 1, GL_FALSE, value.data.data);
 	}
-	#if T == V3f {
+	else #if T == V3f {
 		context.rhi.glUniform3f(xx loc, value.x, value.y, value.z);
 	}
-	#if T == V2f {
+	else #if T == V2f {
 		context.rhi.glUniform2f(xx loc, value.x, value.y);
+	} else #if T == float32 {
+		context.rhi.glUniform1f(xx loc, value);
+	}
+	else {
+		print("Unsupported uniform type for %: %\n", name, typeof(value));
+		assert(false);
 	}
 }
 set_uniform :: (shader: *Shader, name: string, value: Texture, unit: int) {
@@ -451,6 +466,7 @@ set_uniform :: (shader: *Shader, name: string, value: Texture, unit: int) {
 		memcpy(allocated_name.data, name.data, name.count);
 		array_add(*shader.keys, allocated_name);
 		table_add(*shader.locations, allocated_name, loc);
+		write_string("Uniform location not found.\n");
 	}
 
 	if loc < 0 {
@@ -462,6 +478,20 @@ set_uniform :: (shader: *Shader, name: string, value: Texture, unit: int) {
 	context.rhi.glUniform1i(xx loc, xx unit);
 }
 
+release :: (shader: *Shader) {
+	if shader.vertex_shader > 0 {
+		context.rhi.glDeleteShader(shader.vertex_shader);
+		shader.vertex_shader = 0;
+	}
+	if shader.fragment_shader > 0 {
+		context.rhi.glDeleteShader(shader.fragment_shader);
+		shader.fragment_shader = 0;
+	}
+	if shader.program > 0 {
+		context.rhi.glDeleteProgram(shader.program);
+		shader.program = 0;
+	}
+}
 
 compile :: (shader: *Shader) {
 	status: GLint;
@@ -514,7 +544,7 @@ compile :: (shader: *Shader) {
 	if status == 0 {
 		buffer := NewArray(1024, u8, false,, temp);
 		written: u32;
-		context.rhi.glGetProgramInfoLog(vertex_shader, xx buffer.count, *written, buffer.data);
+		context.rhi.glGetProgramInfoLog(shader_program, xx buffer.count, *written, buffer.data);
 		error_msg: string = .{ data =buffer.data, count = buffer.count };
 		print("Shader program linking failed: %\n", error_msg);
 		context.rhi.glDeleteProgram(shader_program);
@@ -561,6 +591,9 @@ Geometry :: struct {
 		return geometry;
 	}
 
+	make_from_obj :: (obj: [] u8) -> Geometry {
+		return make_from_obj(obj.(string));
+	}
 	make_from_obj :: (obj: string) -> Geometry {
 		geometry: Geometry;
 
@@ -760,7 +793,7 @@ enable_instanced_attributes :: (slot: int) {
 		xx (slot + 0),
 		4,
 		GL_FLOAT,
-		0,
+		GL_FALSE,
 		size_of(Geometry.Instance_Data),
 		xx (offset_of(Geometry.Instance_Data, "M") + 00)
 	);
@@ -768,7 +801,7 @@ enable_instanced_attributes :: (slot: int) {
 		xx (slot + 1),
 		4,
 		GL_FLOAT,
-		0,
+		GL_FALSE,
 		size_of(Geometry.Instance_Data),
 		xx (offset_of(Geometry.Instance_Data, "M") + 16)
 	);
@@ -776,7 +809,7 @@ enable_instanced_attributes :: (slot: int) {
 		xx (slot + 2),
 		4,
 		GL_FLOAT,
-		0,
+		GL_FALSE,
 		size_of(Geometry.Instance_Data),
 		xx (offset_of(Geometry.Instance_Data, "M") + 32)
 	);
@@ -784,7 +817,7 @@ enable_instanced_attributes :: (slot: int) {
 		xx (slot + 3),
 		4,
 		GL_FLOAT,
-		0,
+		GL_FALSE,
 		size_of(Geometry.Instance_Data),
 		xx (offset_of(Geometry.Instance_Data, "M") + 48)
 	);
@@ -811,7 +844,7 @@ Texture :: struct {
 		texture.height = image.height;
 		texture.id = 0;
 
-		upload(*texture, image.data, image.has_alpha);
+		upload(*texture, image.data, image.channels);
 		return texture;
 	}
 }
@@ -819,23 +852,30 @@ Texture :: struct {
 ok :: (texture: Texture) -> bool {
 	return texture.id > 0;
 }
-upload :: (texture: *Texture, data: [] u8, has_alpha := false) {
+upload :: (texture: *Texture, data: [] u8, channels: int) {
 	context.rhi.glGenTextures(1, *texture.id);
 	context.rhi.glBindTexture(GL_TEXTURE_2D, texture.id);
 	context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	if has_alpha {
+	if channels == 4 {
 		context.rhi.glTexImage2D(
 			GL_TEXTURE_2D, 0, GL_RGBA8, texture.width, texture.height, 0,
 			GL_RGBA, GL_UNSIGNED_BYTE, data.data
 		);
-	} else {
+	} else if channels == 3 {
 		context.rhi.glTexImage2D(
 			GL_TEXTURE_2D, 0, GL_RGB8, texture.width, texture.height, 0,
 			GL_RGB, GL_UNSIGNED_BYTE, data.data
 		);
+	} else if channels == 1 {
+		context.rhi.glTexImage2D(
+			GL_TEXTURE_2D, 0, GL_R8, texture.width, texture.height, 0,
+			GL_RED, GL_UNSIGNED_BYTE, data.data
+		);
+	} else {
+		print("Unsupported channel count %\n", channels);
 	}
 }
 set_parameter :: (texture: Texture, parameter: GLenum, value: GLint) {

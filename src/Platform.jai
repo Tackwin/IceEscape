@@ -77,6 +77,9 @@ Frame_Info :: struct {
 
 	message_received: [1024] Web_Message;
 	message_received_count := 0;
+
+	file_change: [1024] string;
+	file_change_count := 0;
 }
 
 Audio :: struct {
@@ -100,7 +103,7 @@ Platform :: struct {
 
 	get_token:        #type () -> int        = null;
 	set_token:        #type (token: int)     = null;
-	get_frame_info:   #type () -> Frame_Info = null;
+	get_frame_info:   #type (info: *Frame_Info) = null;
 	end_frame:        #type ()               = null;
 	send_web_message: #type (msg: [] u8)     = null;
 
@@ -146,8 +149,8 @@ GLhalfNV :: u16;
 GL_DEPTH_BUFFER_BIT :: 0x00000100;
 GL_STENCIL_BUFFER_BIT :: 0x00000400;
 GL_COLOR_BUFFER_BIT :: 0x00004000;
-GL_FALSE :: 0;
-GL_TRUE :: 1;
+GL_FALSE : GLboolean : (false).(GLboolean);
+GL_TRUE : GLboolean : (true).(GLboolean);
 GL_POINTS :: 0x0000;
 GL_LINES :: 0x0001;
 GL_LINE_LOOP :: 0x0002;

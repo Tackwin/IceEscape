@@ -2,6 +2,10 @@
 Render :: #import "Render";
 Assets :: #import "Assets";
 Platform :: #import "Platform";
+Scene :: #import "Scene";
+#import "String";
+#import "File";
+#import "Basic";
 
 #scope_export
 
@@ -40,6 +44,38 @@ Shader_Id :: enum {
 }
 
 Store :: struct {
+	tile_snow_albedo_png: Assets.Image;
+	tile_snow_normal_png: Assets.Image;
+	tile_snow_height_png: Assets.Image;
+
+	tile_cliff_albedo_png: Assets.Image;
+	tile_cliff_normal_png: Assets.Image;
+	tile_cliff_height_png: Assets.Image;
+
+	tile_grass_albedo_png: Assets.Image;
+	tile_grass_normal_png: Assets.Image;
+	tile_grass_height_png: Assets.Image;
+
+	tile_slippy_albedo_png: Assets.Image;
+	tile_slippy_normal_png: Assets.Image;
+	tile_slippy_height_png: Assets.Image;
+
+	tile_snow_albedo: Render.Texture;
+	tile_snow_normal: Render.Texture;
+	tile_snow_height: Render.Texture;
+
+	tile_cliff_albedo: Render.Texture;
+	tile_cliff_normal: Render.Texture;
+	tile_cliff_height: Render.Texture;
+
+	tile_grass_albedo: Render.Texture;
+	tile_grass_normal: Render.Texture;
+	tile_grass_height: Render.Texture;
+
+	tile_slippy_albedo: Render.Texture;
+	tile_slippy_normal: Render.Texture;
+	tile_slippy_height: Render.Texture;
+
 	loser_ogg: Platform.Audio;
 	footstep_0_ogg: Platform.Audio;
 	footstep_1_ogg: Platform.Audio;
@@ -101,6 +137,54 @@ get_geometry :: (store: Store, id: Model_Id) -> *Render.Geometry {
 	return null;
 }
 
+get_albedo :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
+	if #complete id == {
+		case .None;
+			return null;
+		case .Ice;
+			return *store.ice_texture;
+		case .Slippy_Ice;
+			return *store.tile_slippy_albedo;
+		case .Grass;
+			return *store.tile_grass_albedo;
+		case .Dirt;
+			return *store.dirt_texture;
+	}
+	return null;
+}
+
+get_height :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
+	if #complete id == {
+		case .None;
+			return null;
+		case .Ice;
+			return *store.tile_snow_height;
+		case .Slippy_Ice;
+			return *store.tile_slippy_height;
+		case .Grass;
+			return *store.tile_grass_height;
+		case .Dirt;
+			return *store.tile_cliff_height;
+	}
+	return null;
+}
+
+get_normal :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
+	if #complete id == {
+		case .None;
+			return null;
+		case .Ice;
+			return *store.ice_texture;
+		case .Slippy_Ice;
+			return *store.tile_slippy_normal;
+		case .Grass;
+			return *store.tile_grass_normal;
+		case .Dirt;
+			return *store.dirt_texture;
+	}
+	return null;
+}
+
 get_texture :: (store: Store, id: Texture_Id) -> *Render.Texture {
 	if #complete id == {
 		case .Ice; return *store.ice_texture;
@@ -141,42 +225,75 @@ get_footstep_sound :: (store: Store, index: int) -> *Platform.Audio {
 }
 
 init_store :: (platform: Platform.Platform, store: *Store) {
-	store.loser_ogg = platform.load_audio(Assets.LOSER_OGG);
-	store.footstep_0_ogg = platform.load_audio(Assets.FOOTSTEP_0_OGG);
-	store.footstep_1_ogg = platform.load_audio(Assets.FOOTSTEP_1_OGG);
-	store.footstep_2_ogg = platform.load_audio(Assets.FOOTSTEP_2_OGG);
-	store.footstep_3_ogg = platform.load_audio(Assets.FOOTSTEP_3_OGG);
-	store.footstep_4_ogg = platform.load_audio(Assets.FOOTSTEP_4_OGG);
-	store.click_wav = platform.load_audio(Assets.CLICK_WAV);
-	store.snowflakes_and_lights_ogg = platform.load_audio(Assets.SNOWFLAKES_AND_LIGHTS_OGG);
+	store.tile_cliff_albedo_png = Assets.Image.make_from_memory(Assets.tile_cliff_albedo_png, 4);
+	store.tile_cliff_normal_png = Assets.Image.make_from_memory(Assets.tile_cliff_normal_png, 3);
+	store.tile_cliff_height_png = Assets.Image.make_from_memory(Assets.tile_cliff_height_png, 3);
+
+	store.tile_snow_albedo_png = Assets.Image.make_from_memory(Assets.tile_snow_albedo_png, 4);
+	store.tile_snow_normal_png = Assets.Image.make_from_memory(Assets.tile_snow_normal_png, 3);
+	store.tile_snow_height_png = Assets.Image.make_from_memory(Assets.tile_snow_height_png, 3);
+
+	store.tile_grass_albedo_png = Assets.Image.make_from_memory(Assets.tile_grass_albedo_png, 4);
+	store.tile_grass_normal_png = Assets.Image.make_from_memory(Assets.tile_grass_normal_png, 3);
+	store.tile_grass_height_png = Assets.Image.make_from_memory(Assets.tile_grass_height_png, 3);
+
+	store.tile_slippy_albedo_png = Assets.Image.make_from_memory(Assets.tile_slippy_albedo_png, 4);
+	store.tile_slippy_normal_png = Assets.Image.make_from_memory(Assets.tile_slippy_normal_png, 3);
+	store.tile_slippy_height_png = Assets.Image.make_from_memory(Assets.tile_slippy_height_png, 3);
+
+	store.tile_cliff_albedo = Render.Texture.make_from_image(store.tile_cliff_albedo_png);
+	store.tile_cliff_normal = Render.Texture.make_from_image(store.tile_cliff_normal_png);
+	store.tile_cliff_height = Render.Texture.make_from_image(store.tile_cliff_height_png);
+
+	store.tile_snow_albedo = Render.Texture.make_from_image(store.tile_snow_albedo_png);
+	store.tile_snow_normal = Render.Texture.make_from_image(store.tile_snow_normal_png);
+	store.tile_snow_height = Render.Texture.make_from_image(store.tile_snow_height_png);
+
+	store.tile_grass_albedo = Render.Texture.make_from_image(store.tile_grass_albedo_png);
+	store.tile_grass_normal = Render.Texture.make_from_image(store.tile_grass_normal_png);
+	store.tile_grass_height = Render.Texture.make_from_image(store.tile_grass_height_png);
+
+	store.tile_slippy_albedo = Render.Texture.make_from_image(store.tile_slippy_albedo_png);
+	store.tile_slippy_normal = Render.Texture.make_from_image(store.tile_slippy_normal_png);
+	store.tile_slippy_height = Render.Texture.make_from_image(store.tile_slippy_height_png);
+
+	store.loser_ogg = platform.load_audio(xx Assets.LOSER_OGG);
+	store.footstep_0_ogg = platform.load_audio(xx Assets.FOOTSTEP_0_OGG);
+	store.footstep_1_ogg = platform.load_audio(xx Assets.FOOTSTEP_1_OGG);
+	store.footstep_2_ogg = platform.load_audio(xx Assets.FOOTSTEP_2_OGG);
+	store.footstep_3_ogg = platform.load_audio(xx Assets.FOOTSTEP_3_OGG);
+	store.footstep_4_ogg = platform.load_audio(xx Assets.FOOTSTEP_4_OGG);
+	store.click_wav = platform.load_audio(xx Assets.CLICK_WAV);
+	store.snowflakes_and_lights_ogg = platform.load_audio(xx Assets.SNOWFLAKES_AND_LIGHTS_OGG);
 
 	store.model_shader = Render.Shader.make(
-		Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT
+		xx Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT
 	);
 	store.texture_shader = Render.Shader.make(
-		Assets.PLAIN_VERTEX, Assets.TEXTURE_FRAGMENT
+		xx Assets.PLAIN_VERTEX, Assets.TEXTURE_FRAGMENT
 	);
 	store.font_shader = Render.Shader.make(
 		Assets.FONT_VERTEX, Assets.FONT_FRAGMENT
 	);
 	store.instance_shader = Render.Shader.make(
-		Assets.INSTANCED_VERTEX, Assets.TEXTURE_FRAGMENT
+		xx Assets.INSTANCE_VERTEX, xx Assets.INSTANCE_FRAGMENT
 	);
 	store.tile_shader = Render.Shader.make(
-		Assets.TILE_VERTEX, Assets.TILE_FRAGMENT
+		xx Assets.TILE_VERTEX, xx Assets.TILE_FRAGMENT
 	);
 	store.ice_texture = Render.Texture.make_from_image(Assets.ICE_TEXTURE);
 	store.coin_texture = Render.Texture.make_from_image(Assets.COIN_TEXTURE);
 	store.dirt_texture = Render.Texture.make_from_image(Assets.DIRT_TEXTURE);
 	store.grass_texture = Render.Texture.make_from_image(Assets.GRASS_TEXTURE);
 	store.slippy_ice_texture = Render.Texture.make_from_image(Assets.SLIPPY_ICE_TEXTURE);
-	store.tile_geometry = Render.Geometry.make_square(
-		.{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
-	);
 	store.mark_texture = Render.Texture.make_from_image(Assets.MARK_TEXTURE);
 	store.vehicle_colormap = Render.Texture.make_from_image(Assets.VEHICLE_COLORMAP_TEXTURE);
 	Render.set_clamp(store.mark_texture, .T);
 
+	// store.tile_geometry = Render.Geometry.make_square(
+	// 	.{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
+	// );
+	store.tile_geometry = Render.Geometry.make_from_obj(Assets.TILE_OBJ);
 	store.player_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_RACER_OBJ);
 	store.racer_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_RACER_OBJ);
 	store.suv_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_SUV_OBJ);
@@ -190,6 +307,43 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.gate_close_geometry = Render.Geometry.make_from_obj(Assets.GATE_CLOSE_OBJ);
 	store.shuriken_geometry = Render.Geometry.make_from_obj(Assets.SHURIKEN_OBJ);
 	store.spirit_geometry = Render.Geometry.make_from_obj(Assets.SPIRIT_OBJ);
+}
 
-	
+check_change :: (store: *Store, paths: [] string) {
+	for paths {
+		if ends_with(it, "tile.vert") || ends_with(it, "tile.frag") {
+
+			print("Recompiling tile shader\n");
+
+			vertex_code, ok := read_entire_file(
+				tprint("%/../assets/Shader/tile.vert", #filepath),, temp
+			);
+			if ok {
+				fragment_code:, ok = read_entire_file(
+					tprint("%/../assets/Shader/tile.frag", #filepath),, temp
+				);
+				if ok {
+					Render.release(*store.tile_shader);
+					store.tile_shader = Render.Shader.make(vertex_code, fragment_code);
+				}
+			}
+		}
+		if ends_with(it, "instance.vert") || ends_with(it, "instance.frag") {
+
+			print("Recompiling instance shader\n");
+
+			vertex_code, ok := read_entire_file(
+				tprint("%/../assets/Shader/instance.vert", #filepath),, temp
+			);
+			if ok {
+				fragment_code:, ok = read_entire_file(
+					tprint("%/../assets/Shader/instance.frag", #filepath),, temp
+				);
+				if ok {
+					Render.release(*store.instance_shader);
+					store.instance_shader = Render.Shader.make(vertex_code, fragment_code);
+				}
+			}
+		}
+	}
 }

@@ -1283,7 +1283,10 @@ render :: (scene: Scene) {
 	Render.set_uniform(*store.texture_shader, "P", P);
 	Render.set_uniform(*store.tile_shader, "V", V);
 	Render.set_uniform(*store.tile_shader, "P", P);
+	Render.set_uniform(*store.instance_shader, "V", V);
+	Render.set_uniform(*store.instance_shader, "P", P);
 
+	Render.set_uniform(*store.instance_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
 	Render.set_uniform(*store.texture_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
 	Render.set_uniform(*store.texture_shader, "texture_sampler", store.ice_texture, 0);
 	Render.set_uniform(*store.texture_shader, "texture_offset", V2f.{ 0, 0 });
@@ -1438,7 +1441,7 @@ render_shurikens :: (scene: Scene) {
 	});
 
 	Render.enable_instanced_attributes(3);
-	Render.render_instanced(store.shuriken_geometry, store.tile_shader, instanced.count);
+	Render.render_instanced(store.shuriken_geometry, store.instance_shader, instanced.count);
 }
 
 render_skulls :: (scene: Scene) {
@@ -1459,7 +1462,7 @@ render_skulls :: (scene: Scene) {
 	});
 
 	Render.enable_instanced_attributes(3);
-	Render.render_instanced(store.skull_geometry, store.tile_shader, instanced.count);
+	Render.render_instanced(store.skull_geometry, store.instance_shader, instanced.count);
 }
 
 render_terrain :: (scene: Scene, terrain: *Terrain) {
@@ -1472,13 +1475,38 @@ render_terrain :: (scene: Scene, terrain: *Terrain) {
 	);
 
 	for 0..4 {
-		if !scene.tile_kind_to_shader[it]
-			continue;
+		name := tprint("albedos[%]\0", it);
+		texture := get_albedo(store, xx it);
+		if texture
+			Render.set_uniform(*store.tile_shader, name, texture, it);
+	}
+	
+	for 0..4 {
+		name := tprint("normals[%]\0", it);
+		texture := get_normal(store, xx it);
+		if texture
+			Render.set_uniform(*store.tile_shader, name, texture, 5 + it);
+	}
 
-		name := tprint("samplers[%]\0", it);
-		Render.set_uniform(
-			*store.tile_shader, name, scene.tile_kind_to_shader[it], it
-		);
+	for 0..4 {
+		name := tprint("heights[%]\0", it);
+		texture := get_height(store, xx it);
+		if texture
+			Render.set_uniform(*store.tile_shader, name, texture, 10 + it);
+	}
+
+	Render.set_uniform(*store.tile_shader, "useHeight", 0.0);
+	Render.set_uniform(*store.tile_shader, "useNormal", 0.0);
+	Render.set_uniform(*store.tile_shader, "heightRange", 0.03);
+
+	playerPos := V3f.{ 0, 0, 0 };
+	{
+		for scene.players {
+			if it.id == scene.controlled_player_id {
+				playerPos = it.client.position;
+				break;
+			}
+		}
 	}
 
 	for * tile: terrain.tiles {
