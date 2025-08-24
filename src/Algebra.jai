@@ -157,6 +157,29 @@ from_unit_vectors :: (a: V3($T), b: V3(T)) -> Q(T) {
 	return .{ v.x, v.y, v.z, dot(a, half) };
 }
 
+scale_matrix :: (s: $T) -> M4(T) {
+	M: M4(T);
+	for * M.data {
+		it.* = 0;
+	}
+	M.data[0 + 0 * 4] = s;
+	M.data[1 + 1 * 4] = s;
+	M.data[2 + 2 * 4] = s;
+	M.data[3 + 3 * 4] = 1;
+	return M;
+}
+scale_matrix :: (s: V3($T)) -> M4(T) {
+	M: M4(T);
+	for * M.data {
+		it.* = 0;
+	}
+	M.data[0 + 0 * 4] = s.x;
+	M.data[1 + 1 * 4] = s.y;
+	M.data[2 + 2 * 4] = s.z;
+	M.data[3 + 3 * 4] = 1;
+	return M;
+}
+
 to_rotation_matrix :: (q: Q($T)) -> M4(T) {
 	x := q * V3(T).{1, 0, 0};
 	y := q * V3(T).{0, 1, 0};
@@ -231,6 +254,9 @@ cross :: (a: V3($T), b: V3(T)) -> V3(T) {
 	};
 }
 
+dot :: (a: V2($T), b: V2(T)) -> T {
+	return a.x * b.x + a.y * b.y;
+}
 dot :: (a: V3($T), b: V3(T)) -> T {
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
@@ -239,6 +265,9 @@ dot :: (a: V4($T), b: V4(T)) -> T {
 }
 
 norm :: (a: V3($T)) -> T {
+	return sqrt(dot(a, a));
+}
+norm :: (a: V2($T)) -> T {
 	return sqrt(dot(a, a));
 }
 
@@ -505,4 +534,27 @@ ease_up_and_back :: (x: float) -> float {
 	if x < 0.5
 		return 2 * x;
 	return 2 * (1 - x);
+}
+
+ease_out_bounce :: (x: float) -> float {
+	n1 :: 7.5625;
+	d1 :: 2.75;
+
+	if (x < 1 / d1) {
+		return n1 * x * x;
+	} else if (x < 2 / d1) {
+		x -= 1.5 / d1;
+		return n1 * x * x + 0.75;
+	} else if (x < 2.5 / d1) {
+		x -= 2.25 / d1;
+		return n1 * x * x + 0.9375;
+	} else {
+		x -= 2.625 / d1;
+		return n1 * x * x + 0.984375;
+	}
+}
+ease_in_out_bounce :: (x: float) -> float {
+	return ifx x < 0.5
+		then (1 - ease_out_bounce(1 - 2 * x)) / 2
+		else (1 + ease_out_bounce(2 * x - 1)) / 2;
 }

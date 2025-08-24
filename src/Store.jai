@@ -60,6 +60,8 @@ Store :: struct {
 	tile_slippy_normal_png: Assets.Image;
 	tile_slippy_height_png: Assets.Image;
 
+	ui_atlas_png: Assets.Image;
+
 	tile_snow_albedo: Render.Texture;
 	tile_snow_normal: Render.Texture;
 	tile_snow_height: Render.Texture;
@@ -76,6 +78,8 @@ Store :: struct {
 	tile_slippy_normal: Render.Texture;
 	tile_slippy_height: Render.Texture;
 
+	ui_atlas: Render.Texture;
+
 	loser_ogg: Platform.Audio;
 	footstep_0_ogg: Platform.Audio;
 	footstep_1_ogg: Platform.Audio;
@@ -90,6 +94,7 @@ Store :: struct {
 	texture_shader: Render.Shader;
 	instance_shader: Render.Shader;
 	tile_shader: Render.Shader;
+	quad_texture_shader: Render.Shader;
 
 	ice_texture: Render.Texture;
 	coin_texture: Render.Texture;
@@ -99,6 +104,8 @@ Store :: struct {
 	mark_texture: Render.Texture;
 	vehicle_colormap: Render.Texture;
 
+	flag_geometry: Render.Geometry;
+	flag_down_geometry: Render.Geometry;
 	player_geometry: Render.Geometry;
 	racer_geometry: Render.Geometry;
 	suv_geometry: Render.Geometry;
@@ -111,6 +118,8 @@ Store :: struct {
 	mark_geometry: Render.Geometry;
 	gate_geometry: Render.Geometry;
 	gate_close_geometry: Render.Geometry;
+	gate_finish_geometry: Render.Geometry;
+	gate_finish_close_geometry: Render.Geometry;
 	shuriken_geometry: Render.Geometry;
 	spirit_geometry: Render.Geometry;
 }
@@ -225,6 +234,9 @@ get_footstep_sound :: (store: Store, index: int) -> *Platform.Audio {
 }
 
 init_store :: (platform: Platform.Platform, store: *Store) {
+	store.ui_atlas_png = Assets.Image.make_from_memory(Assets.ui_atlas_png, 4);
+	store.ui_atlas = Render.Texture.make_from_image(store.ui_atlas_png);
+
 	store.tile_cliff_albedo_png = Assets.Image.make_from_memory(Assets.tile_cliff_albedo_png, 4);
 	store.tile_cliff_normal_png = Assets.Image.make_from_memory(Assets.tile_cliff_normal_png, 3);
 	store.tile_cliff_height_png = Assets.Image.make_from_memory(Assets.tile_cliff_height_png, 3);
@@ -281,6 +293,10 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.tile_shader = Render.Shader.make(
 		xx Assets.TILE_VERTEX, xx Assets.TILE_FRAGMENT
 	);
+	store.quad_texture_shader = Render.Shader.make(
+		xx Assets.QUAD_TEXTURE_VERTEX, xx Assets.QUAD_TEXTURE_FRAGMENT
+	);
+
 	store.ice_texture = Render.Texture.make_from_image(Assets.ICE_TEXTURE);
 	store.coin_texture = Render.Texture.make_from_image(Assets.COIN_TEXTURE);
 	store.dirt_texture = Render.Texture.make_from_image(Assets.DIRT_TEXTURE);
@@ -294,6 +310,8 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	// 	.{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
 	// );
 	store.tile_geometry = Render.Geometry.make_from_obj(Assets.TILE_OBJ);
+	store.flag_geometry = Render.Geometry.make_from_obj(Assets.FLAG_OBJ);
+	store.flag_down_geometry = Render.Geometry.make_from_obj(Assets.FLAG_DOWN_OBJ);
 	store.player_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_RACER_OBJ);
 	store.racer_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_RACER_OBJ);
 	store.suv_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_SUV_OBJ);
@@ -305,6 +323,8 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.mark_geometry = Render.Geometry.make_from_obj(Assets.MARK_OBJ);
 	store.gate_geometry = Render.Geometry.make_from_obj(Assets.GATE_OBJ);
 	store.gate_close_geometry = Render.Geometry.make_from_obj(Assets.GATE_CLOSE_OBJ);
+	store.gate_finish_geometry = Render.Geometry.make_from_obj(Assets.GATE_FINISH_OBJ);
+	store.gate_finish_close_geometry = Render.Geometry.make_from_obj(Assets.GATE_FINISH_CLOSE_OBJ);
 	store.shuriken_geometry = Render.Geometry.make_from_obj(Assets.SHURIKEN_OBJ);
 	store.spirit_geometry = Render.Geometry.make_from_obj(Assets.SPIRIT_OBJ);
 }

@@ -22,6 +22,7 @@ Scene :: struct {
 	state: State;
 
 	id := 1;
+	next_id := -1;
 
 	is_server := false;
 
@@ -42,6 +43,7 @@ Scene :: struct {
 	shurikens: [..] Shuriken;
 	stand_in: [..] Stand_In;
 	trigger_zones: [..] Trigger_Zone;
+	flags: [..] Flag;
 	terrain: Terrain;
 
 	coin_generation := 0;
@@ -59,6 +61,9 @@ Scene :: struct {
 	fading := false;
 
 	succeed := false;
+	end_scene_countdown_time: Apollo_Time;
+	end_scene_countdown := 10.0;
+	end_scene_countdown_started := false;
 }
 clear :: (scene: *Scene) {
 	scene.tombstones.count = 0;
@@ -70,10 +75,12 @@ clear :: (scene: *Scene) {
 	scene.shurikens.count = 0;
 	scene.stand_in.count = 0;
 	scene.trigger_zones.count = 0;
+	scene.flags.count = 0;
 }
 
 make_sync :: (scene: *Scene) -> Command.Sync_Scene {
 	sync_scene: Command.Sync_Scene;
+	sync_scene.id = scene.id;
 	sync_scene.terrain = scene.terrain.text;
 	sync_scene.players = NewArray(scene.players.count, Command.Sync_Player, false,, temp);
 	sync_scene.skulls = NewArray(scene.skulls.count, Command.Sync_Skull, false,, temp);
@@ -104,6 +111,7 @@ make_sync :: (skull: *Skull) -> Command.Sync_Skull {
 	sync_skull: Command.Sync_Skull;
 	sync_skull.skull_id = skull.id;
 	sync_skull.t = skull.server.t;
+	sync_skull.speed = skull.server.speed;
 	return sync_skull;
 }
 
@@ -120,6 +128,7 @@ Frame_Result :: struct {
 	sync_gate: [..] Command.Sync_Gate;
 	move_to_player_world: [..] Command.Move_To_Play_World;
 	wipe_scene: [..] Command.Wipe_Scene;
+	end_level: [..] Command.End_Level;
 }
 free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.died);
@@ -127,6 +136,7 @@ free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.sync_gate);
 	array_free(frame_result.move_to_player_world);
 	array_free(frame_result.wipe_scene);
+	array_free(frame_result.end_level);
 }
 clear :: (frame_result: *Frame_Result) {
 	frame_result.died.count = 0;
@@ -134,22 +144,28 @@ clear :: (frame_result: *Frame_Result) {
 	frame_result.sync_gate.count = 0;
 	frame_result.move_to_player_world.count = 0;
 	frame_result.wipe_scene.count = 0;
+	frame_result.end_level.count = 0;
 }
 
 Process_Response :: struct {
-	move: [..] Command.Move;
-	coin_spawn: [..] Command.Spawn_Coin;
-	ntp: [..] Command.NTP;
+	Entry :: struct {
+		scene_id: int;
+		command: Command;
+	}
+
+	entries: [..] Entry;
 }
 free :: (process_response: *Process_Response) {
-	array_free(process_response.move);
-	array_free(process_response.coin_spawn);
-	array_free(process_response.ntp);
+	array_free(process_response.entries);
 }
 clear :: (response: *Process_Response) {
-	response.move.count = 0;
-	response.coin_spawn.count = 0;
-	response.ntp.count = 0;
+	response.entries.count = 0;
+}
+add :: (process_response: *Process_Response, scene_id: int, command: $T) {
+	entry: Process_Response.Entry;
+	entry.scene_id = scene_id;
+	entry.command = make_command(command);
+	array_add(*process_response.entries, entry);
 }
 
 Camera :: struct {
@@ -227,6 +243,22 @@ unproject_ndc :: (ndc: V2f, V: M4f, P: M4f) -> V3f {
 
 Trigger :: enum {
 	Move_To_Play_World :: 0;
+}
+
+Flag :: struct {
+	id: int;
+	position: V3f;
+	radius: float = 0.25;
+
+	count_changed_juice_t := 0.0;
+	activated_juice_t := 0.0;
+
+	index := 0;
+	activated := false;
+
+	n_present := 0;
+
+	last_player_count := 0;
 }
 
 Trigger_Zone :: struct {
@@ -454,8 +486,10 @@ interpolate_to_server :: (key: *Key, dt: float32) {
 restart :: (scene: *Scene) {
 	parse_terrain(scene.terrain.text, scene);
 	for * player: scene.players {
-		spawn_into(player, scene.terrain);
+		spawn_into(player, scene);
 	}
+	scene.end_scene_countdown_started = false;
+	scene.succeed = false;
 }
 
 update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
@@ -548,6 +582,10 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 		update(scene, it, dt);
 	}
 
+	for * scene.flags {
+		update(scene, it, dt);
+	}
+
 	for * scene.keys {
 		interpolate_to_server(it, dt);
 
@@ -627,7 +665,7 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 
 						player_to_respawn := find_by_player_id(scene, tombstone.player_id);
 						if player_to_respawn {
-							spawn_into(player_to_respawn, scene.terrain);
+							spawn_into(player_to_respawn, scene);
 						}
 
 						remove it;
@@ -663,7 +701,7 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 
 						player_to_respawn := find_by_player_id(scene, tomb.player_id);
 						if player_to_respawn {
-							spawn_into(player_to_respawn, scene.terrain);
+							spawn_into(player_to_respawn, scene);
 						}
 
 						remove tomb;
@@ -729,7 +767,36 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 				}
 			}
 		}
+
+		// >RULE First player to reach the end gate win.
+		if !scene.end_scene_countdown_started for * scene.gates {
+			if it.is_end {
+				p := v2(it.position);
+
+				for * player: scene.players {
+					if player.server.dead
+						continue;
+
+					q := v2(player.server.position);
+					d := norm(p - q);
+					if d < 0.5 {
+						winner: Command.End_Level;
+						winner.winner_id = player.id;
+						array_add(*result.end_level, winner);
+
+						win_level(scene, player.id);
+						break it;
+					}
+				}
+			}
+		}
 	}
+}
+
+win_level :: (scene: *Scene, player_id: int) {
+	scene.end_scene_countdown_started = true;
+	scene.end_scene_countdown_time = current_time_monotonic();
+	scene.end_scene_countdown = 6;
 }
 
 server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
@@ -761,6 +828,42 @@ server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 	if !any_alive {
 		array_add(*result.wipe_scene, .{});
 		restart(scene);
+	}
+}
+
+update :: (scene: Scene, flag: *Flag, dt: float32) {
+	if !flag.activated {
+		p := v2(flag.position);
+
+		count := 0;
+		for scene.players {
+			if it.server.dead
+				continue;
+
+			q := v2(it.server.position);
+			d := norm(p - q);
+
+			if d < flag.radius {
+				count += 1;
+			}
+		}
+
+		if (count * 1.5).(s64) >= scene.players.count && scene.players.count > 0 {
+			flag.activated = true;
+			flag.activated_juice_t = 1.0;
+		}
+
+		if flag.last_player_count != count {
+			flag.count_changed_juice_t = 1.0;
+		}
+		flag.last_player_count = count;
+	}
+
+	if flag.activated_juice_t > 0 {
+		flag.activated_juice_t -= dt;
+	}
+	if flag.count_changed_juice_t > 0 {
+		flag.count_changed_juice_t -= dt;
 	}
 }
 
@@ -940,7 +1043,7 @@ process_server_only :: (scene: *Scene, command: Command, response: *Process_Resp
 			cmd.sender = coin.sender;
 			cmd.position = coin.server.position;
 			cmd.direction = coin.server.direction;
-			array_add(*response.coin_spawn, cmd);
+			add(response, scene.id, cmd);
 
 			scene.coin_generation += 1;
 			return true;
@@ -974,6 +1077,7 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		if player
 		{
 			if player.id == scene.controlled_player_id {
+				scene.store.loser_ogg.volume = 0.1;
 				context._platform.play_audio(*scene.store.loser_ogg);
 			}
 
@@ -1006,6 +1110,14 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		}
 	}
 
+	end_level: *Command.End_Level = isa(command.payload, Command.End_Level);
+	if end_level {
+		scene.end_scene_countdown_time = current_time_monotonic();
+		scene.end_scene_countdown = end_level.next_level_scheduled_in_seconds;
+		scene.end_scene_countdown_started = true;
+		return true;
+	}
+
 	return false;
 }
 
@@ -1018,25 +1130,29 @@ process :: (scene: *Scene, command: Command, response: *Process_Response) -> boo
 
 	spawn: *Command.Spawn = isa(command.payload, Command.Spawn);
 	if spawn {
-		player := find_by_player_id(scene, spawn.player_id);
+		if spawn.scene_id == scene.id {
+			player := find_by_player_id(scene, spawn.player_id);
 
-		if !player {
-			new_player: Player;
-			new_player.id = spawn.player_id;
-			array_add(*scene.players, new_player);
-			player = *scene.players[scene.players.count - 1];
-			spawn_into(player, scene.terrain);
+			if !player {
+				new_player: Player;
+				new_player.id = spawn.player_id;
+				if spawn.model_id >= 0
+					new_player.server.model_id = spawn.model_id;
+				array_add(*scene.players, new_player);
+				player = *scene.players[scene.players.count - 1];
+				spawn_into(player, scene);
+			}
+
+			if spawn.its_you {
+				scene.controlled_player_id = spawn.player_id;
+				dt := scene.camera.position - scene.camera.target;
+				scene.camera.target = player.server.position;
+				scene.camera.position = scene.camera.target + dt;
+				scene.camera.locked_to = scene.controlled_player_id;
+			}
+
+			return true;
 		}
-
-		if spawn.its_you {
-			scene.controlled_player_id = spawn.player_id;
-			dt := scene.camera.position - scene.camera.target;
-			scene.camera.target = player.server.position;
-			scene.camera.position = scene.camera.target + dt;
-			scene.camera.locked_to = scene.controlled_player_id;
-		}
-
-		return true;
 	}
 
 	quit: *Command.Quit = isa(command.payload, Command.Quit);
@@ -1053,7 +1169,7 @@ process :: (scene: *Scene, command: Command, response: *Process_Response) -> boo
 
 				player := find_by_player_id(scene, it.player_id);
 				if player {
-					spawn_into(player, scene.terrain);
+					spawn_into(player, scene);
 				}
 				remove it;
 			}
@@ -1103,6 +1219,7 @@ process :: (scene: Scene, skull: *Skull, command: Command, response: *Process_Re
 
 		if skull.id == sync.skull_id {
 			skull.server.t = sync.t;
+			skull.server.speed = sync.speed;
 			return true;
 		}
 	}
@@ -1130,7 +1247,7 @@ process :: (scene: Scene, player: *Player, command: Command, response: *Process_
 			reply: Command.Move;
 			reply.player_id = player.id;
 			reply.ground_target = move.ground_target;
-			array_add(*response.move, reply);
+			add(response, scene.id, reply);
 		}
 
 		return true;
@@ -1311,6 +1428,7 @@ render :: (scene: Scene) {
 	render_shurikens(scene);
 	render_gates(scene);
 	render_tombstones(scene);
+	render_flags(scene);
 
 	if to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time) < 0.8 {
 		Render.set_uniform(*store.texture_shader, "texture_sampler", store.mark_texture, 0);
@@ -1324,6 +1442,33 @@ render :: (scene: Scene) {
 		context.rhi.glDisable(GL_CULL_FACE);
 		Render.render(store.mark_geometry, store.texture_shader);
 		context.rhi.glEnable(GL_CULL_FACE);
+	}
+}
+
+render_flags :: (scene: Scene) {
+	store := scene.store;
+	Render.set_uniform(*store.texture_shader, "texture_sampler", store.vehicle_colormap, 0);
+	for * scene.flags {
+		M := M4f.translate(it.position);
+		if it.activated_juice_t > 0 {
+			R := axis_angle(
+				V3f.{ 0, 0, 1}, it.activated_juice_t * 3.1415926 * 2.0 * 5.0
+			);
+			S := scale_matrix(1.0 + ease_up_and_back(1.0 - it.activated_juice_t));
+
+			M = M * to_rotation_matrix(R) * S;
+		}
+		if !it.activated && it.count_changed_juice_t > 0 {
+			M = M * scale_matrix(1.0 + ease_up_and_back(1.0 - it.count_changed_juice_t));
+		}
+
+		Render.set_uniform(*store.texture_shader, "M", M);
+
+		if it.activated && it.activated_juice_t < 0.5 {
+			Render.render(store.flag_geometry, store.texture_shader);
+		} else {
+			Render.render(store.flag_down_geometry, store.texture_shader);
+		}
 	}
 }
 
@@ -1360,10 +1505,18 @@ render_gates :: (scene: Scene) {
 		M := M4f.translate(it.position) * R;
 		Render.set_uniform(*store.texture_shader, "M", M);
 
-		if it.is_closed {
-			Render.render(store.gate_close_geometry, store.texture_shader);
+		if it.is_end {
+			if it.is_closed {
+				Render.render(store.gate_finish_close_geometry, store.texture_shader);
+			} else {
+				Render.render(store.gate_finish_geometry, store.texture_shader);
+			}
 		} else {
-			Render.render(store.gate_geometry, store.texture_shader);
+			if it.is_closed {
+				Render.render(store.gate_close_geometry, store.texture_shader);
+			} else {
+				Render.render(store.gate_geometry, store.texture_shader);
+			}
 		}
 	}
 }
@@ -1610,9 +1763,26 @@ compute_shuriken_server_world_pos :: (scene: Scene, shuriken: Shuriken) -> V3f {
 	return v3(M * v4(shuriken.server.position, 1.0));
 }
 
-spawn_into :: (player: *Player, terrain: Terrain) {
-	player.server.position.x = xx terrain.spawn_tile.x + 0.5;
-	player.server.position.y = xx terrain.spawn_tile.y + 0.5;
+spawn_into :: (player: *Player, scene: Scene) {
+	// Look for the activated flag with the highest idx;
+	best: *Flag = null;
+	for * scene.flags {
+		if !it.activated
+			continue;
+
+		if !best || it.index > best.index {
+			best = it;
+		}
+	}
+
+	if best {
+		player.server.position.x = xx best.position.x;
+		player.server.position.y = xx best.position.y;
+	} else {
+		player.server.position.x = xx scene.terrain.spawn_tile.x + 0.5;
+		player.server.position.y = xx scene.terrain.spawn_tile.y + 0.5;
+	}
+
 	player.server.walking_toward = false;
 	player.server.slipping = false;
 	player.server.dead = false;

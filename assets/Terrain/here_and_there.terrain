@@ -1,0 +1,110 @@
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XIIIIXXGIIGIIGIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XIiiIXIGIIGIIGIIIGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XIiiIXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XIIIIXIiiiiXXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXIIIIIIIXX
+XXXXGGIiiiiIIIIIXXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXGGXX
+XXXXGGGiiiiXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGXX
+XGGGSGGiiiiGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGXX
+XXXXGGGiiiiXXXXXXXXXXXXXXXXXXXGGGGXXXXXXXXXXXXXXGGXX
+XXXXGGIiiiiIIIIIXXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXGGXX
+XIIIIXIiiiiXXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXIIIIIIIXX
+XIiiIXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XIiiIXIGIIGIIGIIIGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XIIIIXXGIIGIIGIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+gate
+- position: 2.5 7.5 0.0
+- wait_for_key_id: 1
+- is_end: true
+
+path
+- checkpoint: 11.5 9.5 0.0
+- checkpoint: 50.5 9.6 0.0
+
+path
+- checkpoint: 11.5 10.5 0.0
+- checkpoint: 50.5 10.6 0.0
+
+
+path
+- checkpoint: 50.5 4.6 0.0
+- checkpoint: 11.5 4.5 0.0
+
+path
+- checkpoint: 50.5 5.6 0.0
+- checkpoint: 11.5 5.5 0.0
+
+
+skull
+- path_id: 0
+- speed: 0.125
+- t: 0
+skull
+- path_id: 0
+- speed: 0.125
+- t: 0.5
+skull
+- path_id: 0
+- speed: 0.125
+- t: 1.0
+skull
+- path_id: 0
+- speed: 0.125
+- t: 1.5
+
+skull
+- path_id: 1
+- speed: 0.125
+- t: 0.25
+skull
+- path_id: 1
+- speed: 0.125
+- t: 0.75
+skull
+- path_id: 1
+- speed: 0.125
+- t: 1.25
+skull
+- path_id: 1
+- speed: 0.125
+- t: 1.75
+
+
+
+
+skull
+- path_id: 2
+- speed: 0.125
+- t: 0
+skull
+- path_id: 2
+- speed: 0.125
+- t: 0.33
+skull
+- path_id: 2
+- speed: 0.125
+- t: 0.66
+
+skull
+- path_id: 3
+- speed: 0.125
+- t: 0.165
+skull
+- path_id: 3
+- speed: 0.125
+- t: 0.495
+skull
+- path_id: 3
+- speed: 0.125
+- t: 0.825
+
+flag
+- position: 49.5 7.5 0.0
+- index: 0
+
+
+
+key
+- position: 6 8.5 0.0

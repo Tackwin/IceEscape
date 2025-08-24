@@ -18,26 +18,6 @@ GUI :: #import "GUI";
 
 show_inspector := false;    // Wish we could declare static variables inside functions.
 
-State :: struct {
-	platform: *Platform;
-	scene: Scene.Scene;
-
-	is_connected := false;
-	connected_last_try: Apollo_Time;
-
-	ntp_period: Period(0.15);
-	NTP_Result :: struct {
-		offset: float64 = 0;
-		ping: float64 = 0;
-		time: float64 = 0;
-	}
-
-	ntp_history: [64] NTP_Result;
-	ntp_history_cursor := 0;
-
-	received_command_history: [..] Command.payload.Kind;
-}
-
 process_complete_ntp :: (state: *State, ntp: Command.NTP) {
 	result: State.NTP_Result;
 	result.offset = (ntp.t1 + ntp.t2) / 2 - (ntp.t0 + ntp.t3) / 2;
@@ -80,8 +60,9 @@ process :: (state: *State, command: Command, response: *Scene.Process_Response) 
 			send_back = false;
 		}
 
-		if send_back && response
-			array_add(*response.ntp, reply);
+		if send_back && response {
+			Scene.add(response, state.scene.id, reply);
+		}
 
 		if is_over
 			process_complete_ntp(state, reply);
@@ -92,6 +73,7 @@ process :: (state: *State, command: Command, response: *Scene.Process_Response) 
 	sync_scene: *Command.Sync_Scene = isa(command.payload, Command.Sync_Scene);
 	if sync_scene {
 		Terrain.parse_terrain(sync_scene.terrain, *state.scene);
+		state.scene.id = sync_scene.id;
 		// Remove all players not present in the sync.
 		for * state.scene.players {
 			found := false;
@@ -163,9 +145,9 @@ parse_web_message :: (state: *State, frame_info: Frame_Info) -> [] Command {
 }
 
 respond :: (platform: Platform, response: Scene.Process_Response) {
-	for * response.ntp {
-		cmd := make_command(it.*);
-		send_web_message(platform, cmd);
+	for * response.entries {
+		if isa(it.command.payload, Command.NTP)
+			send_web_message(platform, it.command);
 	}
 }
 
@@ -180,7 +162,7 @@ main :: () {
 
 	store: Store;
 	init_store(platform, *store);
-	Render.im_init();
+	Render.im_init(*store);
 
 	clear_color := V4f.{0.45, 0.55, 0.60, 1.00};
 
@@ -227,9 +209,6 @@ main :: () {
 		it.* = true;
 	filter_command_debug[xx Command.payload.Kind.Sync_Player] = false;
 	filter_command_debug[xx Command.payload.Kind.NTP] = false;
-
-	yes: [..] V2f;
-	last_yes: Apollo_Time;
 
 	footstep_trigger_index := 0;
 	process_response: Scene.Process_Response;
@@ -325,20 +304,12 @@ main :: () {
 		if just_pressed[Key.P] {
 			render_command_debug = !render_command_debug;
 		}
+		if scene.end_scene_countdown_started {
+			dt := to_float64_seconds(current_time_monotonic() - scene.end_scene_countdown_time);
+			text := tprint("you have % seconds left to go through the gate !", dt.(s64));
 
-		if scene.succeed && to_float64_seconds(current_time_monotonic() - last_yes) > 0.175 {
-			p := V2f.{ 0, 0 };
-			if yes.count > 0 {
-				p = yes[yes.count - 1];
-			}
-
-			p.x += 123456;
-			p.y += 456789;
-			p.x = fmod_cycling(p.x, frame_info.framebuffer_size.x);
-			p.y = fmod_cycling(p.y, frame_info.framebuffer_size.y);
-
-			array_add(*yes, p);
-			last_yes = current_time_monotonic();
+			Render.push_text("Level cleared !", .{ 781, 955 }, 48);
+			Render.push_text(text, .{ 398, 850 }, 48);
 		}
 
 		T += 1;
@@ -404,7 +375,7 @@ main :: () {
 			ntp.t1 = FLOAT64_MAX;
 			ntp.t2 = FLOAT64_MAX;
 			ntp.t3 = FLOAT64_MAX;
-			array_add(*process_response.ntp, ntp);
+			Scene.add(*process_response, scene.id, ntp);
 		}
 		respond(platform, process_response);
 		Scene.update(scene, frame_info.delta_time, null);
@@ -419,9 +390,11 @@ main :: () {
 
 		Scene.render(scene);
 		GUI.render_action_palette(frame_info);
-
-		for yes {
-			Render.push_text("GG, you won !", it, 24);
+		GUI.render_settings(*state.volume_on, frame_info);
+		if state.volume_on {
+			state.platform.volume_audio(1.0);
+		} else {
+			state.platform.volume_audio(0.0);
 		}
 
 		if render_command_debug {
@@ -437,18 +410,18 @@ main :: () {
 				if !filter_command_debug[kind_idx]
 					continue;
 
-				Render.push_text(tprint("%", kind), V2f.{ 200.0, 10.0 + y * 20.0 }, 18);
+				Render.push_text(tprint("%", kind), V2f.{ 500.0, 10.0 + y * 20.0 }, 18);
 				y += 1;
 			}
 
 			for * filter_command_debug {
 				Render.push_text(
 					tprint("%", it_index.(Command.payload.Kind)),
-					V2f.{ 10.0, 10.0 + it_index * 20.0 },
+					V2f.{ 310.0, 10.0 + it_index * 20.0 },
 					18
 				);
 				if Render.push_checkbox(
-					V2f.{ 175, 20.0 + it_index * 20.0 }, 18, filter_command_debug[it_index]
+					V2f.{ 475, 20.0 + it_index * 20.0 }, 18, filter_command_debug[it_index]
 				)
 					filter_command_debug[it_index] = !filter_command_debug[it_index];
 			}
@@ -496,3 +469,24 @@ main :: () {
 	exit_platform(platform);
 }
 
+State :: struct {
+	platform: *Platform;
+	scene: Scene.Scene;
+
+	is_connected := false;
+	connected_last_try: Apollo_Time;
+
+	ntp_period: Period(0.15);
+	NTP_Result :: struct {
+		offset: float64 = 0;
+		ping: float64 = 0;
+		time: float64 = 0;
+	}
+
+	ntp_history: [64] NTP_Result;
+	ntp_history_cursor := 0;
+
+	received_command_history: [..] Command.payload.Kind;
+
+	volume_on := false;
+}

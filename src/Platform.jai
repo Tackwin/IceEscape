@@ -110,6 +110,7 @@ Platform :: struct {
 	load_audio: #type (data: string) -> Audio = null;
 	play_audio: #type (audio: *Audio) = null;
 	query_audio: #type (audio: *Audio) -> bool = null;
+	volume_audio: #type (x: float) -> float = null;
 }
 
 GLenum :: u32;

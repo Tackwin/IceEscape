@@ -1,5 +1,6 @@
 Terrain :: #import "Terrain";
 #import "http";
+#import "String";
 #import "Basic";
 #import "Math";
 #import "Communication";
@@ -7,9 +8,11 @@ Scene :: #import "Scene";
 #import "Thread";
 #import "Hash_Table";
 #import "Utils";
+#import "File";
 Platform :: #import "Platform";
+#import "File_Watcher";
 
-TIMEOUT_DURATION := 10.0;
+TIMEOUT_DURATION := 1000.0;
 
 prepare_typed_message :: (_payload: $T) -> [] u8 {
 	payload := _payload;
@@ -25,9 +28,20 @@ prepare_typed_message :: (_payload: $T) -> [] u8 {
 	return buffer;
 }
 
+scene_scoped_broadcast :: (scene_id: int, data: $T) {
+	message := prepare_typed_message(data);
+	scene_scoped_broadcast_prepared(scene_id, message);
+}
 broadcast :: (server: Websocket_Server, data: $T) {
 	message := prepare_typed_message(data);
 	broadcast_prepared(server, message);
+}
+scene_scoped_broadcast_prepared :: (scene_id: int, payload: [] u8) {
+	for state.users {
+		if it.scene_id == scene_id {
+			websocket_send(it.websocket, .{ data = payload.data, count = payload.count }, .BINARY);
+		}
+	}
 }
 broadcast_prepared :: (server: Websocket_Server, payload: [] u8) {
 	for server.websockets {
@@ -98,8 +112,12 @@ State :: struct {
 	ntp_history_cursor := 0;
 
 	scenes: [..] Scene.Scene;
+
 	pick_scene_id: int;
 	first_world_id: int;
+	second_world_id: int;
+
+	playing_scene_id: int;
 }
 state: State;
 
@@ -190,7 +208,7 @@ sync :: (state: State) {
 		for * scene: state.scenes {
 			for * scene.players {
 				msg := Scene.make_sync(it);
-				broadcast(state.server, make_command(msg));
+				scene_scoped_broadcast(scene.id, make_command(msg));
 			}
 		}
 	}
@@ -199,7 +217,7 @@ sync :: (state: State) {
 		for * scene: state.scenes {
 			for * scene.moving_frames {
 				msg := Scene.make_sync(it);
-				broadcast(state.server, make_command(msg));
+				scene_scoped_broadcast(scene.id, make_command(msg));
 			}
 		}
 	}
@@ -208,7 +226,7 @@ sync :: (state: State) {
 		for * scene: state.scenes {
 			for * scene.skulls {
 				msg := Scene.make_sync(it);
-				broadcast(state.server, make_command(msg));
+				scene_scoped_broadcast(scene.id, make_command(msg));
 			}
 		}
 	}
@@ -220,7 +238,7 @@ sync :: (state: State) {
 				msg.key_id = it.id;
 				msg.holder = it.holder;
 				msg.position = it.server.position;
-				broadcast(state.server, make_command(msg));
+				scene_scoped_broadcast(scene.id, make_command(msg));
 			}
 		}
 	}
@@ -263,7 +281,6 @@ tick :: (state: *State) {
 	reset_temporary_storage();
 
 	Scene.clear(*process_response);
-	Scene.clear(*frame_result);
 
 	// Early test
 	if state.received.count > 0 {
@@ -292,59 +309,57 @@ tick :: (state: *State) {
 		state.received.count = 0; // Clear the queue after processing.
 	}
 
-	for process_response.move {
-		broadcast(state.server, make_command(it));
-	}
-	for process_response.coin_spawn {
-		broadcast(state.server, make_command(it));
-	}
-	for process_response.ntp {
-		if it.player_id < 0 {
-			broadcast(state.server, make_command(it));
-		} else {
-			user := find_user_by_player_id(it.player_id);
-			if user {
-				send(user.websocket, make_command(it));
+	for process_response.entries {
+		ntp: *Command.NTP = isa(it.command.payload, Command.NTP);
+		if ntp {
+			if ntp.player_id < 0 {
+				broadcast(state.server, it.command);
+			} else {
+				user := find_user_by_player_id(ntp.player_id);
+				if user {
+					send(user.websocket, it.command);
+				}
 			}
+		} else {
+			scene_scoped_broadcast(it.scene_id, it.command);
 		}
 	}
 
 	for * scene: state.scenes {
+		Scene.clear(*frame_result);
 		Scene.update(scene, state.tick_period.period, *frame_result);
-	}
 
-	for frame_result.move_to_player_world {
-		move_player_to_scene(it.player_id, state.first_world_id);
-
-		user := find_user_by_player_id(it.player_id);
-		if user {
-			scene := find_by_scene_id(state.first_world_id);
-			if scene {
-				player := Scene.find_by_player_id(scene, it.player_id);
-				if player {
-					player.server.model_id = it.model_id;
-				}
-
-				sync_scene := Scene.make_sync(scene);
-
-				send(user.websocket, make_command(sync_scene));
-			}
+		for frame_result.end_level {
+			scene_scoped_broadcast(scene.id, make_command(it));
 		}
 
+		for frame_result.move_to_player_world {
+			move_player_to_scene(it.player_id, state.playing_scene_id, it.model_id);
+		}
+
+		for frame_result.died {
+			scene_scoped_broadcast(scene.id, make_command(it));
+		}
+		for frame_result.respawn {
+			scene_scoped_broadcast(scene.id, make_command(it));
+		}
+		for frame_result.sync_gate {
+			scene_scoped_broadcast(scene.id, make_command(it));
+		}
+		for frame_result.wipe_scene {
+			scene_scoped_broadcast(scene.id, make_command(it));
+		}
+
+		if scene.end_scene_countdown_started {
+			t := current_time_monotonic();
+			dt := to_float64_seconds(t - scene.end_scene_countdown_time);
+			if dt >= scene.end_scene_countdown {
+				scene.end_scene_countdown_started = false;
+				move_playing_scene(scene.next_id);
+			}
+		}
 	}
 
-	for frame_result.died {
-		broadcast(state.server, make_command(it));
-	}
-	for frame_result.respawn {
-		broadcast(state.server, make_command(it));
-	}
-	for frame_result.sync_gate {
-		broadcast(state.server, make_command(it));
-	}
-	for frame_result.wipe_scene {
-		broadcast(state.server, make_command(it));
-	}
 
 	for * state.users {
 		if to_float64_seconds(current_time_monotonic() - it.last_ping) > TIMEOUT_DURATION {
@@ -398,7 +413,7 @@ process :: (
 		}
 
 		if send_back && response
-			array_add(*response.ntp, reply);
+			Scene.add(response, -1, reply);
 
 		if is_over
 			process_complete_ntp(state, reply);
@@ -451,6 +466,7 @@ process :: (
 				spawn: Command.Spawn;
 				spawn.player_id = user.player_id;
 				spawn.its_you = false;
+				spawn.scene_id = it.scene_id;
 				append_queue(spawn, it.websocket);
 			}
 
@@ -458,6 +474,7 @@ process :: (
 			spawn: Command.Spawn;
 			spawn.player_id = user.player_id;
 			spawn.its_you = false;
+			spawn.scene_id = user.scene_id;
 			append_received_sync(make_command(spawn), null);
 		}
 
@@ -470,6 +487,7 @@ process :: (
 		spawn: Command.Spawn;
 		spawn.player_id = user.player_id;
 		spawn.its_you = true;
+		spawn.scene_id = user.scene_id;
 		append_queue(spawn, user.websocket);
 
 		// And finally we can respond to the user with the connection token
@@ -494,22 +512,50 @@ add_scene :: (text: string) -> int {
 	return scene.id;
 }
 
-move_player_to_scene :: (player_id: int, scene_id: int) {
-	player: *Scene.Player = null;
-	old_scene: *Scene.Scene = null;
-	for * scene: state.scenes {
-		old_scene = scene;
-		player = Scene.find_by_player_id(scene, player_id);
-		if player
-			break;
-	}
-	if !player
+set_scene :: (scene: *Scene.Scene, text: string) -> int {
+	scene.is_server = true;
+	Terrain.parse_terrain(text, scene);
+	return scene.id;
+}
+
+move_playing_scene :: (scene_id: int) {
+	old_scene := find_by_scene_id(state.playing_scene_id);
+
+	scene := find_by_scene_id(scene_id);
+	if !scene
 		return;
 
-	for * old_scene.players {
-		if it == player {
-			remove it;
-			break;
+	Scene.restart(scene);
+	sync_scene := Scene.make_sync(scene);
+	for state.users {
+		if it.scene_id == state.playing_scene_id {
+			send(it.websocket, make_command(sync_scene));
+		}
+	}
+	state.playing_scene_id = scene_id;
+	for old_scene.players {
+		move_player_to_scene(it.id, scene_id, -1);
+	}
+}
+
+move_player_to_scene :: (player_id: int, scene_id: int, model_id: int) {
+	{
+		player: *Scene.Player = null;
+		old_scene: *Scene.Scene = null;
+		for * scene: state.scenes {
+			old_scene = scene;
+			player = Scene.find_by_player_id(scene, player_id);
+			if player
+				break;
+		}
+		if !player
+			return;
+
+		for * old_scene.players {
+			if it.id == player_id {
+				remove it;
+				break;
+			}
 		}
 	}
 
@@ -518,10 +564,49 @@ move_player_to_scene :: (player_id: int, scene_id: int) {
 		return;
 
 	spawn: Command.Spawn;
-	spawn.player_id = player.id;
-	spawn.scene_id = new_scene.id;
+	spawn.player_id = player_id;
+	spawn.scene_id = scene_id;
+	spawn.model_id = model_id;
 	Scene.process(new_scene, make_command(spawn), null);
+
+	find_user_by_player_id(player_id).scene_id = scene_id;
+
+	user := find_user_by_player_id(player_id);
+	if user {
+		scene := find_by_scene_id(state.first_world_id);
+		if scene {
+			player := Scene.find_by_player_id(scene, player_id);
+			if player && model_id >= 0 {
+				player.server.model_id = model_id;
+			}
+
+			sync_scene := Scene.make_sync(scene);
+
+			send(user.websocket, make_command(sync_scene));
+		}
+	}
+
+	// Signal to the rest of the users in the scene that a new player popped in.
+	for state.users {
+		if it.scene_id != scene_id
+			continue;
+		
+		if it.player_id == player_id
+			continue;
+
+		spawn: Command.Spawn;
+		spawn.player_id = player_id;
+		spawn.scene_id = scene_id;
+		spawn.model_id = model_id;
+		send(it.websocket, make_command(spawn));
+	}
 }
+
+watcher: File_Watcher(void);
+frame_file_change: [1024] string;
+frame_file_change_count := 0;
+
+name_to_scene_id: Table(string, int);
 
 #add_context _platform: Platform.Platform;
 main :: () {
@@ -533,7 +618,21 @@ main :: () {
 	state.tick_period.last = current_time_monotonic();
 
 	state.pick_scene_id = add_scene(Terrain.PICK_STRING);
-	state.first_world_id = add_scene(Terrain.ROUNDABOUT_STRING);
+	{
+		plain_terrain_txt := sprint("%/../assets/terrain/here_and_there.terrain", #filepath);
+		data, ok := read_entire_file(plain_terrain_txt);
+		state.first_world_id = add_scene(data);
+
+		table_add(*name_to_scene_id, "here_and_there.terrain", state.first_world_id);
+	}
+	state.second_world_id = add_scene(Terrain.ROUNDABOUT_STRING);
+
+	for 0..state.scenes.count-2 {
+		state.scenes[it].next_id = state.scenes[it+1].id;
+	}
+
+	state.playing_scene_id = state.first_world_id;
+
 	http_listen(port=5623);
 
 	server := websocket_listen("/ws");
@@ -563,8 +662,45 @@ main :: () {
 
 	state.server = server;
 
+	init(*watcher, (watcher: *File_Watcher(void), change: *File_Change, user_data: *void) {
+		frame_file_change_count %= frame_file_change.count;
+		frame_file_change[frame_file_change_count] = alloc_string(change.full_path.count);
+		memcpy(
+			frame_file_change[frame_file_change_count].data,
+			change.full_path.data,
+			change.full_path.count
+		);
+		frame_file_change_count += 1;
+	}, null);
+	add_directories(*watcher, tprint("%/../assets/", #filepath));
+
 	error := 0.0;
 	while 1 {
+		process_changes(*watcher);
+		for 0..frame_file_change_count-1 {
+			change := frame_file_change[it];
+
+			for id, name: name_to_scene_id {
+				if ends_with(change, name) {
+
+					data, ok := read_entire_file(change);
+					scene := find_by_scene_id(id);
+
+					if scene && ok {
+						for user: state.users {
+							if user.scene_id == id {
+								set_scene(scene, data);
+								sync_scene := Scene.make_sync(scene);
+
+								send(user.websocket, make_command(sync_scene));
+							}
+						}
+					}
+
+				}
+			}
+		}
+
 		if check(*state.sync_period) {
 			sync(state);
 		}
@@ -607,6 +743,8 @@ main :: () {
 				state.queue.count = 0; // Clear the queue after processing.
 			}
 		}
+
+		frame_file_change_count = 0;
 	}
 }
 

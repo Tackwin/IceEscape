@@ -129,10 +129,14 @@ gate
 - is_end: true
 
 gate
-- position: 13.5 17.5 0.0
+- position: 12.5 17.5 0.0
 - direction: 1 0 0
 - is_closed: true
 - wait_for_key_id: 1
+
+flag
+- position: 14 17.5 0
+- index: 0
 
 skull
 - path_id: 0
@@ -167,7 +171,6 @@ skull
 skull
 - path_id: 1
 - speed: 1.1
-- t: 4
 
 skull
 - path_id: 1
@@ -294,6 +297,38 @@ parse_terrain :: (text: string, scene: *Scene) {
 			continue;
 		if starts_with(line, "//")
 			continue;
+
+		if scan2(line, "flag") {
+			flag: Flag;
+			defer array_add(*scene.flags, flag);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				if scan2(
+					line, "- position: % % %", *flag.position.x, *flag.position.y, *flag.position.z
+				)
+					continue;
+				if scan2(line, "- index: %", *flag.index)
+					continue;
+
+				print("Error reading flag, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
 
 		if scan2(line, "shuriken") {
 			shuriken: Shuriken;

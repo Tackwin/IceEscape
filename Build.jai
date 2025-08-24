@@ -3,6 +3,7 @@
 #import "Basic";
 #import "String";
 #import "Bindings_Generator";
+#import "File";
 
 build_win32 :: () -> Workspace {
 	w := compiler_create_workspace("Win32");

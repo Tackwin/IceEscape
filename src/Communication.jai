@@ -42,6 +42,7 @@ Command :: struct {
 	Spawn :: struct {
 		scene_id: int;
 		player_id: int;
+		model_id := -1;
 		its_you: bool;
 	}
 	Spawn_Coin :: struct {
@@ -79,6 +80,7 @@ Command :: struct {
 	Sync_Skull :: struct {
 		skull_id: int;
 		t: float;
+		speed: float;
 	}
 	Sync_Key :: struct {
 		key_id: int;
@@ -106,7 +108,12 @@ Command :: struct {
 		model_id: int;
 		play_world_id: int;
 	}
+	End_Level :: struct {
+		winner_id: int;
+		next_level_scheduled_in_seconds := 60.0;
+	}
 	Sync_Scene :: struct {
+		id: int;
 		terrain: string;
 		players: [] Sync_Player; // Would usually point to a temporary buffer.
 		skulls: [] Sync_Skull;
@@ -118,7 +125,7 @@ Command :: struct {
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
-		Wipe_Scene
+		Wipe_Scene, End_Level
 	);
 	sent_timestamp: float64;
 }
@@ -164,6 +171,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 
 	for label: 0.. 0 if #complete cmd.payload.kind == {
 		case .Wipe_Scene; #through;
+		case .End_Level; #through;
 		case .Move; #through;
 		case .Spawn; #through;
 		case .Connect; #through;
@@ -242,6 +250,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 	if #complete cmd.payload.kind == {
 		case .Wipe_Scene; #through;
 		case .Move; #through;
+		case .End_Level; #through;
 		case .Spawn; #through;
 		case .Connect; #through;
 		case .Spawn_Coin; #through;

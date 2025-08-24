@@ -4,6 +4,7 @@
 #import "Assets";
 #import "Platform";
 #import "Hash_Table";
+Store :: #import "Store";
 STB :: #import "stb_image";
 
 #scope_export
@@ -31,6 +32,15 @@ IM: struct {
 		size: V3f;
 	}
 
+	Quad_Texture :: struct {
+		pos: V2f;
+		size: V2f;
+		color: V4f;
+		tex_slot: V2f;
+		z: float = 0.0;
+	}
+
+
 	quad_object: GLuint = 0;
 	quad_buffer: GLuint = 0;
 
@@ -39,6 +49,7 @@ IM: struct {
 
 	quads: [..] Quad;
 	quads_late: [..] Quad;
+	quads_texture: [..] Quad_Texture;
 	quad_shader: Shader;
 
 	chars: [..] Char;
@@ -57,13 +68,12 @@ IM: struct {
 	pressed: [Key_COUNT] bool;
 
 	mouse_pos: V2f;
+	store: *Store.Store;
 }
 
-im_init :: () {
+im_init :: (store: *Store.Store) {
 	IM = .{};
-	IM.quads.allocator = context.allocator;
-	IM.quads_late.allocator = context.allocator;
-	IM.chars.allocator = context.allocator;
+	IM.store = store;
 }
 
 handle_frame_info :: (info: Frame_Info) {
@@ -107,6 +117,20 @@ push_checkbox :: (
 	return false;
 }
 
+push_button :: (center: V2f, size: float, tex_slot: V2f, z := 0.0) -> bool {
+	push_quad_texture(
+		center - V2f.{ size / 2, size / 2 }, V2f.{ size, size }, .{ 1, 1, 1 }, tex_slot
+	);
+
+	low := center - V2f.{ size / 2, size / 2 };
+	high := center + V2f.{ size / 2, size / 2 };
+
+	if IM.just_pressed[Key.MouseLeft] && point_aabb(IM.mouse_pos, low, high) {
+		return true;
+	}
+	return false;
+}
+
 push_quad :: (quad: IM.Quad) {
 	array_add(*IM.quads, quad);
 }
@@ -121,6 +145,19 @@ push_quad_screen :: (pos: V2f, size: V2f, color: V3f, z := 0.0) {
 	quad.z = z;
 
 	array_add(*IM.quads, quad);
+}
+push_quad_texture :: (pos: V2f, size: V2f, color: V3f, tex_slot: V2f, z := 0.0) {
+	quad: IM.Quad_Texture;
+	// IM.display_size
+	quad.pos.x = pos.x / IM.display_size.x * 2 - 1.0;
+	quad.pos.y = pos.y / IM.display_size.y * 2 - 1.0;
+	quad.size.x = size.x / IM.display_size.x * 2;
+	quad.size.y = size.y / IM.display_size.y * 2;
+	quad.color = .{ color.x, color.y, color.z, 1.0 };
+	quad.tex_slot = tex_slot;
+	quad.z = z;
+
+	array_add(*IM.quads_texture, quad);
 }
 
 push_late_quad_screen :: (pos: V2f, size: V2f, color: V4f, z := 0.0) {
@@ -267,6 +304,87 @@ render_im_quad :: () {
 	IM.quads_late.count = 0;
 }
 
+render_im_quad_texture :: () {
+	context.rhi.glUseProgram(IM.store.quad_texture_shader.program);
+
+	if !IM.quad_object {
+		context.rhi.glGenVertexArrays(1, *IM.quad_object);
+	}
+	context.rhi.glBindVertexArray(IM.quad_object);
+	
+	if !IM.quad_buffer {
+		context.rhi.glGenBuffers(1, *IM.quad_buffer);
+	}
+
+	Quad_Vertex :: struct {
+		pos: V3f;
+		color: V4f;
+		tex: V2f;
+	}
+
+	vertices := NewArray(
+		IM.quads_texture.count * 6, Quad_Vertex, false,, temp
+	);
+
+	for IM.quads_texture {
+		vertices[it_index * 6 + 0].pos = .{ it.pos.x, it.pos.y, it.z };
+		vertices[it_index * 6 + 0].color = it.color;
+		vertices[it_index * 6 + 0].tex = .{ it.tex_slot.x * 64, it.tex_slot.y * 64 + 64 };
+
+		vertices[it_index * 6 + 1].pos = .{ it.pos.x + it.size.x, it.pos.y, it.z };
+		vertices[it_index * 6 + 1].color = it.color;
+		vertices[it_index * 6 + 1].tex = .{ it.tex_slot.x * 64 + 64, it.tex_slot.y * 64 + 64 };
+
+		vertices[it_index * 6 + 2].pos = .{ it.pos.x + it.size.x, it.pos.y + it.size.y, it.z };
+		vertices[it_index * 6 + 2].color = it.color;
+		vertices[it_index * 6 + 2].tex = .{ it.tex_slot.x * 64 + 64, it.tex_slot.y * 64 };
+
+		vertices[it_index * 6 + 3].pos = .{ it.pos.x, it.pos.y, it.z };
+		vertices[it_index * 6 + 3].color = it.color;
+		vertices[it_index * 6 + 3].tex = .{ it.tex_slot.x * 64, it.tex_slot.y * 64 + 64 };
+
+		vertices[it_index * 6 + 4].pos = .{ it.pos.x + it.size.x, it.pos.y + it.size.y, it.z };
+		vertices[it_index * 6 + 4].color = it.color;
+		vertices[it_index * 6 + 4].tex = .{ it.tex_slot.x * 64 + 64, it.tex_slot.y * 64 };
+
+		vertices[it_index * 6 + 5].pos = .{ it.pos.x, it.pos.y + it.size.y, it.z };
+		vertices[it_index * 6 + 5].color = it.color;
+		vertices[it_index * 6 + 5].tex = .{ it.tex_slot.x * 64, it.tex_slot.y * 64 };
+	}
+
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, IM.quad_buffer);
+	context.rhi.glBufferData(
+		GL_ARRAY_BUFFER,
+		vertices.count * size_of(Quad_Vertex),
+		vertices.data,
+		GL_DYNAMIC_DRAW
+	);
+
+	context.rhi.glEnableVertexAttribArray(0); // Position
+	context.rhi.glVertexAttribPointer(
+		0, 3, GL_FLOAT, GL_FALSE, size_of(Quad_Vertex), xx offset_of(Quad_Vertex, "pos")
+	);
+
+	context.rhi.glEnableVertexAttribArray(1); // Color
+	context.rhi.glVertexAttribPointer(
+		1, 4, GL_FLOAT, GL_FALSE, size_of(Quad_Vertex), xx offset_of(Quad_Vertex, "color")
+	);
+
+	context.rhi.glEnableVertexAttribArray(2); // TexCoord
+	context.rhi.glVertexAttribPointer(
+		2, 2, GL_FLOAT, GL_FALSE, size_of(Quad_Vertex), xx offset_of(Quad_Vertex, "tex")
+	);
+
+	set_uniform(*IM.store.quad_texture_shader, "tex_size", V2f.{
+		IM.store.ui_atlas_png.width.(float),
+		IM.store.ui_atlas_png.height.(float)
+	});
+	set_uniform(*IM.store.quad_texture_shader, "tex", IM.store.ui_atlas, 0);
+
+	context.rhi.glDrawArrays(GL_TRIANGLES, 0, xx vertices.count);
+
+	IM.quads_texture.count = 0;
+}
 
 render_im_char :: () {
 	if IM.chars.count == 0
@@ -375,6 +493,7 @@ render_im_char :: () {
 
 render_im :: () {
 	render_im_quad();
+	render_im_quad_texture();
 	render_im_char();
 }
 
@@ -431,7 +550,6 @@ set_uniform :: (shader: *Shader, name: string, value: $T) {
 		memcpy(allocated_name.data, name.data, name.count);
 		array_add(*shader.keys, allocated_name);
 		table_add(*shader.locations, allocated_name, loc);
-		write_string("Uniform location not found.\n");
 	}
 
 	if loc < 0 {
@@ -466,7 +584,6 @@ set_uniform :: (shader: *Shader, name: string, value: Texture, unit: int) {
 		memcpy(allocated_name.data, name.data, name.count);
 		array_add(*shader.keys, allocated_name);
 		table_add(*shader.locations, allocated_name, loc);
-		write_string("Uniform location not found.\n");
 	}
 
 	if loc < 0 {

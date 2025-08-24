@@ -176,12 +176,15 @@ FORMAT;
 	return sprint(format_text, name, "%", "%", root, "%", "%", path);
 }
 
-#insert #run embed_data("SNOWFLAKES_AND_LIGHTS_OGG", "Snowflakes and Lights.ogg", #filepath);
 #insert #run embed_data("PLAIN_VERTEX", "Shader/plain.vert", #filepath);
 #insert #run embed_data("INSTANCE_VERTEX", "Shader/instance.vert", #filepath);
 #insert #run embed_data("INSTANCE_FRAGMENT", "Shader/instance.frag", #filepath);
 #insert #run embed_data("TILE_VERTEX", "Shader/tile.vert", #filepath);
 #insert #run embed_data("TILE_FRAGMENT", "Shader/tile.frag", #filepath);
+#insert #run embed_data("QUAD_TEXTURE_VERTEX", "Shader/quad_texture.vert", #filepath);
+#insert #run embed_data("QUAD_TEXTURE_FRAGMENT", "Shader/quad_texture.frag", #filepath);
+
+#insert #run embed_data("SNOWFLAKES_AND_LIGHTS_OGG", "Snowflakes and Lights.ogg", #filepath);
 #insert #run embed_data("tile_cliff_albedo_png", "Tile/cliff_albedo.png", #filepath);
 #insert #run embed_data("tile_cliff_normal_png", "Tile/cliff_normal.png", #filepath);
 #insert #run embed_data("tile_cliff_height_png", "Tile/cliff_height.png", #filepath);
@@ -199,6 +202,8 @@ FORMAT;
 #insert #run embed_data("VEHICLE_RACER_OBJ", "vehicle-racer.obj", #filepath);
 #insert #run embed_data("VEHICLE_SUV_OBJ", "vehicle-suv.obj", #filepath);
 #insert #run embed_data("VEHICLE_SPEEDSTER_OBJ", "vehicle-speedster.obj", #filepath);
+#insert #run embed_data("FLAG_OBJ", "flag.obj", #filepath);
+#insert #run embed_data("FLAG_DOWN_OBJ", "flag_down.obj", #filepath);
 
 #insert #run embed_data("CLICK_WAV", "click.wav", #filepath);
 
@@ -220,6 +225,8 @@ FORMAT;
 #insert #run embed_data("MARK_OBJ", "mark.obj", #filepath);
 #insert #run embed_data("GATE_OBJ", "gate.obj", #filepath);
 #insert #run embed_data("GATE_CLOSE_OBJ", "gate_close.obj", #filepath);
+#insert #run embed_data("GATE_FINISH_OBJ", "gate-finish.obj", #filepath);
+#insert #run embed_data("GATE_FINISH_CLOSE_OBJ", "gate-finish_close.obj", #filepath);
 #insert #run embed_data("SHURIKEN_OBJ", "shuriken.obj", #filepath);
 
 
@@ -470,6 +477,7 @@ dirt_texture_help :: () -> Image {
 
 		image := decode_image(tprint("%/../assets/Dirt_01.png", #filepath));
 		return image.data, image.width, image.height;
+
 	};
 	return .{ width = xx b, height = xx c, data = a };
 }

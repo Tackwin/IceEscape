@@ -309,6 +309,15 @@ query_audio :: (audio: *Audio) -> bool {
 	return false;
 }
 
+master_volume := 1.0;
+volume_audio :: (x: float) -> float {
+	if x < 0
+		return master_volume;
+	master_volume = x;
+	Sound.set_master_volume(master_volume);
+	return master_volume;
+}
+
 watcher: File_Watcher(Platform);
 frame_file_change: [1024] string;
 frame_file_change_count := 0;
@@ -344,7 +353,7 @@ init_platform :: () -> Platform {
 	curl_buffer = NewArray(1024*1024*32, u8, false);
 
 	sdl_window = SDL_CreateWindow(
-		"Ice Escape",
+		tprint("Ice Escape %\0", win32_get_token()).data,
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
 		1366,
@@ -375,6 +384,7 @@ init_platform :: () -> Platform {
 	platform.query_audio = query_audio;
 	platform.load_audio = load_audio;
 	platform.play_audio = play_audio;
+	platform.volume_audio = volume_audio;
 
 	GL.gl_load(*GL.gl, SDL_GL_GetProcAddress);
 
