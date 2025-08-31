@@ -8,12 +8,12 @@ Graphics :: struct {
 	adapter: WGPUAdapter;
 }
 
-#add_context gpu: Graphics;
+#add_context graphics: Graphics;
 
 init_graphics :: () {
-	gpu := *context.gpu;
-	gpu.instance = wgpuCreateInstance(null);
-	if !gpu.instance {
+	using context;
+	graphics.instance = gpu.createInstance(null);
+	if !graphics.instance {
 		print("Failed to create WGPU instance\n");
 		return;
 	}
@@ -21,7 +21,7 @@ init_graphics :: () {
 	done := false;
 	opts: WGPURequestAdapterOptions = .{};
 	cb: WGPURequestAdapterCallbackInfo = .{};
-	cb.userdata1 = gpu;
+	cb.userdata1 = *context.graphics;
 	cb.userdata2 = *done;
 	cb.callback = (
 		status: WGPURequestAdapterStatus,
@@ -30,9 +30,9 @@ init_graphics :: () {
 		userdata1: *void,
 		userdata2: *void
 	) #c_call {
-		gpu := userdata1.(*Graphics);
+		graphics := userdata1.(*Graphics);
 		if status == WGPURequestAdapterStatus.Success {
-			gpu.adapter = adapter;
+			graphics.adapter = adapter;
 			userdata2.(*bool).* = true;
 		} else {
 			ctx: #Context;
@@ -41,21 +41,21 @@ init_graphics :: () {
 			}
 		}
 	};
-	wgpuInstanceRequestAdapter(gpu.instance, *opts, cb);
+	gpu.instanceRequestAdapter(graphics.instance, *opts, cb);
 	while !done {
 		;
 	}
 
 	limits: WGPULimits = .{};
-	if wgpuAdapterGetLimits(gpu.adapter, *limits) == .Success {
+	if gpu.adapterGetLimits(graphics.adapter, *limits) == .Success {
 		print("WGPU limits: %\n", limits);
 	}
 
 	features: WGPUSupportedFeatures;
 	defer {
-		wgpuSupportedFeaturesFreeMembers(features);
+		gpu.supportedFeaturesFreeMembers(features);
 	}
-	wgpuAdapterGetFeatures(gpu.adapter, *features);
+	gpu.adapterGetFeatures(graphics.adapter, *features);
 	for 0..features.featureCount-1 {
 		print("Support %\n", features.features[it]);
 	}

@@ -569,21 +569,20 @@ move_player_to_scene :: (player_id: int, scene_id: int, model_id: int) {
 	spawn.model_id = model_id;
 	Scene.process(new_scene, make_command(spawn), null);
 
-	find_user_by_player_id(player_id).scene_id = scene_id;
-
 	user := find_user_by_player_id(player_id);
 	if user {
-		scene := find_by_scene_id(state.first_world_id);
+		scene := find_by_scene_id(user.scene_id);
 		if scene {
 			player := Scene.find_by_player_id(scene, player_id);
 			if player && model_id >= 0 {
 				player.server.model_id = model_id;
 			}
 
-			sync_scene := Scene.make_sync(scene);
+			sync_scene := Scene.make_sync(new_scene);
 
 			send(user.websocket, make_command(sync_scene));
 		}
+		user.scene_id = scene_id;
 	}
 
 	// Signal to the rest of the users in the scene that a new player popped in.

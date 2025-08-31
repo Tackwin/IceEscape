@@ -15,6 +15,7 @@ Render :: #import "Render";
 Scene :: #import "Scene";
 Assets :: #import "Assets";
 GUI :: #import "GUI";
+Graphics :: #import "Graphics";
 
 show_inspector := false;    // Wish we could declare static variables inside functions.
 
@@ -74,6 +75,7 @@ process :: (state: *State, command: Command, response: *Scene.Process_Response) 
 	if sync_scene {
 		Terrain.parse_terrain(sync_scene.terrain, *state.scene);
 		state.scene.id = sync_scene.id;
+		state.scene.end_scene_countdown_started = false;
 		// Remove all players not present in the sync.
 		for * state.scene.players {
 			found := false;
@@ -163,6 +165,8 @@ main :: () {
 	store: Store;
 	init_store(platform, *store);
 	Render.im_init(*store);
+	framegraph: Render.Framegraph;
+	Render.create_framegraph(*framegraph, *store);
 
 	clear_color := V4f.{0.45, 0.55, 0.60, 1.00};
 
@@ -306,10 +310,15 @@ main :: () {
 		}
 		if scene.end_scene_countdown_started {
 			dt := to_float64_seconds(current_time_monotonic() - scene.end_scene_countdown_time);
-			text := tprint("you have % seconds left to go through the gate !", dt.(s64));
+			dt = scene.end_scene_countdown - dt;
+			text := tprint("you have % seconds left to go through the gate !", ceil(dt).(s64));
 
-			Render.push_text("Level cleared !", .{ 781, 955 }, 48);
-			Render.push_text(text, .{ 398, 850 }, 48);
+			cursor := V2f.{
+				frame_info.framebuffer_size.x / 2, frame_info.framebuffer_size.y * 0.75
+			};
+			cursor.y -= Render.push_text("Level cleared !", cursor, 48, align = .Center).y;
+			cursor.y -= 8;
+			Render.push_text(text, cursor, 48, -0.5, align = .Center);
 		}
 
 		T += 1;
@@ -388,7 +397,7 @@ main :: () {
 		rhi.glEnable(GL_CULL_FACE);
 		rhi.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		Scene.render(scene);
+		Render.render(framegraph, scene, .{ viewport = frame_info.window_size });
 		GUI.render_action_palette(frame_info);
 		GUI.render_settings(*state.volume_on, frame_info);
 		if state.volume_on {
@@ -418,7 +427,8 @@ main :: () {
 				Render.push_text(
 					tprint("%", it_index.(Command.payload.Kind)),
 					V2f.{ 310.0, 10.0 + it_index * 20.0 },
-					18
+					18,
+					-0.5
 				);
 				if Render.push_checkbox(
 					V2f.{ 475, 20.0 + it_index * 20.0 }, 18, filter_command_debug[it_index]
@@ -488,5 +498,5 @@ State :: struct {
 
 	received_command_history: [..] Command.payload.Kind;
 
-	volume_on := false;
+	volume_on := true;
 }

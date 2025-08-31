@@ -6,6 +6,7 @@
 #import "Hash_Table";
 Store :: #import "Store";
 STB :: #import "stb_image";
+Scene :: #import "Scene";
 
 #scope_export
 
@@ -173,9 +174,28 @@ push_late_quad_screen :: (pos: V2f, size: V2f, color: V4f, z := 0.0) {
 	array_add(*IM.quads_late, quad);
 }
 
-push_text :: (text: string, pos: V2f, height := 12.0, z := 0.0) {
+Text_Align :: enum {
+	Left :: 0b01;
+	Right :: 0b10;
+	HCenter :: 0b11;
+	Top :: 0b1000;
+	Bottom :: 0b0100;
+	VCenter :: 0b1100;
+	Center :: 0b1111;
+	Bottom_Left :: 0b0101;
+	Bottom_Right :: 0b0110;
+	Top_Left :: 0b1001;
+	Top_Right :: 0b1010;
+}
+push_text :: (
+	text: string, pos: V2f, height := 12.0, z := 0.0, align := Text_Align.Bottom_Left
+) -> V2f {
 	x := pos.x;
 
+	before := IM.chars.count;
+	max_height := 0.0;
+	H := MAIN_FONT.height.(float);
+	H = height / H;
 	for text {
 		char: IM.Char;
 		char.id = it - 0x20;
@@ -185,10 +205,32 @@ push_text :: (text: string, pos: V2f, height := 12.0, z := 0.0) {
 		char.color = .{ 1, 1, 1 };
 		char.height = height;
 
-		x += MAIN_FONT.sprites[char.id].charAdvanceX * height / MAIN_FONT.height;
+		sprite := MAIN_FONT.sprites[char.id];
 
+		x += sprite.charAdvanceX * H;
+		h := sprite.sourceHeight * H;
+
+		max_height = max(max_height, h);
 		array_add(*IM.chars, char);
 	}
+
+	for before..IM.chars.count-1 {
+		char := IM.chars[it];
+		if (align & Text_Align.HCenter) == Text_Align.HCenter {
+			char.pos.x -= (x - pos.x) / 2;
+		}
+		if (align & Text_Align.Right) == Text_Align.Right {
+			char.pos.x -= (x - pos.x);
+		}
+		if (align & Text_Align.VCenter) == Text_Align.VCenter {
+			char.pos.y -= max_height/ 2;
+		}
+		if (align & Text_Align.Top) == Text_Align.Bottom {
+			char.pos.y -= max_height;
+		}
+	}
+
+	return .{ x - pos.x, max_height };
 }
 
 render_im_quad :: () {
@@ -227,7 +269,8 @@ render_im_quad :: () {
 		vertices[it_index * 6 + 2].color = it.color;
 
 		vertices[it_index * 6 + 3].pos = .{ it.pos.x, it.pos.y, it.z };
-		vertices[it_index * 6 + 3].color = it.color;
+		vertices[
+			it_index * 6 + 3].color = it.color;
 
 		vertices[it_index * 6 + 4].pos = .{ it.pos.x + it.size.x, it.pos.y + it.size.y, it.z };
 		vertices[it_index * 6 + 4].color = it.color;
@@ -492,9 +535,57 @@ render_im_char :: () {
 }
 
 render_im :: () {
+	context.rhi.glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	render_im_quad();
 	render_im_quad_texture();
 	render_im_char();
+}
+
+Framebuffer :: struct {
+	id: GLuint = 0;
+	width: int = 0;
+	height: int = 0;
+
+	rbo: GLuint = 0;
+
+	make :: (size: V2i, add_rbo := true) -> Framebuffer {
+		framebuffer: Framebuffer;
+		framebuffer.width = size.x;
+		framebuffer.height = size.y;
+
+		context.rhi.glGenFramebuffers(1, *framebuffer.id);
+		context.rhi.glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.id);
+		if add_rbo {
+			context.rhi.glGenRenderbuffers(1, *framebuffer.rbo);
+			context.rhi.glBindRenderbuffer(
+				GL_RENDERBUFFER, framebuffer.rbo
+			);
+			context.rhi.glRenderbufferStorage(
+				GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, xx framebuffer.width, xx framebuffer.height
+			);
+			context.rhi.glFramebufferRenderbuffer(
+				GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, framebuffer.rbo
+			);
+		}
+		return framebuffer;
+	}
+}
+attach_color :: (framebuffer: Framebuffer, texture: Texture, attachment: int) {
+	context.rhi.glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.id);
+	context.rhi.glFramebufferTexture2D(
+		GL_FRAMEBUFFER, xx (GL_COLOR_ATTACHMENT0 + attachment), GL_TEXTURE_2D, texture.id, 0
+	);
+}
+attach_depth :: (framebuffer: Framebuffer, texture: Texture) {
+	context.rhi.glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.id);
+	context.rhi.glFramebufferTexture2D(
+		GL_FRAMEBUFFER, xx GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texture.id, 0
+	);
+}
+clear :: (framebuffer: Framebuffer, clear_color: V4f) {
+	context.rhi.glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.id);
+	context.rhi.glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
+	context.rhi.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 }
 
 Shader :: struct {
@@ -532,8 +623,133 @@ Shader :: struct {
 		}
 		array_free(shader.keys);
 	}
-
 }
+
+setup_vertex_attributes :: (attribute_offset: int, $V: Type) -> int {
+	info := cast(*Type_Info_Struct) type_info(V);
+
+	cursor := attribute_offset;
+	for info.members {
+		iit := cast(Type_Info_Struct_Member) it;
+		offset := it.offset_in_bytes;
+		if iit.type == type_info(M4f) {
+			for i: 0..3 {
+				context.rhi.glEnableVertexAttribArray(xx cursor);
+				context.rhi.glVertexAttribPointer(
+					xx cursor,
+					4,
+					GL_FLOAT,
+					GL_FALSE,
+					size_of(V),
+					xx (it.offset_in_bytes + i * 16)
+				);
+				context.rhi.glVertexAttribDivisor(xx cursor, 0);
+				cursor += 1;
+			}
+			continue;
+		}
+
+		component_type := GL_FLOAT;
+		component_size := iit.type.runtime_size / size_of(float);
+		if iit.notes.count > 0 {
+
+			if compare(iit.notes[0], "int") == 0 {
+				component_type = GL_INT;
+				component_size = iit.type.runtime_size / size_of(s32);
+			}
+		}
+
+		context.rhi.glEnableVertexAttribArray(xx cursor);
+		if component_type == GL_INT {
+			context.rhi.glVertexAttribIPointer(
+				xx cursor,
+				xx component_size,
+				xx component_type,
+				size_of(V),
+				xx it.offset_in_bytes
+			);
+		} else {
+			context.rhi.glVertexAttribPointer(
+				xx cursor,
+				xx component_size,
+				xx component_type,
+				GL_FALSE,
+				size_of(V),
+				xx it.offset_in_bytes
+			);
+		}
+		context.rhi.glVertexAttribPointer(
+			xx cursor,
+			xx component_size,
+			xx component_type,
+			GL_FALSE,
+			size_of(V),
+			xx it.offset_in_bytes
+		);
+		context.rhi.glVertexAttribDivisor(xx cursor, 0);
+		cursor += 1;
+	}
+	return cursor;
+}
+
+setup_instance_attributes :: (attribute_offset: int, $I: Type) -> int {
+	info := cast(*Type_Info_Struct) type_info(I);
+
+	cursor := attribute_offset;
+	for info.members {
+		iit := cast(Type_Info_Struct_Member) it;
+		offset := it.offset_in_bytes;
+		if iit.type == type_info(M4f) {
+			for i: 0..3 {
+				context.rhi.glEnableVertexAttribArray(xx cursor);
+				context.rhi.glVertexAttribPointer(
+					xx cursor,
+					4,
+					GL_FLOAT,
+					GL_FALSE,
+					size_of(I),
+					xx (it.offset_in_bytes + i * 16)
+				);
+				context.rhi.glVertexAttribDivisor(xx cursor, 1);
+				cursor += 1;
+			}
+			continue;
+		}
+
+		component_type := GL_FLOAT;
+		component_size := iit.type.runtime_size / size_of(float);
+		if iit.notes.count > 0 {
+			if compare(iit.notes[0], "int") == 0 {
+				component_type = GL_INT;
+				component_size = iit.type.runtime_size / size_of(s32);
+			}
+		}
+
+		context.rhi.glEnableVertexAttribArray(xx cursor);
+		if component_type == GL_INT {
+			context.rhi.glVertexAttribIPointer(
+				xx cursor,
+				xx component_size,
+				xx component_type,
+				size_of(I),
+				xx it.offset_in_bytes
+			);
+		} else {
+			context.rhi.glVertexAttribPointer(
+				xx cursor,
+				xx component_size,
+				xx component_type,
+				GL_FALSE,
+				size_of(I),
+				xx it.offset_in_bytes
+			);
+		}
+		context.rhi.glVertexAttribDivisor(xx cursor, 1);
+		cursor += 1;
+	}
+	return cursor;
+}
+
 ok :: (shader: Shader) -> bool {
 	return shader.program > 0;
 }
@@ -553,7 +769,8 @@ set_uniform :: (shader: *Shader, name: string, value: $T) {
 	}
 
 	if loc < 0 {
-		print("Uniform % not found in shader program.\n", name);
+		// print("Uniform % not found in shader program.\n", name);
+		return;
 	}
 
 	#if T == M4f {
@@ -587,9 +804,10 @@ set_uniform :: (shader: *Shader, name: string, value: Texture, unit: int) {
 	}
 
 	if loc < 0 {
-		print("Uniform % not found in shader program.\n", name);
+		// print("Uniform % not found in shader program.\n", name);
+		return;
 	}
- 
+
 	context.rhi.glActiveTexture(xx (GL_TEXTURE0 + unit));
 	context.rhi.glBindTexture(GL_TEXTURE_2D, value.id);
 	context.rhi.glUniform1i(xx loc, xx unit);
@@ -825,6 +1043,36 @@ Geometry :: struct {
 
 		return geometry;
 	}
+
+	make_fullscreen_quad :: () -> Geometry {
+		geom: Geometry;
+		context.rhi.glGenVertexArrays(1, *geom.gpu_object);
+		context.rhi.glBindVertexArray(geom.gpu_object);
+
+		context.rhi.glGenBuffers(1, *geom.gpu_buffer);
+		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, geom.gpu_buffer);
+
+		data :: float.[
+			-1.0, -1.0,
+			1.0, -1.0,
+			1.0, 1.0,
+			-1.0, -1.0,
+			1.0, 1.0,
+			-1.0, 1.0
+		];
+
+		context.rhi.glBufferData(
+			GL_ARRAY_BUFFER, data.count * size_of(float), data.data, GL_STATIC_DRAW
+		);
+
+		context.rhi.glEnableVertexAttribArray(0); // Position
+		context.rhi.glVertexAttribPointer(
+			0, 2, GL_FLOAT, GL_FALSE,
+			2 * size_of(float32), null
+		);
+
+		return geom;
+	}
 }
 
 offset_of :: ($T: Type, $member: string) -> int {
@@ -964,6 +1212,46 @@ Texture :: struct {
 		upload(*texture, image.data, image.channels);
 		return texture;
 	}
+
+	make_rgba32f :: (size: V2i) -> Texture {
+		texture: Texture;
+		texture.width = xx size.x;
+		texture.height = xx size.y;
+		texture.id = 0;
+
+		context.rhi.glGenTextures(1, *texture.id);
+		context.rhi.glBindTexture(GL_TEXTURE_2D, texture.id);
+		context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		context.rhi.glTexImage2D(
+			GL_TEXTURE_2D, 0, GL_RGBA32F, texture.width, texture.height, 0,
+			GL_RGBA, GL_FLOAT, null
+		);
+
+		return texture;
+	}
+	
+	make_depth :: (size: V2i) -> Texture {
+		texture: Texture;
+		texture.width = xx size.x;
+		texture.height = xx size.y;
+		texture.id = 0;
+
+		context.rhi.glGenTextures(1, *texture.id);
+		context.rhi.glBindTexture(GL_TEXTURE_2D, texture.id);
+		context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		context.rhi.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		context.rhi.glTexImage2D(
+			GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, texture.width, texture.height, 0,
+			GL_DEPTH_COMPONENT, GL_FLOAT, null
+		);
+
+		return texture;
+	}
 }
 
 ok :: (texture: Texture) -> bool {
@@ -1006,4 +1294,444 @@ set_clamp :: (texture: Texture, dir: enum { S; T; }) {
 		xx (ifx dir == .S then GL_TEXTURE_WRAP_S else GL_TEXTURE_WRAP_T),
 		GL_CLAMP_TO_EDGE
 	);
+}
+
+Framegraph :: struct {
+	main_framebuffer: Framebuffer;
+	main_color: Texture;
+
+	shadow_framebuffer: Framebuffer;
+	shadow_depth: Texture;
+
+	fullscreen_quad: Geometry;
+
+	postpro_shader: *Shader;
+}
+
+Camera_Matrix :: struct {
+	V: M4f;
+	P: M4f;
+
+	viewport: V2f;
+}
+
+Shaders :: struct {
+	tile_shader: *Shader;
+	textured_shader: *Shader;
+	instanced_shader: *Shader;
+	instanced_texture_shader: *Shader;
+}
+
+bind :: (framegraph: Framegraph) {
+	context.rhi.glBindFramebuffer(GL_FRAMEBUFFER, framegraph.main_framebuffer.id);
+}
+
+create_framegraph :: (framegraph: *Framegraph, store: *Store.Store) {
+	framegraph.main_framebuffer = Framebuffer.make(V2i.{ 1920, 1080 });
+
+	framegraph.main_color = Texture.make_rgba32f(V2i.{ 1920, 1080 });
+	attach_color(framegraph.main_framebuffer, framegraph.main_color, 0);
+
+	framegraph.shadow_framebuffer = Framebuffer.make(V2i.{ 4096, 4096 }, false);
+	framegraph.shadow_depth = Texture.make_depth(V2i.{ 4096, 4096 });
+	attach_depth(framegraph.shadow_framebuffer, framegraph.shadow_depth);
+
+	framegraph.fullscreen_quad = Geometry.make_fullscreen_quad();
+	framegraph.postpro_shader = *store.postpro_shader;
+}
+
+render :: (
+	framegraph: Framegraph, scene: Scene.Scene, camera_matrix: Camera_Matrix
+) {
+	store := scene.store;
+
+	shaders: Shaders;
+	shaders.tile_shader = *store.tile_shader;
+
+	context.rhi.glBindFramebuffer(GL_FRAMEBUFFER, framegraph.shadow_framebuffer.id);
+	context.rhi.glViewport(
+		0, 0, xx framegraph.shadow_framebuffer.width, xx framegraph.shadow_framebuffer.height
+	);
+	clear(framegraph.shadow_framebuffer, V4f.{ 0.0, 0.0, 0.0, 1 });
+
+	center := V3f.{ 0, 0, 0 };
+	center.x += scene.terrain.tiles_count.x / 2.0;
+	center.y += scene.terrain.tiles_count.y / 2.0;
+	SV := Scene.look_at(center + V3f.{ 100, 100, 100 }, center, V3f.{ 0, 1, 0 });
+	SP := Scene.orthographic(-40, 40, -40, 40, 0.1, 500);
+	set_uniform(*store.shadow_shader, "V", SV);
+	set_uniform(*store.shadow_shader, "P", SP);
+	set_uniform(*store.shadow_instanced_shader, "V", SV);
+	set_uniform(*store.shadow_instanced_shader, "P", SP);
+	set_uniform(*store.shadow_instanced_texture_shader, "V", SV);
+	set_uniform(*store.shadow_instanced_texture_shader, "P", SP);
+	
+	shaders.textured_shader = *store.shadow_shader;
+	shaders.instanced_shader = *store.shadow_instanced_shader;
+	shaders.instanced_texture_shader = *store.shadow_instanced_texture_shader;
+	render_terrain_props(scene, scene.props, shaders);
+	render_keys(scene, shaders);
+	render_standin(scene, shaders);
+	if scene.state != .Wipe_Fade_In
+		render_players(scene, shaders);
+	render_skulls(scene, shaders);
+	render_shurikens(scene, shaders);
+	render_gates(scene, shaders);
+	render_tombstones(scene, shaders);
+	render_flags(scene, shaders);
+
+	shaders.textured_shader = *store.texture_shader;
+	shaders.instanced_shader = *store.instance_shader;
+	shaders.instanced_texture_shader = *store.instanced_texture_shader;
+	context.rhi.glBindFramebuffer(GL_FRAMEBUFFER, framegraph.main_framebuffer.id);
+	context.rhi.glViewport(0, 0, xx camera_matrix.viewport.x, xx camera_matrix.viewport.y);
+	clear(framegraph.main_framebuffer, V4f.{ 0.45, 0.55, 0.60, 1 });
+	V := Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
+	P := Scene.perspective(scene.camera);
+
+	set_uniform(*store.model_shader, "V", V);
+	set_uniform(*store.model_shader, "P", P);
+	set_uniform(shaders.textured_shader, "V", V);
+	set_uniform(shaders.textured_shader, "P", P);
+	set_uniform(*store.tile_shader, "V", V);
+	set_uniform(*store.tile_shader, "P", P);
+	set_uniform(*store.tile_shader, "shadow", framegraph.shadow_depth, 1);
+	set_uniform(*store.tile_shader, "shadowV", SV);
+	set_uniform(*store.tile_shader, "shadowP", SP);
+	set_uniform(*store.instanced_texture_shader, "shadow", framegraph.shadow_depth, 1);
+	set_uniform(*store.instanced_texture_shader, "shadowV", SV);
+	set_uniform(*store.instanced_texture_shader, "shadowP", SP);
+	set_uniform(*store.instance_shader, "V", V);
+	set_uniform(*store.instance_shader, "P", P);
+	set_uniform(*store.instanced_texture_shader, "V", V);
+	set_uniform(*store.instanced_texture_shader, "P", P);
+
+	set_uniform(*store.instanced_texture_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
+	set_uniform(*store.instance_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
+	set_uniform(shaders.textured_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
+	set_uniform(shaders.textured_shader, "texture_offset", V2f.{ 0, 0 });
+
+	render_terrain(scene, *scene.terrain, shaders);
+
+	set_uniform(shaders.textured_shader, "texture_sampler", store.coin_texture, 0);
+	for * scene.coins {
+		R := to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, it.client.theta));
+
+		M := M4f.translate(it.client.position) * R;
+		set_uniform(shaders.textured_shader, "M", M);
+		render(store.coin_geometry, shaders.textured_shader);
+	}
+
+	render_keys(scene, shaders);
+	render_standin(scene, shaders);
+	if scene.state != .Wipe_Fade_In
+		render_players(scene, shaders);
+	render_skulls(scene, shaders);
+	render_shurikens(scene, shaders);
+	render_gates(scene, shaders);
+	render_tombstones(scene, shaders);
+	render_flags(scene, shaders);
+
+	if to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time) < 0.8 {
+		set_uniform(shaders.textured_shader, "texture_sampler", store.mark_texture, 0);
+		M := M4f.translate(scene.mark_clicked_pos);
+		set_uniform(shaders.textured_shader, "M", M);
+		t := to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time);
+		t /= 0.8;
+		t = 1 - ((1 - t) * (1 - t) * (1 - t) * (1 - t) * (1 - t));
+		offset := V2f.{ 0, xx -t };
+		set_uniform(shaders.textured_shader, "texture_offset", offset);
+		context.rhi.glDisable(GL_CULL_FACE);
+		render(store.mark_geometry, shaders.textured_shader);
+		context.rhi.glEnable(GL_CULL_FACE);
+	}
+
+	context.rhi.glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	context.rhi.glUseProgram(framegraph.postpro_shader.program);
+	set_uniform(framegraph.postpro_shader, "hdr", framegraph.main_color, 0);
+	set_uniform(
+		framegraph.postpro_shader,
+		"hdr_size",
+		V2f.{ xx framegraph.main_color.width, xx framegraph.main_color.height }
+	);
+	set_uniform(
+		framegraph.postpro_shader,
+		"viewport_size",
+		camera_matrix.viewport
+	);
+	context.rhi.glBindVertexArray(framegraph.fullscreen_quad.gpu_object);
+	context.rhi.glDrawArrays(GL_TRIANGLES, 0, xx 6);
+}
+
+render_flags :: (scene: Scene.Scene, shaders: Shaders) {
+	store := scene.store;
+	set_uniform(shaders.textured_shader, "texture_sampler", store.vehicle_colormap, 0);
+	for * scene.flags {
+		M := M4f.translate(it.position);
+		if it.activated_juice_t > 0 {
+			R := axis_angle(
+				V3f.{ 0, 0, 1}, it.activated_juice_t * 3.1415926 * 2.0 * 5.0
+			);
+			S := scale_matrix(1.0 + ease_up_and_back(1.0 - it.activated_juice_t));
+
+			M = M * to_rotation_matrix(R) * S;
+		}
+		if !it.activated && it.count_changed_juice_t > 0 {
+			M = M * scale_matrix(1.0 + ease_up_and_back(1.0 - it.count_changed_juice_t));
+		}
+
+		set_uniform(shaders.textured_shader, "M", M);
+
+		if it.activated && it.activated_juice_t < 0.5 {
+			render(store.flag_geometry, shaders.textured_shader);
+		} else {
+			render(store.flag_down_geometry, shaders.textured_shader);
+		}
+	}
+}
+
+render_keys :: (scene: Scene.Scene, shaders: Shaders) {
+	store := scene.store;
+	set_uniform(shaders.textured_shader, "texture_sampler", store.vehicle_colormap, 0);
+	for * scene.keys {
+		p := it.client.position;
+		if it.holder >= 0
+			p.z += 1;
+
+		M := M4f.translate(p);
+		set_uniform(shaders.textured_shader, "M", M);
+		render(store.key_geometry, shaders.textured_shader);
+	}
+}
+
+render_tombstones :: (scene: Scene.Scene, shaders: Shaders) {
+	store := scene.store;
+	set_uniform(shaders.textured_shader, "texture_sampler", store.vehicle_colormap, 0);
+	for * scene.tombstones {
+		M := M4f.translate(it.position);
+		set_uniform(shaders.textured_shader, "M", M);
+		render(store.tombstone_geometry, shaders.textured_shader);
+	}
+}
+
+render_gates :: (scene: Scene.Scene, shaders: Shaders) {
+	store := scene.store;
+	set_uniform(shaders.textured_shader, "texture_sampler", store.vehicle_colormap, 0);
+	for * scene.gates {
+		R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, it.direction));
+
+		M := M4f.translate(it.position) * R;
+		set_uniform(shaders.textured_shader, "M", M);
+
+		if it.is_end {
+			if it.is_closed {
+				render(store.gate_finish_close_geometry, shaders.textured_shader);
+			} else {
+				render(store.gate_finish_geometry, shaders.textured_shader);
+			}
+		} else {
+			if it.is_closed {
+				render(store.gate_close_geometry, shaders.textured_shader);
+			} else {
+				render(store.gate_geometry, shaders.textured_shader);
+			}
+		}
+	}
+}
+
+render_standin :: (scene: Scene.Scene, shaders: Shaders) {
+	store := scene.store;
+	for * scene.stand_in {
+		M := M4f.translate(it.position);
+		M = M * to_rotation_matrix(it.orientation);
+		set_uniform(shaders.textured_shader, "M", M);
+		geometry := Store.get_geometry(scene.store, it.model_id);
+		if !geometry {
+			geometry = *store.spirit_geometry;
+		}
+		set_uniform(shaders.textured_shader, "texture_sampler", store.vehicle_colormap, 0);
+		render(geometry.*, shaders.textured_shader);
+	}
+}
+
+render_players :: (scene: Scene.Scene, shaders: Shaders) {
+	store := scene.store;
+	colors :: V3f.[
+		V3f.{ 1.0, 0.8, 0.8 },
+		V3f.{ 0.8, 1.0, 0.8 },
+		V3f.{ 0.8, 0.8, 1.0 },
+		V3f.{ 1.0, 1.0, 0.8 },
+		V3f.{ 1.0, 0.8, 1.0 },
+		V3f.{ 0.8, 1.0, 1.0 },
+		V3f.{ 1.0, 1.0, 1.0 }
+	];
+	set_uniform(shaders.textured_shader, "texture_offset", V2f.{ 0, 0 });
+	for * scene.players {
+		if !it.server.dead {
+			M := M4f.identity();
+
+			q := from_unit_vectors(V3f.{ 1, 0, 0 }, it.client.direction);
+			M = to_rotation_matrix(q);
+
+			M = M4f.translate(it.client.position) * M;
+
+			set_uniform(shaders.textured_shader, "M", M);
+			// set_uniform(*scene.texture_shader, "tint", colors[it.id % colors.count]);
+			set_uniform(shaders.textured_shader, "texture_sampler", store.vehicle_colormap, 0);
+
+			geometry := Store.get_geometry(scene.store, it.server.model_id);
+			if !geometry {
+				geometry = *store.spirit_geometry;
+			}
+
+			render(geometry.*, shaders.textured_shader);
+		}
+	}
+	// set_uniform(*scene.model_shader, "tint", V3f.{ 1, 1, 1 });
+}
+
+render_shurikens :: (scene: Scene.Scene, shaders: Shaders) {
+	store := scene.store;
+	instanced := NewArray(
+		scene.shurikens.count, Geometry.Instance_Data, initialized = false,, temp
+	);
+
+	for * scene.shurikens {
+		M := Scene.compute_moving_frame_server_world_matrix(
+			scene, Scene.find_by_frame_id(scene, it.frame_id)
+		);
+		M *= M4f.translate(it.server.position) * to_rotation_matrix(
+			axis_angle(V3f.{ 0, 0, 1 }, it.client.theta)
+		);
+		instance := *instanced[it_index];
+		instance.kind = -1;
+		instance.M = M;
+	}
+
+	add_instance(*store.shuriken_geometry, .{
+		data = xx instanced.data,
+		count = instanced.count * size_of(Geometry.Instance_Data)
+	});
+
+	enable_instanced_attributes(3);
+	render_instanced(store.shuriken_geometry, shaders.instanced_shader, instanced.count);
+}
+
+render_skulls :: (scene: Scene.Scene, shaders: Shaders) {
+	store := scene.store;
+	instanced := NewArray(
+		scene.skulls.count, Geometry.Instance_Data, initialized = false,, temp
+	);
+
+	for * skull: scene.skulls {
+		instance := *instanced[it_index];
+		instance.kind = -1;
+		instance.M = Scene.compute_skull_matrix(scene, skull);
+	}
+
+	add_instance(*store.skull_geometry, .{
+		data = xx instanced.data,
+		count = instanced.count * size_of(Geometry.Instance_Data)
+	});
+
+	enable_instanced_attributes(3);
+	render_instanced(store.skull_geometry, shaders.instanced_shader, instanced.count);
+}
+
+render_terrain_props :: (scene: Scene.Scene, props: [] Scene.Prop, shaders: Shaders) {
+	store := scene.store;
+	set_uniform(*store.instanced_texture_shader, "colormap", store.prop_colormap, 0);
+
+	max_id := 0;
+	for props
+		if it.id > max_id
+			max_id = it.id;
+
+
+	Instance :: struct {
+		M: M4f;
+		kind: u32; @int
+	};
+
+	instanced := NewArray(props.count, Instance, initialized = false,, temp);
+	for prop_id: 0..max_id {
+		geometry := Store.get_prop(store, xx prop_id);
+		if !geometry
+			continue;
+
+		instanced.count = 0;
+
+		for props {
+			if it.id != prop_id
+				continue;
+			
+			instanced.count += 1;
+			instanced[instanced.count - 1].M = it.M;
+		}
+		if instanced.count == 0
+			continue;
+
+		add_instance(geometry, .{
+			data = xx instanced.data,
+			count = instanced.count * size_of(Instance)
+		});
+
+		context.rhi.glBindVertexArray(geometry.gpu_object);
+		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, geometry.gpu_buffer);
+		cursor := setup_vertex_attributes(0, Geometry.Vertex_Data);
+		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, geometry.instanced_buffer);
+		cursor = setup_instance_attributes(cursor, Instance);
+		render_instanced(geometry, shaders.instanced_texture_shader, instanced.count);
+	}
+
+}
+
+render_terrain :: (scene: Scene.Scene, terrain: *Scene.Terrain, shaders: Shaders) {
+	store := scene.store;
+	if terrain.tiles_count.x <= 0 || terrain.tiles_count.y <= 0
+		return;
+
+	render_terrain_props(scene, scene.props, shaders);
+
+	Instance :: struct {
+		M: M4f;
+		kind: u32; @int
+	};
+
+	instanced := NewArray(
+		terrain.tiles.count, Instance, initialized = false,, temp
+	);
+
+	set_uniform(shaders.tile_shader, "atlas", store.tile_atlas, 0);
+	playerPos := V3f.{ 0, 0, 0 };
+	{
+		for scene.players {
+			if it.id == scene.controlled_player_id {
+				playerPos = it.client.position;
+				break;
+			}
+		}
+	}
+	set_uniform(shaders.tile_shader, "playerPos", playerPos);
+
+	for * tile: terrain.tiles {
+		x := it_index % terrain.tiles_count.x;
+		y := it_index / terrain.tiles_count.x;
+
+		instance := *instanced[it_index];
+		instance.kind = xx tile.kind;
+		instance.M = M4f.translate(.{ cast(float32) x, cast(float32) y, 0 });
+	}
+
+	add_instance(*store.tile_geometry, .{
+		data = xx instanced.data,
+		count = terrain.tiles.count * size_of(Geometry.Instance_Data)
+	});
+
+	context.rhi.glBindVertexArray(store.tile_geometry.gpu_object);
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.tile_geometry.gpu_buffer);
+	cursor := setup_vertex_attributes(0, Geometry.Vertex_Data);
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.tile_geometry.instanced_buffer);
+	setup_instance_attributes(cursor, Instance);
+	render_instanced(store.tile_geometry, shaders.tile_shader, terrain.tiles.count);
 }

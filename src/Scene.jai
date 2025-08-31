@@ -44,6 +44,7 @@ Scene :: struct {
 	stand_in: [..] Stand_In;
 	trigger_zones: [..] Trigger_Zone;
 	flags: [..] Flag;
+	props: [..] Prop;
 	terrain: Terrain;
 
 	coin_generation := 0;
@@ -76,6 +77,7 @@ clear :: (scene: *Scene) {
 	scene.stand_in.count = 0;
 	scene.trigger_zones.count = 0;
 	scene.flags.count = 0;
+	scene.props.count = 0;
 }
 
 make_sync :: (scene: *Scene) -> Command.Sync_Scene {
@@ -147,6 +149,11 @@ clear :: (frame_result: *Frame_Result) {
 	frame_result.end_level.count = 0;
 }
 
+Prop :: struct {
+	id: int;
+	M: M4f;
+}
+
 Process_Response :: struct {
 	Entry :: struct {
 		scene_id: int;
@@ -204,6 +211,29 @@ perspective :: (camera: Camera) -> M4f {
 	M.data[1 + 3 * 4] = 0;
 	M.data[2 + 3 * 4] = -2 * (camera.far * camera.near) / (camera.far - camera.near);
 	M.data[3 + 3 * 4] = 0;
+	return M;
+}
+
+orthographic :: (
+	left: float, right: float, bottom: float, top: float, near: float, far: float
+) -> M4f {
+	M: M4f = ---;
+	M.data[0 + 0 * 4] = 2 / (right - left);
+	M.data[1 + 0 * 4] = 0;
+	M.data[2 + 0 * 4] = 0;
+	M.data[3 + 0 * 4] = 0;
+	M.data[0 + 1 * 4] = 0;
+	M.data[1 + 1 * 4] = 2 / (top - bottom);
+	M.data[2 + 1 * 4] = 0;
+	M.data[3 + 1 * 4] = 0;
+	M.data[0 + 2 * 4] = 0;
+	M.data[1 + 2 * 4] = 0;
+	M.data[2 + 2 * 4] = -2 / (far - near);
+	M.data[3 + 2 * 4] = 0;
+	M.data[0 + 3 * 4] = -(right + left) / (right - left);
+	M.data[1 + 3 * 4] = -(top + bottom) / (top - bottom);
+	M.data[2 + 3 * 4] = -(far + near) / (far - near);
+	M.data[3 + 3 * 4] = 1;
 	return M;
 }
 
@@ -782,6 +812,8 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					if d < 0.5 {
 						winner: Command.End_Level;
 						winner.winner_id = player.id;
+						winner.next_level_scheduled_in_seconds = 6;
+						winner.next_scene_id = scene.next_id;
 						array_add(*result.end_level, winner);
 
 						win_level(scene, player.id);
@@ -1115,6 +1147,7 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		scene.end_scene_countdown_time = current_time_monotonic();
 		scene.end_scene_countdown = end_level.next_level_scheduled_in_seconds;
 		scene.end_scene_countdown_started = true;
+		scene.next_id = end_level.next_scene_id;
 		return true;
 	}
 
@@ -1259,7 +1292,8 @@ process :: (scene: Scene, player: *Player, command: Command, response: *Process_
 			it.server.direction = sync.direction;
 			it.server.position = sync.position;
 			it.server.dead = sync.dead;
-			it.server.model_id = sync.model_id;
+			if sync.model_id >= 0
+				it.server.model_id = sync.model_id;
 		}
 	}
 
@@ -1388,298 +1422,6 @@ touch_a_tile :: (terrain: Terrain, spot: V3f, radius: float, kind: Tile.Kind) ->
 
 	return false;
 }
-
-render :: (scene: Scene) {
-	store := scene.store;
-	V := look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
-	P := perspective(scene.camera);
-
-	Render.set_uniform(*store.model_shader, "V", V);
-	Render.set_uniform(*store.model_shader, "P", P);
-	Render.set_uniform(*store.texture_shader, "V", V);
-	Render.set_uniform(*store.texture_shader, "P", P);
-	Render.set_uniform(*store.tile_shader, "V", V);
-	Render.set_uniform(*store.tile_shader, "P", P);
-	Render.set_uniform(*store.instance_shader, "V", V);
-	Render.set_uniform(*store.instance_shader, "P", P);
-
-	Render.set_uniform(*store.instance_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
-	Render.set_uniform(*store.texture_shader, "tint", V3f.{ 1.0, 1.0, 1.0 });
-	Render.set_uniform(*store.texture_shader, "texture_sampler", store.ice_texture, 0);
-	Render.set_uniform(*store.texture_shader, "texture_offset", V2f.{ 0, 0 });
-
-	used_texture := *store.ice_texture;
-	render_terrain(scene, *scene.terrain);
-
-	Render.set_uniform(*store.texture_shader, "texture_sampler", store.coin_texture, 0);
-	for * scene.coins {
-		R := to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, it.client.theta));
-
-		M := M4f.translate(it.client.position) * R;
-		Render.set_uniform(*store.texture_shader, "M", M);
-		Render.render(store.coin_geometry, store.texture_shader);
-	}
-
-	render_keys(scene);
-	render_standin(scene);
-	if scene.state != .Wipe_Fade_In
-		render_players(scene);
-	render_skulls(scene);
-	render_shurikens(scene);
-	render_gates(scene);
-	render_tombstones(scene);
-	render_flags(scene);
-
-	if to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time) < 0.8 {
-		Render.set_uniform(*store.texture_shader, "texture_sampler", store.mark_texture, 0);
-		M := M4f.translate(scene.mark_clicked_pos);
-		Render.set_uniform(*store.texture_shader, "M", M);
-		t := to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time);
-		t /= 0.8;
-		t = 1 - ((1 - t) * (1 - t) * (1 - t) * (1 - t) * (1 - t));
-		offset := V2f.{ 0, xx -t };
-		Render.set_uniform(*store.texture_shader, "texture_offset", offset);
-		context.rhi.glDisable(GL_CULL_FACE);
-		Render.render(store.mark_geometry, store.texture_shader);
-		context.rhi.glEnable(GL_CULL_FACE);
-	}
-}
-
-render_flags :: (scene: Scene) {
-	store := scene.store;
-	Render.set_uniform(*store.texture_shader, "texture_sampler", store.vehicle_colormap, 0);
-	for * scene.flags {
-		M := M4f.translate(it.position);
-		if it.activated_juice_t > 0 {
-			R := axis_angle(
-				V3f.{ 0, 0, 1}, it.activated_juice_t * 3.1415926 * 2.0 * 5.0
-			);
-			S := scale_matrix(1.0 + ease_up_and_back(1.0 - it.activated_juice_t));
-
-			M = M * to_rotation_matrix(R) * S;
-		}
-		if !it.activated && it.count_changed_juice_t > 0 {
-			M = M * scale_matrix(1.0 + ease_up_and_back(1.0 - it.count_changed_juice_t));
-		}
-
-		Render.set_uniform(*store.texture_shader, "M", M);
-
-		if it.activated && it.activated_juice_t < 0.5 {
-			Render.render(store.flag_geometry, store.texture_shader);
-		} else {
-			Render.render(store.flag_down_geometry, store.texture_shader);
-		}
-	}
-}
-
-render_keys :: (scene: Scene) {
-	store := scene.store;
-	Render.set_uniform(*store.texture_shader, "texture_sampler", store.vehicle_colormap, 0);
-	for * scene.keys {
-		p := it.client.position;
-		if it.holder >= 0
-			p.z += 1;
-
-		M := M4f.translate(p);
-		Render.set_uniform(*store.texture_shader, "M", M);
-		Render.render(store.key_geometry, store.texture_shader);
-	}
-}
-
-render_tombstones :: (scene: Scene) {
-	store := scene.store;
-	Render.set_uniform(*store.texture_shader, "texture_sampler", store.vehicle_colormap, 0);
-	for * scene.tombstones {
-		M := M4f.translate(it.position);
-		Render.set_uniform(*store.texture_shader, "M", M);
-		Render.render(store.tombstone_geometry, store.texture_shader);
-	}
-}
-
-render_gates :: (scene: Scene) {
-	store := scene.store;
-	Render.set_uniform(*store.texture_shader, "texture_sampler", store.vehicle_colormap, 0);
-	for * scene.gates {
-		R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, it.direction));
-
-		M := M4f.translate(it.position) * R;
-		Render.set_uniform(*store.texture_shader, "M", M);
-
-		if it.is_end {
-			if it.is_closed {
-				Render.render(store.gate_finish_close_geometry, store.texture_shader);
-			} else {
-				Render.render(store.gate_finish_geometry, store.texture_shader);
-			}
-		} else {
-			if it.is_closed {
-				Render.render(store.gate_close_geometry, store.texture_shader);
-			} else {
-				Render.render(store.gate_geometry, store.texture_shader);
-			}
-		}
-	}
-}
-
-render_standin :: (scene: Scene) {
-	store := scene.store;
-	for * scene.stand_in {
-		M := M4f.translate(it.position);
-		M = M * to_rotation_matrix(it.orientation);
-		Render.set_uniform(*store.texture_shader, "M", M);
-		geometry := get_geometry(scene.store, it.model_id);
-		if !geometry {
-			geometry = *store.spirit_geometry;
-		}
-		Render.set_uniform(*store.texture_shader, "texture_sampler", store.vehicle_colormap, 0);
-		Render.render(geometry.*, store.texture_shader);
-	}
-}
-
-render_players :: (scene: Scene) {
-	store := scene.store;
-	colors :: V3f.[
-		V3f.{ 1.0, 0.8, 0.8 },
-		V3f.{ 0.8, 1.0, 0.8 },
-		V3f.{ 0.8, 0.8, 1.0 },
-		V3f.{ 1.0, 1.0, 0.8 },
-		V3f.{ 1.0, 0.8, 1.0 },
-		V3f.{ 0.8, 1.0, 1.0 },
-		V3f.{ 1.0, 1.0, 1.0 }
-	];
-	Render.set_uniform(*store.texture_shader, "texture_offset", V2f.{ 0, 0 });
-	for * scene.players {
-		if !it.server.dead {
-			M := M4f.identity();
-
-			q := from_unit_vectors(V3f.{ 1, 0, 0 }, it.client.direction);
-			M = to_rotation_matrix(q);
-
-			M = M4f.translate(it.client.position) * M;
-
-			Render.set_uniform(*store.texture_shader, "M", M);
-			// Render.set_uniform(*scene.texture_shader, "tint", colors[it.id % colors.count]);
-			Render.set_uniform(*store.texture_shader, "texture_sampler", store.vehicle_colormap, 0);
-
-			geometry := get_geometry(scene.store, it.server.model_id);
-			if !geometry {
-				geometry = *store.spirit_geometry;
-			}
-
-			Render.render(geometry.*, store.texture_shader);
-		}
-	}
-	// Render.set_uniform(*scene.model_shader, "tint", V3f.{ 1, 1, 1 });
-}
-
-render_shurikens :: (scene: Scene) {
-	store := scene.store;
-	instanced := NewArray(
-		scene.shurikens.count, Render.Geometry.Instance_Data, initialized = false,, temp
-	);
-
-	for * scene.shurikens {
-		M := compute_moving_frame_server_world_matrix(scene, find_by_frame_id(scene, it.frame_id));
-		M *= M4f.translate(it.server.position) * to_rotation_matrix(
-			axis_angle(V3f.{ 0, 0, 1 }, it.client.theta)
-		);
-		instance := *instanced[it_index];
-		instance.kind = -1;
-		instance.M = M;
-	}
-
-	Render.add_instance(*store.shuriken_geometry, .{
-		data = xx instanced.data,
-		count = instanced.count * size_of(Render.Geometry.Instance_Data)
-	});
-
-	Render.enable_instanced_attributes(3);
-	Render.render_instanced(store.shuriken_geometry, store.instance_shader, instanced.count);
-}
-
-render_skulls :: (scene: Scene) {
-	store := scene.store;
-	instanced := NewArray(
-		scene.skulls.count, Render.Geometry.Instance_Data, initialized = false,, temp
-	);
-
-	for * skull: scene.skulls {
-		instance := *instanced[it_index];
-		instance.kind = -1;
-		instance.M = compute_skull_matrix(scene, skull);
-	}
-
-	Render.add_instance(*store.skull_geometry, .{
-		data = xx instanced.data,
-		count = instanced.count * size_of(Render.Geometry.Instance_Data)
-	});
-
-	Render.enable_instanced_attributes(3);
-	Render.render_instanced(store.skull_geometry, store.instance_shader, instanced.count);
-}
-
-render_terrain :: (scene: Scene, terrain: *Terrain) {
-	store := scene.store;
-	if terrain.tiles_count.x <= 0 || terrain.tiles_count.y <= 0
-		return;
-
-	instanced := NewArray(
-		terrain.tiles.count, Render.Geometry.Instance_Data, initialized = false,, temp
-	);
-
-	for 0..4 {
-		name := tprint("albedos[%]\0", it);
-		texture := get_albedo(store, xx it);
-		if texture
-			Render.set_uniform(*store.tile_shader, name, texture, it);
-	}
-	
-	for 0..4 {
-		name := tprint("normals[%]\0", it);
-		texture := get_normal(store, xx it);
-		if texture
-			Render.set_uniform(*store.tile_shader, name, texture, 5 + it);
-	}
-
-	for 0..4 {
-		name := tprint("heights[%]\0", it);
-		texture := get_height(store, xx it);
-		if texture
-			Render.set_uniform(*store.tile_shader, name, texture, 10 + it);
-	}
-
-	Render.set_uniform(*store.tile_shader, "useHeight", 0.0);
-	Render.set_uniform(*store.tile_shader, "useNormal", 0.0);
-	Render.set_uniform(*store.tile_shader, "heightRange", 0.03);
-
-	playerPos := V3f.{ 0, 0, 0 };
-	{
-		for scene.players {
-			if it.id == scene.controlled_player_id {
-				playerPos = it.client.position;
-				break;
-			}
-		}
-	}
-
-	for * tile: terrain.tiles {
-		x := it_index % terrain.tiles_count.x;
-		y := it_index / terrain.tiles_count.x;
-
-		instance := *instanced[it_index];
-		instance.kind = xx tile.kind;
-		instance.M = M4f.translate(.{ cast(float32) x, cast(float32) y, 0 });
-	}
-
-	Render.add_instance(*store.tile_geometry, .{
-		data = xx instanced.data,
-		count = terrain.tiles.count * size_of(Render.Geometry.Instance_Data)
-	});
-
-	Render.enable_instanced_attributes(3);
-	Render.render_instanced(store.tile_geometry, store.tile_shader, terrain.tiles.count);
-}
-
 compute_skull_matrix :: (scene: Scene, skull: Skull) -> M4f {
 	if skull.path_id >= scene.terrain.paths.count
 		return M4f.identity();

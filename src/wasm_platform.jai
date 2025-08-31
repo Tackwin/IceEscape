@@ -199,6 +199,15 @@ init_platform :: () -> Platform {
 	platform.query_audio = query_audio;
 	platform.load_audio = load_audio;
 	platform.play_audio = play_audio;
+	platform.volume_audio = (x: float) -> float {
+		// Clamp the volume between 0.0 and 1.0
+		if x < 0.0 {
+			x = 0.0;
+		} else if x > 1.0 {
+			x = 1.0;
+		}
+		return x;
+	};
 
 	meta_run :: () -> string {
 		sb: String_Builder;
@@ -258,8 +267,21 @@ init_platform :: () -> Platform {
 		return builder_to_string(*sb);
 	}
 	#insert #run meta_run();
-
 	context.rhi = platform.rhi;
+
+	#insert #run -> string {
+		sb: String_Builder;
+
+		for entries {
+			if it.special_function.count > 0 {
+				print(*sb, "platform.gpu.% = %;\n", it.name, it.special_function);
+			}
+		}
+
+		return builder_to_string(*sb);
+	};
+
+
 	return platform;
 }
 
@@ -368,6 +390,62 @@ header_proc :: (info: *Type_Info_Procedure) -> string {
     
     return builder_to_string(*sb);
 }
+
+Entry :: struct {
+	name: string;
+	type: Type;
+	special_function := "";
+}
+
+JS_HEADER :: #string JS_HEADER
+object_map = [];
+object_map_counter = 0;
+
+const jsCreateInstance = (params_ptr, returns_ptr) => {
+	const view = new DataView(jai_exports.memory.buffer);
+	object_map_counter += 1;
+	object_map[object_map_counter] = navigator.gpu;
+	view.setBigUint64(returns_ptr + 0, BigInt(object_map_counter), true);
+}
+
+const jsInstanceRequestAdapter = async (params_ptr, returns_ptr) => {
+	const view = new DataView(jai_exports.memory.buffer);
+	switch(wasm_pause()) {
+		case 0: (async () => {
+			const adapter = await navigator.gpu.requestAdapter();
+
+			object_map_counter += 1;
+			object_map[object_map_counter] = adapter;
+			view.setBigUint64(returns_ptr + 0, BigInt(object_map_counter), true);
+			return +1;
+		})().then(wasm_resume); break;
+	}
+}
+
+JS_HEADER;
+
+wasmCreateInstance :: (descriptor: *WGPUInstanceDescriptor) -> WGPUInstance #c_call {
+	jsCreateInstance :: (params: *void, returns: *void) #foreign;
+	instance: WGPUInstance;
+	jsCreateInstance(null, *instance);
+	return instance;
+}
+wasmInstanceRequestAdapter :: (
+	instance: WGPUInstance,
+	options: *WGPURequestAdapterOptions,
+	callbackInfo: WGPURequestAdapterCallbackInfo
+) -> WGPUFuture #c_call {
+	jsInstanceRequestAdapter :: (params: *void, returns: *void) #foreign;
+	adapter: WGPUAdapter;
+	jsInstanceRequestAdapter(null, *adapter);
+	callbackInfo.callback(.Success, adapter, .{}, callbackInfo.userdata1, callbackInfo.userdata2);
+	return .{};
+}
+entries :: Entry.[
+	.{ "createInstance", WGPUProcCreateInstance, "wasmCreateInstance" },
+	.{ "instanceRequestAdapter", WGPUProcInstanceRequestAdapter, "wasmInstanceRequestAdapter" },
+];
+
 
 // wgpu_functions :: string.[
 // 	"WGPUProcInstanceRequestAdapter"

@@ -149,7 +149,28 @@ Image :: struct {
 	}
 }
 
-embed_data :: (name: string, path: string, root: string) -> string {
+RUNTIME :: true && OS != .WASM;
+#if RUNTIME {
+	#import "File";
+}
+
+embed_data :: ($name: string, $path: string, $root: string) -> string {
+	#if RUNTIME {
+format_runtime_text :: #string FORMAT
+%: [] u8;
+%_PROC :: () {
+	file, ok := read_entire_file("%/../assets/%");
+	if ok {
+		% = xx file;
+	} else {
+		print("Couldn't load %\n");
+	}
+}
+FORMAT;
+		return sprint(format_runtime_text, name, name, root, path, name, name);
+	}
+
+
 format_text :: #string FORMAT
 % ::  #run,host -> []u8 {
 	#import "Compiler";
@@ -183,6 +204,20 @@ FORMAT;
 #insert #run embed_data("TILE_FRAGMENT", "Shader/tile.frag", #filepath);
 #insert #run embed_data("QUAD_TEXTURE_VERTEX", "Shader/quad_texture.vert", #filepath);
 #insert #run embed_data("QUAD_TEXTURE_FRAGMENT", "Shader/quad_texture.frag", #filepath);
+#insert #run embed_data("POSTPROCESS_VERTEX", "Shader/postpro.vert", #filepath);
+#insert #run embed_data("POSTPROCESS_FRAGMENT", "Shader/postpro.frag", #filepath);
+#insert #run embed_data("SHADOW_VERTEX", "Shader/shadow.vert", #filepath);
+#insert #run embed_data("SHADOW_FRAGMENT", "Shader/shadow.frag", #filepath);
+#insert #run embed_data("SHADOW_INSTANCED_VERTEX", "Shader/shadow_instanced.vert", #filepath);
+#insert #run embed_data("SHADOW_INSTANCED_FRAGMENT", "Shader/shadow_instanced.frag", #filepath);
+#insert #run embed_data("INSTANCED_TEXTURE_VERTEX", "Shader/instance_texture.vert", #filepath);
+#insert #run embed_data("INSTANCED_TEXTURE_FRAGMENT", "Shader/instance_texture.frag", #filepath);
+#insert #run embed_data(
+	"SHADOW_INSTANCED_TEXTURE_VERTEX", "Shader/instance_texture.vert", #filepath
+);
+#insert #run embed_data(
+	"SHADOW_INSTANCED_TEXTURE_FRAGMENT", "Shader/instance_texture.frag", #filepath
+);
 
 #insert #run embed_data("SNOWFLAKES_AND_LIGHTS_OGG", "Snowflakes and Lights.ogg", #filepath);
 #insert #run embed_data("tile_cliff_albedo_png", "Tile/cliff_albedo.png", #filepath);
@@ -197,6 +232,7 @@ FORMAT;
 #insert #run embed_data("tile_slippy_albedo_png", "Tile/slippy_albedo.png", #filepath);
 #insert #run embed_data("tile_slippy_normal_png", "Tile/slippy_normal.png", #filepath);
 #insert #run embed_data("tile_slippy_height_png", "Tile/slippy_height.png", #filepath);
+#insert #run embed_data("tile_atlas_png", "Tile/atlas.png", #filepath);
 #insert #run embed_data("ui_atlas_png", "UI/ui_atlas.png", #filepath);
 
 #insert #run embed_data("VEHICLE_RACER_OBJ", "vehicle-racer.obj", #filepath);
@@ -207,11 +243,11 @@ FORMAT;
 
 #insert #run embed_data("CLICK_WAV", "click.wav", #filepath);
 
-#insert #run embed_data("FOOTSTEP_0_OGG", "footstep_snow_000-converted.ogg", #filepath);
-#insert #run embed_data("FOOTSTEP_1_OGG", "footstep_snow_001.ogg", #filepath);
-#insert #run embed_data("FOOTSTEP_2_OGG", "footstep_snow_002.ogg", #filepath);
-#insert #run embed_data("FOOTSTEP_3_OGG", "footstep_snow_003.ogg", #filepath);
-#insert #run embed_data("FOOTSTEP_4_OGG", "footstep_snow_004.ogg", #filepath);
+#insert #run embed_data("FOOTSTEP_SNOW_0_OGG", "footstep_snow_000.ogg", #filepath);
+#insert #run embed_data("FOOTSTEP_SNOW_1_OGG", "footstep_snow_001.ogg", #filepath);
+#insert #run embed_data("FOOTSTEP_SNOW_2_OGG", "footstep_snow_002.ogg", #filepath);
+#insert #run embed_data("FOOTSTEP_SNOW_3_OGG", "footstep_snow_003.ogg", #filepath);
+#insert #run embed_data("FOOTSTEP_SNOW_4_OGG", "footstep_snow_004.ogg", #filepath);
 
 #insert #run embed_data("LOSER_OGG", "loser.ogg", #filepath);
 
@@ -229,6 +265,127 @@ FORMAT;
 #insert #run embed_data("GATE_FINISH_CLOSE_OBJ", "gate-finish_close.obj", #filepath);
 #insert #run embed_data("SHURIKEN_OBJ", "shuriken.obj", #filepath);
 
+#insert #run embed_data("TERRAIN_TREE_SNOW_A", "Terrain/tree_snow_a.obj", #filepath);
+#insert #run embed_data("TERRAIN_TREE_SNOW_B", "Terrain/tree_snow_b.obj", #filepath);
+#insert #run embed_data("TERRAIN_TREE_SNOW_C", "Terrain/tree_snow_c.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOWMAN", "Terrain/snowman.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOWMAN_HAT", "Terrain/snowman_hat.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOW_FLAT", "Terrain/snow_flat.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOW_FLAT_LARGE", "Terrain/snow_flat_large.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOW_PILE", "Terrain/snow_pile.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOWFLAKE_A", "Terrain/snowflake_a.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOWFLAKE_B", "Terrain/snowflake_b.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOWFLAKE_C", "Terrain/snowflake_c.obj", #filepath);
+#insert #run embed_data("ROCK_SMALL", "Terrain/rock_small.obj", #filepath);
+#insert #run embed_data("ROCK_MEDIUM", "Terrain/rock_medium.obj", #filepath);
+#insert #run embed_data("ROCK_LARGE", "Terrain/rock_large.obj", #filepath);
+#insert #run embed_data("PROP_COLORMAP", "Terrain/prop_colormap.png", #filepath);
+
+Prop_Id :: enum {
+	TERRAIN_TREE_SNOW_A :: 0;
+	TERRAIN_TREE_SNOW_B;
+	TERRAIN_TREE_SNOW_C;
+	TERRAIN_SNOWMAN;
+	TERRAIN_SNOWMAN_HAT;
+	TERRAIN_SNOW_FLAT;
+	TERRAIN_SNOW_FLAT_LARGE;
+	TERRAIN_SNOW_PILE;
+	TERRAIN_SNOWFLAKE_A;
+	TERRAIN_SNOWFLAKE_B;
+	TERRAIN_SNOWFLAKE_C;
+	ROCK_SMALL;
+	ROCK_MEDIUM;
+	ROCK_LARGE;
+}
+
+load_everything :: () {
+	#if !RUNTIME
+		return;
+
+	#if RUNTIME {
+		names :: string.[
+			"PLAIN_VERTEX",
+			"INSTANCE_VERTEX",
+			"INSTANCE_FRAGMENT",
+			"TILE_VERTEX",
+			"TILE_FRAGMENT",
+			"QUAD_TEXTURE_VERTEX",
+			"QUAD_TEXTURE_FRAGMENT",
+			"SNOWFLAKES_AND_LIGHTS_OGG",
+			"tile_cliff_albedo_png",
+			"tile_cliff_normal_png",
+			"tile_cliff_height_png",
+			"tile_snow_albedo_png",
+			"tile_snow_normal_png",
+			"tile_snow_height_png",
+			"tile_grass_albedo_png",
+			"tile_grass_normal_png",
+			"tile_grass_height_png",
+			"tile_slippy_albedo_png",
+			"tile_slippy_normal_png",
+			"tile_slippy_height_png",
+			"ui_atlas_png",
+			"VEHICLE_RACER_OBJ",
+			"VEHICLE_SUV_OBJ",
+			"VEHICLE_SPEEDSTER_OBJ",
+			"FLAG_OBJ",
+			"FLAG_DOWN_OBJ",
+			"CLICK_WAV",
+			"FOOTSTEP_SNOW_0_OGG",
+			"FOOTSTEP_SNOW_1_OGG",
+			"FOOTSTEP_SNOW_2_OGG",
+			"FOOTSTEP_SNOW_3_OGG",
+			"FOOTSTEP_SNOW_4_OGG",
+			"LOSER_OGG",
+			"TILE_OBJ",
+			"CAR_OBJ",
+			"TOMBSTONE_OBJ",
+			"SKULL_OBJ",
+			"COIN_OBJ",
+			"SPIRIT_OBJ",
+			"KEY_OBJ",
+			"MARK_OBJ",
+			"GATE_OBJ",
+			"GATE_CLOSE_OBJ",
+			"GATE_FINISH_OBJ",
+			"GATE_FINISH_CLOSE_OBJ",
+			"SHURIKEN_OBJ",
+			"POSTPROCESS_VERTEX",
+			"POSTPROCESS_FRAGMENT",
+			"tile_atlas_png",
+			"SHADOW_VERTEX",
+			"SHADOW_FRAGMENT",
+			"SHADOW_INSTANCED_VERTEX",
+			"SHADOW_INSTANCED_FRAGMENT",
+			"INSTANCED_TEXTURE_VERTEX",
+			"INSTANCED_TEXTURE_FRAGMENT",
+			"SHADOW_INSTANCED_TEXTURE_VERTEX",
+			"SHADOW_INSTANCED_TEXTURE_FRAGMENT",
+			"TERRAIN_TREE_SNOW_A",
+			"TERRAIN_TREE_SNOW_B",
+			"TERRAIN_TREE_SNOW_C",
+			"TERRAIN_SNOWMAN",
+			"TERRAIN_SNOWMAN_HAT",
+			"TERRAIN_SNOW_FLAT",
+			"TERRAIN_SNOW_FLAT_LARGE",
+			"TERRAIN_SNOW_PILE",
+			"TERRAIN_SNOWFLAKE_A",
+			"TERRAIN_SNOWFLAKE_B",
+			"TERRAIN_SNOWFLAKE_C",
+			"PROP_COLORMAP",
+			"ROCK_SMALL",
+			"ROCK_LARGE",
+			"ROCK_MEDIUM",
+		];
+		#insert #run -> string {
+			sb: String_Builder;
+			for names {
+				print_to_builder(*sb, "%_PROC();\n", it);
+			}
+			return builder_to_string(*sb);
+		};
+	}
+}
 
 
 vehicle_colormap_texture_help :: () -> Image {

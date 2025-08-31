@@ -400,7 +400,45 @@ init_platform :: () -> Platform {
 	}
 	#insert #run meta_run();
 
+
+	wgpuCreateInstance :: (
+		descriptor: *WGPUInstanceDescriptor
+	) -> WGPUInstance #foreign wgpu_native;
+	wgpuInstanceRequestAdapter :: (
+		instance: WGPUInstance,
+		options: *WGPURequestAdapterOptions,
+		callbackInfo: WGPURequestAdapterCallbackInfo
+	) -> WGPUFuture #foreign wgpu_native;
+	wgpuAdapterGetLimits :: (
+		adapter: WGPUAdapter, limits: *WGPULimits
+	) -> WGPUStatus #foreign wgpu_native;
+	wgpuSupportedFeaturesFreeMembers :: (
+		supportedFeatures: WGPUSupportedFeatures
+	) -> void #foreign wgpu_native;
+	wgpuAdapterGetFeatures :: (
+		adapter: WGPUAdapter, features: *WGPUSupportedFeatures
+	) -> void #foreign wgpu_native;
+
+	webgpu_meta_run :: () -> string {
+		sb: String_Builder;
+
+		info : *Type_Info_Struct = cast(*Type_Info_Struct) type_info(GPU_proc);
+		for info.members {
+			capitalizedName := tprint("%", it.name);
+			if capitalizedName.count > 0 {
+				capitalizedName.data[0] = to_upper(capitalizedName.data[0]);
+			}
+
+			print(*sb, "platform.gpu.% = wgpu%;\n", it.name, capitalizedName);
+		}
+
+		return builder_to_string(*sb);
+	}
+	#insert #run webgpu_meta_run();
+
 	context.rhi = platform.rhi;
+	context.gpu = platform.gpu;
+
 	return platform;
 }
 
@@ -410,3 +448,6 @@ exit_platform :: (platform: Platform) {
 	SDL_DestroyWindow(sdl_window);
 	SDL_Quit();
 }
+
+
+wgpu_native :: #library "./lib/wgpu_native";

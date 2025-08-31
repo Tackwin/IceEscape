@@ -110,6 +110,7 @@ Command :: struct {
 	}
 	End_Level :: struct {
 		winner_id: int;
+		next_scene_id: int;
 		next_level_scheduled_in_seconds := 60.0;
 	}
 	Sync_Scene :: struct {

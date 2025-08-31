@@ -2,8 +2,10 @@
 #import "Basic";
 #import "Algebra";
 #import "Store";
+Assets :: #import "Assets";
 #import "String";
 #import "Hash_Table";
+Rand :: #import "Rand";
 
 #scope_export
 
@@ -13,8 +15,8 @@ XXXXXIGIIGIIGIIXXXXXX
 XXXGIIGIIGIIGIIIGXXXX
 XXIIIIIIIIIIIIIIIIXXX
 XGGIIIIIIIIIIIIIIGGXX
-XIIIIIIIiiiIIIIIIIIXX
-XGGIIIIIiiiIIIIIIGGXX
+XIIIIIIiiiiiIIIIIIIXX
+XGGIIIIiiiiiIIIIIGGXX
 XIIIIIIIIIIIIIIIIIIXX
 XXIGIIIIXGXIIIIIGIXXX
 XXIGIIGIXGXIGIIIGIXXX
@@ -648,6 +650,65 @@ parse_terrain :: (text: string, scene: *Scene) {
 			}
 
 			cursor -= 1;
+		}
+	}
+
+	rng := Rand.seed(123456789);
+
+	get_probability :: (id: Assets.Prop_Id) -> float {
+		if #complete id == {
+			case .TERRAIN_TREE_SNOW_A;
+				return 0.25;
+			case .TERRAIN_TREE_SNOW_B;
+				return 0.25;
+			case .TERRAIN_TREE_SNOW_C;
+				return 0.1;
+			case .TERRAIN_SNOWMAN;
+				return 0.04;
+			case .TERRAIN_SNOWMAN_HAT;
+				return 0.01;
+			case .TERRAIN_SNOW_FLAT;
+				return 0.0;
+			case .TERRAIN_SNOW_FLAT_LARGE;
+				return 0.0;
+			case .TERRAIN_SNOW_PILE;
+				return 0.0;
+			case .TERRAIN_SNOWFLAKE_A;
+			case .TERRAIN_SNOWFLAKE_B;
+			case .TERRAIN_SNOWFLAKE_C;
+			case .ROCK_SMALL;
+				return 0.05;
+			case .ROCK_MEDIUM;
+				return 0.033;
+			case .ROCK_LARGE;
+				return 0.0166;
+		}
+		return 0.0;
+	}
+	// Populate props
+	for y: 0..scene.terrain.tiles_count.y-1 {
+		for x: 0..scene.terrain.tiles_count.x-1 {
+			tile : Tile = scene.terrain.tiles[x + y * scene.terrain.tiles_count.x];
+			if tile.kind == .Dirt {
+
+				for id: 0..16 {
+					r := Rand.random_uniform(*rng);
+					if r < get_probability(xx id) {
+						prop: Prop;
+						prop.id = xx id;
+
+						offx := Rand.random_uniform(*rng, -0.4, 0.4);
+						offy := Rand.random_uniform(*rng, -0.4, 0.4);
+						offtheta := Rand.random_uniform(*rng, 0, 2 * 3.141592);
+
+						prop.M = M4f.translate(V3f.{ x + 0.5 + offx, y + 0.5 + offy, 0 });
+						prop.M = prop.M * to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, offtheta));
+
+						array_add(*scene.props, prop);
+					}
+
+				}
+			}
 		}
 	}
 }
