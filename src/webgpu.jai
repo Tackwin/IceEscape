@@ -6,4 +6,6 @@ GPU_proc :: struct {
     adapterGetLimits: WGPUProcAdapterGetLimits = null;
     supportedFeaturesFreeMembers: WGPUProcSupportedFeaturesFreeMembers = null;
     adapterGetFeatures: WGPUProcAdapterGetFeatures = null;
+    adapterRelease: WGPUProcAdapterRelease = null;
+    adapterRequestDevice: WGPUProcAdapterRequestDevice = null;
 }

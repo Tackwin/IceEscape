@@ -4,6 +4,7 @@
 #import "String";
 #import "Bindings_Generator";
 #import "File";
+#import "File_Utilities";
 
 build_win32 :: () -> Workspace {
 	w := compiler_create_workspace("Win32");
@@ -78,7 +79,6 @@ build_wasm :: () {
 		"-output_path", "../web/",
 		"+Toolchains/Web/Progressive_Web_App"
 	);
-
 	while true {
 		ok, result := get_process_result(*process);
 		if !ok
@@ -95,6 +95,17 @@ build_wasm :: () {
 		}
 		sleep_milliseconds(250);
 	}
+
+	runtime:, ok = read_entire_file("web/runtime.js");
+	if !ok {
+		return;
+	}
+	webgpu:, ok = read_entire_file("src/webgpu.js");
+	if !ok {
+		return;
+	}
+
+	write_entire_file("./web/runtime.js", tprint("%\n%\n", runtime, webgpu));
 }
 
 build :: () {

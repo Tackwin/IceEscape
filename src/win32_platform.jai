@@ -418,6 +418,14 @@ init_platform :: () -> Platform {
 	wgpuAdapterGetFeatures :: (
 		adapter: WGPUAdapter, features: *WGPUSupportedFeatures
 	) -> void #foreign wgpu_native;
+	wgpuAdapterRelease :: (
+		adapter: WGPUAdapter
+	) -> void #foreign wgpu_native;
+	wgpuAdapterRequestDevice :: (
+		adapter: WGPUAdapter,
+		descriptor: *WGPUDeviceDescriptor,
+		callbackInfo: WGPURequestDeviceCallbackInfo
+	) -> WGPUFuture #foreign wgpu_native;
 
 	webgpu_meta_run :: () -> string {
 		sb: String_Builder;

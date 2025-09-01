@@ -161,6 +161,9 @@ main :: () {
 	platform := init_platform();
 	context._platform = platform;
 	rhi := platform.rhi;
+	context.gpu = platform.gpu;
+
+	Graphics.init_graphics();
 
 	store: Store;
 	init_store(platform, *store);

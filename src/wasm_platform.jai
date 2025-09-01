@@ -397,33 +397,6 @@ Entry :: struct {
 	special_function := "";
 }
 
-JS_HEADER :: #string JS_HEADER
-object_map = [];
-object_map_counter = 0;
-
-const jsCreateInstance = (params_ptr, returns_ptr) => {
-	const view = new DataView(jai_exports.memory.buffer);
-	object_map_counter += 1;
-	object_map[object_map_counter] = navigator.gpu;
-	view.setBigUint64(returns_ptr + 0, BigInt(object_map_counter), true);
-}
-
-const jsInstanceRequestAdapter = async (params_ptr, returns_ptr) => {
-	const view = new DataView(jai_exports.memory.buffer);
-	switch(wasm_pause()) {
-		case 0: (async () => {
-			const adapter = await navigator.gpu.requestAdapter();
-
-			object_map_counter += 1;
-			object_map[object_map_counter] = adapter;
-			view.setBigUint64(returns_ptr + 0, BigInt(object_map_counter), true);
-			return +1;
-		})().then(wasm_resume); break;
-	}
-}
-
-JS_HEADER;
-
 wasmCreateInstance :: (descriptor: *WGPUInstanceDescriptor) -> WGPUInstance #c_call {
 	jsCreateInstance :: (params: *void, returns: *void) #foreign;
 	instance: WGPUInstance;
@@ -441,9 +414,75 @@ wasmInstanceRequestAdapter :: (
 	callbackInfo.callback(.Success, adapter, .{}, callbackInfo.userdata1, callbackInfo.userdata2);
 	return .{};
 }
+wasmAdapterGetLimits :: (
+	adapter: WGPUAdapter,
+	limits: *WGPULimits
+) -> WGPUStatus #c_call
+{
+	jsAdapterGetLimits :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		adapter: WGPUAdapter;
+		limits: *WGPULimits;
+	};
+	params.adapter = adapter;
+	params.limits = limits;
+
+	result: WGPUStatus;
+	jsAdapterGetLimits(*params, *result);
+	return result;
+}
+wasmAdapterGetFeatures :: (
+	adapter: WGPUAdapter,
+	features: *WGPUSupportedFeatures
+) #c_call
+{
+	jsAdapterGetFeatures :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		adapter: WGPUAdapter;
+		features: *WGPUSupportedFeatures;
+	};
+	params.adapter = adapter;
+	params.features = features;
+
+	result: WGPUStatus;
+	jsAdapterGetFeatures(*params, *result);
+}
+wasmSupportedFeaturesFreeMembers :: (features: WGPUSupportedFeatures) #c_call {
+	jsSupportedFeaturesFreeMembers :: (params: *void, returns: *void) #foreign;
+	jsSupportedFeaturesFreeMembers(*features, null);
+}
+wasmAdapterRelease :: (adapter: WGPUAdapter) -> void #c_call {
+	jsAdapterRelease :: (params: *void, returns: *void) #foreign;
+	jsAdapterRelease(*adapter, null);
+}
+wasmAdapterRequestDevice :: (
+	adapter: WGPUAdapter,
+	descriptor: *WGPUDeviceDescriptor,
+	callbackInfo: WGPURequestDeviceCallbackInfo
+) -> WGPUFuture #c_call {
+	jsAdapterRequestDevice :: (params: *void, returns: *void) #foreign;
+	device: WGPUDevice;
+
+	params: struct {
+		adapter: WGPUAdapter;
+		descriptor: *WGPUDeviceDescriptor;
+	};
+	params.adapter = adapter;
+	params.descriptor = descriptor;
+	jsAdapterRequestDevice(*params, *device);
+	callbackInfo.callback(.Success, device, .{}, callbackInfo.userdata1, callbackInfo.userdata2);
+	return .{};
+}
 entries :: Entry.[
 	.{ "createInstance", WGPUProcCreateInstance, "wasmCreateInstance" },
 	.{ "instanceRequestAdapter", WGPUProcInstanceRequestAdapter, "wasmInstanceRequestAdapter" },
+	.{ "adapterGetLimits", WGPUProcAdapterGetLimits, "wasmAdapterGetLimits" },
+	.{ "supportedFeaturesFreeMembers", WGPUProcSupportedFeaturesFreeMembers, "wasmSupportedFeaturesFreeMembers" },
+	.{ "adapterGetFeatures", WGPUProcAdapterGetFeatures, "wasmAdapterGetFeatures" },
+	.{ "adapterRelease", WGPUProcAdapterRelease, "wasmAdapterRelease" },
+	.{ "adapterRequestDevice", WGPUProcAdapterRequestDevice, "wasmAdapterRequestDevice" },
 ];
 
 
