@@ -10,6 +10,7 @@ GL :: #import "GL";
 #import "SDL";
 #import "Reflection";
 #import "Curl";
+Win32 :: #import "Windows";
 
 sdl_window: *SDL_Window;
 sdl_gl_context: SDL_GLContext;
@@ -426,6 +427,95 @@ init_platform :: () -> Platform {
 		descriptor: *WGPUDeviceDescriptor,
 		callbackInfo: WGPURequestDeviceCallbackInfo
 	) -> WGPUFuture #foreign wgpu_native;
+	wgpuDeviceGetQueue :: (
+		device: WGPUDevice
+	) -> WGPUQueue #foreign wgpu_native;
+	wgpuQueueRelease :: (
+		queue: WGPUQueue
+	) -> void #foreign wgpu_native;
+	wgpuQueueSubmit :: (
+		queue: WGPUQueue,
+		commandCount: u64,
+		commands: *WGPUCommandBuffer
+	) -> void #foreign wgpu_native;
+	wgpuQueueWriteBuffer :: (
+		queue: WGPUQueue,
+		buffer: WGPUBuffer,
+		bufferOffset: u64,
+		data: *void,
+		dataSize: u64
+	) -> void #foreign wgpu_native;
+	wgpuQueueWriteTexture :: (
+		queue: WGPUQueue,
+		destination: *WGPUTexelCopyTextureInfo,
+		data: *void,
+		dataSize: u64,
+		dataLayout: *WGPUTexelCopyBufferLayout,
+		writeSize: *WGPUExtent3D
+	) -> void #foreign wgpu_native;
+	wgpuDeviceCreateCommandEncoder :: (
+		device: WGPUDevice,
+		descriptor: *WGPUCommandEncoderDescriptor
+	) -> WGPUCommandEncoder #foreign wgpu_native;
+	wgpuCommandEncoderFinish :: (
+		encoder: WGPUCommandEncoder,
+		descriptor: *WGPUCommandBufferDescriptor
+	) -> WGPUCommandBuffer #foreign wgpu_native;
+	wgpuCommandEncoderInsertDebugMarker :: (
+		encoder: WGPUCommandEncoder,
+		markerLabel: WGPUStringView
+	) -> void #foreign wgpu_native;
+	wgpuCommandBufferRelease :: (
+		commandBuffer: WGPUCommandBuffer
+	) -> void #foreign wgpu_native;
+	wgpuCommandEncoderRelease :: (
+		encoder: WGPUCommandEncoder
+	) -> void #foreign wgpu_native;
+	wgpuDeviceCreateBuffer :: (
+		device: WGPUDevice,
+		descriptor: *WGPUBufferDescriptor
+	) -> WGPUBuffer #foreign wgpu_native;
+	wgpuBufferRelease :: (
+		buffer: WGPUBuffer
+	) -> void #foreign wgpu_native;
+	wgpuBufferGetMappedRange :: (
+		buffer: WGPUBuffer,
+		offset: u64,
+		size: u64
+	) -> *void #foreign wgpu_native;
+	wgpuBufferUnmap :: (
+		buffer: WGPUBuffer
+	) -> void #foreign wgpu_native;
+	wgpuMyInstanceCreateSurface :: (
+		instance: WGPUInstance,
+		descriptor: *WGPUSurfaceDescriptor
+	) -> WGPUSurface #c_call {
+		wgpuInstanceCreateSurface :: (
+			instance: WGPUInstance,
+			descriptor: *WGPUSurfaceDescriptor
+		) -> WGPUSurface #foreign wgpu_native;
+
+		chained: WGPUSurfaceSourceWindowsHWND = .{};
+		chained.hinstance = Win32.GetModuleHandleW(null);
+		info: SDL_SysWMinfo = .{};
+
+		ctx: #Context;
+		push_context ctx {
+			SDL_VERSION(*info.version);
+			SDL_GetWindowWMInfo(sdl_window, *info);
+		}
+		chained.hwnd = xx info.info.win.window;
+
+		_desc := descriptor.*;
+
+		chain: WGPUChainedStruct = .{};
+		chain.sType = .SurfaceSourceWindowsHWND;
+		chain.next = xx *chained;
+
+		_desc.nextInChain = *chain;
+
+		return wgpuInstanceCreateSurface(instance, *_desc);
+	};
 
 	webgpu_meta_run :: () -> string {
 		sb: String_Builder;

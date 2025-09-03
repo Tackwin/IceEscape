@@ -47,6 +47,9 @@ Scene :: struct {
 	props: [..] Prop;
 	terrain: Terrain;
 
+	camera_min: V2f;
+	camera_max: V2f;
+
 	coin_generation := 0;
 
 	mark_clicked_time: Apollo_Time;

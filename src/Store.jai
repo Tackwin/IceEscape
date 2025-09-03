@@ -63,6 +63,9 @@ Store :: struct {
 	tile_atlas_png: Assets.Image;
 	prop_colormap_png: Assets.Image;
 
+	skybox_ski_png: Assets.Image;
+	skybox_ski: Render.Texture;
+
 	tile_snow_albedo: Render.Texture;
 	tile_snow_normal: Render.Texture;
 	tile_snow_height: Render.Texture;
@@ -101,6 +104,7 @@ Store :: struct {
 	shadow_shader: Render.Shader;
 	shadow_instanced_shader: Render.Shader;
 	shadow_instanced_texture_shader: Render.Shader;
+	skybox_shader: Render.Shader;
 
 	ice_texture: Render.Texture;
 	coin_texture: Render.Texture;
@@ -144,6 +148,7 @@ Store :: struct {
 	rock_small: Render.Geometry;
 	rock_medium: Render.Geometry;
 	rock_large: Render.Geometry;
+	skybox_geometry: Render.Geometry;
 }
 
 get_geometry :: (store: Store, id: int) -> *Render.Geometry {
@@ -334,6 +339,8 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.tile_slippy_normal = Render.Texture.make_from_image(store.tile_slippy_normal_png);
 	store.tile_slippy_height = Render.Texture.make_from_image(store.tile_slippy_height_png);
 
+	store.skybox_ski_png = Assets.Image.make_from_memory(Assets.SKYBOX_SKI_PNG, 4);
+	store.skybox_ski = Render.Texture.make_from_image(store.skybox_ski_png);
 
 	store.loser_ogg = platform.load_audio(xx Assets.LOSER_OGG);
 	store.footstep_0_ogg = platform.load_audio(xx Assets.FOOTSTEP_SNOW_0_OGG);
@@ -344,6 +351,9 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.click_wav = platform.load_audio(xx Assets.CLICK_WAV);
 	store.snowflakes_and_lights_ogg = platform.load_audio(xx Assets.SNOWFLAKES_AND_LIGHTS_OGG);
 
+	store.skybox_shader = Render.Shader.make(
+		xx Assets.SKYBOX_VERTEX, xx Assets.SKYBOX_FRAGMENT
+	);
 	store.model_shader = Render.Shader.make(
 		xx Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT
 	);
@@ -423,6 +433,7 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.rock_small = Render.Geometry.make_from_obj(Assets.ROCK_SMALL);
 	store.rock_medium = Render.Geometry.make_from_obj(Assets.ROCK_MEDIUM);
 	store.rock_large = Render.Geometry.make_from_obj(Assets.ROCK_LARGE);
+	store.skybox_geometry = Render.Geometry.make_from_obj(Assets.SKYBOX_OBJ);
 }
 
 #if Assets.RUNTIME {
@@ -462,6 +473,7 @@ check_change :: (store: *Store, paths: [] string) {
 			handle_shader(it, "shadow_instanced", *store.shadow_instanced_shader);
 			handle_shader(it, "instance_texture", *store.instanced_texture_shader);
 			handle_shader(it, "shadow_instance_texture", *store.shadow_instanced_texture_shader);
+			handle_shader(it, "skybox", *store.skybox_shader);
 		}
 	}
 }

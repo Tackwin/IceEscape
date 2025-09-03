@@ -123,7 +123,8 @@ float inShadow() {
 			float depth = texture(shadow, shadow_coords.xy + texel_size * vec2(x, y)).r;
 			float my_depth = shadow_coords.z;
 
-			sum += my_depth < depth ? 1.0 : 0.0;
+			// sum += my_depth < depth ? 1.0 : 0.0;
+			sum += (my_depth < depth ? 1.0 : 0.0);// + smoothstep(0.0, 0.007d5, my_depth - depth);
 		}
 	}
 	return sum / 25.0;

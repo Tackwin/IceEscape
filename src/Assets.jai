@@ -149,6 +149,7 @@ Image :: struct {
 	}
 }
 
+
 RUNTIME :: true && OS != .WASM;
 #if RUNTIME {
 	#import "File";
@@ -197,6 +198,8 @@ FORMAT;
 	return sprint(format_text, name, "%", "%", root, "%", "%", path);
 }
 
+#insert #run embed_data("SKYBOX_VERTEX", "Shader/skybox.vert", #filepath);
+#insert #run embed_data("SKYBOX_FRAGMENT", "Shader/skybox.frag", #filepath);
 #insert #run embed_data("PLAIN_VERTEX", "Shader/plain.vert", #filepath);
 #insert #run embed_data("INSTANCE_VERTEX", "Shader/instance.vert", #filepath);
 #insert #run embed_data("INSTANCE_FRAGMENT", "Shader/instance.frag", #filepath);
@@ -280,6 +283,8 @@ FORMAT;
 #insert #run embed_data("ROCK_MEDIUM", "Terrain/rock_medium.obj", #filepath);
 #insert #run embed_data("ROCK_LARGE", "Terrain/rock_large.obj", #filepath);
 #insert #run embed_data("PROP_COLORMAP", "Terrain/prop_colormap.png", #filepath);
+#insert #run embed_data("SKYBOX_SKI_PNG", "skybox_ski.png", #filepath);
+#insert #run embed_data("SKYBOX_OBJ", "skybox.obj", #filepath);
 
 Prop_Id :: enum {
 	TERRAIN_TREE_SNOW_A :: 0;
@@ -376,6 +381,10 @@ load_everything :: () {
 			"ROCK_SMALL",
 			"ROCK_LARGE",
 			"ROCK_MEDIUM",
+			"SKYBOX_SKI_PNG",
+			"SKYBOX_OBJ",
+			"SKYBOX_VERTEX",
+			"SKYBOX_FRAGMENT",
 		];
 		#insert #run -> string {
 			sb: String_Builder;

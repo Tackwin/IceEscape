@@ -1395,6 +1395,8 @@ render :: (
 	set_uniform(shaders.textured_shader, "P", P);
 	set_uniform(*store.tile_shader, "V", V);
 	set_uniform(*store.tile_shader, "P", P);
+	set_uniform(*store.skybox_shader, "V", V);
+	set_uniform(*store.skybox_shader, "P", P);
 	set_uniform(*store.tile_shader, "shadow", framegraph.shadow_depth, 1);
 	set_uniform(*store.tile_shader, "shadowV", SV);
 	set_uniform(*store.tile_shader, "shadowP", SP);
@@ -1446,6 +1448,8 @@ render :: (
 		context.rhi.glEnable(GL_CULL_FACE);
 	}
 
+	render_skybox(scene);
+
 	context.rhi.glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	context.rhi.glUseProgram(framegraph.postpro_shader.program);
 	set_uniform(framegraph.postpro_shader, "hdr", framegraph.main_color, 0);
@@ -1461,6 +1465,12 @@ render :: (
 	);
 	context.rhi.glBindVertexArray(framegraph.fullscreen_quad.gpu_object);
 	context.rhi.glDrawArrays(GL_TRIANGLES, 0, xx 6);
+}
+
+render_skybox :: (scene: Scene.Scene) {
+	store := scene.store;
+	set_uniform(*store.skybox_shader, "skybox", store.skybox_ski, 0);
+	render(store.skybox_geometry, store.skybox_shader);
 }
 
 render_flags :: (scene: Scene.Scene, shaders: Shaders) {

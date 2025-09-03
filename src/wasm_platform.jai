@@ -457,6 +457,24 @@ wasmAdapterRelease :: (adapter: WGPUAdapter) -> void #c_call {
 	jsAdapterRelease :: (params: *void, returns: *void) #foreign;
 	jsAdapterRelease(*adapter, null);
 }
+
+
+// we expose these so that you can allocate memory from js if you need to
+#program_export jaiAdapterRequestDeviceErrorCallback :: (
+	ctx: *#Context,
+	device: *WGPUDevice,
+	message: *void,
+	message_count: u64,
+	cb: *void,
+	userdata1: *void,
+	userdata2: *void
+) -> void #c_call {
+	push_context,defer_pop ctx;
+	typed_cb := cb.(WGPUUncapturedErrorCallback);
+	typed_cb(
+		device, .Unknown, .{ data = xx message, length = xx message_count }, userdata1, userdata2
+	);
+}
 wasmAdapterRequestDevice :: (
 	adapter: WGPUAdapter,
 	descriptor: *WGPUDeviceDescriptor,
@@ -475,61 +493,227 @@ wasmAdapterRequestDevice :: (
 	callbackInfo.callback(.Success, device, .{}, callbackInfo.userdata1, callbackInfo.userdata2);
 	return .{};
 }
+wasmDeviceGetQueue :: (device: WGPUDevice) -> WGPUQueue #c_call {
+	jsDeviceGetQueue :: (params: *void, returns: *void) #foreign;
+	queue: WGPUQueue;
+	jsDeviceGetQueue(*device, *queue);
+	return queue;
+}
+wasmQueueRelease :: (queue: WGPUQueue) -> void #c_call {
+	jsQueueRelease :: (params: *void, returns: *void) #foreign;
+	jsQueueRelease(*queue, null);
+}
+wasmQueueSubmit :: (
+	queue: WGPUQueue,
+	commandCount: u64,
+	commands: *WGPUCommandBuffer
+) -> void #c_call {
+	jsQueueSubmit :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		queue: WGPUQueue;
+		commandCount: u64;
+		commands: *WGPUCommandBuffer;
+	};
+	params.queue = queue;
+	params.commandCount = commandCount;
+	params.commands = commands;
+
+	jsQueueSubmit(*params, null);
+}
+wasmQueueWriteBuffer :: (
+	queue: WGPUQueue,
+	buffer: WGPUBuffer,
+	bufferOffset: u64,
+	data: *void,
+	dataSize: u64
+) -> void #c_call {
+	jsQueueWriteBuffer :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		queue: WGPUQueue;
+		buffer: WGPUBuffer;
+		bufferOffset: u64;
+		data: *void;
+		dataSize: u64;
+	};
+	params.queue = queue;
+	params.buffer = buffer;
+	params.bufferOffset = bufferOffset;
+	params.data = data;
+	params.dataSize = dataSize;
+
+	jsQueueWriteBuffer(*params, null);
+}
+wasmQueueWriteTexture :: (
+	queue: WGPUQueue,
+	region: *WGPUTexelCopyTextureInfo,
+	data: *void,
+	dataSize: u64,
+	dataLayout: *WGPUTexelCopyBufferLayout,
+	writeSize: *WGPUExtent3D
+) -> void #c_call {
+	jsQueueWriteTexture :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		queue: WGPUQueue;
+		region: *WGPUTexelCopyTextureInfo;
+		data: *void;
+		dataSize: u64;
+		dataLayout: *WGPUTexelCopyBufferLayout;
+		writeSize: *WGPUExtent3D;
+	};
+	params.queue = queue;
+	params.region = region;
+	params.data = data;
+	params.dataSize = dataSize;
+	params.dataLayout = dataLayout;
+	params.writeSize = writeSize;
+
+	jsQueueWriteTexture(*params, null);
+}
+wasmDeviceCreateCommandEncoder :: (
+	device: WGPUDevice,
+	descriptor: *WGPUCommandEncoderDescriptor
+) -> WGPUCommandEncoder #c_call {
+	jsDeviceCreateCommandEncoder :: (params: *void, returns: *void) #foreign;
+	encoder: WGPUCommandEncoder;
+
+	params: struct {
+		device: WGPUDevice;
+		descriptor: *WGPUCommandEncoderDescriptor;
+	};
+	params.device = device;
+	params.descriptor = descriptor;
+
+	jsDeviceCreateCommandEncoder(*params, *encoder);
+	return encoder;
+}
+wasmCommandEncoderFinish :: (
+	encoder: WGPUCommandEncoder,
+	descriptor: *WGPUCommandBufferDescriptor
+) -> WGPUCommandBuffer #c_call {
+	jsCommandEncoderFinish :: (params: *void, returns: *void) #foreign;
+	command_buffer: WGPUCommandBuffer;
+
+	params: struct {
+		encoder: WGPUCommandEncoder;
+		descriptor: *WGPUCommandBufferDescriptor;
+	};
+	params.encoder = encoder;
+	params.descriptor = descriptor;
+
+	jsCommandEncoderFinish(*params, *command_buffer);
+	return command_buffer;
+}
+wasmCommandEncoderInsertDebugMarker :: (
+	encoder: WGPUCommandEncoder,
+	markerLabel: WGPUStringView
+) -> void #c_call {
+	jsCommandEncoderInsertDebugMarker :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		encoder: WGPUCommandEncoder;
+		markerLabel: *WGPUStringView;
+	};
+	params.encoder = encoder;
+	params.markerLabel = *markerLabel;
+
+	jsCommandEncoderInsertDebugMarker(*params, null);
+}
+wasmCommandBufferRelease :: (
+	buffer: WGPUCommandBuffer
+) -> void #c_call {
+	jsCommandBufferRelease :: (params: *void, returns: *void) #foreign;
+	jsCommandBufferRelease(*buffer, null);
+}
+wasmCommandEncoderRelease :: (
+	encoder: WGPUCommandEncoder
+) -> void #c_call {
+	jsCommandEncoderRelease :: (params: *void, returns: *void) #foreign;
+	jsCommandEncoderRelease(*encoder, null);
+}
+wasmDeviceCreateBuffer :: (
+	device: WGPUDevice,
+	descriptor: *WGPUBufferDescriptor
+) -> WGPUBuffer #c_call {
+	jsDeviceCreateBuffer :: (params: *void, returns: *void) #foreign;
+	buffer: WGPUBuffer;
+
+	params: struct {
+		device: WGPUDevice;
+		descriptor: *WGPUBufferDescriptor;
+	};
+	params.device = device;
+	params.descriptor = descriptor;
+
+	jsDeviceCreateBuffer(*params, *buffer);
+	return buffer;
+}
+wasmBufferRelease :: (
+	buffer: WGPUBuffer
+) -> void #c_call {
+	jsBufferRelease :: (params: *void, returns: *void) #foreign;
+	jsBufferRelease(*buffer, null);
+}
+wasmBufferGetMappedRange :: (
+	buffer: WGPUBuffer,
+	offset: u64,
+	size: u64
+) -> *void #c_call {
+	jsBufferGetMappedRange :: (params: *void, returns: *void) #foreign;
+	result: *void;
+
+	params: struct {
+		buffer: WGPUBuffer;
+		offset: u64;
+		size: u64;
+	};
+	params.buffer = buffer;
+	params.offset = offset;
+	params.size = size;
+
+	jsBufferGetMappedRange(*params, *result);
+	return result;
+}
+wasmBufferUnmap :: (
+	buffer: WGPUBuffer
+) -> void #c_call {
+	jsBufferUnmap :: (params: *void, returns: *void) #foreign;
+	jsBufferUnmap(*buffer, null);
+}
+wasmInstanceCreateSurface :: (
+	instance: WGPUInstance,
+	descriptor: *WGPUSurfaceDescriptor
+) -> WGPUSurface #c_call {
+	jsInstanceCreateSurface :: (params: *void, returns: *void) #foreign;
+	surface: WGPUSurface;
+	jsInstanceCreateSurface(*instance, *surface);
+	return surface;
+}
 entries :: Entry.[
 	.{ "createInstance", WGPUProcCreateInstance, "wasmCreateInstance" },
+	.{ "myInstanceCreateSurface", WGPUProcInstanceCreateSurface, "wasmInstanceCreateSurface" },
 	.{ "instanceRequestAdapter", WGPUProcInstanceRequestAdapter, "wasmInstanceRequestAdapter" },
 	.{ "adapterGetLimits", WGPUProcAdapterGetLimits, "wasmAdapterGetLimits" },
 	.{ "supportedFeaturesFreeMembers", WGPUProcSupportedFeaturesFreeMembers, "wasmSupportedFeaturesFreeMembers" },
 	.{ "adapterGetFeatures", WGPUProcAdapterGetFeatures, "wasmAdapterGetFeatures" },
 	.{ "adapterRelease", WGPUProcAdapterRelease, "wasmAdapterRelease" },
 	.{ "adapterRequestDevice", WGPUProcAdapterRequestDevice, "wasmAdapterRequestDevice" },
+	.{ "deviceGetQueue", WGPUProcDeviceGetQueue, "wasmDeviceGetQueue" },
+	.{ "queueRelease", WGPUProcQueueRelease, "wasmQueueRelease" },
+	.{ "queueSubmit", WGPUProcQueueSubmit, "wasmQueueSubmit" },
+	.{ "queueWriteBuffer", WGPUProcQueueWriteBuffer, "wasmQueueWriteBuffer" },
+	.{ "queueWriteTexture", WGPUProcQueueWriteTexture, "wasmQueueWriteTexture" },
+	.{ "deviceCreateCommandEncoder", WGPUProcDeviceCreateCommandEncoder, "wasmDeviceCreateCommandEncoder" },
+	.{ "commandEncoderFinish", WGPUProcCommandEncoderFinish, "wasmCommandEncoderFinish" },
+	.{ "commandEncoderInsertDebugMarker", WGPUProcCommandEncoderInsertDebugMarker, "wasmCommandEncoderInsertDebugMarker" },
+	.{ "commandBufferRelease", WGPUProcCommandBufferRelease, "wasmCommandBufferRelease" },
+	.{ "commandEncoderRelease", WGPUProcCommandEncoderRelease, "wasmCommandEncoderRelease" },
+	.{ "deviceCreateBuffer", WGPUProcDeviceCreateBuffer, "wasmDeviceCreateBuffer" },
+	.{ "bufferRelease", WGPUProcBufferRelease, "wasmBufferRelease" },
+	.{ "bufferGetMappedRange", WGPUProcBufferGetMappedRange, "wasmBufferGetMappedRange" },
+	.{ "bufferUnmap", WGPUProcBufferUnmap, "wasmBufferUnmap" }
 ];
-
-
-// wgpu_functions :: string.[
-// 	"WGPUProcInstanceRequestAdapter"
-// ];
-
-// #run {
-// 	WGPU_Function_Entry :: struct {
-// 		name: string;
-// 		info: *Type_Info_Procedure;
-// 	}
-
-// 	#insert #run -> string {
-// 		sb: String_Builder;
-// 		print_to_builder(
-// 			*sb, "wgpu_functions_types := NewArray(%, WGPU_Function_Entry);\n", wgpu_functions.count
-// 		);
-// 		for wgpu_functions {
-// 			print_to_builder(*sb, "wgpu_functions_types[%].name = \"%\";\n", it_index, it);
-// 			// print_to_builder(*sb, "wgpu_functions_types[%].type = %;\n", it_index, it);
-// 			print_to_builder(*sb, "wgpu_functions_types[%].info = type_info(%);\n", it_index, it);
-// 		}
-// 		return builder_to_string(*sb);
-// 	};
-
-// 	sb: String_Builder;
-// 	for wgpu_functions_types {
-// 		type_proc_name := copy_string(it.name);
-// 		type_proc_name.data += 8;
-// 		type_proc_name.count -= 8;
-// 		type_proc_name[0] = to_lower(type_proc_name[0]);
-
-// 		print_to_builder(*sb, "% :: % {\n", type_proc_name, header_proc(it.info));
-// 		print_to_builder(*sb, "    ")
-// 	}
-
-// 	str := builder_to_string(*sb);
-// 	print(str);
-// }
-
-// #insert #run -> string {
-// 	sb: String_Builder;
-// 	for wgpu_functions {
-// 		print_to_builder(*sb, "type_info(%)\n", it);
-// 	}
-// 	return builder_to_string(*sb);
-// };
 
 

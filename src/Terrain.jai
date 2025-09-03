@@ -300,6 +300,36 @@ parse_terrain :: (text: string, scene: *Scene) {
 		if starts_with(line, "//")
 			continue;
 
+		if scan2(line, "frame") {
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				if scan2(line, "- position: % % %", *scene.camera_min.x, *scene.camera_min.y, *scene.camera_min.z)
+					continue;
+
+				if scan2(line, "- size: % % %", *scene.camera_max.x, *scene.camera_max.y, *scene.camera_max.z) {
+					scene.camera_max += scene.camera_min;
+					continue;
+				}
+
+				print("Error reading frame, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
+
 		if scan2(line, "flag") {
 			flag: Flag;
 			defer array_add(*scene.flags, flag);
@@ -320,8 +350,9 @@ parse_terrain :: (text: string, scene: *Scene) {
 
 				if scan2(
 					line, "- position: % % %", *flag.position.x, *flag.position.y, *flag.position.z
-				)
+				) {
 					continue;
+				}
 				if scan2(line, "- index: %", *flag.index)
 					continue;
 
@@ -658,11 +689,11 @@ parse_terrain :: (text: string, scene: *Scene) {
 	get_probability :: (id: Assets.Prop_Id) -> float {
 		if #complete id == {
 			case .TERRAIN_TREE_SNOW_A;
-				return 0.25;
+				return 0.35;
 			case .TERRAIN_TREE_SNOW_B;
 				return 0.25;
 			case .TERRAIN_TREE_SNOW_C;
-				return 0.1;
+				return 0.125;
 			case .TERRAIN_SNOWMAN;
 				return 0.04;
 			case .TERRAIN_SNOWMAN_HAT;
@@ -677,11 +708,11 @@ parse_terrain :: (text: string, scene: *Scene) {
 			case .TERRAIN_SNOWFLAKE_B;
 			case .TERRAIN_SNOWFLAKE_C;
 			case .ROCK_SMALL;
-				return 0.05;
+				return 0.075;
 			case .ROCK_MEDIUM;
-				return 0.033;
+				return 0.05;
 			case .ROCK_LARGE;
-				return 0.0166;
+				return 0.02;
 		}
 		return 0.0;
 	}

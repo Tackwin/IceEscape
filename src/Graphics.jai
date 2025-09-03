@@ -5,8 +5,10 @@
 
 Graphics :: struct {
 	instance: WGPUInstance;
+	surface: WGPUSurface;
 	adapter: WGPUAdapter;
 	device: WGPUDevice;
+	mainQueue: WGPUQueue;
 
 	done: [16] bool;
 }
@@ -20,6 +22,8 @@ init_graphics :: () {
 		print("Failed to create WGPU instance\n");
 		return;
 	}
+
+	graphics.surface = gpu.instanceCreateSurface(graphics.instance, null);
 
 	opts: WGPURequestAdapterOptions = .{};
 	cb: WGPURequestAdapterCallbackInfo = .{};
@@ -64,6 +68,23 @@ init_graphics :: () {
 
 	graphics.done[0] = false;
 	deviceDesc: WGPUDeviceDescriptor = .{};
+	deviceDesc.uncapturedErrorCallbackInfo.userdata1 = xx *context.graphics;
+	deviceDesc.uncapturedErrorCallbackInfo.callback = (
+		device: *WGPUDevice,
+		errorType: WGPUErrorType,
+		message: WGPUStringView,
+		userdata1: *void,
+		userdata2: *void
+	) #c_call {
+		ctx: #Context;
+		push_context ctx {
+			str: string;
+			str.data = message.data;
+			str.count = xx message.length;
+			print("WGPU ERROR %\n", str);
+		}
+	};
+
 	{
 
 		cb: WGPURequestDeviceCallbackInfo = .{};
@@ -94,6 +115,8 @@ init_graphics :: () {
 	}
 
 	gpu.adapterRelease(graphics.adapter);
+
+	graphics.mainQueue = gpu.deviceGetQueue(graphics.device);
 }
 
 
