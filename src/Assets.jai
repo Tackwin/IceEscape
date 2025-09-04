@@ -241,6 +241,9 @@ FORMAT;
 #insert #run embed_data("VEHICLE_RACER_OBJ", "vehicle-racer.obj", #filepath);
 #insert #run embed_data("VEHICLE_SUV_OBJ", "vehicle-suv.obj", #filepath);
 #insert #run embed_data("VEHICLE_SPEEDSTER_OBJ", "vehicle-speedster.obj", #filepath);
+#insert #run embed_data("VEHICLE_MONSTER_TRUCK_OBJ", "vehicle-monster-truck.obj", #filepath);
+#insert #run embed_data("VEHICLE_VINTAGE_RACER_OBJ", "vehicle-vintage-racer.obj", #filepath);
+#insert #run embed_data("VEHICLE_DRAG_RACER_OBJ", "vehicle-drag-racer.obj", #filepath);
 #insert #run embed_data("FLAG_OBJ", "flag.obj", #filepath);
 #insert #run embed_data("FLAG_DOWN_OBJ", "flag_down.obj", #filepath);
 
@@ -333,6 +336,9 @@ load_everything :: () {
 			"VEHICLE_RACER_OBJ",
 			"VEHICLE_SUV_OBJ",
 			"VEHICLE_SPEEDSTER_OBJ",
+			"VEHICLE_DRAG_RACER_OBJ",
+			"VEHICLE_MONSTER_TRUCK_OBJ",
+			"VEHICLE_VINTAGE_RACER_OBJ",
 			"FLAG_OBJ",
 			"FLAG_DOWN_OBJ",
 			"CLICK_WAV",

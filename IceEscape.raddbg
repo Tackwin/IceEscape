@@ -1,5 +1,7 @@
 // raddbg 0.9.21 project file
 
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Scene.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Runtime_Support.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Graphics.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_game.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Store.jai"
@@ -9,8 +11,6 @@ recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Rand.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Assets.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/.build/.added_strings_w3.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Preload.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Scene.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Runtime_Support.jai"
 recent_file: path: "src/main_server.jai"
 recent_file: path: "src/Scene.jai"
 recent_file: path: "../jai/modules/preload.jai"
@@ -63,5 +63,15 @@ target:
 breakpoint:
 {
   source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Graphics.jai:65:1"
-  hit_count: 1
+  hit_count: 0
+}
+breakpoint:
+{
+  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Scene.jai:938:1"
+  hit_count: 3
+}
+breakpoint:
+{
+  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Scene.jai:931:1"
+  hit_count: 3
 }

@@ -1730,7 +1730,9 @@ render_terrain :: (scene: Scene.Scene, terrain: *Scene.Terrain, shaders: Shaders
 
 		instance := *instanced[it_index];
 		instance.kind = xx tile.kind;
-		instance.M = M4f.translate(.{ cast(float32) x, cast(float32) y, 0 });
+		pos := V3f.{ x.(float), y.(float), 0 };
+		pos -= v3(scene.camera_min, 0.0);
+		instance.M = M4f.translate(pos);
 	}
 
 	add_instance(*store.tile_geometry, .{

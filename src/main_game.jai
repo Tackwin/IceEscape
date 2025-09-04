@@ -189,6 +189,7 @@ main :: () {
 	scene.camera.target_target = scene.camera.target;
 	scene.camera.wanted_target_to_position = scene.camera.position - scene.camera.target;
 	scene.camera.fov = 55;
+	scene.camera.max_distance = norm(scene.camera.wanted_target_to_position);
 
 	scene.tile_kind_to_shader[xx Scene.Tile.Kind.None] = null;
 	scene.tile_kind_to_shader[xx Scene.Tile.Kind.Ice] = *store.ice_texture;
@@ -278,6 +279,12 @@ main :: () {
 		}
 		if frame_info.mouse_wheel < 0 {
 			scene.camera.wanted_target_to_position *= (1.0 / 0.9);
+			l := norm(scene.camera.wanted_target_to_position);
+			if l > scene.camera.max_distance {
+				l = scene.camera.max_distance;
+			}
+			scene.camera.wanted_target_to_position =
+				l * normalize(scene.camera.wanted_target_to_position);
 		}
 		if pressed[Key.Q] {
 			dt.x -= scene.camera.speed * frame_info.delta_time;

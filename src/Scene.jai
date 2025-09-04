@@ -184,6 +184,9 @@ Camera :: struct {
 	target_target: V3f;
 	wanted_target_to_position: V3f;
 
+	max_distance := 0.0;
+
+
 	locked_to := -1;
 	locked := false;
 
@@ -281,7 +284,7 @@ Trigger :: enum {
 Flag :: struct {
 	id: int;
 	position: V3f;
-	radius: float = 0.25;
+	radius: float = 0.75;
 
 	count_changed_juice_t := 0.0;
 	activated_juice_t := 0.0;
@@ -712,7 +715,7 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 		// >RULE Player die when not under any tile or under a dirt tile
 		for * scene.players {
 			if !it.server.dead {
-				tile, ok := tile_under(scene.terrain, it.server.position);
+				tile, ok := tile_under(scene, it.server.position);
 				if !ok || tile.kind == .Dirt {
 					server_die(scene, it, result);
 					continue;
@@ -932,6 +935,32 @@ update :: (scene: Scene, camera: *Camera, dt: float32) {
 	target_to_position := camera.position - camera.target;
 	target_to_position += (camera.wanted_target_to_position - target_to_position) * 1.0;
 	camera.position = camera.target + target_to_position;
+
+	restricted_target: V3f = camera.target;
+	restricted_target.x = clamp(camera.target.x, scene.camera_min.x, scene.camera_max.x);
+	restricted_target.y = clamp(camera.target.y, scene.camera_min.y, scene.camera_max.y);
+
+	restricted_position: V3f = camera.position;
+	restricted_position.x = clamp(
+		camera.position.x,
+		scene.camera_min.x + camera.wanted_target_to_position.x + 0.2,
+		scene.camera_max.x + camera.wanted_target_to_position.x - 0.2
+	);
+	restricted_position.y = clamp(
+		camera.position.y,
+		scene.camera_min.y + camera.wanted_target_to_position.y + 0.75,
+		scene.camera_max.y + camera.wanted_target_to_position.y - 0.75
+	);
+
+	sig :: (x: float) -> float {
+		return 2.0 / (1.0 + exp(-x)) - 1.0;
+	}
+	camera.target.x = restricted_target.x + sig((camera.target.x - restricted_target.x) * 5.0) * 0.2;
+	camera.target.y = restricted_target.y + sig((camera.target.y - restricted_target.y) * 5.0) * 0.2;
+	camera.position.x = restricted_position.x + sig((camera.position.x - restricted_position.x) * 5.0) * 0.2;
+	camera.position.y = restricted_position.y + sig((camera.position.y - restricted_position.y) * 5.0) * 0.2;
+	// camera.target = damp(restricted_target, camera.target, 10.0, 0.1);
+	// camera.position = damp(restricted_position, camera.position, 10.0, 0.1);
 }
 
 update :: (scene: Scene, skull: *Skull, dt: float32) {
@@ -964,14 +993,14 @@ update :: (scene: Scene, player: *Player, dt: float32) {
 	if player.server.dead
 		return;
 
-	tile, ok := tile_under(scene.terrain, player.server.position);
+	tile, ok := tile_under(scene, player.server.position);
 	if !ok {
 		return;
 	}
 
 	// Let's see if we are still on a tile of the same kind of our confirmed tile.
 	is_still_on := touch_a_tile(
-		scene.terrain,
+		scene,
 		player.server.position,
 		player.server.radius_hitbox_confirmed,
 		player.server.confirmed_tile
@@ -1331,59 +1360,12 @@ free :: (terrain: *Terrain) {
 	free(terrain.text);
 }
 
-load_terrain_from_ascii :: (ascii: string) -> Terrain {
-	max_width := 1;
-	height := 0;
+tile_under :: (scene: Scene, spot: V3f) -> Tile, bool {
+	terrain := *scene.terrain;
 
-	lines := split(ascii, "\n",, temp);
-	height = lines.count;
-
-	for lines
-		max_width = max(max_width, it.count);
-	max_width -= 1; // We remove the \n
-
-	terrain: Terrain;
-	terrain.tiles_count = .{ max_width, height };
-
-	array_resize(*terrain.tiles, max_width * height);
-
-	for * terrain.tiles {
-		it.kind = .None;
-	}
-
-	for y: 0..height - 1 {
-		line := lines[height - 1 - y];
-		if line.count <= 1
-			continue;
-
-		width := line.count - 1;
-
-		low_x := (max_width - width) / 2;
-		hi_x := low_x + width;
-
-		for x: low_x..hi_x-1 {
-			if line[x] == {
-				case #char "I";
-					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Ice;
-				case #char "G";
-					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Grass;
-				case #char "i";
-					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Slippy_Ice;
-				case #char "X";
-					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Dirt;
-				case #char "S";
-					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Grass;
-					terrain.spawn_tile = .{ x, y };
-			}
-		}
-	}
-
-	return terrain;
-}
-
-tile_under :: (terrain: Terrain, spot: V3f) -> Tile, bool {
-	xi := cast(int) floor(spot.x);
-	yi := cast(int) floor(spot.y);
+	tile_idx := position_to_tile(scene, spot);
+	xi := tile_idx.x;
+	yi := tile_idx.y;
 
 	if xi < 0 || xi >= terrain.tiles_count.x || yi < 0 || yi >= terrain.tiles_count.y {
 		return Tile.{}, false; // Out of bounds
@@ -1397,11 +1379,16 @@ tile_under :: (terrain: Terrain, spot: V3f) -> Tile, bool {
 	return terrain.tiles[tile_index], true; // Return the tile and true to indicate it exists
 }
 
-touch_a_tile :: (terrain: Terrain, spot: V3f, radius: float, kind: Tile.Kind) -> bool {
-	lo_x := cast(int) floor(spot.x - radius);
-	hi_x := cast(int) ceil(spot.x + radius);
-	lo_y := cast(int) floor(spot.y - radius);
-	hi_y := cast(int) ceil(spot.y + radius);
+touch_a_tile :: (scene: Scene, spot: V3f, radius: float, kind: Tile.Kind) -> bool {
+	terrain := *scene.terrain;
+
+	low_tile_idx := position_to_tile(scene, spot - V3f.{ radius, radius, 0.0 });
+	high_tile_idx := position_to_tile(scene, spot + V3f.{ radius, radius, 0.0 });
+
+	lo_x := low_tile_idx.x;
+	lo_y := low_tile_idx.y;
+	hi_x := high_tile_idx.x;
+	hi_y := high_tile_idx.y;
 
 	for x: lo_x..hi_x {
 		if x < 0 || x >= terrain.tiles_count.x
@@ -1416,7 +1403,9 @@ touch_a_tile :: (terrain: Terrain, spot: V3f, radius: float, kind: Tile.Kind) ->
 				continue;
 
 			tile := terrain.tiles[tile_index];
-			d := dist_aabb(spot, .{ xx x, xx  y, 0 }, .{ x + 1.0, y + 1.0, 0 });
+			tile_position := tile_center(scene, .{ x, y });
+
+			d := dist_aabb(spot, tile_position, tile_position + V3f.{ 1.0, 1.0, 0 });
 			if d < radius && tile.kind == kind {
 				return true;
 			}
@@ -1524,13 +1513,21 @@ spawn_into :: (player: *Player, scene: Scene) {
 		player.server.position.x = xx best.position.x;
 		player.server.position.y = xx best.position.y;
 	} else {
-		player.server.position.x = xx scene.terrain.spawn_tile.x + 0.5;
-		player.server.position.y = xx scene.terrain.spawn_tile.y + 0.5;
+		player.server.position = tile_center(scene, scene.terrain.spawn_tile);
 	}
 
 	player.server.walking_toward = false;
 	player.server.slipping = false;
 	player.server.dead = false;
+}
+
+tile_center :: (scene: Scene, tile: V2i) -> V3f {
+	return V3f.{ xx tile.x + 0.5 - scene.camera_min.x, xx tile.y + 0.5 - scene.camera_min.y, 0 };
+}
+position_to_tile :: (scene: Scene, pos: V3f) -> V2i {
+	return V2i.{
+		cast(int) floor(pos.x + scene.camera_min.x), cast(int) floor(pos.y + scene.camera_min.y)
+	};
 }
 
 remove_player_from_scene :: (player_id: int, scene: *Scene) {

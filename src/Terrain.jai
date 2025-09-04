@@ -9,261 +9,10 @@ Rand :: #import "Rand";
 
 #scope_export
 
-PICK_STRING :: #string TERRAIN
-XXXXXXXXXXXXXXXXXXXXX
-XXXXXIGIIGIIGIIXXXXXX
-XXXGIIGIIGIIGIIIGXXXX
-XXIIIIIIIIIIIIIIIIXXX
-XGGIIIIIIIIIIIIIIGGXX
-XIIIIIIiiiiiIIIIIIIXX
-XGGIIIIiiiiiIIIIIGGXX
-XIIIIIIIIIIIIIIIIIIXX
-XXIGIIIIXGXIIIIIGIXXX
-XXIGIIGIXGXIGIIIGIXXX
-XXXXXIGIXGXIGIIXXXXXX
-XXXXXXXXXSXXXXXXXXXXX
-
-standin
-- model_id: 1
-- position: 9.5 10.5 0.0
-- orientation_dir: 0 -1 0
-
-trigger_zone
-- accept_player_id: -1
-- trigger: Move_To_Play_World
-- position: 9.5 10.5 0.0
-- radius: 1.0
-- model_id: 1
-
-standin
-- model_id: 2
-- position: 6.5 10.5 0.0
-- orientation_dir: 0 -1 0
-
-trigger_zone
-- accept_player_id: -1
-- trigger: Move_To_Play_World
-- position: 6.5 10.5 0.0
-- radius: 1.0
-- model_id: 2
-
-standin
-- model_id: 3
-- position: 12.5 10.5 0.0
-- orientation_dir: 0 -1 0
-
-trigger_zone
-- accept_player_id: -1
-- trigger: Move_To_Play_World
-- position: 12.5 10.5 0.0
-- radius: 1.0
-- model_id: 3
-
-TERRAIN;
-
-ROUNDABOUT_STRING :: #string TERRAIN
-XXXXXXXXXGGGGGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXGGGGGGGIIIIIXIIIIIIIXIIIIIIIXIIIIIIIIIXXXX
-XXXXXXXXXGGGGGGGIIIIIXIIIIIIIXIIIIIIIXIIIIIIIIIXXXX
-XXXXXXXXXGGGGGGGIIIIIXIIIIIIIXIIIIIIIXIIIIIIIIIIIXX
-XXXXXXXXXGGGGGGGXXXIIXIIIXIIIXIIIXIIIXIIIIIIIIIIIXX
-XXXXXXXXXXXXXXXXXXXIIXIIIXIIIXIIIXIIIXIIIXXXIIIIIXX
-XXXXXXXXXXXXXXXXXXXIIXIIIXIIIXIIIXIIIXIIIXXXIIIIIXX
-XXXXXXXXXXXXXXXIIIIIIXIIIXIIIXIIIXIIIXIIIXXXXXIIIXX
-XXXXXXXXXXXXXXXIIIIIIXIIIXIIIXIIIXIIIXIIIXIIIIIIIXX
-XXXXXXXXXXXXXXXIIIIIIXIIIXIIIXIIIXIIIXIIIXIIIIIIIXX
-XXXXXXXXXXXXXXXIIIIIIIIIIXIIIIIIIXIIIIIIIXIIIIIIIXX
-XXXXXXXXXXXGGGGIIIIIIIIIIXIIIIIIIXIIIIIIIXXXXXGGXXX
-XXXXXXXXXXXIXXXIIIIIIIIIIXIIIIIIIXIIIIIIIXXXXXGGXXX
-XXXXXXXXXXXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXIXXXXXXXXXXXXXIIIIIIIIIIIIXXXIIIIIIIIIXX
-XIGGIIIIIIXIXGIIIIIIIXXXiiiiiiiiiiiiiiiiiiiiiiiiiiX
-XIGGIIIIIIXIXGIXXXXXIXXXiiiiiiiiGiiiiiiiiiiiGiiiiiX
-XIIIIIIIIIXIXXIIXXXXIXXXiiiiiGiiiiiGiiiiiGiiiiiGiiX
-XIIIIIIIIIXIXXIIIIXXIXXXiiiiiiiiXiiiiiiiiiiiXiiiiiX
-XIIIIIIIIIXIXXIIIIXXIXXXiiiiiiiiXiiiiiiiiiiiXiiiiiX
-XIIIIIIIIIXIXXXXXIXXGGGGGiiiGiXXXXXiGiiiGiXXXXXiGiX
-XIIIIIIIIXXIIXXXIIXXGXXXiiiiiiiiXiiiiiiiiiiiXiiiiiX
-XIIIIIIIIGGIIIIIIIXXGXXXiiiiiiiiXiiiiiiiiiiiXiiiiiX
-XIIIIIIIIXXXXXXXXXXXGXXXiiiiiGiiiiiGiiiiiGiiiiiGGiX
-XIGGIIIIIIIIIIIIGGXGGGXXiiiiiiiiGiiiiiiiiiiiGiiGGiX
-XIGGIIIIIIIIIIIIGGXGSGXXiiiiiiiiiiiiiiiiiiiiiiiiiiX
-XIIIIIIIIIIIIIIIGGXGGGXXXIIIIIIIIIIIIXXXIIIIIIIIIXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
-path
-- checkpoint: 28.5 7.5 0.0
-- checkpoint: 29.5 10.5 0.0
-- checkpoint: 32.5 11.5 0.0
-- checkpoint: 35.5 10.5 0.0
-- checkpoint: 36.5 7.5 0.0
-- checkpoint: 35.5 4.5 0.0
-- checkpoint: 32.5 3.5 0.0
-- checkpoint: 29.5 4.5 0.0
-- checkpoint: 28.5 7.5 0.0
-
-path
-- checkpoint: 40.5 7.5 0.0
-- checkpoint: 41.5 10.5 0.0
-- checkpoint: 44.5 11.5 0.0
-- checkpoint: 47.5 10.5 0.0
-- checkpoint: 48.5 7.5 0.0
-- checkpoint: 47.5 4.5 0.0
-- checkpoint: 44.5 3.5 0.0
-- checkpoint: 41.5 4.5 0.0
-- checkpoint: 40.5 7.5 0.0
-
-path
-- checkpoint: 8.5 2.5 0.0
-- checkpoint: 8.5 11.5 0.0
-
-path
-- checkpoint: 17.5 8.5 0.0
-- checkpoint: 14.5 10.5 0.0
-- checkpoint: 17.5 8.5 0.0
-
-gate
-- position: 12.5 26.5 0.0
-- direction: 1 0 0
-- is_closed: true
-- wait_for_key_id: 2
-- is_end: true
-
-gate
-- position: 12.5 17.5 0.0
-- direction: 1 0 0
-- is_closed: true
-- wait_for_key_id: 1
-
-flag
-- position: 14 17.5 0
-- index: 0
-
-skull
-- path_id: 0
-- speed: 1.1
-- t: 0
-
-skull
-- path_id: 0
-- speed: 1.1
-- t: 2
-
-skull
-- path_id: 0
-- speed: 1.1
-- t: 4
-
-skull
-- path_id: 0
-- speed: 1.1
-- t: 6
-
-skull
-- path_id: 1
-- speed: 1.1
-- t: 0
-
-skull
-- path_id: 1
-- speed: 1.1
-- t: 2
-
-skull
-- path_id: 1
-- speed: 1.1
-
-skull
-- path_id: 1
-- speed: 1.1
-- t: 6
-
-skull
-- path_id: 2
-- speed: 0.75
-
-skull
-- path_id: 3
-- speed: 0.5
-
-key
-- position: 48 4 0
-
-key
-- position: 47 17 0
-
-// theta is in turn
-moving_frame
-- key
--- position: 21.5 22.5 0.0
--- theta: 0
--- period: 7
-- key
--- position: 39.5 22.5 0.0
--- theta: 1.5
--- period: 7
-- key
--- position: 21.5 22.5 0.0
--- theta: 3
--- period: 0
-- speed: 0.8
-- t: 0
-
-shuriken
-- frame_id: 1
-- position: 0 0 0
-
-shuriken
-- frame_id: 1
-- position: 1.75 0 0
-
-shuriken
-- frame_id: 1
-- position: -1.75 0 0
-
-shuriken
-- frame_id: 1
-- position: 3.5 0 0
-
-shuriken
-- frame_id: 1
-- position: -3.5 0 0
-
-shuriken
-- frame_id: 1
-- position: 7 0 0
-
-shuriken
-- frame_id: 1
-- position: -7 0 0
-
-shuriken
-- frame_id: 1
-- position: 0 1.75 0
-
-shuriken
-- frame_id: 1
-- position: 0 -1.75 0
-
-shuriken
-- frame_id: 1
-- position: 0 3.5 0
-
-shuriken
-- frame_id: 1
-- position: 0 -3.5 0
-
-
-shuriken
-- frame_id: 1
-- position: 0 7 0
-
-shuriken
-- frame_id: 1
-- position: 0 -7 0
-
-TERRAIN
+// Typical camera need a center surronded by
+//     8
+// 9 Center 9
+//     3
 
 parse_terrain :: (text: string, scene: *Scene) {
 	clear(scene);
@@ -315,10 +64,10 @@ parse_terrain :: (text: string, scene: *Scene) {
 					break;
 				}
 
-				if scan2(line, "- position: % % %", *scene.camera_min.x, *scene.camera_min.y, *scene.camera_min.z)
+				if scan2(line, "- position: % %", *scene.camera_min.x, *scene.camera_min.y)
 					continue;
 
-				if scan2(line, "- size: % % %", *scene.camera_max.x, *scene.camera_max.y, *scene.camera_max.z) {
+				if scan2(line, "- size: % %", *scene.camera_max.x, *scene.camera_max.y) {
 					scene.camera_max += scene.camera_min;
 					continue;
 				}
@@ -732,7 +481,9 @@ parse_terrain :: (text: string, scene: *Scene) {
 						offy := Rand.random_uniform(*rng, -0.4, 0.4);
 						offtheta := Rand.random_uniform(*rng, 0, 2 * 3.141592);
 
-						prop.M = M4f.translate(V3f.{ x + 0.5 + offx, y + 0.5 + offy, 0 });
+						center := tile_center(scene, .{ x, y });
+
+						prop.M = M4f.translate(center + V3f.{ offx, offy, 0 });
 						prop.M = prop.M * to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, offtheta));
 
 						array_add(*scene.props, prop);
@@ -742,4 +493,54 @@ parse_terrain :: (text: string, scene: *Scene) {
 			}
 		}
 	}
+}
+
+load_terrain_from_ascii :: (ascii: string) -> Terrain {
+	max_width := 1;
+	height := 0;
+
+	lines := split(ascii, "\n",, temp);
+	height = lines.count;
+
+	for lines
+		max_width = max(max_width, it.count);
+	max_width -= 1; // We remove the \n
+
+	terrain: Terrain;
+	terrain.tiles_count = .{ max_width, height };
+
+	array_resize(*terrain.tiles, max_width * height);
+
+	for * terrain.tiles {
+		it.kind = .None;
+	}
+
+	for y: 0..height - 1 {
+		line := lines[height - 1 - y];
+		if line.count <= 1
+			continue;
+
+		width := line.count - 1;
+
+		low_x := (max_width - width) / 2;
+		hi_x := low_x + width;
+
+		for x: low_x..hi_x-1 {
+			if line[x] == {
+				case #char "I";
+					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Ice;
+				case #char "G";
+					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Grass;
+				case #char "i";
+					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Slippy_Ice;
+				case #char "X";
+					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Dirt;
+				case #char "S";
+					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Grass;
+					terrain.spawn_tile = .{ x, y };
+			}
+		}
+	}
+
+	return terrain;
 }

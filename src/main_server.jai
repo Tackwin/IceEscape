@@ -616,15 +616,27 @@ main :: () {
 	state.sync_period.last = current_time_monotonic();
 	state.tick_period.last = current_time_monotonic();
 
-	state.pick_scene_id = add_scene(Terrain.PICK_STRING);
+	{
+		plain_terrain_txt := sprint("%/../assets/terrain/pick.terrain", #filepath);
+		data, ok := read_entire_file(plain_terrain_txt);
+		state.pick_scene_id = add_scene(data);
+
+		table_add(*name_to_scene_id, "pick.terrain", state.pick_scene_id);
+	}
 	{
 		plain_terrain_txt := sprint("%/../assets/terrain/here_and_there.terrain", #filepath);
 		data, ok := read_entire_file(plain_terrain_txt);
+		state.second_world_id = add_scene(data);
+
+		table_add(*name_to_scene_id, "here_and_there.terrain", state.second_world_id);
+	}
+	{
+		plain_terrain_txt := sprint("%/../assets/terrain/roundabout.terrain", #filepath);
+		data, ok := read_entire_file(plain_terrain_txt);
 		state.first_world_id = add_scene(data);
 
-		table_add(*name_to_scene_id, "here_and_there.terrain", state.first_world_id);
+		table_add(*name_to_scene_id, "roundabout.terrain", state.first_world_id);
 	}
-	state.second_world_id = add_scene(Terrain.ROUNDABOUT_STRING);
 
 	for 0..state.scenes.count-2 {
 		state.scenes[it].next_id = state.scenes[it+1].id;

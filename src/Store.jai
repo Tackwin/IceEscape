@@ -12,16 +12,19 @@ Model_Id :: enum {
 	Racer :: 1;
 	SUV :: 2;
 	Speedster :: 3;
-	Tombstone :: 4;
-	Tile :: 5;
-	Skull :: 6;
-	Coin :: 7;
-	Key :: 8;
-	Mark :: 9;
-	Gate :: 10;
-	Gate_Close :: 11;
-	Shuriken :: 12;
-	Spirit :: 13;
+	Drag_Racer :: 4;
+	Monster_Truck :: 5;
+	Vintage_Racer :: 6;
+	Tombstone :: 7;
+	Tile :: 8;
+	Skull :: 9;
+	Coin :: 10;
+	Key :: 11;
+	Mark :: 12;
+	Gate :: 13;
+	Gate_Close :: 14;
+	Shuriken :: 15;
+	Spirit :: 16;
 }
 
 Texture_Id :: enum {
@@ -120,6 +123,9 @@ Store :: struct {
 	flag_down_geometry: Render.Geometry;
 	player_geometry: Render.Geometry;
 	racer_geometry: Render.Geometry;
+	drag_racer_geometry: Render.Geometry;
+	vintage_racer_geometry: Render.Geometry;
+	monster_truck_geometry: Render.Geometry;
 	suv_geometry: Render.Geometry;
 	speedster_geometry: Render.Geometry;
 	tombstone_geometry: Render.Geometry;
@@ -169,6 +175,9 @@ get_geometry :: (store: Store, id: Model_Id) -> *Render.Geometry {
 		case .Gate_Close; return *store.gate_close_geometry;
 		case .Shuriken; return *store.shuriken_geometry;
 		case .Spirit; return *store.spirit_geometry;
+		case .Drag_Racer; return *store.drag_racer_geometry;
+		case .Monster_Truck; return *store.monster_truck_geometry;
+		case .Vintage_Racer; return *store.vintage_racer_geometry;
 	}
 	return null;
 }
@@ -407,6 +416,9 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.player_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_RACER_OBJ);
 	store.racer_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_RACER_OBJ);
 	store.suv_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_SUV_OBJ);
+	store.drag_racer_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_DRAG_RACER_OBJ);
+	store.vintage_racer_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_VINTAGE_RACER_OBJ);
+	store.monster_truck_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_MONSTER_TRUCK_OBJ);
 	store.speedster_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_SPEEDSTER_OBJ);
 	store.tombstone_geometry = Render.Geometry.make_from_obj(Assets.TOMBSTONE_OBJ);
 	store.coin_geometry = Render.Geometry.make_from_obj(Assets.COIN_OBJ);
