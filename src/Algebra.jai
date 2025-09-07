@@ -136,6 +136,12 @@ Q :: struct(T: Type) {
 Qd :: Q(float64);
 Qf :: Q(float32);
 
+vector_part :: (q: Q($T)) -> V3(T) {
+	return V3(T).{ q.x, q.y, q.z };
+}
+scalar_part :: (q: Q($T)) -> T {
+	return q.w;
+}
 
 axis_angle :: (axis: V3($T), angle: T) -> Q(T) {
 	s := sin(angle / 2);
@@ -145,6 +151,13 @@ axis_angle :: (axis: V3($T), angle: T) -> Q(T) {
 		axis.z * s,
 		cos(angle / 2)
 	};
+}
+to_axis_angle :: (q: Q($T)) -> V3(T), T {
+	angle := 2 * acos(q.w);
+	s := sqrt(1 - clamp(q.w * q.w, 0, 1));
+	if s < 0.001
+		return V3(T).{ q.x, q.y, q.z }, angle;
+	return V3(T).{ q.x / s, q.y / s, q.z / s }, angle;
 }
 
 from_unit_vectors :: (a: V3($T), b: V3(T)) -> Q(T) {
@@ -157,8 +170,8 @@ from_unit_vectors :: (a: V3($T), b: V3(T)) -> Q(T) {
 	return .{ v.x, v.y, v.z, dot(a, half) };
 }
 
-scale_matrix :: (s: $T) -> M4(T) {
-	M: M4(T);
+scale_matrix :: (s: float) -> M4(float) {
+	M: M4(float);
 	for * M.data {
 		it.* = 0;
 	}
@@ -221,6 +234,15 @@ operator * :: (q: Q($T), v: V3(T)) -> V3(T) {
 	return 2 * dot(u, v) * u
 		+ (s * s - dot(u, u)) * v
 		+ 2 * s * cross(u, v);
+}
+
+operator * :: (a: Q($T), b: Q(T)) -> Q(T) {
+	c: Q(T);
+	scalar := a.w * b.w - dot(vector_part(a), vector_part(b));
+	v := scalar_part(b) * vector_part(a);
+	v += scalar_part(a) * vector_part(b);
+	v += cross(vector_part(a), vector_part(b));
+	return .{ v.x, v.y, v.z, scalar };
 }
 
 operator - :: (a: V3($T), b: V3(T)) -> V3(T) #symmetric {

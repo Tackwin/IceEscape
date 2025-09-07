@@ -4,6 +4,7 @@
 #import "Algebra";
 #import "Math";
 #import "Tagged_Union";
+Rand :: #import "Rand";
 
 #scope_export
 Sum_Type :: struct(types: ..Type) {
@@ -113,12 +114,20 @@ Command :: struct {
 		next_scene_id: int;
 		next_level_scheduled_in_seconds := 60.0;
 	}
+	Sync_Robot :: struct {
+		robot_id: int;
+		position: V3f;
+		shooting_time: float;
+		shooting_cd: float;
+	}
 	Sync_Scene :: struct {
 		id: int;
 		terrain: string;
 		players: [] Sync_Player; // Would usually point to a temporary buffer.
 		skulls: [] Sync_Skull;
 		moving_frames: [] Sync_Moving_Frame;
+		robots: [] Sync_Robot;
+		rng: Rand.State;
 	}
 	Wipe_Scene :: struct {
 	}
@@ -126,7 +135,7 @@ Command :: struct {
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
-		Wipe_Scene, End_Level
+		Wipe_Scene, End_Level, Sync_Robot
 	);
 	sent_timestamp: float64;
 }
@@ -186,6 +195,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Sync_Skull; #through;
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
+		case .Sync_Robot; #through;
 		case .Sync_Moving_Frame; #through;
 		case .NTP; #through;
 		case .Move_To_Play_World;
@@ -204,6 +214,8 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 				size_of(type_of(sync_scene.skulls.data.*)) * sync_scene.skulls.count;
 			additional_data_size +=
 				size_of(type_of(sync_scene.moving_frames.data.*)) * sync_scene.moving_frames.count;
+			additional_data_size +=
+				size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count;
 
 			array_reserve(buffer, dry_size + additional_data_size);
 
@@ -233,6 +245,12 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 			);
 			cursor +=
 				size_of(type_of(sync_scene.moving_frames.data.*)) * sync_scene.moving_frames.count;
+			memcpy(
+				buffer.data + cursor,
+				sync_scene.robots.data,
+				size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count
+			);
+			cursor += size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count;
 			buffer.count = cursor;
 	}
 }
@@ -264,6 +282,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Sync_Skull; #through;
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
+		case .Sync_Robot; #through;
 		case .Sync_Moving_Frame; #through;
 		case .NTP; #through;
 		case .Move_To_Play_World;
@@ -284,6 +303,9 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 			sync_scene.moving_frames.data = (buffer.data + cursor).(*Command.Sync_Moving_Frame);
 			cursor +=
 				size_of(type_of(sync_scene.moving_frames.data.*)) * sync_scene.moving_frames.count;
+			sync_scene.robots.data = (buffer.data + cursor).(*Command.Sync_Robot);
+			cursor += size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count;
+
 			return cmd, true;
 	}
 	return cmd, true;

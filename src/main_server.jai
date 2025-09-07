@@ -116,6 +116,7 @@ State :: struct {
 	pick_scene_id: int;
 	first_world_id: int;
 	second_world_id: int;
+	third_world_id: int;
 
 	playing_scene_id: int;
 }
@@ -624,6 +625,12 @@ main :: () {
 		table_add(*name_to_scene_id, "pick.terrain", state.pick_scene_id);
 	}
 	{
+		plain_terrain_txt := sprint("%/../assets/terrain/gain_time.terrain", #filepath);
+		data, ok := read_entire_file(plain_terrain_txt);
+		state.third_world_id = add_scene(data);
+		table_add(*name_to_scene_id, "gain_time.terrain", state.third_world_id);
+	}
+	{
 		plain_terrain_txt := sprint("%/../assets/terrain/here_and_there.terrain", #filepath);
 		data, ok := read_entire_file(plain_terrain_txt);
 		state.second_world_id = add_scene(data);
@@ -642,7 +649,7 @@ main :: () {
 		state.scenes[it].next_id = state.scenes[it+1].id;
 	}
 
-	state.playing_scene_id = state.first_world_id;
+	state.playing_scene_id = state.scenes[0].next_id;
 
 	http_listen(port=5623);
 

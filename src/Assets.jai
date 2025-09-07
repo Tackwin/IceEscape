@@ -221,6 +221,8 @@ FORMAT;
 #insert #run embed_data(
 	"SHADOW_INSTANCED_TEXTURE_FRAGMENT", "Shader/instance_texture.frag", #filepath
 );
+#insert #run embed_data("PARTICLE_VERTEX", "Shader/particles.vert", #filepath);
+#insert #run embed_data("PARTICLE_FRAGMENT", "Shader/particles.frag", #filepath);
 
 #insert #run embed_data("SNOWFLAKES_AND_LIGHTS_OGG", "Snowflakes and Lights.ogg", #filepath);
 #insert #run embed_data("tile_cliff_albedo_png", "Tile/cliff_albedo.png", #filepath);
@@ -244,6 +246,27 @@ FORMAT;
 #insert #run embed_data("VEHICLE_MONSTER_TRUCK_OBJ", "vehicle-monster-truck.obj", #filepath);
 #insert #run embed_data("VEHICLE_VINTAGE_RACER_OBJ", "vehicle-vintage-racer.obj", #filepath);
 #insert #run embed_data("VEHICLE_DRAG_RACER_OBJ", "vehicle-drag-racer.obj", #filepath);
+#insert #run embed_data("BOAT_ROW_OBJ", "boat_row.obj", #filepath);
+#insert #run embed_data("BOAT_FISHING_OBJ", "boat_fishing.obj", #filepath);
+#insert #run embed_data("TAXI_OBJ", "taxi.obj", #filepath);
+#insert #run embed_data("POLICE_OBJ", "police.obj", #filepath);
+#insert #run embed_data("AMBULANCE_OBJ", "ambulance.obj", #filepath);
+#insert #run embed_data("SPACESHIP_OBJ", "spaceship.obj", #filepath);
+
+
+#insert #run embed_data("NUMBER_0_OBJ", "number_0.obj", #filepath);
+#insert #run embed_data("NUMBER_1_OBJ", "number_1.obj", #filepath);
+#insert #run embed_data("NUMBER_2_OBJ", "number_2.obj", #filepath);
+#insert #run embed_data("NUMBER_3_OBJ", "number_3.obj", #filepath);
+#insert #run embed_data("NUMBER_4_OBJ", "number_4.obj", #filepath);
+#insert #run embed_data("NUMBER_5_OBJ", "number_5.obj", #filepath);
+#insert #run embed_data("NUMBER_6_OBJ", "number_6.obj", #filepath);
+#insert #run embed_data("NUMBER_7_OBJ", "number_7.obj", #filepath);
+#insert #run embed_data("NUMBER_8_OBJ", "number_8.obj", #filepath);
+#insert #run embed_data("NUMBER_9_OBJ", "number_9.obj", #filepath);
+
+#insert #run embed_data("PARTICLE_TEXTURE_PNG", "particle_texture.png", #filepath);
+
 #insert #run embed_data("FLAG_OBJ", "flag.obj", #filepath);
 #insert #run embed_data("FLAG_DOWN_OBJ", "flag_down.obj", #filepath);
 
@@ -270,6 +293,8 @@ FORMAT;
 #insert #run embed_data("GATE_FINISH_OBJ", "gate-finish.obj", #filepath);
 #insert #run embed_data("GATE_FINISH_CLOSE_OBJ", "gate-finish_close.obj", #filepath);
 #insert #run embed_data("SHURIKEN_OBJ", "shuriken.obj", #filepath);
+#insert #run embed_data("INDICATOR_OUTLINE_OBJ", "indicator_outline.obj", #filepath);
+#insert #run embed_data("INDICATOR_STROKE_OBJ", "indicator_stroke.obj", #filepath);
 
 #insert #run embed_data("TERRAIN_TREE_SNOW_A", "Terrain/tree_snow_a.obj", #filepath);
 #insert #run embed_data("TERRAIN_TREE_SNOW_B", "Terrain/tree_snow_b.obj", #filepath);
@@ -288,6 +313,16 @@ FORMAT;
 #insert #run embed_data("PROP_COLORMAP", "Terrain/prop_colormap.png", #filepath);
 #insert #run embed_data("SKYBOX_SKI_PNG", "skybox_ski.png", #filepath);
 #insert #run embed_data("SKYBOX_OBJ", "skybox.obj", #filepath);
+
+#insert #run embed_data("ROBOT_A0_OBJ", "robot_A0.obj", #filepath);
+#insert #run embed_data("ROBOT_A1_OBJ", "robot_A1.obj", #filepath);
+#insert #run embed_data("ROBOT_A2_OBJ", "robot_A2.obj", #filepath);
+#insert #run embed_data("ROBOT_A3_OBJ", "robot_A3.obj", #filepath);
+#insert #run embed_data("ROBOT_A4_OBJ", "robot_A4.obj", #filepath);
+#insert #run embed_data("ROBOT_A5_OBJ", "robot_A5.obj", #filepath);
+
+#insert #run embed_data("UNIT_CYLINDER_OBJ", "unit_cylinder.obj", #filepath);
+#insert #run embed_data("UNIT_SPHERE_OBJ", "unit_sphere.obj", #filepath);
 
 Prop_Id :: enum {
 	TERRAIN_TREE_SNOW_A :: 0;
@@ -391,6 +426,35 @@ load_everything :: () {
 			"SKYBOX_OBJ",
 			"SKYBOX_VERTEX",
 			"SKYBOX_FRAGMENT",
+			"BOAT_ROW_OBJ",
+			"BOAT_FISHING_OBJ",
+			"TAXI_OBJ",
+			"POLICE_OBJ",
+			"AMBULANCE_OBJ",
+			"SPACESHIP_OBJ",
+			"NUMBER_0_OBJ",
+			"NUMBER_1_OBJ",
+			"NUMBER_2_OBJ",
+			"NUMBER_3_OBJ",
+			"NUMBER_4_OBJ",
+			"NUMBER_5_OBJ",
+			"NUMBER_6_OBJ",
+			"NUMBER_7_OBJ",
+			"NUMBER_8_OBJ",
+			"NUMBER_9_OBJ",
+			"PARTICLE_TEXTURE_PNG",
+			"PARTICLE_VERTEX",
+			"PARTICLE_FRAGMENT",
+			"INDICATOR_OUTLINE_OBJ",
+			"INDICATOR_STROKE_OBJ",
+			"ROBOT_A0_OBJ",
+			"ROBOT_A1_OBJ",
+			"ROBOT_A2_OBJ",
+			"ROBOT_A3_OBJ",
+			"ROBOT_A4_OBJ",
+			"ROBOT_A5_OBJ",
+			"UNIT_CYLINDER_OBJ",
+			"UNIT_SPHERE_OBJ",
 		];
 		#insert #run -> string {
 			sb: String_Builder;

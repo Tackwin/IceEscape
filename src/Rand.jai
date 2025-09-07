@@ -5,6 +5,7 @@
 XORState :: struct {
 	s: [2] u64;
 }
+State :: XORState;
 
 seed :: (seed: u64) -> XORState {
 	state : XORState = .{};

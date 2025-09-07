@@ -103,6 +103,11 @@ process :: (state: *State, command: Command, response: *Scene.Process_Response) 
 			Scene.process(*state.scene, make_command(it), response);
 		}
 
+		for sync_scene.robots {
+			Scene.process(*state.scene, make_command(it), response);
+		}
+
+		state.scene.server_rng = sync_scene.rng;
 		return true;
 	}
 

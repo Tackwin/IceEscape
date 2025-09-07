@@ -10,6 +10,7 @@ Render :: #import "Render";
 #import "Hash_Table";
 #import "Store";
 #import "Terrain";
+Rand :: #import "Rand";
 
 #scope_export
 
@@ -43,8 +44,12 @@ Scene :: struct {
 	shurikens: [..] Shuriken;
 	stand_in: [..] Stand_In;
 	trigger_zones: [..] Trigger_Zone;
+	within_zones: [..] Within_Zone;
 	flags: [..] Flag;
 	props: [..] Prop;
+	particles: [..] Particle;
+	robots: [..] Robot;
+	explosions: [..] Explosion;
 	terrain: Terrain;
 
 	camera_min: V2f;
@@ -64,10 +69,15 @@ Scene :: struct {
 	fade_screen: Fade_Screen;
 	fading := false;
 
+	trigger_activated: Table(int, bool);
+
 	succeed := false;
 	end_scene_countdown_time: Apollo_Time;
 	end_scene_countdown := 10.0;
 	end_scene_countdown_started := false;
+
+	client_rng: Rand.State;
+	server_rng: Rand.State;
 }
 clear :: (scene: *Scene) {
 	scene.tombstones.count = 0;
@@ -79,8 +89,13 @@ clear :: (scene: *Scene) {
 	scene.shurikens.count = 0;
 	scene.stand_in.count = 0;
 	scene.trigger_zones.count = 0;
+	scene.within_zones.count = 0;
 	scene.flags.count = 0;
 	scene.props.count = 0;
+	scene.robots.count = 0;
+	scene.particles.count = 0;
+	scene.explosions.count = 0;
+	table_reset(*scene.trigger_activated);
 }
 
 make_sync :: (scene: *Scene) -> Command.Sync_Scene {
@@ -90,6 +105,7 @@ make_sync :: (scene: *Scene) -> Command.Sync_Scene {
 	sync_scene.players = NewArray(scene.players.count, Command.Sync_Player, false,, temp);
 	sync_scene.skulls = NewArray(scene.skulls.count, Command.Sync_Skull, false,, temp);
 	sync_scene.moving_frames = NewArray(scene.moving_frames.count, Command.Sync_Moving_Frame, false,, temp);
+	sync_scene.robots = NewArray(scene.robots.count, Command.Sync_Robot, false,, temp);
 	for * sync_scene.players {
 		it.* = make_sync(*scene.players[it_index]);
 	}
@@ -99,6 +115,10 @@ make_sync :: (scene: *Scene) -> Command.Sync_Scene {
 	for * sync_scene.moving_frames {
 		it.* = make_sync(*scene.moving_frames[it_index]);
 	}
+	for * sync_scene.robots {
+		it.* = make_sync(*scene.robots[it_index]);
+	}
+	sync_scene.rng = scene.server_rng;
 	return sync_scene;
 }
 
@@ -125,6 +145,15 @@ make_sync :: (moving_frame: *Moving_Frame) -> Command.Sync_Moving_Frame {
 	sync_moving_frame.frame_id = moving_frame.id;
 	sync_moving_frame.t = moving_frame.server.t;
 	return sync_moving_frame;
+}
+
+make_sync :: (robot: *Robot) -> Command.Sync_Robot {
+	sync_robot: Command.Sync_Robot;
+	sync_robot.robot_id = robot.id;
+	sync_robot.position = robot.position;
+	sync_robot.shooting_time = robot.shooting_time;
+	sync_robot.shooting_cd = robot.shooting_cd;
+	return sync_robot;
 }
 
 Frame_Result :: struct {
@@ -155,6 +184,205 @@ clear :: (frame_result: *Frame_Result) {
 Prop :: struct {
 	id: int;
 	M: M4f;
+}
+
+Particle :: struct {
+	position: V3f;
+	velocity: V3f;
+	gravity: float = 1.0;
+	drag: float = 0.0;
+	color: V4f = V4f.{ 1, 1, 1, 1 };
+	texture_rec: V4f = V4f.{ 0, 0, 0, 0 };
+	size: float = 0.2;
+	lifetime: float = 1.0;
+	age: float = 0.0;
+	rotation: float = 0.0;
+	rotation_speed: float = 0.0;
+	fade_out_time: float = 0.0;
+	floor_bounce := 0.4;
+}
+
+Explosion :: struct {
+	position: V3f;
+	age: float = 0.0;
+	lifetime: float = 1.0;
+	max_size: float = 1.0;
+}
+
+Robot :: struct {
+	id: int;
+
+	position: V3f;
+	start_target_aabb: V2f;
+	end_target_aabb: V2f;
+
+	axes: [5] float;
+
+	player_targeted_id := -1;
+
+	max_rotation_speed := 3.141592 * 0.5; // radians per second
+
+	charging_time := 1.0;
+	effectshoot_time := 0.5;
+	shooting_cd := 5.0;
+	shooting_time := 0.0;
+
+	shooted := false;
+}
+
+robot_matrix_local :: (n: int, a: float) -> M4f {
+	if n == 0
+		return M4f.identity();
+	if n == 1
+	|| n == 3
+	|| n == 5
+		return to_rotation_matrix(axis_angle(V3f.{ 1, 0, 0 }, a));
+	if n == 2
+	|| n == 4
+		return to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, a));
+	return M4f.identity();
+}
+
+robot_matrix_local_to_joint :: (robot: Robot, n: int) -> M4f {
+	if n == 0 {
+		return M4f.translate(robot.position);
+	}
+
+	if n == 1 {
+		M := robot_matrix_local_to_joint(robot, 0);
+		M = M * robot_matrix_to_next(n, robot.axes[0]);
+		return M;
+	}
+
+	if n == 2 {
+		M := robot_matrix_local_to_joint(robot, 1);
+		M = M * robot_matrix_to_next(n, robot.axes[1]);
+		return M;
+	}
+
+	if n == 3 {
+		M := robot_matrix_local_to_joint(robot, 2);
+		M = M * robot_matrix_to_next(n, robot.axes[2]);
+		return M;
+	}
+
+	if n == 4 {
+		M := robot_matrix_local_to_joint(robot, 3);
+		M = M * robot_matrix_to_next(n, robot.axes[3]);
+		return M;
+	}
+
+	if n == 5 {
+		M := robot_matrix_local_to_joint(robot, 4);
+		M = M * robot_matrix_to_next(n, robot.axes[4]);
+		return M;
+	}
+
+	if n == 6 {
+		M := robot_matrix_local_to_joint(robot, 5);
+		M = M * M4f.translate(V3f.{ 0, 0, 0.55 * 0.7 });
+		return M;
+	}
+
+	return M4f.identity();
+}
+
+robot_pivot :: (robot: Robot, n: int) -> V3f {
+	return v3(robot_matrix_local_to_joint(robot, n) * V4f.{ 0, 0, 0, 1 });
+	// if n == 0 {
+	// 	return robot.position;
+	// }
+
+	// if n == 1 {
+	// 	parent := robot_pivot(robot, 0);
+	// 	return parent + V3f.{ 0, 0, 0.55 * 0.7 };
+	// }
+
+	// if n == 2 {
+	// 	parent := robot_pivot(robot, 1);
+	// 	parent += v3(robot_matrix_local(1, robot.axes[0]) * V4f.{ 0, 0, 0.55 * 0.7, 1 });
+	// 	return parent;
+	// }
+
+	// if n == 3 {
+	// 	parent := robot_pivot(robot, 2);
+	// 	parent += v3(robot_matrix_local(2, robot.axes[1]) * V4f.{ 0, 0, 0.35 * 0.7, 1 });
+	// 	return parent;
+	// }
+
+	// if n == 4 {
+	// 	parent := robot_pivot(robot, 3);
+	// 	parent += v3(robot_matrix_local(3, robot.axes[2]) * V4f.{ 0, 0, 0.55 * 0.7, 1 });
+	// 	return parent;
+	// }
+
+	// if n == 5 {
+	// 	parent := robot_pivot(robot, 4);
+	// 	parent += v3(robot_matrix_local(4, robot.axes[3]) * V4f.{ 0, 0, 0.35 * 0.7, 1 });
+	// 	return parent;
+	// }
+
+	// if n == 6 {
+	// 	parent := robot_pivot(robot, 5);
+	// 	parent += v3(robot_matrix_local(5, robot.axes[4]) * V4f.{ 0, 0, 0.2 * 0.7, 1 });
+	// 	return parent;
+	// }
+
+	// return robot.position;
+}
+
+robot_joint_axis :: (n: int) -> V3f {
+	if n == 0
+		return V3f.{ 0, 0, 1 };
+	if n == 1
+	|| n == 3
+	|| n == 5
+		return V3f.{ 1, 0, 0 };
+	if n == 2
+	|| n == 4
+		return V3f.{ 0, 0, 1 };
+	return V3f.{ 0, 0, 1 };
+}
+
+robot_matrix_to_next :: (n: int, a: float) -> M4f {
+	if n == 0 {
+		return M4f.translate(V3f.{ 0, 0, 0.0 });
+	}
+	if n == 1 {
+		return M4f.translate(V3f.{ 0, 0, 0.55 * 0.7 }) * robot_matrix_local(n, a);
+	}
+	if n == 2 {
+		return M4f.translate(V3f.{ 0, 0, 0.55 * 0.7 }) * robot_matrix_local(n, a);
+	}
+	if n == 3 {
+		return M4f.translate(V3f.{ 0, 0, 0.35 * 0.7 }) * robot_matrix_local(n, a);
+	}
+	if n == 4 {
+		return M4f.translate(V3f.{ 0, 0, 0.55 * 0.7 }) * robot_matrix_local(n, a);
+	}
+	if n == 5 {
+		return M4f.translate(V3f.{ 0, 0, 0.35 * 0.7 }) * robot_matrix_local(n, a);
+	}
+
+	return M4f.identity();
+}
+
+robot_to_axis :: (robot: Robot, n: int) -> M4f {
+	M : M4f = M4f.translate(robot.position);
+	M = M * robot_matrix_to_next(0, robot.axes[0]);
+	for 1..n {
+		M = M * robot_matrix_to_next(it, robot.axes[it - 1]);
+	}
+	return M;
+}
+
+robot_forward :: (robot: Robot) -> M4f {
+	M : M4f = M4f.translate(robot.position);
+	M = M * robot_matrix_local(0, robot.axes[0]);
+	for 1..5 {
+		M = M * robot_matrix_to_next(it, robot.axes[it - 1]);
+	}
+	return M;
 }
 
 Process_Response :: struct {
@@ -308,6 +536,22 @@ Trigger_Zone :: struct {
 	model_id := -1;
 }
 
+Within_Zone :: struct {
+	id: int;
+
+	pos: V2f;
+	size: V2f;
+
+	min_player_percent := 0.5;
+	time_to_stay := 5.0;
+	last_player_count := 0;
+	count_changed_juice_t := 0.0;
+
+	time_stayed := 0.0;
+
+	trigger_id := -1;
+}
+
 Stand_In :: struct {
 	id: int;
 	model_id: int;
@@ -409,6 +653,7 @@ Gate :: struct {
 	direction: V3f;
 	is_closed := true;
 	wait_for_key_id := -1;
+	wait_for_trigger_id := -1;
 	is_end := false;
 }
 
@@ -449,6 +694,14 @@ Player :: struct {
 		position  := V3f.{ 0, 0, 0 };
 		direction := V3f.{ 1, 0, 0 };
 	};
+}
+
+find_by_robot_id :: (scene: Scene, id: int) -> *Robot {
+	for * scene.robots {
+		if it.id == id
+			return it;
+	}
+	return null;
 }
 
 find_by_frame_id :: (scene: Scene, id: int) -> *Moving_Frame {
@@ -528,6 +781,37 @@ restart :: (scene: *Scene) {
 	scene.succeed = false;
 }
 
+add_snow :: (scene: *Scene, dt: float32) {
+	// Add snow particles
+	n_snow := dt * (scene.camera_max.x - scene.camera_min.x) * (scene.camera_max.y - scene.camera_min.y) * 0.2;
+	while n_snow > 0.0 {
+		r := Rand.random_uniform(*scene.client_rng, 0.0, 1.0);
+		if r > n_snow
+			break;
+
+		p: Particle;
+		p.position = V3f.{
+			Rand.random_uniform(*scene.client_rng, scene.camera_min.x - 5, scene.camera_max.x + 5),
+			Rand.random_uniform(*scene.client_rng, scene.camera_min.y - 5, scene.camera_max.y + 5),
+			10.0,
+		};
+		p.velocity = V3f.{
+			Rand.random_uniform(*scene.client_rng, -1.0, 0.5),
+			Rand.random_uniform(*scene.client_rng, -0.5, 0.8),
+			Rand.random_uniform(*scene.client_rng, 0.5, 1.5)
+		};
+		p.velocity = normalize(p.velocity) * Rand.random_uniform(*scene.client_rng, 0.09, 0.11);
+		p.size = Rand.random_uniform(*scene.client_rng, 0.02, 0.07);
+		p.lifetime = Rand.random_uniform(*scene.client_rng, 5.0, 10.0);
+		p.fade_out_time = Rand.random_uniform(*scene.client_rng, 0.1, 1.0);
+		p.color = V4f.{ 1, 1, 1, 1 };
+		p.floor_bounce = Rand.random_uniform(*scene.client_rng, 0.1, 0.3);
+		p.drag = Rand.random_uniform(*scene.client_rng, 0.6, 0.85);
+		array_add(*scene.particles, p);
+		n_snow -= 1.0;
+	}
+}
+
 update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	if #complete scene.state == {
 		case .Normal;
@@ -578,6 +862,7 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 }
 
 update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
+	add_snow(scene, dt);
 	update(scene, *scene.camera, dt);
 
 	for * scene.players {
@@ -622,6 +907,16 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 		update(scene, it, dt);
 	}
 
+	for * scene.within_zones {
+		update(scene, it, dt);
+	}
+
+	for * scene.robots {
+		update(scene, it, dt);
+	}
+
+	update_explosions(scene, dt);
+
 	for * scene.keys {
 		interpolate_to_server(it, dt);
 
@@ -654,6 +949,8 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 			it.server.position = player.server.position;
 		}
 	}
+
+	update_particles(scene, dt);
 
 	if scene.is_server && result {
 
@@ -787,6 +1084,40 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 			}
 		}
 
+		// >RULE Gate open on trigger
+		for *gate: scene.gates {
+			if gate.is_closed && gate.wait_for_trigger_id != -1 {
+				ok, triggered := table_find_new(*scene.trigger_activated, gate.wait_for_trigger_id);
+				if triggered {
+					gate.is_closed = false;
+					gate.wait_for_trigger_id = -1;
+					sync: Command.Sync_Gate;
+					sync.gate_id = gate.id;
+					sync.is_closed = gate.is_closed;
+					array_add(*result.sync_gate, sync);
+				}
+			}
+		}
+
+		// >RULE Player die on contact with an explosion
+		for *expl: scene.explosions {
+			p := expl.position;
+			t := clamp(expl.age / expl.lifetime, 0.0, 1.0);
+			dt := expl.max_size;
+
+			for * player: scene.players {
+				if !player.server.dead {
+					q := player.server.position;
+
+					d := norm(p - q);
+					if d < dt {
+						server_die(scene, player, result);
+						continue;
+					}
+				}
+			}
+		}
+
 		// >RULE Player die on contact with a shuriken
 		for * scene.shurikens {
 			p := compute_shuriken_server_world_pos(scene, it);
@@ -831,6 +1162,43 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	}
 }
 
+update_explosions :: (scene: *Scene, dt: float32) {
+	for * scene.explosions {
+		it.age += dt;
+		if it.age > it.lifetime {
+			remove it;
+		}
+	}
+}
+
+update_particles :: (scene: *Scene, dt: float32) {
+	for * scene.particles {
+		it.position += it.velocity * dt;
+		it.velocity.z -= 1.81 * it.gravity * dt;
+		it.velocity *= (1.0 - clamp(it.drag * dt, 0.0, 1.0));
+		if it.floor_bounce >= 0 {
+			if it.position.z < 0.05 {
+				it.position.z = 0.05;
+				if it.velocity.z < 0 {
+					it.velocity.z = -it.velocity.z;
+					it.velocity *= it.floor_bounce;
+				}
+			}
+		}
+		it.age += dt;
+
+		it.rotation += it.rotation_speed * dt;
+
+		if it.age > it.lifetime {
+			remove it;
+		}
+	}
+}
+
+activate_trigger :: (scene: *Scene, trigger_id: int) {
+	table_set(*scene.trigger_activated, trigger_id, true);
+}
+
 win_level :: (scene: *Scene, player_id: int) {
 	scene.end_scene_countdown_started = true;
 	scene.end_scene_countdown_time = current_time_monotonic();
@@ -869,6 +1237,129 @@ server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 	}
 }
 
+// https://rodolphe-vaillant.fr/entry/114/cyclic-coordonate-descent-inverse-kynematic-ccd-ik
+update :: (scene: Scene, robot: *Robot, dt: float32) {
+	robot.shooting_time += dt;
+
+	player := find_by_player_id(scene, robot.player_targeted_id);
+	if !player {
+		robot.player_targeted_id = -1;
+	} else {
+		p := v2(player.server.position);
+		if p.x < robot.start_target_aabb.x
+		|| p.x > robot.end_target_aabb.x
+		|| p.y < robot.start_target_aabb.y
+		|| p.y > robot.end_target_aabb.y {
+			robot.player_targeted_id = -1;
+			return;
+		}
+	}
+
+	if robot.player_targeted_id < 0 {
+		for scene.players {
+			if it.server.dead
+				continue;
+
+			p := v2(it.server.position);
+			if p.x >= robot.start_target_aabb.x
+			&& p.x <= robot.end_target_aabb.x
+			&& p.y >= robot.start_target_aabb.y
+			&& p.y <= robot.end_target_aabb.y {
+				robot.player_targeted_id = it.id;
+				break;
+			}
+		}
+	}
+
+	if robot.player_targeted_id < 0 {
+		t := to_float64_seconds(current_time_monotonic()).(float32);
+		robot.axes[0] += sin(t * 0.5) * 0.2 * dt;
+		robot.axes[1] += sin(t * 0.7) * 0.3 * dt;
+		robot.axes[2] += sin(t * 0.9) * 0.4 * dt;
+		robot.axes[3] += sin(t * 1.1) * 0.5 * dt;
+		robot.axes[4] += sin(t * 1.3) * 0.6 * dt;
+		return;
+	}
+	player = find_by_player_id(scene, robot.player_targeted_id);
+	if !player {
+		robot.player_targeted_id = -1;
+		return;
+
+	}
+	if robot.shooting_time > robot.shooting_cd {
+		if robot.shooting_time > (robot.shooting_cd + robot.charging_time + robot.effectshoot_time)
+		{
+			robot.shooted = false;
+			robot.shooting_time = 0.0;
+		}
+		else if robot.shooting_time > (robot.shooting_cd + robot.charging_time) {
+
+			if !robot.shooted {
+				robot.shooted = true;
+
+				explosion: Explosion;
+				M := robot_matrix_local_to_joint(robot, 6);
+				ray_origin := v3(M * V4f.{ 0, 0, 0, 1 });
+				ray_direction := normalize(v3(M * V4f.{ 0, 0, 1, 0 }));
+
+				target, hit := ray_plane(ray_origin, ray_direction, V3f.{ 0, 0, 1 });
+				if hit {
+					explosion.position = target;
+					explosion.lifetime = 1.0;
+					explosion.max_size = 1.5;
+					array_add(*scene.explosions, explosion);
+				}
+			}
+		}
+		// Stay in place if we are just after shooting
+		return;
+	}
+
+	target := player.server.position;
+	target.z = 2.0;
+
+	target.x = clamp(target.x, robot.position.x - 2.0, robot.position.x + 2.0);
+	target.y = clamp(target.y, robot.position.y - 2.0, robot.position.y + 2.0);
+	
+	T := target;
+
+	N :: 10;
+	for 1..1 {
+		for #v2 < 1..5 {
+			E := robot_pivot(robot, 6);
+			Oi := robot_pivot(robot, it);
+			ti := normalize(T - Oi);
+			if it > 3 {
+				ti = normalize(player.server.position - Oi);
+			}
+			ei := normalize(E - Oi);
+
+			rotate_effector_to_target := from_unit_vectors(ei, ti);
+
+			hinge_axis := robot_joint_axis(it);
+			Mi := robot_to_axis(robot, it);
+			hinge_axis = v3(Mi * V4f.{ hinge_axis.x, hinge_axis.y, hinge_axis.z, 0 });
+
+			unconstrained_hinge_axis := rotate_effector_to_target * hinge_axis;
+			constraint := from_unit_vectors(unconstrained_hinge_axis, hinge_axis);
+
+			constrained_rotation := constraint * rotate_effector_to_target;
+
+			a, r := to_axis_angle(constrained_rotation);
+			if dot(a, hinge_axis) < 0 {
+				r = -r;
+			}
+
+			r = clamp(r, -robot.max_rotation_speed * dt, robot.max_rotation_speed * dt);
+			robot.axes[it - 1] += r;
+
+			robot.axes[it - 1] = clamp(robot.axes[it - 1], -1.5, +1.5);
+		}
+
+	}
+
+}
+
 update :: (scene: Scene, flag: *Flag, dt: float32) {
 	if !flag.activated {
 		p := v2(flag.position);
@@ -902,6 +1393,45 @@ update :: (scene: Scene, flag: *Flag, dt: float32) {
 	}
 	if flag.count_changed_juice_t > 0 {
 		flag.count_changed_juice_t -= dt;
+	}
+}
+
+update :: (scene: *Scene, within: *Within_Zone, dt: float32) {
+	n_players := 0;
+	for scene.players {
+		if it.server.dead
+			continue;
+
+		p := v2(it.server.position);
+		if p.x >= within.pos.x
+		&& p.x <= within.pos.x + within.size.x
+		&& p.y >= within.pos.y
+		&& p.y <= within.pos.y + within.size.y {
+			n_players += 1;
+		}
+	}
+
+	if within.last_player_count != n_players {
+		within.count_changed_juice_t = 1.0;
+	}
+	within.last_player_count = n_players;
+
+	required := ceil(scene.players.count * within.min_player_percent).(int);
+	if n_players >= required && required > 0 {
+		within.time_stayed += dt;
+	} else if within.time_stayed < within.time_to_stay {
+		within.time_stayed -= dt * 2.0;
+		if within.time_stayed < 0.0
+			within.time_stayed = 0.0;
+	}
+
+	if within.count_changed_juice_t > 0 {
+		within.count_changed_juice_t -= dt;
+	}
+
+	if within.time_stayed >= within.time_to_stay && within.trigger_id != -1 {
+		activate_trigger(scene, within.trigger_id);
+		within.trigger_id = -1;
 	}
 }
 
@@ -1162,6 +1692,17 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 				it.is_closed = sync_gate.is_closed;
 				return true;
 			}
+		}
+	}
+
+	sync_robot: *Command.Sync_Robot = isa(command.payload, Command.Sync_Robot);
+	if sync_robot {
+		robot := find_by_robot_id(scene, sync_robot.robot_id);
+		if robot {
+			robot.shooting_time = sync_robot.shooting_time;
+			robot.position = sync_robot.position;
+			robot.shooting_cd = sync_robot.shooting_cd;
+			return true;
 		}
 	}
 

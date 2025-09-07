@@ -2,6 +2,7 @@
 #import "String";
 #import "Algebra";
 #import "Assets";
+#import "Math";
 #import "Platform";
 #import "Hash_Table";
 Store :: #import "Store";
@@ -40,7 +41,6 @@ IM: struct {
 		tex_slot: V2f;
 		z: float = 0.0;
 	}
-
 
 	quad_object: GLuint = 0;
 	quad_buffer: GLuint = 0;
@@ -1320,6 +1320,7 @@ Shaders :: struct {
 	textured_shader: *Shader;
 	instanced_shader: *Shader;
 	instanced_texture_shader: *Shader;
+	particle_shader: *Shader;
 }
 
 bind :: (framegraph: Framegraph) {
@@ -1379,10 +1380,12 @@ render :: (
 	render_gates(scene, shaders);
 	render_tombstones(scene, shaders);
 	render_flags(scene, shaders);
+	render_robots(scene, shaders);
 
 	shaders.textured_shader = *store.texture_shader;
 	shaders.instanced_shader = *store.instance_shader;
 	shaders.instanced_texture_shader = *store.instanced_texture_shader;
+	shaders.particle_shader = *store.particle_shader;
 	context.rhi.glBindFramebuffer(GL_FRAMEBUFFER, framegraph.main_framebuffer.id);
 	context.rhi.glViewport(0, 0, xx camera_matrix.viewport.x, xx camera_matrix.viewport.y);
 	clear(framegraph.main_framebuffer, V4f.{ 0.45, 0.55, 0.60, 1 });
@@ -1393,6 +1396,12 @@ render :: (
 	set_uniform(*store.model_shader, "P", P);
 	set_uniform(shaders.textured_shader, "V", V);
 	set_uniform(shaders.textured_shader, "P", P);
+	set_uniform(shaders.particle_shader, "V", V);
+	set_uniform(shaders.particle_shader, "P", P);
+	set_uniform(shaders.particle_shader, "albedo", store.particle_texture, 0);
+	set_uniform(shaders.particle_shader, "shadow", framegraph.shadow_depth, 1);
+	set_uniform(shaders.particle_shader, "shadowV", SV);
+	set_uniform(shaders.particle_shader, "shadowP", SP);
 	set_uniform(*store.tile_shader, "V", V);
 	set_uniform(*store.tile_shader, "P", P);
 	set_uniform(*store.skybox_shader, "V", V);
@@ -1433,6 +1442,10 @@ render :: (
 	render_gates(scene, shaders);
 	render_tombstones(scene, shaders);
 	render_flags(scene, shaders);
+	render_robots(scene, shaders);
+	render_within_zones(scene, shaders);
+	render_particles(scene, shaders);
+	render_explosions(scene, shaders);
 
 	if to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time) < 0.8 {
 		set_uniform(shaders.textured_shader, "texture_sampler", store.mark_texture, 0);
@@ -1467,6 +1480,299 @@ render :: (
 	context.rhi.glDrawArrays(GL_TRIANGLES, 0, xx 6);
 }
 
+render_explosions :: (scene: Scene.Scene, shaders: Shaders) {
+	store := scene.store;
+
+	Instance :: struct {
+		M: M4f;
+	};
+	instanced := NewArray(scene.robots.count, Instance, initialized = false,, temp);
+	instanced.count = 0;
+
+	for scene.explosions {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+
+		ts := ease_out_quad(clamp(it.age / it.lifetime, 0.0, 1.0)) * it.max_size;
+
+		instance.M = M4f.translate(it.position);
+		instance.M *= scale_matrix(V3f.{ ts, ts, ts });
+	}
+
+	if instanced.count > 0 {
+		add_instance(*store.unit_sphere_geometry, .{
+			data = xx instanced.data,
+			count = instanced.count * size_of(Instance)
+		});
+
+		context.rhi.glBindVertexArray(store.unit_sphere_geometry.gpu_object);
+		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.unit_sphere_geometry.gpu_buffer);
+		cursor := setup_vertex_attributes(0, Geometry.Vertex_Data);
+		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.unit_sphere_geometry.instanced_buffer);
+		cursor = setup_instance_attributes(cursor, Instance);
+		render_instanced(
+			store.unit_sphere_geometry, shaders.instanced_texture_shader, instanced.count
+		);
+	}
+}
+
+render_robots :: (scene: Scene.Scene, shaders: Shaders) {
+	store := scene.store;
+
+	Instance :: struct {
+		M: M4f;
+	};
+
+	Instance_Particle :: struct {
+		M: M4f;
+		texture_rec: V4f;
+		color: V4f;
+	}
+
+	instanced := NewArray(scene.robots.count, Instance, initialized = false,, temp);
+
+	for 0..5 {
+		instanced.count = 0;
+		for robot: scene.robots {
+			instanced.count += 1;
+			instance := *instanced[instanced.count - 1];
+
+			instance.M = Scene.robot_to_axis(robot, it);
+		}
+		geom := Store.get_axes_geometry(store, it);
+
+		add_instance(geom, .{
+			data = xx instanced.data,
+			count = instanced.count * size_of(Instance)
+		});
+
+		context.rhi.glBindVertexArray(geom.gpu_object);
+		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, geom.gpu_buffer);
+		cursor := setup_vertex_attributes(0, Geometry.Vertex_Data);
+		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, geom.instanced_buffer);
+		cursor = setup_instance_attributes(cursor, Instance);
+		render_instanced(geom, shaders.instanced_texture_shader, instanced.count);
+	}
+
+	instanced.count = 0;
+	instanced_particles := NewArray(
+		scene.robots.count, Instance_Particle, initialized = false,, temp
+	);
+	instanced_particles.count = 0;
+	for robot: scene.robots {
+		M := Scene.robot_matrix_local_to_joint(robot, 6);
+		if robot.shooting_cd < robot.shooting_time
+		&& robot.shooting_time < robot.shooting_cd + robot.charging_time
+		{
+			ray_origin := v3(M * V4f.{ 0, 0, 0, 1 });
+			ray_direction := normalize(v3(M * V4f.{ 0, 0, 1, 0 }));
+
+			target, hit := ray_plane(ray_origin, ray_direction, V3f.{ 0, 0, 1 });
+			if hit {
+				instanced_particles.count += 1;
+				particle := *instanced_particles[instanced_particles.count - 1];
+				particle.M = M4f.translate(target + V3f.{ -1.0, -1.0, 0.01 });
+				particle.M *= scale_matrix(V3f.{ 2.0, 2.0, 1.0 });
+				particle.texture_rec = V4f.{ 0, 0, 1 / 4.0, 1 / 4.0 };
+				particle.color = V4f.{ 1.0, 0.0, 0.0, 1.0 };
+			}
+		}
+
+
+		if !((robot.shooting_cd + robot.charging_time) < robot.shooting_time
+		&& robot.shooting_time < (robot.shooting_cd + robot.charging_time + robot.effectshoot_time))
+			continue;
+
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+
+		over_t := robot.shooting_time - robot.shooting_cd - robot.charging_time;
+		t := clamp(over_t / robot.effectshoot_time, 0.0, 1.0);
+
+		ts := ease_up_and_back(clamp(t * 5, 0.0, 1.0)) * 0.3;
+		tz := ease_out_quad(clamp(t * 20, 0.0, 1.0)) * 100;
+
+		instance.M = M;
+		instance.M *= scale_matrix(V3f.{ ts, ts, tz });
+	}
+
+	if instanced.count > 0 {
+		add_instance(*store.unit_cylinder_geometry, .{
+			data = xx instanced.data,
+			count = instanced.count * size_of(Instance)
+		});
+
+		context.rhi.glBindVertexArray(store.unit_cylinder_geometry.gpu_object);
+		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.unit_cylinder_geometry.gpu_buffer);
+		cursor := setup_vertex_attributes(0, Geometry.Vertex_Data);
+		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.unit_cylinder_geometry.instanced_buffer);
+		cursor = setup_instance_attributes(cursor, Instance);
+		render_instanced(
+			store.unit_cylinder_geometry, shaders.instanced_texture_shader, instanced.count
+		);
+	}
+
+	if instanced_particles.count > 0 && shaders.particle_shader {
+		context.rhi.glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+		context.rhi.glDepthMask(GL_FALSE);
+		defer {
+			context.rhi.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			context.rhi.glDepthMask(GL_TRUE);
+		}
+
+		add_instance(*store.z_facing_unit_square_geometry, .{
+			data = xx instanced_particles.data,
+			count = instanced_particles.count * size_of(Instance_Particle)
+		});
+		set_uniform(shaders.particle_shader, "albedo", store.particle_texture, 0);
+
+		context.rhi.glBindVertexArray(store.z_facing_unit_square_geometry.gpu_object);
+		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.z_facing_unit_square_geometry.gpu_buffer);
+		cursor := setup_vertex_attributes(0, Geometry.Vertex_Data);
+		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.z_facing_unit_square_geometry.instanced_buffer);
+		cursor = setup_instance_attributes(cursor, Instance_Particle);
+		render_instanced(
+			store.z_facing_unit_square_geometry,
+			shaders.particle_shader,
+			instanced_particles.count
+		);
+
+	}
+}
+
+render_within_zones :: (scene: Scene.Scene, shaders: Shaders) {
+	store := scene.store;
+	set_uniform(*store.instanced_texture_shader, "colormap", store.prop_colormap, 0);
+
+	Instance :: struct {
+		M: M4f;
+	};
+
+	instanced := NewArray(scene.within_zones.count, Instance, initialized = false,, temp);
+	instanced.count = 0;
+	for scene.within_zones {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+
+		instance.M = M4f.translate(v3(it.pos, 0.001));
+		instance.M *= scale_matrix(v3(it.size, 1.0));
+	}
+
+	add_instance(*store.indicator_outline_geometry, .{
+		data = xx instanced.data,
+		count = instanced.count * size_of(Instance)
+	});
+
+	context.rhi.glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	context.rhi.glBindVertexArray(store.indicator_outline_geometry.gpu_object);
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.indicator_outline_geometry.gpu_buffer);
+	cursor := setup_vertex_attributes(0, Geometry.Vertex_Data);
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.indicator_outline_geometry.instanced_buffer);
+	cursor = setup_instance_attributes(cursor, Instance);
+	render_instanced(
+		store.indicator_outline_geometry, shaders.instanced_texture_shader, instanced.count
+	);
+
+	instanced.count = 0;
+	for scene.within_zones {
+		if it.time_stayed <= 0.0
+			continue;
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+
+		instance.M = M4f.translate(v3(it.pos + V2f.{ it.size.x * 0.15, it.size.y * 0.15 }, 0.001));
+
+		t := clamp(it.time_stayed / it.time_to_stay, 0.0, 1.0);
+		t = t * 0.7;
+		t *= it.size.y;
+		instance.M *= scale_matrix(V3f.{it.size.x * 0.7, t , 1.0});
+	}
+
+	add_instance(*store.indicator_stroke_geometry, .{
+		data = xx instanced.data,
+		count = instanced.count * size_of(Instance)
+	});
+
+	context.rhi.glBindVertexArray(store.indicator_stroke_geometry.gpu_object);
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.indicator_stroke_geometry.gpu_buffer);
+	cursor = setup_vertex_attributes(0, Geometry.Vertex_Data);
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.indicator_stroke_geometry.instanced_buffer);
+	cursor = setup_instance_attributes(cursor, Instance);
+	render_instanced(
+		store.indicator_stroke_geometry, shaders.instanced_texture_shader, instanced.count
+	);
+
+	context.rhi.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	for scene.within_zones {
+		if it.time_stayed >= it.time_to_stay
+			continue;
+
+		needed := ceil(scene.players.count * it.min_player_percent).(int);
+		left := needed - it.last_player_count;
+
+		pos := v3(it.pos, 0.0) + V3f.{ it.size.x / 2, -0.5, 0.5 };
+		while left > 0 {
+			M := M4f.translate(pos);
+			if it.count_changed_juice_t > 0 {
+				M = M * scale_matrix(
+					1.0 + ease_up_and_back(1.0 - it.count_changed_juice_t) * 0.5
+				);
+			}
+			set_uniform(shaders.textured_shader, "M", M);
+
+			geom := Store.get_number_geometry(store, left % 10);
+			if geom
+				render(geom, shaders.textured_shader);
+
+			left /= 10;
+			pos.x -= 0.3;
+		}
+	}
+}
+
+render_particles :: (scene: Scene.Scene, shaders: Shaders) {
+	store := scene.store;
+
+	Instance :: struct {
+		M: M4f;
+		texture_rec: V4f;
+		color: V4f;
+	}
+
+	dt := normalize(scene.camera.target - scene.camera.position);
+
+	instances := NewArray(scene.particles.count, Instance, false,, temp);
+	for scene.particles {
+		instance := *instances[it_index];
+		instance.M = M4f.identity();
+		instance.M *= M4f.translate(it.position);
+		instance.M *= to_rotation_matrix(from_unit_vectors(V3f.{ 0, 0, -1 }, dt));
+		instance.M *= scale_matrix(it.size);
+		instance.M *= to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, it.rotation));
+		instance.texture_rec = .{
+			it.texture_rec.x, it.texture_rec.y, it.texture_rec.z, it.texture_rec.w
+		};
+		instance.color = .{ it.color.x, it.color.y, it.color.z, it.color.w };
+		if it.fade_out_time > 0 {
+			t := clamp((it.lifetime - it.age) / it.fade_out_time, 0.0, 1.0);
+			instance.color.w *= t;
+		}
+	}
+
+	instances_u8: [] u8;
+	instances_u8.data = instances.data.(*u8);
+	instances_u8.count = instances.count * size_of(Instance);
+	add_instance(*store.z_facing_unit_square_geometry, instances_u8);
+	
+	context.rhi.glBindVertexArray(store.z_facing_unit_square_geometry.gpu_object);
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.z_facing_unit_square_geometry.gpu_buffer);
+	cursor := setup_vertex_attributes(0, store.z_facing_unit_square_geometry.Vertex_Data);
+	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.z_facing_unit_square_geometry.instanced_buffer);
+	cursor = setup_instance_attributes(cursor, Instance);
+
+	render_instanced(store.z_facing_unit_square_geometry, *store.particle_shader, instances.count);
+}
+
 render_skybox :: (scene: Scene.Scene) {
 	store := scene.store;
 	set_uniform(*store.skybox_shader, "skybox", store.skybox_ski, 0);
@@ -1496,6 +1802,22 @@ render_flags :: (scene: Scene.Scene, shaders: Shaders) {
 			render(store.flag_geometry, shaders.textured_shader);
 		} else {
 			render(store.flag_down_geometry, shaders.textured_shader);
+
+			needed := ceil(scene.players.count / 1.5).(int);
+			left := needed - it.last_player_count;
+			if left > 0 {
+				M := M4f.translate(it.position + V3f.{ 0, 0, 2 });
+				if it.count_changed_juice_t > 0 {
+					M = M * scale_matrix(
+						1.0 + ease_up_and_back(1.0 - it.count_changed_juice_t) * 0.5
+					);
+				}
+				set_uniform(shaders.textured_shader, "M", M);
+
+				geom := Store.get_number_geometry(store, left);
+				if geom
+					render(geom, shaders.textured_shader);
+			}
 		}
 	}
 }
@@ -1660,7 +1982,6 @@ render_terrain_props :: (scene: Scene.Scene, props: [] Scene.Prop, shaders: Shad
 
 	Instance :: struct {
 		M: M4f;
-		kind: u32; @int
 	};
 
 	instanced := NewArray(props.count, Instance, initialized = false,, temp);

@@ -15,16 +15,22 @@ Model_Id :: enum {
 	Drag_Racer :: 4;
 	Monster_Truck :: 5;
 	Vintage_Racer :: 6;
-	Tombstone :: 7;
-	Tile :: 8;
-	Skull :: 9;
-	Coin :: 10;
-	Key :: 11;
-	Mark :: 12;
-	Gate :: 13;
-	Gate_Close :: 14;
-	Shuriken :: 15;
-	Spirit :: 16;
+	Boat_Row :: 7;
+	Boat_Fishing :: 8;
+	Taxi :: 9;
+	Police :: 10;
+	Ambulance :: 11;
+	Spaceship :: 12;
+	Tombstone :: 13;
+	Tile :: 14;
+	Skull :: 15;
+	Coin :: 16;
+	Key :: 17;
+	Mark :: 18;
+	Gate :: 19;
+	Gate_Close :: 20;
+	Shuriken :: 21;
+	Spirit :: 22;
 }
 
 Texture_Id :: enum {
@@ -35,6 +41,10 @@ Texture_Id :: enum {
 	Dirt :: 4;
 	Mark :: 5;
 	Vehicle_Colormap :: 6;
+}
+
+Particle_Texture_Id :: enum {
+	None :: 0;
 }
 
 Shader_Id :: enum {
@@ -108,6 +118,7 @@ Store :: struct {
 	shadow_instanced_shader: Render.Shader;
 	shadow_instanced_texture_shader: Render.Shader;
 	skybox_shader: Render.Shader;
+	particle_shader: Render.Shader;
 
 	ice_texture: Render.Texture;
 	coin_texture: Render.Texture;
@@ -119,6 +130,10 @@ Store :: struct {
 	tile_atlas: Render.Texture;
 	prop_colormap: Render.Texture;
 
+	particle_texture: Render.Texture;
+	particle_texture_png: Assets.Image;
+
+	z_facing_unit_square_geometry: Render.Geometry;
 	flag_geometry: Render.Geometry;
 	flag_down_geometry: Render.Geometry;
 	player_geometry: Render.Geometry;
@@ -127,6 +142,12 @@ Store :: struct {
 	vintage_racer_geometry: Render.Geometry;
 	monster_truck_geometry: Render.Geometry;
 	suv_geometry: Render.Geometry;
+	boat_row_geometry: Render.Geometry;
+	boat_fishing_geometry: Render.Geometry;
+	taxi_geometry: Render.Geometry;
+	police_geometry: Render.Geometry;
+	ambulance_geometry: Render.Geometry;
+	spaceship_geometry: Render.Geometry;
 	speedster_geometry: Render.Geometry;
 	tombstone_geometry: Render.Geometry;
 	tile_geometry: Render.Geometry;
@@ -155,8 +176,55 @@ Store :: struct {
 	rock_medium: Render.Geometry;
 	rock_large: Render.Geometry;
 	skybox_geometry: Render.Geometry;
+	indicator_outline_geometry: Render.Geometry;
+	indicator_stroke_geometry: Render.Geometry;
+
+	unit_cylinder_geometry: Render.Geometry;
+	unit_sphere_geometry: Render.Geometry;
+
+	number_0_geometry: Render.Geometry;
+	number_1_geometry: Render.Geometry;
+	number_2_geometry: Render.Geometry;
+	number_3_geometry: Render.Geometry;
+	number_4_geometry: Render.Geometry;
+	number_5_geometry: Render.Geometry;
+	number_6_geometry: Render.Geometry;
+	number_7_geometry: Render.Geometry;
+	number_8_geometry: Render.Geometry;
+	number_9_geometry: Render.Geometry;
+
+	robot_a0_geometry: Render.Geometry;
+	robot_a1_geometry: Render.Geometry;
+	robot_a2_geometry: Render.Geometry;
+	robot_a3_geometry: Render.Geometry;
+	robot_a4_geometry: Render.Geometry;
+	robot_a5_geometry: Render.Geometry;
 }
 
+get_number_geometry :: (store: Store, digit: int) -> *Render.Geometry {
+	if digit == 0 {
+		return *store.number_0_geometry;
+	} else if digit == 1 {
+		return *store.number_1_geometry;
+	} else if digit == 2 {
+		return *store.number_2_geometry;
+	} else if digit == 3 {
+		return *store.number_3_geometry;
+	} else if digit == 4 {
+		return *store.number_4_geometry;
+	} else if digit == 5 {
+		return *store.number_5_geometry;
+	} else if digit == 6 {
+		return *store.number_6_geometry;
+	} else if digit == 7 {
+		return *store.number_7_geometry;
+	} else if digit == 8 {
+		return *store.number_8_geometry;
+	} else if digit == 9 {
+		return *store.number_9_geometry;
+	}
+	return null;
+}
 get_geometry :: (store: Store, id: int) -> *Render.Geometry {
 	return get_geometry(store, id.(Model_Id));
 }
@@ -178,6 +246,28 @@ get_geometry :: (store: Store, id: Model_Id) -> *Render.Geometry {
 		case .Drag_Racer; return *store.drag_racer_geometry;
 		case .Monster_Truck; return *store.monster_truck_geometry;
 		case .Vintage_Racer; return *store.vintage_racer_geometry;
+		case .Boat_Row; return *store.boat_row_geometry;
+		case .Boat_Fishing; return *store.boat_fishing_geometry;
+		case .Taxi; return *store.taxi_geometry;
+		case .Police; return *store.police_geometry;
+		case .Ambulance; return *store.ambulance_geometry;
+		case .Spaceship; return *store.spaceship_geometry;
+	}
+	return null;
+}
+get_axes_geometry :: (store: Store, i: int) -> *Render.Geometry {
+	if i == 0 {
+		return *store.robot_a0_geometry;
+	} else if i == 1 {
+		return *store.robot_a1_geometry;
+	} else if i == 2 {
+		return *store.robot_a2_geometry;
+	} else if i == 3 {
+		return *store.robot_a3_geometry;
+	} else if i == 4 {
+		return *store.robot_a4_geometry;
+	} else if i == 5 {
+		return *store.robot_a5_geometry;
 	}
 	return null;
 }
@@ -360,17 +450,23 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.click_wav = platform.load_audio(xx Assets.CLICK_WAV);
 	store.snowflakes_and_lights_ogg = platform.load_audio(xx Assets.SNOWFLAKES_AND_LIGHTS_OGG);
 
+	store.particle_texture_png = Assets.Image.make_from_memory(Assets.PARTICLE_TEXTURE_PNG, 4);
+	store.particle_texture = Render.Texture.make_from_image(store.particle_texture_png);
+
 	store.skybox_shader = Render.Shader.make(
 		xx Assets.SKYBOX_VERTEX, xx Assets.SKYBOX_FRAGMENT
 	);
+	store.particle_shader = Render.Shader.make(
+		xx Assets.PARTICLE_VERTEX, xx Assets.PARTICLE_FRAGMENT
+	);
 	store.model_shader = Render.Shader.make(
-		xx Assets.PLAIN_VERTEX, Assets.PLAIN_FRAGMENT
+		xx Assets.PLAIN_VERTEX, xx Assets.PLAIN_FRAGMENT
 	);
 	store.texture_shader = Render.Shader.make(
-		xx Assets.PLAIN_VERTEX, Assets.TEXTURE_FRAGMENT
+		xx Assets.PLAIN_VERTEX, xx Assets.TEXTURE_FRAGMENT
 	);
 	store.font_shader = Render.Shader.make(
-		Assets.FONT_VERTEX, Assets.FONT_FRAGMENT
+		xx Assets.FONT_VERTEX, xx Assets.FONT_FRAGMENT
 	);
 	store.instance_shader = Render.Shader.make(
 		xx Assets.INSTANCE_VERTEX, xx Assets.INSTANCE_FRAGMENT
@@ -410,6 +506,9 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	// store.tile_geometry = Render.Geometry.make_square(
 	// 	.{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
 	// );
+	store.z_facing_unit_square_geometry = Render.Geometry.make_square(
+		.{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
+	);
 	store.tile_geometry = Render.Geometry.make_from_obj(Assets.TILE_OBJ);
 	store.flag_geometry = Render.Geometry.make_from_obj(Assets.FLAG_OBJ);
 	store.flag_down_geometry = Render.Geometry.make_from_obj(Assets.FLAG_DOWN_OBJ);
@@ -446,6 +545,35 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.rock_medium = Render.Geometry.make_from_obj(Assets.ROCK_MEDIUM);
 	store.rock_large = Render.Geometry.make_from_obj(Assets.ROCK_LARGE);
 	store.skybox_geometry = Render.Geometry.make_from_obj(Assets.SKYBOX_OBJ);
+	store.indicator_outline_geometry = Render.Geometry.make_from_obj(Assets.INDICATOR_OUTLINE_OBJ);
+	store.indicator_stroke_geometry = Render.Geometry.make_from_obj(Assets.INDICATOR_STROKE_OBJ);
+	store.boat_row_geometry = Render.Geometry.make_from_obj(Assets.BOAT_ROW_OBJ);
+	store.boat_fishing_geometry = Render.Geometry.make_from_obj(Assets.BOAT_FISHING_OBJ);
+	store.taxi_geometry = Render.Geometry.make_from_obj(Assets.TAXI_OBJ);
+	store.police_geometry = Render.Geometry.make_from_obj(Assets.POLICE_OBJ);
+	store.ambulance_geometry = Render.Geometry.make_from_obj(Assets.AMBULANCE_OBJ);
+	store.spaceship_geometry = Render.Geometry.make_from_obj(Assets.SPACESHIP_OBJ);
+
+	store.number_0_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_0_OBJ);
+	store.number_1_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_1_OBJ);
+	store.number_2_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_2_OBJ);
+	store.number_3_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_3_OBJ);
+	store.number_4_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_4_OBJ);
+	store.number_5_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_5_OBJ);
+	store.number_6_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_6_OBJ);
+	store.number_7_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_7_OBJ);
+	store.number_8_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_8_OBJ);
+	store.number_9_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_9_OBJ);
+
+	store.robot_a0_geometry = Render.Geometry.make_from_obj(Assets.ROBOT_A0_OBJ);
+	store.robot_a1_geometry = Render.Geometry.make_from_obj(Assets.ROBOT_A1_OBJ);
+	store.robot_a2_geometry = Render.Geometry.make_from_obj(Assets.ROBOT_A2_OBJ);
+	store.robot_a3_geometry = Render.Geometry.make_from_obj(Assets.ROBOT_A3_OBJ);
+	store.robot_a4_geometry = Render.Geometry.make_from_obj(Assets.ROBOT_A4_OBJ);
+	store.robot_a5_geometry = Render.Geometry.make_from_obj(Assets.ROBOT_A5_OBJ);
+
+	store.unit_cylinder_geometry = Render.Geometry.make_from_obj(Assets.UNIT_CYLINDER_OBJ);
+	store.unit_sphere_geometry = Render.Geometry.make_from_obj(Assets.UNIT_SPHERE_OBJ);
 }
 
 #if Assets.RUNTIME {
@@ -486,6 +614,7 @@ check_change :: (store: *Store, paths: [] string) {
 			handle_shader(it, "instance_texture", *store.instanced_texture_shader);
 			handle_shader(it, "shadow_instance_texture", *store.shadow_instanced_texture_shader);
 			handle_shader(it, "skybox", *store.skybox_shader);
+			handle_shader(it, "particle", *store.particle_shader);
 		}
 	}
 }

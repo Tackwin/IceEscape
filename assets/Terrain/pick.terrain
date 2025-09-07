@@ -86,3 +86,79 @@ trigger_zone
 - position: 3.5 7.5 0.0
 - radius: 1.0
 - model_id: 5
+
+
+standin
+- model_id: 7
+- position: 3.5 5.5 0.0
+- orientation_dir: 1 0 0
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 3.5 5.5 0.0
+- radius: 1.0
+- model_id: 7
+
+
+standin
+- model_id: 8
+- position: 5.5 2.5 0.0
+- orientation_dir: 0 1 0
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 5.5 2.5 0.0
+- radius: 1.0
+- model_id: 8
+
+standin
+- model_id: 9
+- position: 8.5 1.5 0.0
+- orientation_dir: 0 1 0
+
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 8.5 1.5 0.0
+- radius: 1.0
+- model_id: 9
+
+standin
+- model_id: 10
+- position: 14.5 1.5 0.0
+- orientation_dir: 0 1 0
+
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 14.5 1.5 0.0
+- radius: 1.0
+- model_id: 10
+
+standin
+- model_id: 11
+- position: 18.5 2.5 0.0
+- orientation_dir: 0 1 0
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 18.5 2.5 0.0
+- radius: 1.0
+- model_id: 11
+
+standin
+- model_id: 12
+- position: 20.5 5.5 0.0
+- orientation_dir: -1 1.0 0
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 20.5 5.5 0.0
+- radius: 1.0
+- model_id: 12

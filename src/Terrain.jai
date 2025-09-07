@@ -5,7 +5,6 @@
 Assets :: #import "Assets";
 #import "String";
 #import "Hash_Table";
-Rand :: #import "Rand";
 
 #scope_export
 
@@ -48,6 +47,55 @@ parse_terrain :: (text: string, scene: *Scene) {
 			continue;
 		if starts_with(line, "//")
 			continue;
+
+		if scan2(line, "robot") {
+			robot: Robot;
+			robot.id = scene.robots.count + 1;
+			defer array_add(*scene.robots, robot);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *robot.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+
+				if scan2(
+					line,
+					"- start_target_aabb: % %",
+					*robot.start_target_aabb.x,
+					*robot.start_target_aabb.y
+				)
+					continue;
+
+				if scan2(
+					line,
+					"- end_target_aabb: % %",
+					*robot.end_target_aabb.x,
+					*robot.end_target_aabb.y
+				)
+					continue;
+
+				if scan2(line, "- shooting_cd: %", *robot.shooting_cd)
+					continue;
+
+				print("Error reading robot, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
 
 		if scan2(line, "frame") {
 			cursor += 1;
@@ -311,6 +359,9 @@ parse_terrain :: (text: string, scene: *Scene) {
 				if scan2(line, "- wait_for_key_id: %", *gate.wait_for_key_id)
 					continue;
 
+				if scan2(line, "- wait_for_trigger_id: %", *gate.wait_for_trigger_id)
+					continue;
+
 				if scan2(line, "- is_end: %", *gate.is_end)
 					continue;
 
@@ -431,6 +482,46 @@ parse_terrain :: (text: string, scene: *Scene) {
 
 			cursor -= 1;
 		}
+		if scan2("within_zone", line) {
+			zone: Within_Zone;
+			zone.id = scene.within_zones.count + 1;
+			defer array_add(*scene.within_zones, zone);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				if scan2(line, "- position: % %", *zone.pos.x, *zone.pos.y)
+					continue;
+
+				if scan2(line, "- size: % %", *zone.size.x, *zone.size.y)
+					continue;
+
+				if scan2(line, "- min_player_percent: %", *zone.min_player_percent)
+					continue;
+				
+				if scan2(line, "- time_to_stay: %", *zone.time_to_stay)
+					continue;
+
+				if scan2(line, "- trigger_id: %", *zone.trigger_id)
+					continue;
+
+				print("Error reading within zone, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
 	}
 
 	rng := Rand.seed(123456789);
@@ -493,6 +584,8 @@ parse_terrain :: (text: string, scene: *Scene) {
 			}
 		}
 	}
+
+	scene.client_rng = Rand.seed(123456789);
 }
 
 load_terrain_from_ascii :: (ascii: string) -> Terrain {
