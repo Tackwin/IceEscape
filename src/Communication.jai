@@ -129,13 +129,19 @@ Command :: struct {
 		robots: [] Sync_Robot;
 		rng: Rand.State;
 	}
+	Explode :: struct {
+		id: int;
+		position: V3f;
+		max_size: float;
+		lifetime: float;
+	}
 	Wipe_Scene :: struct {
 	}
 
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
-		Wipe_Scene, End_Level, Sync_Robot
+		Wipe_Scene, End_Level, Sync_Robot, Explode
 	);
 	sent_timestamp: float64;
 }
@@ -198,6 +204,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Sync_Robot; #through;
 		case .Sync_Moving_Frame; #through;
 		case .NTP; #through;
+		case .Explode; #through;
 		case .Move_To_Play_World;
 			// Nothing
 		case .Sync_Scene;
@@ -285,6 +292,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Sync_Robot; #through;
 		case .Sync_Moving_Frame; #through;
 		case .NTP; #through;
+		case .Explode; #through;
 		case .Move_To_Play_World;
 			return cmd, true;
 		case .Sync_Scene;

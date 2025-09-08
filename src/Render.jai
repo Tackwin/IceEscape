@@ -1749,6 +1749,7 @@ render_particles :: (scene: Scene.Scene, shaders: Shaders) {
 		instance.M *= to_rotation_matrix(from_unit_vectors(V3f.{ 0, 0, -1 }, dt));
 		instance.M *= scale_matrix(it.size);
 		instance.M *= to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, it.rotation));
+		instance.M *= M4f.translate(V3f.{ -0.5, -0.5, 0 });
 		instance.texture_rec = .{
 			it.texture_rec.x, it.texture_rec.y, it.texture_rec.z, it.texture_rec.w
 		};
@@ -1763,6 +1764,7 @@ render_particles :: (scene: Scene.Scene, shaders: Shaders) {
 	instances_u8.data = instances.data.(*u8);
 	instances_u8.count = instances.count * size_of(Instance);
 	add_instance(*store.z_facing_unit_square_geometry, instances_u8);
+	set_uniform(shaders.particle_shader, "albedo", store.particle_texture, 0);
 	
 	context.rhi.glBindVertexArray(store.z_facing_unit_square_geometry.gpu_object);
 	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.z_facing_unit_square_geometry.gpu_buffer);

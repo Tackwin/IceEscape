@@ -34,3 +34,8 @@ random_uniform :: (state: *XORState, min: float = 0.0, max: float = 1.0) -> floa
 	t := (u.(float64) / ((0xFFFFFFFF).(u64)).(float64)).(float);
 	return t * (max - min) + min;
 }
+
+random_uniform :: (state: *XORState, min: int, max_excluded: int) -> int {
+	u := random_u64(state);
+	return (u % (max_excluded - min).(u64)).(int) + min;
+}

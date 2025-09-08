@@ -614,7 +614,7 @@ check_change :: (store: *Store, paths: [] string) {
 			handle_shader(it, "instance_texture", *store.instanced_texture_shader);
 			handle_shader(it, "shadow_instance_texture", *store.shadow_instanced_texture_shader);
 			handle_shader(it, "skybox", *store.skybox_shader);
-			handle_shader(it, "particle", *store.particle_shader);
+			handle_shader(it, "particles", *store.particle_shader);
 		}
 	}
 }

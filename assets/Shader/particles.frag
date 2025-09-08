@@ -42,5 +42,11 @@ void main() {
 	float l = lightIntensity(vec3(0.0, 0.0, 1.0));
 	vec4 color = texture(albedo, ftex);
 
-	outColor = vec4(l * fcolor.rgb * color.rgb, fcolor.a * color.a); // Color base
+	vec3 rgb = l * fcolor.rgb * color.rgb;
+	float a = fcolor.a * color.a;
+	if (a < 0.01) {
+		discard;
+	}
+	// outColor = vec4(l * fcolor.rgb * color.rgb, fcolor.a * color.a); // Color base
+	outColor = vec4(rgb / a, a); // Color base
 }

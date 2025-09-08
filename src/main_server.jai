@@ -350,6 +350,9 @@ tick :: (state: *State) {
 		for frame_result.wipe_scene {
 			scene_scoped_broadcast(scene.id, make_command(it));
 		}
+		for frame_result.explode {
+			scene_scoped_broadcast(scene.id, make_command(it));
+		}
 
 		if scene.end_scene_countdown_started {
 			t := current_time_monotonic();
@@ -535,7 +538,7 @@ move_playing_scene :: (scene_id: int) {
 	}
 	state.playing_scene_id = scene_id;
 	for old_scene.players {
-		move_player_to_scene(it.id, scene_id, -1);
+		move_player_to_scene(it.id, scene_id, it.server.model_id);
 	}
 }
 

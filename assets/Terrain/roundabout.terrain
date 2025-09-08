@@ -123,6 +123,7 @@ skull
 skull
 - path_id: 1
 - speed: 1.1
+- t: 4
 
 skull
 - path_id: 1
@@ -134,7 +135,7 @@ skull
 - speed: 0.5
 
 key
-- position: 46 6 0
+- position: 20 6 0
 
 key
 - position: 45 19 0

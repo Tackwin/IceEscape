@@ -163,6 +163,7 @@ Frame_Result :: struct {
 	move_to_player_world: [..] Command.Move_To_Play_World;
 	wipe_scene: [..] Command.Wipe_Scene;
 	end_level: [..] Command.End_Level;
+	explode: [..] Command.Explode;
 }
 free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.died);
@@ -171,6 +172,7 @@ free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.move_to_player_world);
 	array_free(frame_result.wipe_scene);
 	array_free(frame_result.end_level);
+	array_free(frame_result.explode);
 }
 clear :: (frame_result: *Frame_Result) {
 	frame_result.died.count = 0;
@@ -179,6 +181,7 @@ clear :: (frame_result: *Frame_Result) {
 	frame_result.move_to_player_world.count = 0;
 	frame_result.wipe_scene.count = 0;
 	frame_result.end_level.count = 0;
+	frame_result.explode.count = 0;
 }
 
 Prop :: struct {
@@ -228,6 +231,7 @@ Robot :: struct {
 	shooting_time := 0.0;
 
 	shooted := false;
+	just_shooted := false;
 }
 
 robot_matrix_local :: (n: int, a: float) -> M4f {
@@ -800,8 +804,12 @@ add_snow :: (scene: *Scene, dt: float32) {
 			Rand.random_uniform(*scene.client_rng, -0.5, 0.8),
 			Rand.random_uniform(*scene.client_rng, 0.5, 1.5)
 		};
+
+		texture_idx := Rand.random_uniform(*scene.client_rng, 1, 4);
+		p.texture_rec = V4f.{ texture_idx / 4.0, 0, 1 / 4.0, 1 / 4.0 };
 		p.velocity = normalize(p.velocity) * Rand.random_uniform(*scene.client_rng, 0.09, 0.11);
-		p.size = Rand.random_uniform(*scene.client_rng, 0.02, 0.07);
+		p.size = Rand.random_uniform(*scene.client_rng, 0.04, 0.10);
+		p.rotation_speed = Rand.random_uniform(*scene.client_rng, -2.0, 2.0);
 		p.lifetime = Rand.random_uniform(*scene.client_rng, 5.0, 10.0);
 		p.fade_out_time = Rand.random_uniform(*scene.client_rng, 0.1, 1.0);
 		p.color = V4f.{ 1, 1, 1, 1 };
@@ -1102,8 +1110,8 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 		// >RULE Player die on contact with an explosion
 		for *expl: scene.explosions {
 			p := expl.position;
-			t := clamp(expl.age / expl.lifetime, 0.0, 1.0);
-			dt := expl.max_size;
+			t := ease_out_quad(clamp(expl.age / expl.lifetime, 0.0, 1.0));
+			dt := t * expl.max_size / 2;
 
 			for * player: scene.players {
 				if !player.server.dead {
@@ -1158,6 +1166,33 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					}
 				}
 			}
+		}
+
+		// >RULE Robots shoots explosions
+		for * robot: scene.robots {
+			if robot.just_shooted {
+				explosion: Explosion;
+				M := robot_matrix_local_to_joint(robot, 6);
+				ray_origin := v3(M * V4f.{ 0, 0, 0, 1 });
+				ray_direction := normalize(v3(M * V4f.{ 0, 0, 1, 0 }));
+
+				target, hit := ray_plane(ray_origin, ray_direction, V3f.{ 0, 0, 1 });
+				if hit {
+					explosion.position = target;
+					explosion.lifetime = 0.75;
+					explosion.max_size = 1.5;
+
+					array_add(*scene.explosions, explosion);
+					
+					cmd: Command.Explode;
+					cmd.id = 0;
+					cmd.lifetime = explosion.lifetime;
+					cmd.max_size = explosion.max_size;
+					cmd.position = explosion.position;
+					array_add(*result.explode, cmd);
+				}
+			}
+			robot.just_shooted = false;
 		}
 	}
 }
@@ -1239,7 +1274,6 @@ server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 
 // https://rodolphe-vaillant.fr/entry/114/cyclic-coordonate-descent-inverse-kynematic-ccd-ik
 update :: (scene: Scene, robot: *Robot, dt: float32) {
-	robot.shooting_time += dt;
 
 	player := find_by_player_id(scene, robot.player_targeted_id);
 	if !player {
@@ -1251,7 +1285,6 @@ update :: (scene: Scene, robot: *Robot, dt: float32) {
 		|| p.y < robot.start_target_aabb.y
 		|| p.y > robot.end_target_aabb.y {
 			robot.player_targeted_id = -1;
-			return;
 		}
 	}
 
@@ -1271,21 +1304,19 @@ update :: (scene: Scene, robot: *Robot, dt: float32) {
 		}
 	}
 
-	if robot.player_targeted_id < 0 {
+	player = find_by_player_id(scene, robot.player_targeted_id);
+	if !player {
 		t := to_float64_seconds(current_time_monotonic()).(float32);
 		robot.axes[0] += sin(t * 0.5) * 0.2 * dt;
 		robot.axes[1] += sin(t * 0.7) * 0.3 * dt;
 		robot.axes[2] += sin(t * 0.9) * 0.4 * dt;
 		robot.axes[3] += sin(t * 1.1) * 0.5 * dt;
 		robot.axes[4] += sin(t * 1.3) * 0.6 * dt;
-		return;
-	}
-	player = find_by_player_id(scene, robot.player_targeted_id);
-	if !player {
 		robot.player_targeted_id = -1;
+		robot.shooting_time = 0;
 		return;
-
 	}
+	robot.shooting_time += dt;
 	if robot.shooting_time > robot.shooting_cd {
 		if robot.shooting_time > (robot.shooting_cd + robot.charging_time + robot.effectshoot_time)
 		{
@@ -1296,19 +1327,7 @@ update :: (scene: Scene, robot: *Robot, dt: float32) {
 
 			if !robot.shooted {
 				robot.shooted = true;
-
-				explosion: Explosion;
-				M := robot_matrix_local_to_joint(robot, 6);
-				ray_origin := v3(M * V4f.{ 0, 0, 0, 1 });
-				ray_direction := normalize(v3(M * V4f.{ 0, 0, 1, 0 }));
-
-				target, hit := ray_plane(ray_origin, ray_direction, V3f.{ 0, 0, 1 });
-				if hit {
-					explosion.position = target;
-					explosion.lifetime = 1.0;
-					explosion.max_size = 1.5;
-					array_add(*scene.explosions, explosion);
-				}
+				robot.just_shooted = true;
 			}
 		}
 		// Stay in place if we are just after shooting
@@ -1721,6 +1740,16 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		scene.end_scene_countdown = end_level.next_level_scheduled_in_seconds;
 		scene.end_scene_countdown_started = true;
 		scene.next_id = end_level.next_scene_id;
+		return true;
+	}
+
+	explode: *Command.Explode = isa(command.payload, Command.Explode);
+	if explode {
+		explosion: Explosion;
+		explosion.position = explode.position;
+		explosion.lifetime = explode.lifetime;
+		explosion.max_size = explode.max_size;
+		array_add(*scene.explosions, explosion);
 		return true;
 	}
 
