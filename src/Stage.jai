@@ -9,8 +9,6 @@ Platform :: #import "Platform";
 Pick_Stage :: struct {
 	model_id_to_geometry_idx: Hash_Table(int, int);
 
-	geometries: [..] Render.Geometry;
-
 	camera: Scene.Camera;
 
 	Player :: struct {

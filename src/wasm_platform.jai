@@ -1,15 +1,14 @@
 #scope_file
-#import "Window_Creation";
+// #import "Window_Creation";
 #import "WAllocator";
-#import "Input";
+// #import "Input";
 #import "Basic";
 #import "String";
 #import "Hash_Table";
-Render :: #import "Render";
-Sound :: #import "Sound_Player";
-WebGL :: #import "Toolchains/Web/WebGL";
+// Sound :: #import "Sound_Player";
+// WebGL :: #import "Toolchains/Web/WebGL";
 
-window: Window_Type;
+// window: Window_Type;
 pressed: [Key_COUNT] bool;
 
 web_buffer: [] u8;
@@ -85,27 +84,38 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	info.window_focused = true;
 	info.window_size = .{ xx 1366, xx 768 };
 
-	update_window_events();
+	jsGetKeyState :: (key_map_ptr: *bool, key_map_count: s64) #foreign;
+	jsGetKeyState(pressed.data, pressed.count);
+	// update_window_events();
+// 
+	// for events_this_frame {
+	// 	if it.type == {
+	// 		case .KEYBOARD;
+	// 			mapped := map_key_to_key(xx it.key_code);
+	// 			if mapped >= 0 {
+	// 				pressed[mapped] = it.key_pressed > 0;
+	// 			}
+	// 		case .QUIT;
+	// 			info.quit = true;
+	// 		case .MOUSE_WHEEL;
+	// 			info.mouse_wheel = it.wheel_delta;
+	// 	}
+	// }
 
-	for events_this_frame {
-		if it.type == {
-			case .KEYBOARD;
-				mapped := map_key_to_key(xx it.key_code);
-				if mapped >= 0 {
-					pressed[mapped] = it.key_pressed > 0;
-				}
-			case .QUIT;
-				info.quit = true;
-			case .MOUSE_WHEEL;
-				info.mouse_wheel = it.wheel_delta;
-		}
-	}
-
-	x, y := get_mouse_pointer_position(window, false);
+	x: u32;
+	y: u32;
+	jsGetMousePointer :: (x_ptr: *u32, y_ptr: *u32) #foreign;
+	jsGetMousePointer(*x, *y);
 	info.mouse_position.x = xx x;
 	info.mouse_position.y = xx y;
 
-	wx, wy, ww, wh := get_dimensions(window, false);
+	dim: [4] u32;
+	jsGetDimensions :: (dim_ptr: *u32) #foreign;
+	jsGetDimensions(dim.data);
+	wx := dim[0];
+	wy := dim[1];
+	ww := dim[2];
+	wh := dim[3];
 	info.framebuffer_size = .{ xx ww, xx wh };
 	info.window_size = .{ xx ww, xx wh };
 	info.mouse_position.y = info.window_size.y - info.mouse_position.y;
@@ -136,57 +146,58 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	}
 }
 
-audio_table: Table(int, *Sound.Sound_Data);
-audio_counter := 0;
+// audio_table: Table(int, *Sound.Sound_Data);
+// audio_counter := 0;
 
 load_audio :: (data: string) -> Audio {
-	audio_counter += 1;
+	// audio_counter += 1;
 
-	audio: Audio;
-	audio.id = audio_counter;
-	// Load audio data
-	sound := Sound.load_audio_data("Machin", data);
-	sound_ptr := New(Sound.Sound_Data);
-	sound_ptr.* = sound;
-	table_set(*audio_table, audio.id, sound_ptr);
+	// audio: Audio;
+	// audio.id = audio_counter;
+	// // Load audio data
+	// sound := Sound.load_audio_data("Machin", data);
+	// sound_ptr := New(Sound.Sound_Data);
+	// sound_ptr.* = sound;
+	// table_set(*audio_table, audio.id, sound_ptr);
 
-	return audio;
+	// return audio;
+	return .{};
 }
 play_audio :: (audio: *Audio) {
-	ok, sound := table_find_new(*audio_table, audio.id);
-	if ok {
-		stream: *Sound.Sound_Stream;
-		if audio.kind == {
-			case .Music;
-				stream = Sound.make_stream(sound, .MUSIC);
-			case .Sound;
-				stream = Sound.make_stream(sound, .GENERAL_SFX);
-		}
-		stream.user_volume_scale = audio.volume;
-		stream.internal_flags &= ~.WAITING_FOR_INITIAL_DECODER_PAGES;
-		Sound.set_repeating(stream, audio.repeating);
-		Sound.start_playing(stream);
-	}
+	// ok, sound := table_find_new(*audio_table, audio.id);
+	// if ok {
+	// 	stream: *Sound.Sound_Stream;
+	// 	if audio.kind == {
+	// 		case .Music;
+	// 			stream = Sound.make_stream(sound, .MUSIC);
+	// 		case .Sound;
+	// 			stream = Sound.make_stream(sound, .GENERAL_SFX);
+	// 	}
+	// 	stream.user_volume_scale = audio.volume;
+	// 	stream.internal_flags &= ~.WAITING_FOR_INITIAL_DECODER_PAGES;
+	// 	Sound.set_repeating(stream, audio.repeating);
+	// 	Sound.start_playing(stream);
+	// }
 }
 query_audio :: (audio: *Audio) -> bool {
 	return false;
 }
 
 wasm_end_frame ::  () {
-	js_webgl_swap_buffers :: (window: Window_Type, vsync: bool) #foreign;
-	js_webgl_swap_buffers(window, false);
-	Sound.update();
+	// js_webgl_swap_buffers :: (window: Window_Type, vsync: bool) #foreign;
+	// js_webgl_swap_buffers(window, false);
+	// Sound.update();
 }
 
 init_platform :: () -> Platform {
 
-	window := create_window(1366, 768, "Ice Escape");
+	// window := create_window(1366, 768, "Ice Escape");
 	for * pressed
 		it.* = false;
-	js_webgl_swap_buffers :: (window: Window_Type, vsync: bool) #foreign;
-	js_webgl_swap_buffers(window, false);
+	// js_webgl_swap_buffers :: (window: Window_Type, vsync: bool) #foreign;
+	// js_webgl_swap_buffers(window, false);
 
-	Sound.sound_player_init(.{ audible_when_window_is_not_in_focus = true });
+	// Sound.sound_player_init(.{ audible_when_window_is_not_in_focus = true });
 	web_buffer = NewArray(1024*1024*32, u8, false);
 
 	platform: Platform;
@@ -266,7 +277,7 @@ init_platform :: () -> Platform {
 
 		return builder_to_string(*sb);
 	}
-	#insert #run meta_run();
+	// #insert #run meta_run();
 	context.rhi = platform.rhi;
 
 	#insert #run -> string {
@@ -688,8 +699,338 @@ wasmInstanceCreateSurface :: (
 ) -> WGPUSurface #c_call {
 	jsInstanceCreateSurface :: (params: *void, returns: *void) #foreign;
 	surface: WGPUSurface;
-	jsInstanceCreateSurface(*instance, *surface);
+
+	params: struct {
+		instance: WGPUInstance;
+		descriptor: *WGPUSurfaceDescriptor;
+	};
+	params.instance = instance;
+	params.descriptor = descriptor;
+
+	jsInstanceCreateSurface(*params, *surface);
 	return surface;
+}
+wasmDeviceCreateShaderModule :: (
+	device: WGPUDevice,
+	descriptor: *WGPUShaderModuleDescriptor
+) -> WGPUShaderModule #c_call {
+	jsDeviceCreateShaderModule :: (params: *void, returns: *void) #foreign;
+	shader_module: WGPUShaderModule;
+
+	params: struct {
+		device: WGPUDevice;
+		descriptor: *WGPUShaderModuleDescriptor;
+	};
+	params.device = device;
+	params.descriptor = descriptor;
+
+	jsDeviceCreateShaderModule(*params, *shader_module);
+	return shader_module;
+}
+wasmDeviceCreateRenderPipeline :: (
+	device: WGPUDevice,
+	descriptor: *WGPURenderPipelineDescriptor
+) -> WGPURenderPipeline #c_call {
+	jsDeviceCreateRenderPipeline :: (params: *void, returns: *void) #foreign;
+	render_pipeline: WGPURenderPipeline;
+
+	params: struct {
+		device: WGPUDevice;
+		descriptor: *WGPURenderPipelineDescriptor;
+	};
+	params.device = device;
+	params.descriptor = descriptor;
+
+	jsDeviceCreateRenderPipeline(*params, *render_pipeline);
+	return render_pipeline;
+}
+wasmCommandEncoderBeginRenderPass :: (
+	encoder: WGPUCommandEncoder,
+	descriptor: *WGPURenderPassDescriptor
+) -> WGPURenderPassEncoder #c_call {
+	jsCommandEncoderBeginRenderPass :: (params: *void, returns: *void) #foreign;
+	render_pass: WGPURenderPassEncoder;
+
+	params: struct {
+		encoder: WGPUCommandEncoder;
+		descriptor: *WGPURenderPassDescriptor;
+	};
+	params.encoder = encoder;
+	params.descriptor = descriptor;
+
+	jsCommandEncoderBeginRenderPass(*params, *render_pass);
+	return render_pass;
+}
+wasmRenderPassEncoderSetPipeline :: (
+	pass: WGPURenderPassEncoder,
+	pipeline: WGPURenderPipeline
+) -> void #c_call {
+	jsRenderPassEncoderSetPipeline :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		pass: WGPURenderPassEncoder;
+		pipeline: WGPURenderPipeline;
+	};
+	params.pass = pass;
+	params.pipeline = pipeline;
+
+	jsRenderPassEncoderSetPipeline(*params, null);
+}
+wasmRenderPassEncoderDraw :: (
+	pass: WGPURenderPassEncoder,
+	vertexCount: u32,
+	instanceCount: u32,
+	firstVertex: u32,
+	firstInstance: u32
+) -> void #c_call {
+	jsRenderPassEncoderDraw :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		pass: WGPURenderPassEncoder;
+		vertexCount: u32;
+		instanceCount: u32;
+		firstVertex: u32;
+		firstInstance: u32;
+	};
+	params.pass = pass;
+	params.vertexCount = vertexCount;
+	params.instanceCount = instanceCount;
+	params.firstVertex = firstVertex;
+	params.firstInstance = firstInstance;
+
+	jsRenderPassEncoderDraw(*params, null);
+}
+wasmRenderPassEncoderEnd :: (
+	pass: WGPURenderPassEncoder
+) -> void #c_call {
+	jsRenderPassEncoderEnd :: (params: *void, returns: *void) #foreign;
+	jsRenderPassEncoderEnd(*pass, null);
+}
+wasmSurfaceGetCurrentTexture :: (
+	surface: WGPUSurface,
+	surfaceTexture: *WGPUSurfaceTexture
+) -> void #c_call {
+	texture: WGPUTexture;
+	jsSurfaceGetCurrentTexture :: (params: *void, returns: *void) #foreign;
+	jsSurfaceGetCurrentTexture(*surface, *texture);
+
+	surfaceTexture.texture = texture;
+	surfaceTexture.status = .SuccessOptimal;
+}
+wasmTextureCreateView :: (
+	texture: WGPUTexture,
+	descriptor: *WGPUTextureViewDescriptor
+) -> WGPUTextureView #c_call {
+	jsTextureCreateView :: (params: *void, returns: *void) #foreign;
+	texture_view: WGPUTextureView;
+
+	params: struct {
+		texture: WGPUTexture;
+		descriptor: *WGPUTextureViewDescriptor;
+	};
+	params.texture = texture;
+	params.descriptor = descriptor;
+
+	jsTextureCreateView(*params, *texture_view);
+	return texture_view;
+}
+wasmTextureViewRelease :: (
+	view: WGPUTextureView
+) -> void #c_call {
+	jsTextureViewRelease :: (params: *void, returns: *void) #foreign;
+	jsTextureViewRelease(*view, null);
+}
+wasmSurfaceConfigure :: (
+	surface: WGPUSurface,
+	descriptor: *WGPUSurfaceConfiguration
+) -> void #c_call {
+	jsSurfaceConfigure :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		surface: WGPUSurface;
+		descriptor: *WGPUSurfaceConfiguration;
+	};
+	params.surface = surface;
+	params.descriptor = descriptor;
+
+	jsSurfaceConfigure(*params, null);
+}
+wasmRenderPassEncoderRelease :: (
+	pass: WGPURenderPassEncoder
+) -> void #c_call {
+	jsRenderPassEncoderRelease :: (params: *void, returns: *void) #foreign;
+	jsRenderPassEncoderRelease(*pass, null);
+}
+wasmSurfacePresent :: (
+	surface: WGPUSurface
+) -> WGPUStatus #c_call {
+	jsSurfacePresent :: (params: *void, returns: *void) #foreign;
+	jsSurfacePresent(*surface, null);
+	return .Success;
+}
+wasmTextureGetFormat :: (
+	texture: WGPUTexture
+) -> WGPUTextureFormat #c_call {
+	jsTextureGetFormat :: (params: *void, returns: *void) #foreign;
+	format: WGPUTextureFormat;
+	jsTextureGetFormat(*texture, *format);
+	return format;
+}
+wasmDeviceCreateBindGroupLayout :: (
+	device: WGPUDevice,
+	descriptor: *WGPUBindGroupLayoutDescriptor
+) -> WGPUBindGroupLayout #c_call {
+	jsDeviceCreateBindGroupLayout :: (params: *void, returns: *void) #foreign;
+	bind_group_layout: WGPUBindGroupLayout;
+
+	params: struct {
+		device: WGPUDevice;
+		descriptor: *WGPUBindGroupLayoutDescriptor;
+	};
+	params.device = device;
+	params.descriptor = descriptor;
+
+	jsDeviceCreateBindGroupLayout(*params, *bind_group_layout);
+	return bind_group_layout;
+}
+wasmBindGroupLayoutRelease :: (
+	layout: WGPUBindGroupLayout
+) -> void #c_call {
+	jsBindGroupLayoutRelease :: (params: *void, returns: *void) #foreign;
+	jsBindGroupLayoutRelease(*layout, null);
+}
+wasmDeviceCreateBindGroup :: (
+	device: WGPUDevice,
+	descriptor: *WGPUBindGroupDescriptor
+) -> WGPUBindGroup #c_call {
+	jsDeviceCreateBindGroup :: (params: *void, returns: *void) #foreign;
+	bind_group: WGPUBindGroup;
+
+	params: struct {
+		device: WGPUDevice;
+		descriptor: *WGPUBindGroupDescriptor;
+	};
+	params.device = device;
+	params.descriptor = descriptor;
+
+	jsDeviceCreateBindGroup(*params, *bind_group);
+	return bind_group;
+}
+wasmBindGroupRelease :: (
+	group: WGPUBindGroup
+) -> void #c_call {
+	jsBindGroupRelease :: (params: *void, returns: *void) #foreign;
+	jsBindGroupRelease(*group, null);
+}
+wasmRenderPipelineGetBindGroupLayout :: (
+	pipeline: WGPURenderPipeline,
+	index: u32
+) -> WGPUBindGroupLayout #c_call {
+	jsRenderPipelineGetBindGroupLayout :: (params: *void, returns: *void) #foreign;
+	bind_group_layout: WGPUBindGroupLayout;
+
+	params: struct {
+		pipeline: WGPURenderPipeline;
+		index: u32;
+	};
+	params.pipeline = pipeline;
+	params.index = index;
+
+	jsRenderPipelineGetBindGroupLayout(*params, *bind_group_layout);
+	return bind_group_layout;
+}
+wasmRenderPassEncoderSetBindGroup :: (
+	pass: WGPURenderPassEncoder,
+	index: u32,
+	bindGroup: WGPUBindGroup,
+	dynamicOffsetCount: u64,
+	dynamicOffsets: *u32
+) -> void #c_call {
+	jsRenderPassEncoderSetBindGroup :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		pass: WGPURenderPassEncoder;
+		index: u64;
+		bindGroup: WGPUBindGroup;
+		dynamicOffsetCount: u64;
+		dynamicOffsets: *u32;
+	};
+	params.pass = pass;
+	params.index = xx index;
+	params.bindGroup = bindGroup;
+	params.dynamicOffsetCount = xx dynamicOffsetCount;
+	params.dynamicOffsets = dynamicOffsets;
+
+	jsRenderPassEncoderSetBindGroup(*params, null);
+}
+wasmRenderPassEncoderSetVertexBuffer :: (
+	pass: WGPURenderPassEncoder,
+	slot: u32,
+	buffer: WGPUBuffer,
+	offset: u64,
+	size: u64
+) -> void #c_call {
+	jsRenderPassEncoderSetVertexBuffer :: (params: *void, returns: *void) #foreign;
+	params: struct {
+		pass: WGPURenderPassEncoder;
+		slot: u32;
+		buffer: WGPUBuffer;
+		offset: u64;
+		size: u64;
+	};
+
+	params.pass = pass;
+	params.slot = slot;
+	params.buffer = buffer;
+	params.offset = offset;
+	params.size = size;
+	jsRenderPassEncoderSetVertexBuffer(*params, null);
+}
+wasmDeviceCreateTexture :: (
+	device: WGPUDevice,
+	descriptor: *WGPUTextureDescriptor
+) -> WGPUTexture #c_call {
+	jsDeviceCreateTexture :: (params: *void, returns: *void) #foreign;
+	texture: WGPUTexture;
+
+	params: struct {
+		device: WGPUDevice;
+		descriptor: *WGPUTextureDescriptor;
+	};
+	params.device = device;
+	params.descriptor = descriptor;
+
+	jsDeviceCreateTexture(*params, *texture);
+	return texture;
+}
+wasmDeviceCreateSampler :: (
+	device: WGPUDevice,
+	descriptor: *WGPUSamplerDescriptor
+) -> WGPUSampler #c_call {
+	jsDeviceCreateSampler :: (params: *void, returns: *void) #foreign;
+	sampler: WGPUSampler;
+
+	params: struct {
+		device: WGPUDevice;
+		descriptor: *WGPUSamplerDescriptor;
+	};
+	params.device = device;
+	params.descriptor = descriptor;
+
+	jsDeviceCreateSampler(*params, *sampler);
+	return sampler;
+}
+wasmSamplerRelease :: (
+	sampler: WGPUSampler
+) -> void #c_call {
+	jsSamplerRelease :: (params: *void, returns: *void) #foreign;
+	jsSamplerRelease(*sampler, null);
+}
+wasmTextureRelease :: (
+	texture: WGPUTexture
+) -> void #c_call {
+	jsTextureRelease :: (params: *void, returns: *void) #foreign;
+	jsTextureRelease(*texture, null);
 }
 entries :: Entry.[
 	.{ "createInstance", WGPUProcCreateInstance, "wasmCreateInstance" },
@@ -713,7 +1054,32 @@ entries :: Entry.[
 	.{ "deviceCreateBuffer", WGPUProcDeviceCreateBuffer, "wasmDeviceCreateBuffer" },
 	.{ "bufferRelease", WGPUProcBufferRelease, "wasmBufferRelease" },
 	.{ "bufferGetMappedRange", WGPUProcBufferGetMappedRange, "wasmBufferGetMappedRange" },
-	.{ "bufferUnmap", WGPUProcBufferUnmap, "wasmBufferUnmap" }
+	.{ "bufferUnmap", WGPUProcBufferUnmap, "wasmBufferUnmap" },
+	.{ "deviceCreateShaderModule", WGPUProcDeviceCreateShaderModule, "wasmDeviceCreateShaderModule" },
+	.{ "deviceCreateRenderPipeline", WGPUProcDeviceCreateRenderPipeline, "wasmDeviceCreateRenderPipeline" },
+	.{ "commandEncoderBeginRenderPass", WGPUProcCommandEncoderBeginRenderPass, "wasmCommandEncoderBeginRenderPass" },
+	.{ "renderPassEncoderSetPipeline", WGPUProcRenderPassEncoderSetPipeline, "wasmRenderPassEncoderSetPipeline" },
+	.{ "renderPassEncoderDraw", WGPUProcRenderPassEncoderDraw, "wasmRenderPassEncoderDraw" },
+	.{ "renderPassEncoderEnd", WGPUProcRenderPassEncoderEnd, "wasmRenderPassEncoderEnd" },
+	.{ "surfaceGetCurrentTexture", WGPUProcSurfaceGetCurrentTexture, "wasmSurfaceGetCurrentTexture" },
+	.{ "textureCreateView", WGPUProcTextureCreateView, "wasmTextureCreateView" },
+	.{ "renderPassEncoderEnd", WGPUProcRenderPassEncoderEnd, "wasmRenderPassEncoderEnd" },
+	.{ "textureViewRelease", WGPUProcTextureViewRelease, "wasmTextureViewRelease" },
+	.{ "surfaceConfigure", WGPUProcSurfaceConfigure, "wasmSurfaceConfigure" },
+	.{ "renderPassEncoderRelease", WGPUProcRenderPassEncoderRelease, "wasmRenderPassEncoderRelease" },
+	.{ "surfacePresent", WGPUProcSurfacePresent, "wasmSurfacePresent" },
+	.{ "textureGetFormat", WGPUProcTextureGetFormat, "wasmTextureGetFormat" },
+	.{ "deviceCreateBindGroupLayout", WGPUProcDeviceCreateBindGroupLayout, "wasmDeviceCreateBindGroupLayout" },
+	.{ "bindGroupLayoutRelease", WGPUProcBindGroupLayoutRelease, "wasmBindGroupLayoutRelease" },
+	.{ "deviceCreateBindGroup", WGPUProcDeviceCreateBindGroup, "wasmDeviceCreateBindGroup" },
+	.{ "bindGroupRelease", WGPUProcBindGroupRelease, "wasmBindGroupRelease" },
+	.{ "renderPipelineGetBindGroupLayout", WGPUProcRenderPipelineGetBindGroupLayout, "wasmRenderPipelineGetBindGroupLayout" },
+	.{ "renderPassEncoderSetBindGroup", WGPUProcRenderPassEncoderSetBindGroup, "wasmRenderPassEncoderSetBindGroup" },
+	.{ "renderPassEncoderSetVertexBuffer", WGPUProcRenderPassEncoderSetVertexBuffer, "wasmRenderPassEncoderSetVertexBuffer" },
+	.{ "deviceCreateTexture", WGPUProcDeviceCreateTexture, "wasmDeviceCreateTexture" },
+	.{ "deviceCreateSampler", WGPUProcDeviceCreateSampler, "wasmDeviceCreateSampler" },
+	.{ "samplerRelease", WGPUProcSamplerRelease, "wasmSamplerRelease" },
+	.{ "textureRelease", WGPUProcTextureRelease, "wasmTextureRelease" },
 ];
 
 

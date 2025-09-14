@@ -104,8 +104,12 @@ build_wasm :: () {
 	if !ok {
 		return;
 	}
+	io:, ok = read_entire_file("src/io.js");
+	if !ok {
+		return;
+	}
 
-	write_entire_file("./web/runtime.js", tprint("%\n%\n", runtime, webgpu));
+	write_entire_file("./web/runtime.js", tprint("%\n\n\n//WEBGPU\n%\n\n\n//IO\n%\n", runtime, webgpu, io));
 }
 
 build :: () {

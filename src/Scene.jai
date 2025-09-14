@@ -2,7 +2,6 @@
 #import "Math";
 #import "Basic";
 #import "String";
-#import "GL";
 Render :: #import "Render";
 #import "Tagged_Union";
 #import "Communication";
@@ -29,7 +28,6 @@ Scene :: struct {
 
 	store: *Store;
 	camera: Camera;
-	tile_kind_to_shader: [64] *Render.Texture;
 
 	// >TODO put all allocation relating to the map in the same pool.
 	players: [..] Player;

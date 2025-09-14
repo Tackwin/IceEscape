@@ -247,7 +247,7 @@ win32_get_frame_info :: (info: *Frame_Info) {
 }
 
 win32_end_frame :: () {
-	SDL_GL_SwapWindow(sdl_window);
+	// SDL_GL_SwapWindow(sdl_window);
 
 	cursor := 0;
 	for * messages_pending {
@@ -359,23 +359,23 @@ init_platform :: () -> Platform {
 		SDL_WINDOWPOS_CENTERED,
 		1366,
 		768,
-		SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE
+		SDL_WINDOW_RESIZABLE
 	);
 
 	if sdl_window == null {
 		return .{};
 	}
 
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, xx SDL_GL_CONTEXT_PROFILE_CORE);
+	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	// SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+	// SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, xx SDL_GL_CONTEXT_PROFILE_CORE);
 
-	sdl_gl_context = SDL_GL_CreateContext(sdl_window);
-	if !sdl_gl_context {
-		return .{};
-	}
+	// sdl_gl_context = SDL_GL_CreateContext(sdl_window);
+	// if !sdl_gl_context {
+	// 	return .{};
+	// }
 
 	platform.get_frame_info = win32_get_frame_info;
 	platform.end_frame = win32_end_frame;
@@ -387,7 +387,7 @@ init_platform :: () -> Platform {
 	platform.play_audio = play_audio;
 	platform.volume_audio = volume_audio;
 
-	GL.gl_load(*GL.gl, SDL_GL_GetProcAddress);
+	// GL.gl_load(*GL.gl, SDL_GL_GetProcAddress);
 
 	meta_run :: () -> string {
 		sb: String_Builder;
@@ -486,6 +486,9 @@ init_platform :: () -> Platform {
 	wgpuBufferUnmap :: (
 		buffer: WGPUBuffer
 	) -> void #foreign wgpu_native;
+	wgpuSurfacePresent :: (
+		surface: WGPUSurface
+	) -> WGPUStatus #foreign wgpu_native;
 	wgpuMyInstanceCreateSurface :: (
 		instance: WGPUInstance,
 		descriptor: *WGPUSurfaceDescriptor
@@ -497,6 +500,8 @@ init_platform :: () -> Platform {
 
 		chained: WGPUSurfaceSourceWindowsHWND = .{};
 		chained.hinstance = Win32.GetModuleHandleW(null);
+		chained.chain.sType = .SurfaceSourceWindowsHWND;
+		chained.chain.next = null;
 		info: SDL_SysWMinfo = .{};
 
 		ctx: #Context;
@@ -506,17 +511,108 @@ init_platform :: () -> Platform {
 		}
 		chained.hwnd = xx info.info.win.window;
 
-		_desc := descriptor.*;
+		_desc : WGPUSurfaceDescriptor = .{};
+		if descriptor
+			_desc = descriptor.*;
 
-		chain: WGPUChainedStruct = .{};
-		chain.sType = .SurfaceSourceWindowsHWND;
-		chain.next = xx *chained;
-
-		_desc.nextInChain = *chain;
+		_desc.nextInChain = xx *chained;
 
 		return wgpuInstanceCreateSurface(instance, *_desc);
 	};
+	wgpuDeviceCreateShaderModule :: (
+		device: WGPUDevice,
+		descriptor: *WGPUShaderModuleDescriptor
+	) -> WGPUShaderModule #foreign wgpu_native;
+	wgpuDeviceCreateRenderPipeline :: (
+		device: WGPUDevice,
+		descriptor: *WGPURenderPipelineDescriptor
+	) -> WGPURenderPipeline #foreign wgpu_native;
 
+	wgpuCommandEncoderBeginRenderPass :: (
+		encoder: WGPUCommandEncoder,
+		descriptor: *WGPURenderPassDescriptor
+	) -> WGPURenderPassEncoder #foreign wgpu_native;
+	wgpuRenderPassEncoderRelease :: (
+		pass: WGPURenderPassEncoder
+	) -> void #foreign wgpu_native;
+	wgpuRenderPassEncoderSetPipeline :: (
+		pass: WGPURenderPassEncoder,
+		pipeline: WGPURenderPipeline
+	) -> void #foreign wgpu_native;
+	wgpuRenderPassEncoderDraw :: (
+		pass: WGPURenderPassEncoder,
+		vertexCount: u32,
+		instanceCount: u32,
+		firstVertex: u32,
+		firstInstance: u32
+	) -> void #foreign wgpu_native;
+	wgpuRenderPassEncoderEnd :: (
+		pass: WGPURenderPassEncoder
+	) -> void #foreign wgpu_native;
+	wgpuSurfaceGetCurrentTexture :: (
+		surface: WGPUSurface,
+		surfaceTexture: *WGPUSurfaceTexture
+	) -> void #foreign wgpu_native;
+	wgpuTextureCreateView :: (
+		texture: WGPUTexture,
+		descriptor: *WGPUTextureViewDescriptor
+	) -> WGPUTextureView #foreign wgpu_native;
+	wgpuTextureViewRelease :: (
+		textureView: WGPUTextureView
+	) -> void #foreign wgpu_native;
+	wgpuSurfaceConfigure :: (
+		surface: WGPUSurface,
+		descriptor: *WGPUSurfaceConfiguration
+	) -> void #foreign wgpu_native;
+	wgpuTextureGetFormat :: (
+		texture: WGPUTexture
+	) -> WGPUTextureFormat #foreign wgpu_native;
+	wgpuDeviceCreateBindGroupLayout :: (
+		device: WGPUDevice,
+		descriptor: *WGPUBindGroupLayoutDescriptor
+	) -> WGPUBindGroupLayout #foreign wgpu_native;
+	wgpuBindGroupLayoutRelease :: (
+		bindGroupLayout: WGPUBindGroupLayout
+	) -> void #foreign wgpu_native;
+	wgpuDeviceCreateBindGroup :: (
+		device: WGPUDevice,
+		descriptor: *WGPUBindGroupDescriptor
+	) -> WGPUBindGroup #foreign wgpu_native;
+	wgpuBindGroupRelease :: (
+		bindGroup: WGPUBindGroup
+	) -> void #foreign wgpu_native;
+	wgpuRenderPipelineGetBindGroupLayout :: (
+		pipeline: WGPURenderPipeline,
+		index: u32
+	) -> WGPUBindGroupLayout #foreign wgpu_native;
+	wgpuRenderPassEncoderSetBindGroup :: (
+		pass: WGPURenderPassEncoder,
+		index: u32,
+		bindGroup: WGPUBindGroup,
+		dynamicOffsetCount: u64,
+		dynamicOffsets: *u32
+	) -> void #foreign wgpu_native;
+	wgpuRenderPassEncoderSetVertexBuffer :: (
+		pass: WGPURenderPassEncoder,
+		slot: u32,
+		buffer: WGPUBuffer,
+		offset: u64,
+		size: u64
+	) -> void #foreign wgpu_native;
+	wgpuDeviceCreateTexture :: (
+		device: WGPUDevice,
+		descriptor: *WGPUTextureDescriptor
+	) -> WGPUTexture #foreign wgpu_native;
+	wgpuTextureRelease :: (
+		texture: WGPUTexture
+	) -> void #foreign wgpu_native;
+	wgpuDeviceCreateSampler :: (
+		device: WGPUDevice,
+		descriptor: *WGPUSamplerDescriptor
+	) -> WGPUSampler #foreign wgpu_native;
+	wgpuSamplerRelease :: (
+		sampler: WGPUSampler
+	) -> void #foreign wgpu_native;
 	webgpu_meta_run :: () -> string {
 		sb: String_Builder;
 

@@ -1642,7 +1642,7 @@ render_robots :: (scene: Scene.Scene, shaders: Shaders) {
 
 render_within_zones :: (scene: Scene.Scene, shaders: Shaders) {
 	store := scene.store;
-	set_uniform(*store.instanced_texture_shader, "colormap", store.prop_colormap, 0);
+	// set_uniform(*store.instanced_texture_shader, "colormap", store.prop_colormap, 0);
 
 	Instance :: struct {
 		M: M4f;
@@ -1974,7 +1974,7 @@ render_skulls :: (scene: Scene.Scene, shaders: Shaders) {
 
 render_terrain_props :: (scene: Scene.Scene, props: [] Scene.Prop, shaders: Shaders) {
 	store := scene.store;
-	set_uniform(*store.instanced_texture_shader, "colormap", store.prop_colormap, 0);
+	// set_uniform(*store.instanced_texture_shader, "colormap", store.prop_colormap, 0);
 
 	max_id := 0;
 	for props

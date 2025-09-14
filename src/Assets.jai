@@ -141,10 +141,10 @@ Image :: struct {
 		image.data.data = STB.stbi_load_from_memory(
 			xx data.data, xx data.count, *x, *y, *c, xx channels
 		);
-		image.data.count = x * y * c;
+		image.data.count = x * y * channels;
 		image.width = xx x;
 		image.height = xx y;
-		image.channels = xx c;
+		image.channels = xx channels;
 		return image;
 	}
 }
@@ -324,6 +324,8 @@ FORMAT;
 #insert #run embed_data("UNIT_CYLINDER_OBJ", "unit_cylinder.obj", #filepath);
 #insert #run embed_data("UNIT_SPHERE_OBJ", "unit_sphere.obj", #filepath);
 
+#insert #run embed_data("GEOMETRY_WGSL", "Shader/geometry.wgsl", #filepath);
+
 Prop_Id :: enum {
 	TERRAIN_TREE_SNOW_A :: 0;
 	TERRAIN_TREE_SNOW_B;
@@ -455,6 +457,7 @@ load_everything :: () {
 			"ROBOT_A5_OBJ",
 			"UNIT_CYLINDER_OBJ",
 			"UNIT_SPHERE_OBJ",
+			"GEOMETRY_WGSL"
 		];
 		#insert #run -> string {
 			sb: String_Builder;
