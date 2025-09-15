@@ -1,7 +1,8 @@
 // raddbg 0.9.21 project file
 
-recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Assets.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/WRender.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Algebra.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Assets.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Graphics.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_game.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/win32_platform.jai"
@@ -12,7 +13,6 @@ recent_file: path: "rustc/17067e9ac6d7ecb70e50f92c1944e545188d2359/library/std/s
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Scene.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Communication.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Render.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Algebra.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Runtime_Support.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Rand.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Preload.jai"
@@ -70,11 +70,6 @@ target:
 }
 breakpoint:
 {
-  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/WRender.jai:13:1"
-  hit_count: 0
-}
-breakpoint:
-{
-  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Assets.jai:137:1"
+  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/WRender.jai:542:1"
   hit_count: 1
 }

@@ -1,7 +1,6 @@
 #import "Scene";
 #import "Basic";
 #import "Algebra";
-#import "Store";
 Assets :: #import "Assets";
 #import "String";
 #import "Hash_Table";

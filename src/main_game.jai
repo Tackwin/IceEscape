@@ -182,7 +182,6 @@ main_webgpu :: () {
 	state: State;
 	state.platform = *platform;
 	scene := *state.scene;
-	scene.store = *store;
 	{
 		connect: Command.Connect;
 		connect.token =  platform.get_token();
@@ -467,7 +466,7 @@ main_webgpu :: () {
 			}
 		}
 
-		WRender.render(*framegraph, scene);
+		WRender.render(*framegraph, scene, store);
 
 		context.gpu.surfacePresent(context.graphics.surface);
 		platform.end_frame();
@@ -499,7 +498,6 @@ main :: () {
 	state: State;
 	state.platform = *platform;
 	scene := *state.scene;
-	scene.store = *store;
 	{
 		connect: Command.Connect;
 		connect.token =  platform.get_token();

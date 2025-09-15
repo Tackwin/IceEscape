@@ -6,8 +6,14 @@ Platform :: #import "Platform";
 Scene :: #import "Scene";
 #import "String";
 #import "Basic";
+#import "Algebra";
 
 #scope_export
+
+Colormaps_Rect :: struct {
+	prop    :: V4f.{ 0 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
+	vehicle :: V4f.{ 1 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
+}
 
 Model_Id :: enum {
 	Racer :: 1;
@@ -33,6 +39,7 @@ Model_Id :: enum {
 	Shuriken :: 21;
 	Spirit :: 22;
 }
+Model_Id_Count :: #run enum_highest_value(Model_Id) + 1;
 
 Texture_Id :: enum {
 	Ice :: 0;
@@ -58,6 +65,7 @@ Shader_Id :: enum {
 
 Store :: struct {
 	geometry_shader: WRender.WShader;
+	geometry_shadow_shader: WRender.WShader;
 
 	terrain_tree_snow_a: WRender.Model;
 	terrain_tree_snow_b: WRender.Model;
@@ -73,9 +81,36 @@ Store :: struct {
 	rock_small: WRender.Model;
 	rock_medium: WRender.Model;
 	rock_large: WRender.Model;
+	tile_model: WRender.Model;
 
-	prop_colormap: WRender.WTexture;
+	racer_model: WRender.Model;
+	suv_model: WRender.Model;
+	speedster_model: WRender.Model;
+	drag_racer_model: WRender.Model;
+	monster_truck_model: WRender.Model;
+	vintage_racer_model: WRender.Model;
+	boat_row_model: WRender.Model;
+	boat_fishing_model: WRender.Model;
+	taxi_model: WRender.Model;
+	police_model: WRender.Model;
+	ambulance_model: WRender.Model;
+	spaceship_model: WRender.Model;
+	tombstone_model: WRender.Model;
+	skull_model: WRender.Model;
+	coin_model: WRender.Model;
+	key_model: WRender.Model;
+	mark_model: WRender.Model;
+	gate_model: WRender.Model;
+	gate_close_model: WRender.Model;
+	gate_finish_model: WRender.Model;
+	gate_finish_close_model: WRender.Model;
+	shuriken_model: WRender.Model;
+	spirit_model: WRender.Model;
 
+
+	colormaps: WRender.WTexture;
+	terrain_tile_albedo: WRender.WTexture;
+	terrain_tile_normal: WRender.WTexture;
 
 	tile_snow_albedo_png: Assets.Image;
 	tile_snow_normal_png: Assets.Image;
@@ -95,7 +130,6 @@ Store :: struct {
 
 	ui_atlas_png: Assets.Image;
 	tile_atlas_png: Assets.Image;
-	prop_colormap_png: Assets.Image;
 
 	skybox_ski_png: Assets.Image;
 	skybox_ski: Render.Texture;
@@ -157,11 +191,9 @@ Store :: struct {
 	flag_geometry: Render.Geometry;
 	flag_down_geometry: Render.Geometry;
 	player_geometry: Render.Geometry;
-	racer_geometry: Render.Geometry;
 	drag_racer_geometry: Render.Geometry;
 	vintage_racer_geometry: Render.Geometry;
 	monster_truck_geometry: Render.Geometry;
-	suv_geometry: Render.Geometry;
 	boat_row_geometry: Render.Geometry;
 	boat_fishing_geometry: Render.Geometry;
 	taxi_geometry: Render.Geometry;
@@ -170,7 +202,6 @@ Store :: struct {
 	spaceship_geometry: Render.Geometry;
 	speedster_geometry: Render.Geometry;
 	tombstone_geometry: Render.Geometry;
-	tile_geometry: Render.Geometry;
 	skull_geometry: Render.Geometry;
 	coin_geometry: Render.Geometry;
 	key_geometry: Render.Geometry;
@@ -234,31 +265,34 @@ get_number_geometry :: (store: Store, digit: int) -> *Render.Geometry {
 get_geometry :: (store: Store, id: int) -> *Render.Geometry {
 	return get_geometry(store, id.(Model_Id));
 }
-get_geometry :: (store: Store, id: Model_Id) -> *Render.Geometry {
+
+get_model :: (store: Store, id: Model_Id) -> *WRender.Model {
 	if #complete id == {
-		case .Racer; return *store.racer_geometry;
-		case .SUV; return *store.suv_geometry;
-		case .Speedster; return *store.speedster_geometry;
-		case .Tombstone; return *store.tombstone_geometry;
-		case .Tile; return *store.tile_geometry;
-		case .Skull; return *store.skull_geometry;
-		case .Coin; return *store.coin_geometry;
-		case .Key; return *store.key_geometry;
-		case .Mark; return *store.mark_geometry;
-		case .Gate; return *store.gate_geometry;
-		case .Gate_Close; return *store.gate_close_geometry;
-		case .Shuriken; return *store.shuriken_geometry;
-		case .Spirit; return *store.spirit_geometry;
-		case .Drag_Racer; return *store.drag_racer_geometry;
-		case .Monster_Truck; return *store.monster_truck_geometry;
-		case .Vintage_Racer; return *store.vintage_racer_geometry;
-		case .Boat_Row; return *store.boat_row_geometry;
-		case .Boat_Fishing; return *store.boat_fishing_geometry;
-		case .Taxi; return *store.taxi_geometry;
-		case .Police; return *store.police_geometry;
-		case .Ambulance; return *store.ambulance_geometry;
-		case .Spaceship; return *store.spaceship_geometry;
+		case .Racer; return *store.racer_model;
+		case .SUV; return *store.suv_model;
+		case .Tile; return *store.tile_model;
+		case .Speedster; return *store.speedster_model;
+		case .Tombstone; return *store.tombstone_model;
+		case .Skull; return *store.skull_model;
+		case .Coin; return *store.coin_model;
+		case .Key; return *store.key_model;
+		case .Mark; return *store.mark_model;
+		case .Gate; return *store.gate_model;
+		case .Gate_Close; return *store.gate_close_model;
+		case .Shuriken; return *store.shuriken_model;
+		case .Spirit; return *store.spirit_model;
+		case .Drag_Racer; return *store.drag_racer_model;
+		case .Monster_Truck; return *store.monster_truck_model;
+		case .Vintage_Racer; return *store.vintage_racer_model;
+		case .Boat_Row; return *store.boat_row_model;
+		case .Boat_Fishing; return *store.boat_fishing_model;
+		case .Taxi; return *store.taxi_model;
+		case .Police; return *store.police_model;
+		case .Ambulance; return *store.ambulance_model;
+		case .Spaceship; return *store.spaceship_model;
 	}
+}
+get_geometry :: (store: Store, id: Model_Id) -> *Render.Geometry {
 	return null;
 }
 get_axes_geometry :: (store: Store, i: int) -> *Render.Geometry {
@@ -276,6 +310,27 @@ get_axes_geometry :: (store: Store, i: int) -> *Render.Geometry {
 		return *store.robot_a5_geometry;
 	}
 	return null;
+}
+
+get_tile_rect :: (id: Scene.Tile.Kind) -> V4f {
+	rect: V4f;
+	if #complete id == {
+		case .None;
+			rect = V4f.{ 0.0, 0.0, 0.0, 0.0 } / 4.0;
+		case .Ice;
+			rect = V4f.{ 1.0, 3.0, 1.0, 1.0 } / 4.0;
+		case .Slippy_Ice;
+			rect = V4f.{ 0.0, 2.0, 1.0, 1.0 } / 4.0;
+		case .Grass;
+			rect = V4f.{ 0.0, 3.0, 1.0, 1.0 } / 4.0;
+		case .Dirt;
+			rect = V4f.{ 1.0, 1.0, 1.0, 1.0 } / 4.0;
+	}
+	rect.x += 0.5 / 512.0;
+	rect.y += 0.5 / 512.0;
+	rect.z -= 1.0 / 512.0;
+	rect.w -= 1.0 / 512.0;
+	return rect;
 }
 
 get_albedo :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
@@ -411,54 +466,79 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.geometry_shader.code = xx Assets.GEOMETRY_WGSL;
 	store.geometry_shader.input = type_info(WRender.WFramegraph.Vertex);
 
-	store.terrain_tree_snow_a = WRender.Model.make_from_obj(
-		Assets.TERRAIN_TREE_SNOW_A, "terrain_tree_snow_a.obj"
-	);
-	store.terrain_tree_snow_b = WRender.Model.make_from_obj(
-		Assets.TERRAIN_TREE_SNOW_B, "terrain_tree_snow_b.obj"
-	);
-	store.terrain_tree_snow_c = WRender.Model.make_from_obj(
-		Assets.TERRAIN_TREE_SNOW_C, "terrain_tree_snow_c.obj"
-	);
-	store.terrain_snowman = WRender.Model.make_from_obj(
-		Assets.TERRAIN_SNOWMAN, "terrain_snowman.obj"
-	);
-	store.terrain_snowman_hat = WRender.Model.make_from_obj(
-		Assets.TERRAIN_SNOWMAN_HAT, "terrain_snowman_hat.obj"
-	);
-	store.terrain_snow_flat = WRender.Model.make_from_obj(
-		Assets.TERRAIN_SNOW_FLAT, "terrain_snow_flat.obj"
-	);
-	store.terrain_snow_flat_large = WRender.Model.make_from_obj(
-		Assets.TERRAIN_SNOW_FLAT_LARGE, "terrain_snow_flat_large.obj"
-	);
-	store.terrain_snow_pile = WRender.Model.make_from_obj(
-		Assets.TERRAIN_SNOW_PILE, "terrain_snow_pile.obj"
-	);
-	store.terrain_snowflake_a = WRender.Model.make_from_obj(
-		Assets.TERRAIN_SNOWFLAKE_A, "terrain_snowflake_a.obj"
-	);
-	store.terrain_snowflake_b = WRender.Model.make_from_obj(
-		Assets.TERRAIN_SNOWFLAKE_B, "terrain_snowflake_b.obj"
-	);
-	store.terrain_snowflake_c = WRender.Model.make_from_obj(
-		Assets.TERRAIN_SNOWFLAKE_C, "terrain_snowflake_c.obj"
-	);
-	store.rock_small = WRender.Model.make_from_obj(
-		Assets.ROCK_SMALL, "rock_small.obj"
-	);
-	store.rock_medium = WRender.Model.make_from_obj(
-		Assets.ROCK_MEDIUM, "rock_medium.obj"
-	);
-	store.rock_large = WRender.Model.make_from_obj(
-		Assets.ROCK_LARGE, "rock_large.obj"
-	);
+	store.geometry_shadow_shader.code = xx Assets.GEOMETRY_SHADOW_WGSL;
+	store.geometry_shadow_shader.input = type_info(WRender.WFramegraph.Vertex);
 
-	store.prop_colormap_png = Assets.Image.make_from_memory(Assets.PROP_COLORMAP, 4);
-	store.prop_colormap = WRender.WTexture.make_from_image(
-		store.prop_colormap_png, "prop_colormap"
-	);
+	store.terrain_tree_snow_a =
+		WRender.Model.make_from_obj(Assets.TERRAIN_TREE_SNOW_A, "terrain_tree_snow_a.obj");
+	store.terrain_tree_snow_b =
+		WRender.Model.make_from_obj(Assets.TERRAIN_TREE_SNOW_B, "terrain_tree_snow_b.obj");
+	store.terrain_tree_snow_c =
+		WRender.Model.make_from_obj(Assets.TERRAIN_TREE_SNOW_C, "terrain_tree_snow_c.obj");
+	store.terrain_snowman =
+		WRender.Model.make_from_obj(Assets.TERRAIN_SNOWMAN, "terrain_snowman.obj");
+	store.terrain_snowman_hat =
+		WRender.Model.make_from_obj(Assets.TERRAIN_SNOWMAN_HAT, "terrain_snowman_hat.obj");
+	store.terrain_snow_flat =
+		WRender.Model.make_from_obj(Assets.TERRAIN_SNOW_FLAT, "terrain_snow_flat.obj");
+	store.terrain_snow_flat_large =
+		WRender.Model.make_from_obj(Assets.TERRAIN_SNOW_FLAT_LARGE, "terrain_snow_flat_large.obj");
+	store.terrain_snow_pile =
+		WRender.Model.make_from_obj(Assets.TERRAIN_SNOW_PILE, "terrain_snow_pile.obj");
+	store.terrain_snowflake_a =
+		WRender.Model.make_from_obj(Assets.TERRAIN_SNOWFLAKE_A, "terrain_snowflake_a.obj");
+	store.terrain_snowflake_b =
+		WRender.Model.make_from_obj(Assets.TERRAIN_SNOWFLAKE_B, "terrain_snowflake_b.obj");
+	store.terrain_snowflake_c =
+		WRender.Model.make_from_obj(Assets.TERRAIN_SNOWFLAKE_C, "terrain_snowflake_c.obj");
+	store.rock_small = WRender.Model.make_from_obj(Assets.ROCK_SMALL, "rock_small.obj");
+	store.rock_medium = WRender.Model.make_from_obj(Assets.ROCK_MEDIUM, "rock_medium.obj");
+	store.rock_large = WRender.Model.make_from_obj(Assets.ROCK_LARGE, "rock_large.obj");
+	store.tile_model = WRender.Model.make_from_obj(Assets.TILE_OBJ, "tile.obj");
 
+	prop_colormap_png := Assets.Image.make_from_memory(Assets.COLORMAPS_PNG, 4);
+	defer {
+		Assets.Image.free(*prop_colormap_png);
+	}
+	store.colormaps = WRender.WTexture.make_from_image(prop_colormap_png, "colormaps");
+
+	terrain_tile_albedo_png := Assets.Image.make_from_memory(Assets.TERRAIN_TILE_ALBEDO_PNG, 4);
+	defer {
+		Assets.Image.free(*terrain_tile_albedo_png);
+	}
+	store.terrain_tile_albedo =
+		WRender.WTexture.make_from_image(terrain_tile_albedo_png, "terrain_tile_albedo");
+	terrain_tile_normal_png := Assets.Image.make_from_memory(Assets.TERRAIN_TILE_NORMAL_PNG, 4);
+	defer {
+		Assets.Image.free(*terrain_tile_normal_png);
+	}
+	store.terrain_tile_normal =
+		WRender.WTexture.make_from_image(terrain_tile_normal_png, "terrain_tile_normal");
+
+	store.racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_RACER_OBJ);
+	store.suv_model = WRender.Model.make_from_obj(Assets.VEHICLE_SUV_OBJ);
+	store.speedster_model = WRender.Model.make_from_obj(Assets.VEHICLE_SPEEDSTER_OBJ);
+	store.drag_racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_DRAG_RACER_OBJ);
+	store.monster_truck_model = WRender.Model.make_from_obj(Assets.VEHICLE_MONSTER_TRUCK_OBJ);
+	store.vintage_racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_VINTAGE_RACER_OBJ);
+	store.boat_row_model = WRender.Model.make_from_obj(Assets.BOAT_ROW_OBJ);
+	store.boat_fishing_model = WRender.Model.make_from_obj(Assets.BOAT_FISHING_OBJ);
+	store.taxi_model = WRender.Model.make_from_obj(Assets.TAXI_OBJ);
+	store.police_model = WRender.Model.make_from_obj(Assets.POLICE_OBJ);
+	store.ambulance_model = WRender.Model.make_from_obj(Assets.AMBULANCE_OBJ);
+	store.spaceship_model = WRender.Model.make_from_obj(Assets.SPACESHIP_OBJ);
+	store.tombstone_model = WRender.Model.make_from_obj(Assets.TOMBSTONE_OBJ);
+	store.skull_model = WRender.Model.make_from_obj(Assets.SKULL_OBJ);
+	store.coin_model = WRender.Model.make_from_obj(Assets.COIN_OBJ);
+	store.key_model = WRender.Model.make_from_obj(Assets.KEY_OBJ);
+	store.mark_model = WRender.Model.make_from_obj(Assets.MARK_OBJ);
+	store.gate_model = WRender.Model.make_from_obj(Assets.GATE_OBJ);
+	store.gate_close_model = WRender.Model.make_from_obj(Assets.GATE_CLOSE_OBJ);
+	store.spirit_model = WRender.Model.make_from_obj(Assets.SPIRIT_OBJ);
+	store.shuriken_model = WRender.Model.make_from_obj(Assets.SHURIKEN_OBJ);
+	store.gate_finish_model = WRender.Model.make_from_obj(Assets.GATE_FINISH_OBJ);
+	store.gate_finish_close_model = WRender.Model.make_from_obj(Assets.GATE_FINISH_CLOSE_OBJ);
+	
 	// store.ui_atlas_png = Assets.Image.make_from_memory(Assets.ui_atlas_png, 4);
 	// store.ui_atlas = Render.Texture.make_from_image(store.ui_atlas_png);
 	

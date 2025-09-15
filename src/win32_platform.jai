@@ -359,7 +359,7 @@ init_platform :: () -> Platform {
 		SDL_WINDOWPOS_CENTERED,
 		1366,
 		768,
-		SDL_WINDOW_RESIZABLE
+		SDL_WINDOW_SHOWN
 	);
 
 	if sdl_window == null {

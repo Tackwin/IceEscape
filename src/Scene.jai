@@ -2,12 +2,10 @@
 #import "Math";
 #import "Basic";
 #import "String";
-Render :: #import "Render";
 #import "Tagged_Union";
 #import "Communication";
 #import "Pool";
 #import "Hash_Table";
-#import "Store";
 #import "Terrain";
 Rand :: #import "Rand";
 
@@ -25,8 +23,6 @@ Scene :: struct {
 	next_id := -1;
 
 	is_server := false;
-
-	store: *Store;
 	camera: Camera;
 
 	// >TODO put all allocation relating to the map in the same pool.
@@ -833,12 +829,12 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					clamp(alpha, 0.0, 1.0)
 				};
 
-				Render.push_late_quad_screen(
-					.{ 0, 0 },
-					Render.IM.display_size,
-					color,
-					-1.0
-				);
+				// Render.push_late_quad_screen(
+				// 	.{ 0, 0 },
+				// 	Render.IM.display_size,
+				// 	color,
+				// 	-1.0
+				// );
 			} else {
 				scene.state = .Wipe_Fade_Out;
 				restart(scene);
@@ -857,12 +853,12 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					clamp(alpha, 0.0, 1.0)
 				};
 
-				Render.push_late_quad_screen(
-					.{ 0, 0 },
-					Render.IM.display_size,
-					color,
-					-1.0
-				);
+				// Render.push_late_quad_screen(
+				// 	.{ 0, 0 },
+				// 	Render.IM.display_size,
+				// 	color,
+				// 	-1.0
+				// );
 			}
 	}
 }
@@ -1687,11 +1683,6 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		player := find_by_player_id(scene, died.player_id);
 		if player
 		{
-			if player.id == scene.controlled_player_id {
-				scene.store.loser_ogg.volume = 0.1;
-				context._platform.play_audio(*scene.store.loser_ogg);
-			}
-
 			player.server.dead = true;
 			tombstone: Tombstone;
 			tombstone.player_id = died.player_id;

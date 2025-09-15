@@ -1344,7 +1344,7 @@ create_framegraph :: (framegraph: *Framegraph, store: *Store.Store) {
 render :: (
 	framegraph: Framegraph, scene: Scene.Scene, camera_matrix: Camera_Matrix
 ) {
-	store := scene.store;
+	store: *Store.Store;
 
 	shaders: Shaders;
 	shaders.tile_shader = *store.tile_shader;
@@ -1481,7 +1481,7 @@ render :: (
 }
 
 render_explosions :: (scene: Scene.Scene, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 
 	Instance :: struct {
 		M: M4f;
@@ -1517,7 +1517,7 @@ render_explosions :: (scene: Scene.Scene, shaders: Shaders) {
 }
 
 render_robots :: (scene: Scene.Scene, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 
 	Instance :: struct {
 		M: M4f;
@@ -1641,7 +1641,7 @@ render_robots :: (scene: Scene.Scene, shaders: Shaders) {
 }
 
 render_within_zones :: (scene: Scene.Scene, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 	// set_uniform(*store.instanced_texture_shader, "colormap", store.prop_colormap, 0);
 
 	Instance :: struct {
@@ -1731,7 +1731,7 @@ render_within_zones :: (scene: Scene.Scene, shaders: Shaders) {
 }
 
 render_particles :: (scene: Scene.Scene, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 
 	Instance :: struct {
 		M: M4f;
@@ -1776,13 +1776,13 @@ render_particles :: (scene: Scene.Scene, shaders: Shaders) {
 }
 
 render_skybox :: (scene: Scene.Scene) {
-	store := scene.store;
+	store: *Store.Store;
 	set_uniform(*store.skybox_shader, "skybox", store.skybox_ski, 0);
 	render(store.skybox_geometry, store.skybox_shader);
 }
 
 render_flags :: (scene: Scene.Scene, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 	set_uniform(shaders.textured_shader, "texture_sampler", store.vehicle_colormap, 0);
 	for * scene.flags {
 		M := M4f.translate(it.position);
@@ -1825,7 +1825,7 @@ render_flags :: (scene: Scene.Scene, shaders: Shaders) {
 }
 
 render_keys :: (scene: Scene.Scene, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 	set_uniform(shaders.textured_shader, "texture_sampler", store.vehicle_colormap, 0);
 	for * scene.keys {
 		p := it.client.position;
@@ -1839,7 +1839,7 @@ render_keys :: (scene: Scene.Scene, shaders: Shaders) {
 }
 
 render_tombstones :: (scene: Scene.Scene, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 	set_uniform(shaders.textured_shader, "texture_sampler", store.vehicle_colormap, 0);
 	for * scene.tombstones {
 		M := M4f.translate(it.position);
@@ -1849,7 +1849,7 @@ render_tombstones :: (scene: Scene.Scene, shaders: Shaders) {
 }
 
 render_gates :: (scene: Scene.Scene, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 	set_uniform(shaders.textured_shader, "texture_sampler", store.vehicle_colormap, 0);
 	for * scene.gates {
 		R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, it.direction));
@@ -1874,12 +1874,12 @@ render_gates :: (scene: Scene.Scene, shaders: Shaders) {
 }
 
 render_standin :: (scene: Scene.Scene, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 	for * scene.stand_in {
 		M := M4f.translate(it.position);
 		M = M * to_rotation_matrix(it.orientation);
 		set_uniform(shaders.textured_shader, "M", M);
-		geometry := Store.get_geometry(scene.store, it.model_id);
+		geometry := Store.get_geometry(.{}, it.model_id);
 		if !geometry {
 			geometry = *store.spirit_geometry;
 		}
@@ -1889,7 +1889,7 @@ render_standin :: (scene: Scene.Scene, shaders: Shaders) {
 }
 
 render_players :: (scene: Scene.Scene, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 	colors :: V3f.[
 		V3f.{ 1.0, 0.8, 0.8 },
 		V3f.{ 0.8, 1.0, 0.8 },
@@ -1913,7 +1913,7 @@ render_players :: (scene: Scene.Scene, shaders: Shaders) {
 			// set_uniform(*scene.texture_shader, "tint", colors[it.id % colors.count]);
 			set_uniform(shaders.textured_shader, "texture_sampler", store.vehicle_colormap, 0);
 
-			geometry := Store.get_geometry(scene.store, it.server.model_id);
+			geometry := Store.get_geometry(.{}, it.server.model_id);
 			if !geometry {
 				geometry = *store.spirit_geometry;
 			}
@@ -1925,7 +1925,7 @@ render_players :: (scene: Scene.Scene, shaders: Shaders) {
 }
 
 render_shurikens :: (scene: Scene.Scene, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 	instanced := NewArray(
 		scene.shurikens.count, Geometry.Instance_Data, initialized = false,, temp
 	);
@@ -1952,7 +1952,7 @@ render_shurikens :: (scene: Scene.Scene, shaders: Shaders) {
 }
 
 render_skulls :: (scene: Scene.Scene, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 	instanced := NewArray(
 		scene.skulls.count, Geometry.Instance_Data, initialized = false,, temp
 	);
@@ -1973,7 +1973,7 @@ render_skulls :: (scene: Scene.Scene, shaders: Shaders) {
 }
 
 render_terrain_props :: (scene: Scene.Scene, props: [] Scene.Prop, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 	// set_uniform(*store.instanced_texture_shader, "colormap", store.prop_colormap, 0);
 
 	max_id := 0;
@@ -2020,7 +2020,7 @@ render_terrain_props :: (scene: Scene.Scene, props: [] Scene.Prop, shaders: Shad
 }
 
 render_terrain :: (scene: Scene.Scene, terrain: *Scene.Terrain, shaders: Shaders) {
-	store := scene.store;
+	store: *Store.Store;
 	if terrain.tiles_count.x <= 0 || terrain.tiles_count.y <= 0
 		return;
 
@@ -2058,15 +2058,15 @@ render_terrain :: (scene: Scene.Scene, terrain: *Scene.Terrain, shaders: Shaders
 		instance.M = M4f.translate(pos);
 	}
 
-	add_instance(*store.tile_geometry, .{
-		data = xx instanced.data,
-		count = terrain.tiles.count * size_of(Geometry.Instance_Data)
-	});
+	// add_instance(*store.tile_geometry, .{
+	// 	data = xx instanced.data,
+	// 	count = terrain.tiles.count * size_of(Geometry.Instance_Data)
+	// });
 
-	context.rhi.glBindVertexArray(store.tile_geometry.gpu_object);
-	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.tile_geometry.gpu_buffer);
-	cursor := setup_vertex_attributes(0, Geometry.Vertex_Data);
-	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.tile_geometry.instanced_buffer);
-	setup_instance_attributes(cursor, Instance);
-	render_instanced(store.tile_geometry, shaders.tile_shader, terrain.tiles.count);
+	// context.rhi.glBindVertexArray(store.tile_geometry.gpu_object);
+	// context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.tile_geometry.gpu_buffer);
+	// cursor := setup_vertex_attributes(0, Geometry.Vertex_Data);
+	// context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.tile_geometry.instanced_buffer);
+	// setup_instance_attributes(cursor, Instance);
+	// render_instanced(store.tile_geometry, shaders.tile_shader, terrain.tiles.count);
 }

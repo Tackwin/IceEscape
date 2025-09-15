@@ -138,6 +138,7 @@ Image :: struct {
 		x: s32;
 		y: s32;
 		c: s32;
+		STB.stbi_set_flip_vertically_on_load(1);
 		image.data.data = STB.stbi_load_from_memory(
 			xx data.data, xx data.count, *x, *y, *c, xx channels
 		);
@@ -146,6 +147,14 @@ Image :: struct {
 		image.height = xx y;
 		image.channels = xx channels;
 		return image;
+	}
+
+	free :: (image: *Image) {
+		if image.data.data {
+			STB.stbi_image_free(image.data.data);
+			image.data.data = null;
+			image.data.count = 0;
+		}
 	}
 }
 
@@ -325,6 +334,10 @@ FORMAT;
 #insert #run embed_data("UNIT_SPHERE_OBJ", "unit_sphere.obj", #filepath);
 
 #insert #run embed_data("GEOMETRY_WGSL", "Shader/geometry.wgsl", #filepath);
+#insert #run embed_data("GEOMETRY_SHADOW_WGSL", "Shader/geometry_shadow.wgsl", #filepath);
+#insert #run embed_data("COLORMAPS_PNG", "colormaps.png", #filepath);
+#insert #run embed_data("TERRAIN_TILE_ALBEDO_PNG", "tile_albedo.png", #filepath);
+#insert #run embed_data("TERRAIN_TILE_NORMAL_PNG", "tile_normal.png", #filepath);
 
 Prop_Id :: enum {
 	TERRAIN_TREE_SNOW_A :: 0;
@@ -457,7 +470,10 @@ load_everything :: () {
 			"ROBOT_A5_OBJ",
 			"UNIT_CYLINDER_OBJ",
 			"UNIT_SPHERE_OBJ",
-			"GEOMETRY_WGSL"
+			"GEOMETRY_WGSL",
+			"COLORMAPS_PNG",
+			"TERRAIN_TILE_ALBEDO_PNG",
+			"TERRAIN_TILE_NORMAL_PNG",
 		];
 		#insert #run -> string {
 			sb: String_Builder;
