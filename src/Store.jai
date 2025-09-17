@@ -64,6 +64,7 @@ Shader_Id :: enum {
 }
 
 Store :: struct {
+	present_shader: WRender.WShader;
 	geometry_shader: WRender.WShader;
 	geometry_shadow_shader: WRender.WShader;
 
@@ -468,6 +469,9 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 
 	store.geometry_shadow_shader.code = xx Assets.GEOMETRY_SHADOW_WGSL;
 	store.geometry_shadow_shader.input = type_info(WRender.WFramegraph.Vertex);
+
+	store.present_shader.code = xx Assets.PRESENT_WGSL;
+	store.present_shader.input = .{};
 
 	store.terrain_tree_snow_a =
 		WRender.Model.make_from_obj(Assets.TERRAIN_TREE_SNOW_A, "terrain_tree_snow_a.obj");

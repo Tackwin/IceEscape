@@ -32,6 +32,7 @@ GPU_proc :: struct {
     renderPassEncoderEnd: WGPUProcRenderPassEncoderEnd = null;
     renderPassEncoderRelease: WGPUProcRenderPassEncoderRelease = null;
     renderPassEncoderSetVertexBuffer: WGPUProcRenderPassEncoderSetVertexBuffer = null;
+    renderPassEncoderSetViewport: WGPUProcRenderPassEncoderSetViewport = null;
     surfaceGetCurrentTexture: WGPUProcSurfaceGetCurrentTexture = null;
     textureCreateView: WGPUProcTextureCreateView = null;
     textureViewRelease: WGPUProcTextureViewRelease = null;
@@ -47,4 +48,6 @@ GPU_proc :: struct {
     textureRelease: WGPUProcTextureRelease = null;
     deviceCreateSampler: WGPUProcDeviceCreateSampler = null;
     samplerRelease: WGPUProcSamplerRelease = null;
+    deviceCreatePipelineLayout: WGPUProcDeviceCreatePipelineLayout = null;
+    pipelineLayoutRelease: WGPUProcPipelineLayoutRelease = null;
 }

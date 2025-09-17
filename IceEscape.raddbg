@@ -1,12 +1,13 @@
 // raddbg 0.9.21 project file
 
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/WRender.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_game.jai"
+recent_file: path: "rustc/17067e9ac6d7ecb70e50f92c1944e545188d2359/library/std/src/sys/backtrace.rs"
+recent_file: path: "rustc/17067e9ac6d7ecb70e50f92c1944e545188d2359/library/std/src/panicking.rs"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Algebra.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Assets.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Graphics.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_game.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/win32_platform.jai"
-recent_file: path: "rustc/17067e9ac6d7ecb70e50f92c1944e545188d2359/library/std/src/panicking.rs"
 recent_file: path: "rustc/17067e9ac6d7ecb70e50f92c1944e545188d2359/library/panic_unwind/src/seh.rs"
 recent_file: path: "rustc/17067e9ac6d7ecb70e50f92c1944e545188d2359/library/std/src/sys/alloc/windows.rs"
 recent_file: path: "rustc/17067e9ac6d7ecb70e50f92c1944e545188d2359/library/std/src/alloc.rs"
@@ -70,6 +71,6 @@ target:
 }
 breakpoint:
 {
-  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/WRender.jai:542:1"
-  hit_count: 1
+  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/WRender.jai:991:1"
+  hit_count: 0
 }

@@ -613,6 +613,22 @@ init_platform :: () -> Platform {
 	wgpuSamplerRelease :: (
 		sampler: WGPUSampler
 	) -> void #foreign wgpu_native;
+	wgpuDeviceCreatePipelineLayout :: (
+		device: WGPUDevice,
+		descriptor: *WGPUPipelineLayoutDescriptor
+	) -> WGPUPipelineLayout #foreign wgpu_native;
+	wgpuPipelineLayoutRelease :: (
+		pipelineLayout: WGPUPipelineLayout
+	) -> void #foreign wgpu_native;
+	wgpuRenderPassEncoderSetViewport :: (
+		pass: WGPURenderPassEncoder,
+		x: float32,
+		y: float32,
+		width: float32,
+		height: float32,
+		minDepth: float32,
+		maxDepth: float32
+	) -> void #foreign wgpu_native;
 	webgpu_meta_run :: () -> string {
 		sb: String_Builder;
 

@@ -1032,6 +1032,59 @@ wasmTextureRelease :: (
 	jsTextureRelease :: (params: *void, returns: *void) #foreign;
 	jsTextureRelease(*texture, null);
 }
+wasmDeviceCreatePipelineLayout :: (
+	device: WGPUDevice,
+	descriptor: *WGPUPipelineLayoutDescriptor
+) -> WGPUPipelineLayout #c_call {
+	jsDeviceCreatePipelineLayout :: (params: *void, returns: *void) #foreign;
+	pipeline_layout: WGPUPipelineLayout;
+
+	params: struct {
+		device: WGPUDevice;
+		descriptor: *WGPUPipelineLayoutDescriptor;
+	};
+	params.device = device;
+	params.descriptor = descriptor;
+
+	jsDeviceCreatePipelineLayout(*params, *pipeline_layout);
+	return pipeline_layout;
+}
+wasmPipelineLayoutRelease :: (
+	layout: WGPUPipelineLayout
+) -> void #c_call {
+	jsPipelineLayoutRelease :: (params: *void, returns: *void) #foreign;
+	jsPipelineLayoutRelease(*layout, null);
+}
+wasmRenderPassEncoderSetViewport :: (
+	pass: WGPURenderPassEncoder,
+	x: float32,
+	y: float32,
+	width: float32,
+	height: float32,
+	minDepth: float32,
+	maxDepth: float32
+) -> void #c_call {
+	jsRenderPassEncoderSetViewport :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		pass: WGPURenderPassEncoder;
+		x: float32;
+		y: float32;
+		width: float32;
+		height: float32;
+		minDepth: float32;
+		maxDepth: float32;
+	};
+	params.pass = pass;
+	params.x = x;
+	params.y = y;
+	params.width = width;
+	params.height = height;
+	params.minDepth = minDepth;
+	params.maxDepth = maxDepth;
+
+	jsRenderPassEncoderSetViewport(*params, null);
+}
 entries :: Entry.[
 	.{ "createInstance", WGPUProcCreateInstance, "wasmCreateInstance" },
 	.{ "myInstanceCreateSurface", WGPUProcInstanceCreateSurface, "wasmInstanceCreateSurface" },
@@ -1080,6 +1133,9 @@ entries :: Entry.[
 	.{ "deviceCreateSampler", WGPUProcDeviceCreateSampler, "wasmDeviceCreateSampler" },
 	.{ "samplerRelease", WGPUProcSamplerRelease, "wasmSamplerRelease" },
 	.{ "textureRelease", WGPUProcTextureRelease, "wasmTextureRelease" },
+	.{ "deviceCreatePipelineLayout", WGPUProcDeviceCreatePipelineLayout, "wasmDeviceCreatePipelineLayout" },
+	.{ "pipelineLayoutRelease", WGPUProcPipelineLayoutRelease, "wasmPipelineLayoutRelease" },
+	.{ "renderPassEncoderSetViewport", WGPUProcRenderPassEncoderSetViewport, "wasmRenderPassEncoderSetViewport" }
 ];
 
 

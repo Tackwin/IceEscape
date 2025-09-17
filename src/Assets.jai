@@ -335,6 +335,7 @@ FORMAT;
 
 #insert #run embed_data("GEOMETRY_WGSL", "Shader/geometry.wgsl", #filepath);
 #insert #run embed_data("GEOMETRY_SHADOW_WGSL", "Shader/geometry_shadow.wgsl", #filepath);
+#insert #run embed_data("PRESENT_WGSL", "Shader/present.wgsl", #filepath);
 #insert #run embed_data("COLORMAPS_PNG", "colormaps.png", #filepath);
 #insert #run embed_data("TERRAIN_TILE_ALBEDO_PNG", "tile_albedo.png", #filepath);
 #insert #run embed_data("TERRAIN_TILE_NORMAL_PNG", "tile_normal.png", #filepath);
@@ -471,6 +472,8 @@ load_everything :: () {
 			"UNIT_CYLINDER_OBJ",
 			"UNIT_SPHERE_OBJ",
 			"GEOMETRY_WGSL",
+			"GEOMETRY_SHADOW_WGSL",
+			"PRESENT_WGSL",
 			"COLORMAPS_PNG",
 			"TERRAIN_TILE_ALBEDO_PNG",
 			"TERRAIN_TILE_NORMAL_PNG",

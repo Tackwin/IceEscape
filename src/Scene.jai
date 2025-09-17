@@ -460,11 +460,11 @@ orthographic :: (
 	M.data[3 + 1 * 4] = 0;
 	M.data[0 + 2 * 4] = 0;
 	M.data[1 + 2 * 4] = 0;
-	M.data[2 + 2 * 4] = -2 / (far - near);
+	M.data[2 + 2 * 4] = -1 / (far - near);
 	M.data[3 + 2 * 4] = 0;
 	M.data[0 + 3 * 4] = -(right + left) / (right - left);
 	M.data[1 + 3 * 4] = -(top + bottom) / (top - bottom);
-	M.data[2 + 3 * 4] = -(far + near) / (far - near);
+	M.data[2 + 3 * 4] = -(near) / (far - near);
 	M.data[3 + 3 * 4] = 1;
 	return M;
 }
