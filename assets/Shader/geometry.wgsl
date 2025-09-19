@@ -7,9 +7,6 @@ struct UniformData {
 	shadowV: mat4x4<f32>,
 	shadowP: mat4x4<f32>,
 
-	tint: vec3f,
-	padding0: f32,
-
 	sun_dir: vec3f,
 	padding2: f32,
 	sun_color: vec3f,
@@ -23,6 +20,7 @@ struct InstanceData {
 	useNormalMap: u32,
 	useShadowMap: u32,
 	padding: u32,
+	color: vec4f,
 };
 
 struct VertexOutput {
@@ -139,9 +137,9 @@ fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
 	// let shadowUV = shadowCoord.xy * 0.5 + vec2f(0.5, 0.5);
 	// return vec4f(shadowUV, shadowCoord.z / shadowCoord.w, 1.0);
 
-	var color: vec3f = vec3f(1.0, 0.0, 1.0);
+	var color: vec4f = vec4f(1.0, 0.0, 1.0, 1.0);
 	if (instanceData[instanceIndex].useAlbedoMap > 0u) {
-		color = textureSample(albedoMap, albedoSampler, uv).xyz;
+		color = textureSample(albedoMap, albedoSampler, uv);
 	}
 
 	var normal: vec3f = normalize(worldNor);
@@ -153,5 +151,8 @@ fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
 	// Shadow mapping
 
 	var light: f32 = light_intensity(f32(instanceData[instanceIndex].useShadowMap), worldPos, normal);
-	return vec4f(light * uniforms.tint * color, 1.0);
+	return vec4f(
+		light * instanceData[instanceIndex].color.xyz * color.xyz / color.w,
+		instanceData[instanceIndex].color.w * color.w
+	);
 }

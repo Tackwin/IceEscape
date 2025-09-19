@@ -5,8 +5,6 @@ struct UniformData {
 	shadowV: mat4x4<f32>,
 	shadowP: mat4x4<f32>,
 
-	tint: vec3f,
-
 	useAlbedoMap: u32,
 	useNormalMap: u32,
 	useShadowMap: u32,
@@ -20,6 +18,7 @@ struct InstanceData {
 	useNormalMap: u32,
 	useShadowMap: u32,
 	padding: u32,
+	color: vec4f,
 };
 
 struct VertexOutput {

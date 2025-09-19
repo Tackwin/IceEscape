@@ -1398,7 +1398,7 @@ render :: (
 	set_uniform(shaders.textured_shader, "P", P);
 	set_uniform(shaders.particle_shader, "V", V);
 	set_uniform(shaders.particle_shader, "P", P);
-	set_uniform(shaders.particle_shader, "albedo", store.particle_texture, 0);
+	// set_uniform(shaders.particle_shader, "albedo", store.particle_texture, 0);
 	set_uniform(shaders.particle_shader, "shadow", framegraph.shadow_depth, 1);
 	set_uniform(shaders.particle_shader, "shadowV", SV);
 	set_uniform(shaders.particle_shader, "shadowP", SP);
@@ -1531,28 +1531,28 @@ render_robots :: (scene: Scene.Scene, shaders: Shaders) {
 
 	instanced := NewArray(scene.robots.count, Instance, initialized = false,, temp);
 
-	for 0..5 {
-		instanced.count = 0;
-		for robot: scene.robots {
-			instanced.count += 1;
-			instance := *instanced[instanced.count - 1];
+	// for 0..5 {
+	// 	instanced.count = 0;
+	// 	for robot: scene.robots {
+	// 		instanced.count += 1;
+	// 		instance := *instanced[instanced.count - 1];
 
-			instance.M = Scene.robot_to_axis(robot, it);
-		}
-		geom := Store.get_axes_geometry(store, it);
+	// 		instance.M = Scene.robot_to_axis(robot, it);
+	// 	}
+	// 	geom := Store.get_axes_geometry(store, it);
 
-		add_instance(geom, .{
-			data = xx instanced.data,
-			count = instanced.count * size_of(Instance)
-		});
+	// 	add_instance(geom, .{
+	// 		data = xx instanced.data,
+	// 		count = instanced.count * size_of(Instance)
+	// 	});
 
-		context.rhi.glBindVertexArray(geom.gpu_object);
-		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, geom.gpu_buffer);
-		cursor := setup_vertex_attributes(0, Geometry.Vertex_Data);
-		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, geom.instanced_buffer);
-		cursor = setup_instance_attributes(cursor, Instance);
-		render_instanced(geom, shaders.instanced_texture_shader, instanced.count);
-	}
+	// 	context.rhi.glBindVertexArray(geom.gpu_object);
+	// 	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, geom.gpu_buffer);
+	// 	cursor := setup_vertex_attributes(0, Geometry.Vertex_Data);
+	// 	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, geom.instanced_buffer);
+	// 	cursor = setup_instance_attributes(cursor, Instance);
+	// 	render_instanced(geom, shaders.instanced_texture_shader, instanced.count);
+	// }
 
 	instanced.count = 0;
 	instanced_particles := NewArray(
@@ -1624,7 +1624,7 @@ render_robots :: (scene: Scene.Scene, shaders: Shaders) {
 			data = xx instanced_particles.data,
 			count = instanced_particles.count * size_of(Instance_Particle)
 		});
-		set_uniform(shaders.particle_shader, "albedo", store.particle_texture, 0);
+		// set_uniform(shaders.particle_shader, "albedo", store.particle_texture, 0);
 
 		context.rhi.glBindVertexArray(store.z_facing_unit_square_geometry.gpu_object);
 		context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.z_facing_unit_square_geometry.gpu_buffer);
@@ -1764,7 +1764,7 @@ render_particles :: (scene: Scene.Scene, shaders: Shaders) {
 	instances_u8.data = instances.data.(*u8);
 	instances_u8.count = instances.count * size_of(Instance);
 	add_instance(*store.z_facing_unit_square_geometry, instances_u8);
-	set_uniform(shaders.particle_shader, "albedo", store.particle_texture, 0);
+	// set_uniform(shaders.particle_shader, "albedo", store.particle_texture, 0);
 	
 	context.rhi.glBindVertexArray(store.z_facing_unit_square_geometry.gpu_object);
 	context.rhi.glBindBuffer(GL_ARRAY_BUFFER, store.z_facing_unit_square_geometry.gpu_buffer);

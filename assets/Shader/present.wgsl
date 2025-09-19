@@ -60,6 +60,16 @@ fn CommerceToneMapping(ccolor: vec3f) -> vec3f {
 	return mix(color, newPeak * vec3f(1.0), vec3f(g));
 }
 
+fn Tonemap_ACES(x: vec3f) -> vec3f
+{
+	let a: f32 = 2.51;
+	let b: f32 = 0.03;
+	let c: f32 = 2.43;
+	let d: f32 = 0.59;
+	let e: f32 = 0.14;
+	return (x * (a * x + b)) / (x * (c * x + d) + e);
+}
+
 fn sampleTexture(uv: vec2f) -> vec4f {
 	var pos: vec2<u32> = vec2<u32>(uv * uniforms.size);
 

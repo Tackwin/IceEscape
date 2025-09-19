@@ -71,6 +71,6 @@ target:
 }
 breakpoint:
 {
-  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/WRender.jai:991:1"
-  hit_count: 0
+  source_location: "C:/Users/Tackwin/Documents/Code/IceEscape/src/WRender.jai:1209:1"
+  hit_count: 1
 }

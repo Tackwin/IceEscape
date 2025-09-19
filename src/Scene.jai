@@ -800,7 +800,7 @@ add_snow :: (scene: *Scene, dt: float32) {
 		};
 
 		texture_idx := Rand.random_uniform(*scene.client_rng, 1, 4);
-		p.texture_rec = V4f.{ texture_idx / 4.0, 0, 1 / 4.0, 1 / 4.0 };
+		p.texture_rec = V4f.{ texture_idx / 4.0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
 		p.velocity = normalize(p.velocity) * Rand.random_uniform(*scene.client_rng, 0.09, 0.11);
 		p.size = Rand.random_uniform(*scene.client_rng, 0.04, 0.10);
 		p.rotation_speed = Rand.random_uniform(*scene.client_rng, -2.0, 2.0);

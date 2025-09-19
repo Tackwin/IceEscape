@@ -107,11 +107,38 @@ Store :: struct {
 	gate_finish_close_model: WRender.Model;
 	shuriken_model: WRender.Model;
 	spirit_model: WRender.Model;
+	flag_model: WRender.Model;
+	flag_down_model: WRender.Model;
 
+	robot_a0_model: WRender.Model;
+	robot_a1_model: WRender.Model;
+	robot_a2_model: WRender.Model;
+	robot_a3_model: WRender.Model;
+	robot_a4_model: WRender.Model;
+	robot_a5_model: WRender.Model;
+
+	number_0_model: WRender.Model;
+	number_1_model: WRender.Model;
+	number_2_model: WRender.Model;
+	number_3_model: WRender.Model;
+	number_4_model: WRender.Model;
+	number_5_model: WRender.Model;
+	number_6_model: WRender.Model;
+	number_7_model: WRender.Model;
+	number_8_model: WRender.Model;
+	number_9_model: WRender.Model;
+
+	unit_cylinder_model: WRender.Model;
+	unit_sphere_model: WRender.Model;
+	indicator_outline_model: WRender.Model;
+	indicator_stroke_model: WRender.Model;
 
 	colormaps: WRender.WTexture;
 	terrain_tile_albedo: WRender.WTexture;
 	terrain_tile_normal: WRender.WTexture;
+	particle_texture: WRender.WTexture;
+
+	particle_texture_png: Assets.Image;
 
 	tile_snow_albedo_png: Assets.Image;
 	tile_snow_normal_png: Assets.Image;
@@ -185,9 +212,6 @@ Store :: struct {
 	vehicle_colormap: Render.Texture;
 	tile_atlas: Render.Texture;
 
-	particle_texture: Render.Texture;
-	particle_texture_png: Assets.Image;
-
 	z_facing_unit_square_geometry: Render.Geometry;
 	flag_geometry: Render.Geometry;
 	flag_down_geometry: Render.Geometry;
@@ -239,6 +263,30 @@ Store :: struct {
 	robot_a5_geometry: Render.Geometry;
 }
 
+get_number_model ::  (store: Store, digit: int) -> *WRender.Model {
+	if digit == 0 {
+		return *store.number_0_model;
+	} else if digit == 1 {
+		return *store.number_1_model;
+	} else if digit == 2 {
+		return *store.number_2_model;
+	} else if digit == 3 {
+		return *store.number_3_model;
+	} else if digit == 4 {
+		return *store.number_4_model;
+	} else if digit == 5 {
+		return *store.number_5_model;
+	} else if digit == 6 {
+		return *store.number_6_model;
+	} else if digit == 7 {
+		return *store.number_7_model;
+	} else if digit == 8 {
+		return *store.number_8_model;
+	} else if digit == 9 {
+		return *store.number_9_model;
+	}
+	return null;
+}
 get_number_geometry :: (store: Store, digit: int) -> *Render.Geometry {
 	if digit == 0 {
 		return *store.number_0_geometry;
@@ -296,19 +344,19 @@ get_model :: (store: Store, id: Model_Id) -> *WRender.Model {
 get_geometry :: (store: Store, id: Model_Id) -> *Render.Geometry {
 	return null;
 }
-get_axes_geometry :: (store: Store, i: int) -> *Render.Geometry {
+get_axes_model :: (store: Store, i: int) -> *WRender.Model {
 	if i == 0 {
-		return *store.robot_a0_geometry;
+		return *store.robot_a0_model;
 	} else if i == 1 {
-		return *store.robot_a1_geometry;
+		return *store.robot_a1_model;
 	} else if i == 2 {
-		return *store.robot_a2_geometry;
+		return *store.robot_a2_model;
 	} else if i == 3 {
-		return *store.robot_a3_geometry;
+		return *store.robot_a3_model;
 	} else if i == 4 {
-		return *store.robot_a4_geometry;
+		return *store.robot_a4_model;
 	} else if i == 5 {
-		return *store.robot_a5_geometry;
+		return *store.robot_a5_model;
 	}
 	return null;
 }
@@ -518,6 +566,12 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	}
 	store.terrain_tile_normal =
 		WRender.WTexture.make_from_image(terrain_tile_normal_png, "terrain_tile_normal");
+		
+	particle_texture_png := Assets.Image.make_from_memory(Assets.PARTICLE_TEXTURE_PNG, 4);
+	store.particle_texture = WRender.WTexture.make_from_image(particle_texture_png);
+	defer {
+		Assets.Image.free(*particle_texture_png);
+	}
 
 	store.racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_RACER_OBJ);
 	store.suv_model = WRender.Model.make_from_obj(Assets.VEHICLE_SUV_OBJ);
@@ -542,7 +596,31 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.shuriken_model = WRender.Model.make_from_obj(Assets.SHURIKEN_OBJ);
 	store.gate_finish_model = WRender.Model.make_from_obj(Assets.GATE_FINISH_OBJ);
 	store.gate_finish_close_model = WRender.Model.make_from_obj(Assets.GATE_FINISH_CLOSE_OBJ);
-	
+	store.flag_model = WRender.Model.make_from_obj(Assets.FLAG_OBJ);
+	store.flag_down_model = WRender.Model.make_from_obj(Assets.FLAG_DOWN_OBJ);
+	store.robot_a0_model = WRender.Model.make_from_obj(Assets.ROBOT_A0_OBJ);
+	store.robot_a1_model = WRender.Model.make_from_obj(Assets.ROBOT_A1_OBJ);
+	store.robot_a2_model = WRender.Model.make_from_obj(Assets.ROBOT_A2_OBJ);
+	store.robot_a3_model = WRender.Model.make_from_obj(Assets.ROBOT_A3_OBJ);
+	store.robot_a4_model = WRender.Model.make_from_obj(Assets.ROBOT_A4_OBJ);
+	store.robot_a5_model = WRender.Model.make_from_obj(Assets.ROBOT_A5_OBJ);
+	store.number_0_model = WRender.Model.make_from_obj(Assets.NUMBER_0_OBJ);
+	store.number_1_model = WRender.Model.make_from_obj(Assets.NUMBER_1_OBJ);
+	store.number_2_model = WRender.Model.make_from_obj(Assets.NUMBER_2_OBJ);
+	store.number_3_model = WRender.Model.make_from_obj(Assets.NUMBER_3_OBJ);
+	store.number_4_model = WRender.Model.make_from_obj(Assets.NUMBER_4_OBJ);
+	store.number_5_model = WRender.Model.make_from_obj(Assets.NUMBER_5_OBJ);
+	store.number_6_model = WRender.Model.make_from_obj(Assets.NUMBER_6_OBJ);
+	store.number_7_model = WRender.Model.make_from_obj(Assets.NUMBER_7_OBJ);
+	store.number_8_model = WRender.Model.make_from_obj(Assets.NUMBER_8_OBJ);
+	store.number_9_model = WRender.Model.make_from_obj(Assets.NUMBER_9_OBJ);
+
+	store.unit_cylinder_model = WRender.Model.make_from_obj(Assets.UNIT_CYLINDER_OBJ);
+	store.unit_sphere_model = WRender.Model.make_from_obj(Assets.UNIT_SPHERE_OBJ);
+
+	store.indicator_outline_model = WRender.Model.make_from_obj(Assets.INDICATOR_OUTLINE_OBJ);
+	store.indicator_stroke_model = WRender.Model.make_from_obj(Assets.INDICATOR_STROKE_OBJ);
+
 	// store.ui_atlas_png = Assets.Image.make_from_memory(Assets.ui_atlas_png, 4);
 	// store.ui_atlas = Render.Texture.make_from_image(store.ui_atlas_png);
 	

@@ -628,6 +628,12 @@ main :: () {
 		table_add(*name_to_scene_id, "pick.terrain", state.pick_scene_id);
 	}
 	{
+		plain_terrain_txt := sprint("%/../assets/terrain/gain_time.terrain", #filepath);
+		data, ok := read_entire_file(plain_terrain_txt);
+		state.third_world_id = add_scene(data);
+		table_add(*name_to_scene_id, "gain_time.terrain", state.third_world_id);
+	}
+	{
 		plain_terrain_txt := sprint("%/../assets/terrain/here_and_there.terrain", #filepath);
 		data, ok := read_entire_file(plain_terrain_txt);
 		state.second_world_id = add_scene(data);
@@ -640,12 +646,6 @@ main :: () {
 		state.first_world_id = add_scene(data);
 
 		table_add(*name_to_scene_id, "roundabout.terrain", state.first_world_id);
-	}
-	{
-		plain_terrain_txt := sprint("%/../assets/terrain/gain_time.terrain", #filepath);
-		data, ok := read_entire_file(plain_terrain_txt);
-		state.third_world_id = add_scene(data);
-		table_add(*name_to_scene_id, "gain_time.terrain", state.third_world_id);
 	}
 
 	for 0..state.scenes.count-2 {
