@@ -863,8 +863,14 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	}
 }
 
-update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
+update_client :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	add_snow(scene, dt);
+}
+
+update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
+	if !scene.is_server
+		update_client(scene, dt, result);
+
 	update(scene, *scene.camera, dt);
 
 	for * scene.players {

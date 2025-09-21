@@ -77,26 +77,6 @@ im_init :: (store: *Store.Store) {
 	IM.store = store;
 }
 
-handle_frame_info :: (info: Frame_Info) {
-	for * IM.just_pressed {
-		if info.key_pressed[it_index] && !IM.pressed[it_index]
-			it.* = true;
-		else
-			it.* = false;
-	}
-	for * IM.just_released {
-		if !info.key_pressed[it_index] && IM.pressed[it_index]
-			it.* = true;
-		else
-			it.* = false;
-	}
-	for * IM.pressed {
-		it.* = info.key_pressed[it_index];
-	}
-	IM.mouse_pos.x = info.mouse_position.x;
-	IM.mouse_pos.y = info.mouse_position.y;
-}
-
 push_checkbox :: (
 	center: V2f, size: float, checked: bool
 ) -> bool {

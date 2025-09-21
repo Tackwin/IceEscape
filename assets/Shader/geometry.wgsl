@@ -141,6 +141,9 @@ fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
 	if (instanceData[instanceIndex].useAlbedoMap > 0u) {
 		color = textureSample(albedoMap, albedoSampler, uv);
 	}
+	if (color.w < 0.05) {
+		discard;
+	}
 
 	var normal: vec3f = normalize(worldNor);
 	if (instanceData[instanceIndex].useNormalMap > 0u) {
@@ -149,8 +152,9 @@ fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
 	}
 
 	// Shadow mapping
-
-	var light: f32 = light_intensity(f32(instanceData[instanceIndex].useShadowMap), worldPos, normal);
+	var light: f32 = light_intensity(
+		f32(instanceData[instanceIndex].useShadowMap), worldPos, normal
+	);
 	return vec4f(
 		light * instanceData[instanceIndex].color.xyz * color.xyz / color.w,
 		instanceData[instanceIndex].color.w * color.w

@@ -97,6 +97,7 @@ Command :: struct {
 		t: float;
 	}
 	NTP :: struct {
+		client_origin := false;
 		player_id: int = -1;
 		t0: float64 = FLOAT64_MAX;
 		t1: float64 = FLOAT64_MAX;

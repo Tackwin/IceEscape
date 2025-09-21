@@ -64,6 +64,7 @@ Shader_Id :: enum {
 }
 
 Store :: struct {
+	quad_shader: WRender.WShader;
 	present_shader: WRender.WShader;
 	geometry_shader: WRender.WShader;
 	geometry_shadow_shader: WRender.WShader;
@@ -137,6 +138,8 @@ Store :: struct {
 	terrain_tile_albedo: WRender.WTexture;
 	terrain_tile_normal: WRender.WTexture;
 	particle_texture: WRender.WTexture;
+	ui_atlas: WRender.WTexture;
+	font_atlas: WRender.WTexture;
 
 	particle_texture_png: Assets.Image;
 
@@ -178,7 +181,6 @@ Store :: struct {
 	tile_slippy_normal: Render.Texture;
 	tile_slippy_height: Render.Texture;
 
-	ui_atlas: Render.Texture;
 
 	loser_ogg: Platform.Audio;
 	footstep_0_ogg: Platform.Audio;
@@ -521,6 +523,9 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.present_shader.code = xx Assets.PRESENT_WGSL;
 	store.present_shader.input = .{};
 
+	store.quad_shader.code = xx Assets.QUAD_WGSL;
+	store.quad_shader.input = .{};
+
 	store.terrain_tree_snow_a =
 		WRender.Model.make_from_obj(Assets.TERRAIN_TREE_SNOW_A, "terrain_tree_snow_a.obj");
 	store.terrain_tree_snow_b =
@@ -549,29 +554,28 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.tile_model = WRender.Model.make_from_obj(Assets.TILE_OBJ, "tile.obj");
 
 	prop_colormap_png := Assets.Image.make_from_memory(Assets.COLORMAPS_PNG, 4);
-	defer {
-		Assets.Image.free(*prop_colormap_png);
-	}
+	defer Assets.Image.free(*prop_colormap_png);
 	store.colormaps = WRender.WTexture.make_from_image(prop_colormap_png, "colormaps");
 
 	terrain_tile_albedo_png := Assets.Image.make_from_memory(Assets.TERRAIN_TILE_ALBEDO_PNG, 4);
-	defer {
-		Assets.Image.free(*terrain_tile_albedo_png);
-	}
+	defer Assets.Image.free(*terrain_tile_albedo_png);
 	store.terrain_tile_albedo =
 		WRender.WTexture.make_from_image(terrain_tile_albedo_png, "terrain_tile_albedo");
 	terrain_tile_normal_png := Assets.Image.make_from_memory(Assets.TERRAIN_TILE_NORMAL_PNG, 4);
-	defer {
-		Assets.Image.free(*terrain_tile_normal_png);
-	}
+	defer Assets.Image.free(*terrain_tile_normal_png);
 	store.terrain_tile_normal =
 		WRender.WTexture.make_from_image(terrain_tile_normal_png, "terrain_tile_normal");
 		
 	particle_texture_png := Assets.Image.make_from_memory(Assets.PARTICLE_TEXTURE_PNG, 4);
-	store.particle_texture = WRender.WTexture.make_from_image(particle_texture_png);
-	defer {
-		Assets.Image.free(*particle_texture_png);
-	}
+	store.particle_texture =
+		WRender.WTexture.make_from_image(particle_texture_png, "particle_texture");
+	defer Assets.Image.free(*particle_texture_png);
+
+	ui_atlas_png := Assets.Image.make_from_memory(Assets.ui_atlas_png, 4);
+	defer Assets.Image.free(*ui_atlas_png);
+	store.ui_atlas = WRender.WTexture.make_from_image(ui_atlas_png, "ui_atlas");
+
+	store.font_atlas = WRender.WTexture.make_from_image(Assets.MAIN_FONT.atlas, "font_atlas");
 
 	store.racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_RACER_OBJ);
 	store.suv_model = WRender.Model.make_from_obj(Assets.VEHICLE_SUV_OBJ);
@@ -621,9 +625,6 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.indicator_outline_model = WRender.Model.make_from_obj(Assets.INDICATOR_OUTLINE_OBJ);
 	store.indicator_stroke_model = WRender.Model.make_from_obj(Assets.INDICATOR_STROKE_OBJ);
 
-	// store.ui_atlas_png = Assets.Image.make_from_memory(Assets.ui_atlas_png, 4);
-	// store.ui_atlas = Render.Texture.make_from_image(store.ui_atlas_png);
-	
 	// store.tile_atlas_png = Assets.Image.make_from_memory(Assets.tile_atlas_png, 4);
 	// store.tile_atlas = Render.Texture.make_from_image(store.tile_atlas_png);
 

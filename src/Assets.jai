@@ -336,6 +336,8 @@ FORMAT;
 #insert #run embed_data("GEOMETRY_WGSL", "Shader/geometry.wgsl", #filepath);
 #insert #run embed_data("GEOMETRY_SHADOW_WGSL", "Shader/geometry_shadow.wgsl", #filepath);
 #insert #run embed_data("PRESENT_WGSL", "Shader/present.wgsl", #filepath);
+#insert #run embed_data("QUAD_WGSL", "Shader/quad.wgsl", #filepath);
+
 #insert #run embed_data("COLORMAPS_PNG", "colormaps.png", #filepath);
 #insert #run embed_data("TERRAIN_TILE_ALBEDO_PNG", "tile_albedo.png", #filepath);
 #insert #run embed_data("TERRAIN_TILE_NORMAL_PNG", "tile_normal.png", #filepath);
@@ -474,6 +476,7 @@ load_everything :: () {
 			"GEOMETRY_WGSL",
 			"GEOMETRY_SHADOW_WGSL",
 			"PRESENT_WGSL",
+			"QUAD_WGSL",
 			"COLORMAPS_PNG",
 			"TERRAIN_TILE_ALBEDO_PNG",
 			"TERRAIN_TILE_NORMAL_PNG",
@@ -513,6 +516,7 @@ vehicle_colormap_texture_help :: () -> Image {
 			x: s32;
 			y: s32;
 			c: s32;
+			CT_STB.stbi_set_flip_vertically_on_load(1);
 			image.data.data = CT_STB.stbi_load_from_memory(file.data, xx file.count, *x, *y, *c, 3);
 			image.data.count = x * y * 3;
 			image.width = xx x;
@@ -903,6 +907,7 @@ ztotez_help :: () -> Font {
 			x: s32;
 			y: s32;
 			c: s32;
+			CT_STB.stbi_set_flip_vertically_on_load(1);
 			image.data.data = CT_STB.stbi_load_from_memory(file.data, xx file.count, *x, *y, *c, 4);
 			image.data.count = x * y * 4;
 			image.width = xx x;

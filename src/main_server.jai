@@ -399,6 +399,7 @@ process :: (
 		}
 		else if reply.t1 == FLOAT64_MAX {
 			reply.t1 = to_float64_seconds(current_time_monotonic());
+			reply.t2 = to_float64_seconds(current_time_monotonic());
 			is_over = false;
 			send_back = true;
 		}
@@ -409,6 +410,7 @@ process :: (
 		}
 		else if reply.t3 == FLOAT64_MAX {
 			reply.t3 = to_float64_seconds(current_time_monotonic());
+			reply.t4 = to_float64_seconds(current_time_monotonic());
 			is_over = false;
 			send_back = true;
 		} else {

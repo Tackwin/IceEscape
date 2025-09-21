@@ -6,9 +6,11 @@
 #import "Platform";
 #import "Hash_Table";
 #import "Rand";
+#import "Sort";
 Store :: #import "Store";
 STB :: #import "stb_image";
 Scene :: #import "Scene";
+GUI :: #import "GUI";
 
 offset_of :: ($T: Type, $member: string) -> int {
 	for type_info(T).members {
@@ -237,9 +239,13 @@ Model :: struct {
 WFramegraph :: struct {
 	rng: XORState;
 
+	quadModule: WGPUShaderModule;
+	quadPipeline: WGPURenderPipeline;
+
 	instanceBindGroupLayout: WGPUBindGroupLayout;
 	textureBindGroupLayout: WGPUBindGroupLayout;
 	presentBindGroupLayout: WGPUBindGroupLayout;
+	quadBindGroupLayout: WGPUBindGroupLayout;
 
 	geometryModule: WGPUShaderModule;
 	geometryPipeline: WGPURenderPipeline;
@@ -258,6 +264,29 @@ WFramegraph :: struct {
 
 	shadowTexture: WTexture;
 	hdrTexture: WTexture;
+
+	surfaceTexture: WGPUSurfaceTexture;
+
+	geometryBindGroup: WGPUBindGroup;
+	textureBindGroup: WGPUBindGroup;
+	particleBindGroup: WGPUBindGroup;
+
+	UI_Uniform :: struct {
+		window_size: V2f;
+	}
+	uiUniformBuffer: WGPUBuffer;
+	UI_Instance :: struct {
+		pos: V2f;
+		size: V2f;
+		texture_rect: V4f = .{ 0, 0, 0, 0 }; // x, y, width, height
+		color: V4f = .{ 1, 1, 1, 1 };
+		z30sdf2: u32 = 0;
+		padding0: u32 = 0;
+		padding1: u32 = 0;
+		padding2: u32 = 0;
+	}
+	uiInstanceBuffer: WGPUBuffer;
+	uiInstances: [..] UI_Instance;
 
 	Present_Uniform :: struct {
 		size: V2f;
@@ -351,6 +380,100 @@ init_bindgroup_layout :: (framegraph: *WFramegraph) {
 		layout.label = toWGPUStringView("Texture Bind Group Layout");
 		framegraph.textureBindGroupLayout =
 			context.gpu.deviceCreateBindGroupLayout(context.graphics.device, *layout);
+	}
+	if false {
+		layout: WGPUBindGroupLayoutDescriptor = .{};
+		entries: [6] WGPUBindGroupLayoutEntry;
+			entries[0].binding = 0;
+			entries[0].visibility = WGPUShaderStage_Vertex;
+			entries[0].buffer.type = .Uniform;
+			entries[0].buffer.hasDynamicOffset = 0;
+			entries[0].buffer.minBindingSize = 8;
+			entries[1].binding = 1;
+			entries[1].visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+			entries[1].buffer.type = .ReadOnlyStorage;
+			entries[1].buffer.hasDynamicOffset = 0;
+			entries[1].buffer.minBindingSize = 0;
+			entries[2].binding = 2;
+			entries[2].visibility = WGPUShaderStage_Fragment;
+			entries[2].texture.sampleType = .Float;
+			entries[2].texture.viewDimension = ._2D;
+			entries[2].texture.multisampled = 0;
+			entries[3].binding = 3;
+			entries[3].visibility = WGPUShaderStage_Fragment;
+			entries[3].sampler.type = .Filtering;
+			entries[4].binding = 4;
+			entries[4].visibility = WGPUShaderStage_Fragment;
+			entries[4].texture.sampleType = .Float;
+			entries[4].texture.viewDimension = ._2D;
+			entries[4].texture.multisampled = 0;
+			entries[5].binding = 5;
+			entries[5].visibility = WGPUShaderStage_Fragment;
+			entries[5].sampler.type = .Filtering;
+		layout.entryCount = entries.count;
+		layout.entries = entries.data;
+		layout.label = toWGPUStringView("UI Bind Group Layout");
+		framegraph.quadBindGroupLayout =
+			context.gpu.deviceCreateBindGroupLayout(context.graphics.device, *layout);
+	}
+}
+
+init_quad_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
+	{
+		desc: WGPUShaderModuleDescriptor = .{};
+		wgsl: WGPUShaderSourceWGSL = .{};
+		wgsl.code = toWGPUStringView(store.quad_shader.code);
+		wgsl.chain.next = null;
+		wgsl.chain.sType = .ShaderSourceWGSL;
+		desc.nextInChain = *wgsl.chain;
+		framegraph.quadModule = context.gpu.deviceCreateShaderModule(
+			context.graphics.device, *desc
+		);
+	}
+	{
+		desc: WGPURenderPipelineDescriptor = .{};
+		desc.label = toWGPUStringView("Quad Pipeline");
+		desc.layout = null;
+		desc.vertex.module = framegraph.quadModule;
+		desc.vertex.entryPoint = toWGPUStringView("vs");
+		desc.vertex.bufferCount = 0;
+		desc.vertex.buffers = null;
+		desc.primitive.topology = .WGPUPrimitiveTopology_TriangleList;
+		desc.primitive.stripIndexFormat = .Undefined;
+		desc.primitive.frontFace = .CCW;
+		desc.primitive.cullMode = .None;
+		desc.primitive.unclippedDepth = 0;
+
+		desc.depthStencil = null;
+
+		desc.multisample.count = 1;
+		desc.multisample.mask = 0xFFFFFFFF;
+		desc.multisample.alphaToCoverageEnabled = 0;
+			fragment: WGPUFragmentState = .{};
+			fragment.module = framegraph.quadModule;
+			fragment.entryPoint = toWGPUStringView("fs");
+				targets: [1] WGPUColorTargetState;
+				targets[0].format = .BGRA8Unorm;
+					blend: WGPUBlendState = .{};
+					blend.color.operation = .Add;
+					blend.color.srcFactor = .SrcAlpha;
+					blend.color.dstFactor = .OneMinusSrcAlpha;
+					blend.alpha.operation = .Add;
+					blend.alpha.srcFactor = .One;
+					blend.alpha.dstFactor = .OneMinusSrcAlpha;
+				targets[0].blend = *blend;
+				targets[0].writeMask = WGPUColorWriteMask_All;
+			fragment.targets = targets.data;
+			fragment.targetCount = targets.count;
+		desc.fragment = *fragment;
+
+		framegraph.quadPipeline = context.gpu.deviceCreateRenderPipeline(
+			context.graphics.device, *desc
+		);
+
+		framegraph.quadBindGroupLayout = context.gpu.renderPipelineGetBindGroupLayout(
+			framegraph.quadPipeline, 0
+		);
 	}
 }
 
@@ -627,11 +750,28 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 	}
 	{
 		desc: WGPUBufferDescriptor = .{};
+		desc.label = toWGPUStringView("UI Uniform Buffer");
+		desc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
+		desc.size = size_of(WFramegraph.UI_Uniform);
+		desc.mappedAtCreation = 0;
+		framegraph.uiUniformBuffer = context.gpu.deviceCreateBuffer(context.graphics.device, *desc);
+	}
+	{
+		desc: WGPUBufferDescriptor = .{};
 		desc.label = toWGPUStringView("Instance Buffer");
 		desc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst;
 		desc.size = 64 * 1024 * size_of(WFramegraph.Instance);
 		desc.mappedAtCreation = 0;
 		framegraph.instanceBuffer = context.gpu.deviceCreateBuffer(context.graphics.device, *desc);
+	}
+	{
+		desc: WGPUBufferDescriptor = .{};
+		desc.label = toWGPUStringView("UI Instance Buffer");
+		desc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst;
+		desc.size = 64 * 1024 * size_of(WFramegraph.UI_Instance);
+		desc.mappedAtCreation = 0;
+		framegraph.uiInstanceBuffer =
+			context.gpu.deviceCreateBuffer(context.graphics.device, *desc);
 	}
 	{
 		desc: WGPUTextureDescriptor = .{};
@@ -743,8 +883,32 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		store.present_shader.dirty = false;
 		init_present_pipeline(framegraph, store);
 	}
-	
+
+	if store.quad_shader.dirty {
+		store.quad_shader.dirty = false;
+		init_quad_pipeline(framegraph, store);
+	}
+
 	array_reserve(*framegraph.instances, 64 * 1024);
+	array_reserve(*framegraph.uiInstances, 1024);
+
+	framegraph.geometryBindGroup =texture_bind_group(
+		framegraph, "Typical textures", *store.colormaps, null, *framegraph.shadowTexture
+	);
+	framegraph.textureBindGroup = texture_bind_group(
+		framegraph,
+		"Terrain textures",
+		*store.terrain_tile_albedo,
+		*store.terrain_tile_normal,
+		*framegraph.shadowTexture
+	);
+	framegraph.particleBindGroup = texture_bind_group(
+		framegraph,
+		"Particle textures",
+		*store.particle_texture,
+		null,
+		null
+	);
 }
 
 writeTo :: (buffer: WGPUBuffer, offset: int, data: *$T) {
@@ -781,6 +945,39 @@ present_bind_group :: (
 	desc.entries = entries.data;
 	return context.gpu.deviceCreateBindGroup(context.graphics.device, *desc);
 }
+
+ui_instance_bind_group :: (
+	framegraph: *WFramegraph,
+	name: string,
+	instanced_count: int,
+	albedo_map: WTexture,
+	sdf_map: WTexture
+) -> WGPUBindGroup {
+	desc: WGPUBindGroupDescriptor = .{};
+	desc.label = toWGPUStringView("UI Instance Bind Group");
+	desc.layout = framegraph.quadBindGroupLayout;
+	entries: [6] WGPUBindGroupEntry;
+	entries[0].binding = 0;
+	entries[0].buffer = framegraph.uiUniformBuffer;
+	entries[0].offset = 0;
+	entries[0].size = size_of(WFramegraph.UI_Uniform);
+	entries[1].binding = 1;
+	entries[1].buffer = framegraph.uiInstanceBuffer;
+	entries[1].offset = 0;
+	entries[1].size = xx (framegraph.uiInstances.count * size_of(WFramegraph.UI_Instance));
+	entries[2].binding = 2;
+	entries[2].textureView = albedo_map.view;
+	entries[3].binding = 3;
+	entries[3].sampler = albedo_map.sampler;
+	entries[4].binding = 4;
+	entries[4].textureView = sdf_map.view;
+	entries[5].binding = 5;
+	entries[5].sampler = sdf_map.sampler;
+	desc.entryCount = entries.count;
+	desc.entries = entries.data;
+	return context.gpu.deviceCreateBindGroup(context.graphics.device, *desc);
+}
+
 
 instance_bind_group :: (
 	framegraph: *WFramegraph,
@@ -879,6 +1076,13 @@ Extra :: struct {
 		color: V3f;
 	}
 	spheres: [..] Sphere;
+
+	Quad :: struct {
+		M: M4f;
+		texture_rect: V4f;
+		color: V4f;
+	}
+	quads: [..] Quad;
 }
 
 reserve :: (extra: *Extra, count: int) {
@@ -888,24 +1092,35 @@ reserve :: (extra: *Extra, count: int) {
 	array_reserve(*extra.cylinders, count);
 	extra.spheres.allocator = temp;
 	array_reserve(*extra.spheres, count);
+	extra.quads.allocator = temp;
+	array_reserve(*extra.quads, count);
 }
 
 clear :: (extra: *Extra) {
 	extra.numbers.count = 0;
 	extra.cylinders.count = 0;
 	extra.spheres.count = 0;
+	extra.quads.count = 0;
+}
+
+free :: (extra: *Extra) {
+	array_free(extra.numbers);
+	array_free(extra.cylinders);
+	array_free(extra.spheres);
+	array_free(extra.quads);
 }
 
 render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
-
 	surfaceTexture: WGPUSurfaceTexture;
 	context.gpu.surfaceGetCurrentTexture(context.graphics.surface, *surfaceTexture);
 	surfaceView := context.gpu.textureCreateView(surfaceTexture.texture, null);
 	defer {
 		context.gpu.textureViewRelease(surfaceView);
 	}
-
 	encoder := context.gpu.deviceCreateCommandEncoder(context.graphics.device, null);
+	defer {
+		context.gpu.commandEncoderRelease(encoder);
+	}
 
 	framegraph.typicalUniform = .{};
 	framegraph.typicalUniform.V =
@@ -944,6 +1159,13 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 	surfaceAttachment.loadOp = .Clear;
 	surfaceAttachment.storeOp = .Store;
 	surfaceAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
+	
+	uiAttachment: WGPURenderPassColorAttachment = .{};
+	uiAttachment.view = surfaceView;
+	uiAttachment.depthSlice = 0;
+	uiAttachment.loadOp = .Load;
+	uiAttachment.storeOp = .Store;
+	uiAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
 
 	depthAttachment: WGPURenderPassDepthStencilAttachment = .{};
 	depthAttachment.view = framegraph.depthView;
@@ -965,6 +1187,9 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 
 	extra: Extra;
 	reserve(*extra, 16);
+	defer {
+		free(*extra);
+	}
 
 	if true {
 		clear(*extra);
@@ -1009,11 +1234,9 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		geometryPass := context.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
 		context.gpu.renderPassEncoderSetPipeline(geometryPass, framegraph.geometryPipeline);
 
-		geometryBindGroup := texture_bind_group(
-			framegraph, "Typical textures", *store.colormaps, null, *framegraph.shadowTexture
+		context.gpu.renderPassEncoderSetBindGroup(
+			geometryPass, 1, framegraph.geometryBindGroup, 0, null
 		);
-		context.gpu.renderPassEncoderSetBindGroup(geometryPass, 1, geometryBindGroup, 0, null);
-		defer context.gpu.bindGroupRelease(geometryBindGroup);
 
 		render_players(framegraph, encoder, geometryPass, scene, store);
 		render_keys(framegraph, encoder, geometryPass, scene, store);
@@ -1027,33 +1250,27 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		render_flags(framegraph, encoder, geometryPass, scene, store, *extra);
 		render_explosions(framegraph, encoder, geometryPass, scene, store, *extra);
 
-		textureBindGroup := texture_bind_group(
-			framegraph,
-			"Terrain textures",
-			*store.terrain_tile_albedo,
-			*store.terrain_tile_normal,
-			*framegraph.shadowTexture
+		context.gpu.renderPassEncoderSetBindGroup(
+			geometryPass, 1, framegraph.textureBindGroup, 0, null
 		);
-		defer context.gpu.bindGroupRelease(textureBindGroup);
-		context.gpu.renderPassEncoderSetBindGroup(geometryPass, 1, textureBindGroup, 0, null);
 
 		render_terrain(framegraph, encoder, geometryPass, scene, store);
 		
-		particleBindGroup := texture_bind_group(
-			framegraph,
-			"Particle textures",
-			*store.particle_texture,
-			null,
-			*framegraph.shadowTexture
+		context.gpu.renderPassEncoderSetBindGroup(
+			geometryPass, 1, framegraph.particleBindGroup, 0, null
 		);
-		defer context.gpu.bindGroupRelease(particleBindGroup);
-		context.gpu.renderPassEncoderSetBindGroup(geometryPass, 1, particleBindGroup, 0, null);
 
 		render_particles(framegraph, encoder, geometryPass, scene, store, *extra);
 
-		context.gpu.renderPassEncoderSetBindGroup(geometryPass, 1, geometryBindGroup, 0, null);
+		context.gpu.renderPassEncoderSetBindGroup(
+			geometryPass, 1, framegraph.geometryBindGroup, 0, null
+		);
 		render_within_zones(framegraph, encoder, geometryPass, scene, store, *extra);
 		render_extra(framegraph, encoder, geometryPass, scene, store, *extra);
+		context.gpu.renderPassEncoderSetBindGroup(
+			geometryPass, 1, framegraph.particleBindGroup, 0, null
+		);
+		render_extra_quads(framegraph, encoder, geometryPass, scene, store, *extra);
 
 		context.gpu.renderPassEncoderEnd(geometryPass);
 		context.gpu.renderPassEncoderRelease(geometryPass);
@@ -1089,9 +1306,96 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		context.gpu.renderPassEncoderRelease(presentPass);
 	}
 
+	if true {
+		passDesc: WGPURenderPassDescriptor = .{};
+		passDesc.label = toWGPUStringView("UI Pass");
+		passDesc.colorAttachments = *uiAttachment;
+		passDesc.colorAttachmentCount = 1;
+		passDesc.depthStencilAttachment = null;
+		uiPass := context.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
+
+		context.gpu.renderPassEncoderSetPipeline(uiPass, framegraph.quadPipeline);
+
+		uniforms: WFramegraph.UI_Uniform = .{};
+		uniforms.window_size = V2f.{ 1366, 768 };
+		writeTo(framegraph.uiUniformBuffer, 0, *uniforms);
+
+		framegraph.uiInstances.count = 0;
+
+		for GUI.IM.quads {
+			framegraph.uiInstances.count += 1;
+			instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
+			instance.* = .{};
+			instance.pos = it.pos;
+			instance.size = it.size;
+			instance.color = it.color;
+			instance.z30sdf2 = xx (it.z * 400);
+			instance.texture_rect = it.texture_rect;
+		}
+
+		for GUI.IM.chars {
+			framegraph.uiInstances.count += 1;
+			instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
+			instance.* = .{};
+
+			sprite := MAIN_FONT.sprites[it.id];
+
+			x := it.pos.x;
+			y := it.pos.y;
+			width := sprite.sourceWidth * it.height / MAIN_FONT.height;
+			height := sprite.sourceHeight * it.height / MAIN_FONT.height;
+			pos := V2f.{
+				xx (sprite.positionX - sprite.padding), xx (sprite.positionY - sprite.padding)
+			};
+			size := V2f.{ xx sprite.sourceWidth, xx sprite.sourceHeight };
+			pos.x /= MAIN_FONT.atlas.width;
+			pos.y /= MAIN_FONT.atlas.height;
+			pos.y = 1.0 - pos.y;
+			size.x /= MAIN_FONT.atlas.width;
+			size.y /= MAIN_FONT.atlas.height;
+			pos.y -= size.y;
+
+			instance.pos = V2f.{ x, y };
+			instance.size = V2f.{ width, height };
+			instance.texture_rect = .{ pos.x, pos.y, size.x, size.y };
+			instance.z30sdf2 = (it.z * 400).(u32) + 1;
+			instance.color = v4(it.color, 1.0);
+		}
+
+		if framegraph.uiInstances.count > 0 {
+			quick_sort(
+				framegraph.uiInstances,
+				(a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
+					az := a.z30sdf2 / 4;
+					bz := b.z30sdf2 / 4;
+					if az < bz
+						return -1;
+					if az > bz
+						return 1;
+					return 0;
+				});
+
+			bindGroup := ui_instance_bind_group(
+				framegraph,
+				"UI Instances",
+				framegraph.uiInstances.count,
+				store.ui_atlas,
+				store.font_atlas
+			);
+			context.gpu.renderPassEncoderSetBindGroup(uiPass, 0, bindGroup, 0, null);
+			defer context.gpu.bindGroupRelease(bindGroup);
+			writeTo(framegraph.uiInstanceBuffer, 0, framegraph.uiInstances);
+			context.gpu.renderPassEncoderDraw(uiPass, 6, xx framegraph.uiInstances.count, 0, 0);
+		}
+
+		context.gpu.renderPassEncoderEnd(uiPass);
+		context.gpu.renderPassEncoderRelease(uiPass);
+	}
+
 	bufferDesc: WGPUCommandBufferDescriptor = .{};
 	bufferDesc.label = toWGPUStringView("Main Command Buffer");
 	buffer := context.gpu.commandEncoderFinish(encoder, *bufferDesc);
+	defer context.gpu.commandBufferRelease(buffer);
 
 	submit: [1] WGPUCommandBuffer = .[buffer];
 	context.gpu.queueSubmit(context.graphics.mainQueue, 1, submit.data);
@@ -1208,6 +1512,34 @@ render_extra_numbers :: (
 
 		instanced.count = 0;
 	}
+}
+
+render_extra_quads :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store,
+	extra: *Extra
+) {
+	instanced := NewArray(extra.quads.count, WFramegraph.Instance, false,, temp);
+	instanced.count = 0;
+	for extra.quads {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = it.M;
+		instance.texture_rect = it.texture_rect;
+		instance.color = it.color;
+	}
+	if instanced.count == 0
+		return;
+
+	bindGroup := instance_bind_group(framegraph, "Extra Quads", instanced.count);
+	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
+	defer context.gpu.bindGroupRelease(bindGroup);
+	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
+	encode_and_draw(framegraph, pass, store.tile_model, instanced.count);
 }
 
 render_within_zones :: (
@@ -1362,6 +1694,26 @@ render_robots :: (
 		cylinder.M = M;
 		cylinder.M *= scale_matrix(V3f.{ ts, ts, tz });
 		array_add(*extra.cylinders, cylinder);
+	}
+
+	for robot: scene.robots {
+		if robot.shooting_cd < robot.shooting_time
+		&& robot.shooting_time < robot.shooting_cd + robot.charging_time
+		{
+			M := Scene.robot_matrix_local_to_joint(robot, 6);
+			ray_origin := v3(M * V4f.{ 0, 0, 0, 1 });
+			ray_direction := normalize(v3(M * V4f.{ 0, 0, 1, 0 }));
+
+			target, hit := ray_plane(ray_origin, ray_direction, V3f.{ 0, 0, 1 });
+			if hit {
+				particle: Extra.Quad;
+				particle.M = M4f.translate(target + V3f.{ -1.0, -1.0, 0.01 });
+				particle.M *= scale_matrix(V3f.{ 2.0, 2.0, 1.0 });
+				particle.texture_rect = V4f.{ 0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
+				particle.color = V4f.{ 1.0, 0.0, 0.0, 1.0 };
+				array_add(*extra.quads, particle);
+			}
+		}
 	}
 }
 
