@@ -42,6 +42,7 @@ Scene :: struct {
 	flags: [..] Flag;
 	props: [..] Prop;
 	particles: [..] Particle;
+	trophies: [..] Trophy;
 	robots: [..] Robot;
 	explosions: [..] Explosion;
 	terrain: Terrain;
@@ -89,6 +90,7 @@ clear :: (scene: *Scene) {
 	scene.robots.count = 0;
 	scene.particles.count = 0;
 	scene.explosions.count = 0;
+	scene.trophies.count = 0;
 	table_reset(*scene.trigger_activated);
 }
 
@@ -181,6 +183,11 @@ clear :: (frame_result: *Frame_Result) {
 Prop :: struct {
 	id: int;
 	M: M4f;
+}
+
+Trophy :: struct {
+	id: int;
+	position: V3f;
 }
 
 Particle :: struct {

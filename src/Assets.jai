@@ -262,6 +262,7 @@ FORMAT;
 #insert #run embed_data("AMBULANCE_OBJ", "ambulance.obj", #filepath);
 #insert #run embed_data("SPACESHIP_OBJ", "spaceship.obj", #filepath);
 
+#insert #run embed_data("TROPHY_OBJ", "trophy.obj", #filepath);
 
 #insert #run embed_data("NUMBER_0_OBJ", "number_0.obj", #filepath);
 #insert #run embed_data("NUMBER_1_OBJ", "number_1.obj", #filepath);
@@ -450,6 +451,7 @@ load_everything :: () {
 			"POLICE_OBJ",
 			"AMBULANCE_OBJ",
 			"SPACESHIP_OBJ",
+			"TROPHY_OBJ",
 			"NUMBER_0_OBJ",
 			"NUMBER_1_OBJ",
 			"NUMBER_2_OBJ",

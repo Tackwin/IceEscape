@@ -47,6 +47,36 @@ parse_terrain :: (text: string, scene: *Scene) {
 		if starts_with(line, "//")
 			continue;
 
+		if scan2(line, "trophy") {
+			trophy: Trophy;
+			trophy.id = scene.trophies.count + 1;
+			defer array_add(*scene.trophies, trophy);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *trophy.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+
+				print("Error reading trophy, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
+
 		if scan2(line, "robot") {
 			robot: Robot;
 			robot.id = scene.robots.count + 1;

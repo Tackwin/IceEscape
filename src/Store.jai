@@ -1,5 +1,4 @@
 #scope_file
-Render :: #import "Render";
 WRender :: #import "WRender";
 Assets :: #import "Assets";
 Platform :: #import "Platform";
@@ -110,6 +109,7 @@ Store :: struct {
 	spirit_model: WRender.Model;
 	flag_model: WRender.Model;
 	flag_down_model: WRender.Model;
+	trophy_model: WRender.Model;
 
 	robot_a0_model: WRender.Model;
 	robot_a1_model: WRender.Model;
@@ -141,45 +141,45 @@ Store :: struct {
 	ui_atlas: WRender.WTexture;
 	font_atlas: WRender.WTexture;
 
-	particle_texture_png: Assets.Image;
+	// particle_texture_png: Assets.Image;
 
-	tile_snow_albedo_png: Assets.Image;
-	tile_snow_normal_png: Assets.Image;
-	tile_snow_height_png: Assets.Image;
+	// tile_snow_albedo_png: Assets.Image;
+	// tile_snow_normal_png: Assets.Image;
+	// tile_snow_height_png: Assets.Image;
 
-	tile_cliff_albedo_png: Assets.Image;
-	tile_cliff_normal_png: Assets.Image;
-	tile_cliff_height_png: Assets.Image;
+	// tile_cliff_albedo_png: Assets.Image;
+	// tile_cliff_normal_png: Assets.Image;
+	// tile_cliff_height_png: Assets.Image;
 
-	tile_grass_albedo_png: Assets.Image;
-	tile_grass_normal_png: Assets.Image;
-	tile_grass_height_png: Assets.Image;
+	// tile_grass_albedo_png: Assets.Image;
+	// tile_grass_normal_png: Assets.Image;
+	// tile_grass_height_png: Assets.Image;
 
-	tile_slippy_albedo_png: Assets.Image;
-	tile_slippy_normal_png: Assets.Image;
-	tile_slippy_height_png: Assets.Image;
+	// tile_slippy_albedo_png: Assets.Image;
+	// tile_slippy_normal_png: Assets.Image;
+	// tile_slippy_height_png: Assets.Image;
 
-	ui_atlas_png: Assets.Image;
-	tile_atlas_png: Assets.Image;
+	// ui_atlas_png: Assets.Image;
+	// tile_atlas_png: Assets.Image;
 
-	skybox_ski_png: Assets.Image;
-	skybox_ski: Render.Texture;
+	// skybox_ski_png: Assets.Image;
+	// skybox_ski: Render.Texture;
 
-	tile_snow_albedo: Render.Texture;
-	tile_snow_normal: Render.Texture;
-	tile_snow_height: Render.Texture;
+	// tile_snow_albedo: Render.Texture;
+	// tile_snow_normal: Render.Texture;
+	// tile_snow_height: Render.Texture;
 
-	tile_cliff_albedo: Render.Texture;
-	tile_cliff_normal: Render.Texture;
-	tile_cliff_height: Render.Texture;
+	// tile_cliff_albedo: Render.Texture;
+	// tile_cliff_normal: Render.Texture;
+	// tile_cliff_height: Render.Texture;
 
-	tile_grass_albedo: Render.Texture;
-	tile_grass_normal: Render.Texture;
-	tile_grass_height: Render.Texture;
+	// tile_grass_albedo: Render.Texture;
+	// tile_grass_normal: Render.Texture;
+	// tile_grass_height: Render.Texture;
 
-	tile_slippy_albedo: Render.Texture;
-	tile_slippy_normal: Render.Texture;
-	tile_slippy_height: Render.Texture;
+	// tile_slippy_albedo: Render.Texture;
+	// tile_slippy_normal: Render.Texture;
+	// tile_slippy_height: Render.Texture;
 
 
 	loser_ogg: Platform.Audio;
@@ -191,78 +191,78 @@ Store :: struct {
 	click_wav: Platform.Audio;
 	snowflakes_and_lights_ogg: Platform.Audio;
 
-	font_shader: Render.Shader;
-	model_shader: Render.Shader;
-	texture_shader: Render.Shader;
-	instance_shader: Render.Shader;
-	tile_shader: Render.Shader;
-	quad_texture_shader: Render.Shader;
-	postpro_shader: Render.Shader;
-	instanced_texture_shader: Render.Shader;
-	shadow_shader: Render.Shader;
-	shadow_instanced_shader: Render.Shader;
-	shadow_instanced_texture_shader: Render.Shader;
-	skybox_shader: Render.Shader;
-	particle_shader: Render.Shader;
+	// font_shader: Render.Shader;
+	// model_shader: Render.Shader;
+	// texture_shader: Render.Shader;
+	// instance_shader: Render.Shader;
+	// tile_shader: Render.Shader;
+	// quad_texture_shader: Render.Shader;
+	// postpro_shader: Render.Shader;
+	// instanced_texture_shader: Render.Shader;
+	// shadow_shader: Render.Shader;
+	// shadow_instanced_shader: Render.Shader;
+	// shadow_instanced_texture_shader: Render.Shader;
+	// skybox_shader: Render.Shader;
+	// particle_shader: Render.Shader;
 
-	ice_texture: Render.Texture;
-	coin_texture: Render.Texture;
-	slippy_ice_texture: Render.Texture;
-	grass_texture: Render.Texture;
-	dirt_texture: Render.Texture;
-	mark_texture: Render.Texture;
-	vehicle_colormap: Render.Texture;
-	tile_atlas: Render.Texture;
+	// ice_texture: Render.Texture;
+	// coin_texture: Render.Texture;
+	// slippy_ice_texture: Render.Texture;
+	// grass_texture: Render.Texture;
+	// dirt_texture: Render.Texture;
+	// mark_texture: Render.Texture;
+	// vehicle_colormap: Render.Texture;
+	// tile_atlas: Render.Texture;
 
-	z_facing_unit_square_geometry: Render.Geometry;
-	flag_geometry: Render.Geometry;
-	flag_down_geometry: Render.Geometry;
-	player_geometry: Render.Geometry;
-	drag_racer_geometry: Render.Geometry;
-	vintage_racer_geometry: Render.Geometry;
-	monster_truck_geometry: Render.Geometry;
-	boat_row_geometry: Render.Geometry;
-	boat_fishing_geometry: Render.Geometry;
-	taxi_geometry: Render.Geometry;
-	police_geometry: Render.Geometry;
-	ambulance_geometry: Render.Geometry;
-	spaceship_geometry: Render.Geometry;
-	speedster_geometry: Render.Geometry;
-	tombstone_geometry: Render.Geometry;
-	skull_geometry: Render.Geometry;
-	coin_geometry: Render.Geometry;
-	key_geometry: Render.Geometry;
-	mark_geometry: Render.Geometry;
-	gate_geometry: Render.Geometry;
-	gate_close_geometry: Render.Geometry;
-	gate_finish_geometry: Render.Geometry;
-	gate_finish_close_geometry: Render.Geometry;
-	shuriken_geometry: Render.Geometry;
-	spirit_geometry: Render.Geometry;
-	skybox_geometry: Render.Geometry;
-	indicator_outline_geometry: Render.Geometry;
-	indicator_stroke_geometry: Render.Geometry;
+	// z_facing_unit_square_geometry: Render.Geometry;
+	// flag_geometry: Render.Geometry;
+	// flag_down_geometry: Render.Geometry;
+	// player_geometry: Render.Geometry;
+	// drag_racer_geometry: Render.Geometry;
+	// vintage_racer_geometry: Render.Geometry;
+	// monster_truck_geometry: Render.Geometry;
+	// boat_row_geometry: Render.Geometry;
+	// boat_fishing_geometry: Render.Geometry;
+	// taxi_geometry: Render.Geometry;
+	// police_geometry: Render.Geometry;
+	// ambulance_geometry: Render.Geometry;
+	// spaceship_geometry: Render.Geometry;
+	// speedster_geometry: Render.Geometry;
+	// tombstone_geometry: Render.Geometry;
+	// skull_geometry: Render.Geometry;
+	// coin_geometry: Render.Geometry;
+	// key_geometry: Render.Geometry;
+	// mark_geometry: Render.Geometry;
+	// gate_geometry: Render.Geometry;
+	// gate_close_geometry: Render.Geometry;
+	// gate_finish_geometry: Render.Geometry;
+	// gate_finish_close_geometry: Render.Geometry;
+	// shuriken_geometry: Render.Geometry;
+	// spirit_geometry: Render.Geometry;
+	// skybox_geometry: Render.Geometry;
+	// indicator_outline_geometry: Render.Geometry;
+	// indicator_stroke_geometry: Render.Geometry;
 
-	unit_cylinder_geometry: Render.Geometry;
-	unit_sphere_geometry: Render.Geometry;
+	// unit_cylinder_geometry: Render.Geometry;
+	// unit_sphere_geometry: Render.Geometry;
 
-	number_0_geometry: Render.Geometry;
-	number_1_geometry: Render.Geometry;
-	number_2_geometry: Render.Geometry;
-	number_3_geometry: Render.Geometry;
-	number_4_geometry: Render.Geometry;
-	number_5_geometry: Render.Geometry;
-	number_6_geometry: Render.Geometry;
-	number_7_geometry: Render.Geometry;
-	number_8_geometry: Render.Geometry;
-	number_9_geometry: Render.Geometry;
+	// number_0_geometry: Render.Geometry;
+	// number_1_geometry: Render.Geometry;
+	// number_2_geometry: Render.Geometry;
+	// number_3_geometry: Render.Geometry;
+	// number_4_geometry: Render.Geometry;
+	// number_5_geometry: Render.Geometry;
+	// number_6_geometry: Render.Geometry;
+	// number_7_geometry: Render.Geometry;
+	// number_8_geometry: Render.Geometry;
+	// number_9_geometry: Render.Geometry;
 
-	robot_a0_geometry: Render.Geometry;
-	robot_a1_geometry: Render.Geometry;
-	robot_a2_geometry: Render.Geometry;
-	robot_a3_geometry: Render.Geometry;
-	robot_a4_geometry: Render.Geometry;
-	robot_a5_geometry: Render.Geometry;
+	// robot_a0_geometry: Render.Geometry;
+	// robot_a1_geometry: Render.Geometry;
+	// robot_a2_geometry: Render.Geometry;
+	// robot_a3_geometry: Render.Geometry;
+	// robot_a4_geometry: Render.Geometry;
+	// robot_a5_geometry: Render.Geometry;
 }
 
 get_number_model ::  (store: Store, digit: int) -> *WRender.Model {
@@ -289,33 +289,33 @@ get_number_model ::  (store: Store, digit: int) -> *WRender.Model {
 	}
 	return null;
 }
-get_number_geometry :: (store: Store, digit: int) -> *Render.Geometry {
-	if digit == 0 {
-		return *store.number_0_geometry;
-	} else if digit == 1 {
-		return *store.number_1_geometry;
-	} else if digit == 2 {
-		return *store.number_2_geometry;
-	} else if digit == 3 {
-		return *store.number_3_geometry;
-	} else if digit == 4 {
-		return *store.number_4_geometry;
-	} else if digit == 5 {
-		return *store.number_5_geometry;
-	} else if digit == 6 {
-		return *store.number_6_geometry;
-	} else if digit == 7 {
-		return *store.number_7_geometry;
-	} else if digit == 8 {
-		return *store.number_8_geometry;
-	} else if digit == 9 {
-		return *store.number_9_geometry;
-	}
-	return null;
-}
-get_geometry :: (store: Store, id: int) -> *Render.Geometry {
-	return get_geometry(store, id.(Model_Id));
-}
+// get_number_geometry :: (store: Store, digit: int) -> *Render.Geometry {
+// 	if digit == 0 {
+// 		return *store.number_0_geometry;
+// 	} else if digit == 1 {
+// 		return *store.number_1_geometry;
+// 	} else if digit == 2 {
+// 		return *store.number_2_geometry;
+// 	} else if digit == 3 {
+// 		return *store.number_3_geometry;
+// 	} else if digit == 4 {
+// 		return *store.number_4_geometry;
+// 	} else if digit == 5 {
+// 		return *store.number_5_geometry;
+// 	} else if digit == 6 {
+// 		return *store.number_6_geometry;
+// 	} else if digit == 7 {
+// 		return *store.number_7_geometry;
+// 	} else if digit == 8 {
+// 		return *store.number_8_geometry;
+// 	} else if digit == 9 {
+// 		return *store.number_9_geometry;
+// 	}
+// 	return null;
+// }
+// get_geometry :: (store: Store, id: int) -> *Render.Geometry {
+// 	return get_geometry(store, id.(Model_Id));
+// }
 
 get_model :: (store: Store, id: Model_Id) -> *WRender.Model {
 	if #complete id == {
@@ -343,9 +343,9 @@ get_model :: (store: Store, id: Model_Id) -> *WRender.Model {
 		case .Spaceship; return *store.spaceship_model;
 	}
 }
-get_geometry :: (store: Store, id: Model_Id) -> *Render.Geometry {
-	return null;
-}
+// get_geometry :: (store: Store, id: Model_Id) -> *Render.Geometry {
+// 	return null;
+// }
 get_axes_model :: (store: Store, i: int) -> *WRender.Model {
 	if i == 0 {
 		return *store.robot_a0_model;
@@ -384,77 +384,77 @@ get_tile_rect :: (id: Scene.Tile.Kind) -> V4f {
 	return rect;
 }
 
-get_albedo :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
-	if #complete id == {
-		case .None;
-			return null;
-		case .Ice;
-			return *store.ice_texture;
-		case .Slippy_Ice;
-			return *store.tile_slippy_albedo;
-		case .Grass;
-			return *store.tile_grass_albedo;
-		case .Dirt;
-			return *store.dirt_texture;
-	}
-	return null;
-}
+// get_albedo :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
+// 	if #complete id == {
+// 		case .None;
+// 			return null;
+// 		case .Ice;
+// 			return *store.ice_texture;
+// 		case .Slippy_Ice;
+// 			return *store.tile_slippy_albedo;
+// 		case .Grass;
+// 			return *store.tile_grass_albedo;
+// 		case .Dirt;
+// 			return *store.dirt_texture;
+// 	}
+// 	return null;
+// }
 
-get_height :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
-	if #complete id == {
-		case .None;
-			return null;
-		case .Ice;
-			return *store.tile_snow_height;
-		case .Slippy_Ice;
-			return *store.tile_slippy_height;
-		case .Grass;
-			return *store.tile_grass_height;
-		case .Dirt;
-			return *store.tile_cliff_height;
-	}
-	return null;
-}
+// get_height :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
+// 	if #complete id == {
+// 		case .None;
+// 			return null;
+// 		case .Ice;
+// 			return *store.tile_snow_height;
+// 		case .Slippy_Ice;
+// 			return *store.tile_slippy_height;
+// 		case .Grass;
+// 			return *store.tile_grass_height;
+// 		case .Dirt;
+// 			return *store.tile_cliff_height;
+// 	}
+// 	return null;
+// }
 
-get_normal :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
-	if #complete id == {
-		case .None;
-			return null;
-		case .Ice;
-			return *store.ice_texture;
-		case .Slippy_Ice;
-			return *store.tile_slippy_normal;
-		case .Grass;
-			return *store.tile_grass_normal;
-		case .Dirt;
-			return *store.dirt_texture;
-	}
-	return null;
-}
+// get_normal :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
+// 	if #complete id == {
+// 		case .None;
+// 			return null;
+// 		case .Ice;
+// 			return *store.ice_texture;
+// 		case .Slippy_Ice;
+// 			return *store.tile_slippy_normal;
+// 		case .Grass;
+// 			return *store.tile_grass_normal;
+// 		case .Dirt;
+// 			return *store.dirt_texture;
+// 	}
+// 	return null;
+// }
 
-get_texture :: (store: Store, id: Texture_Id) -> *Render.Texture {
-	if #complete id == {
-		case .Ice; return *store.ice_texture;
-		case .Coin; return *store.coin_texture;
-		case .Slippy_Ice; return *store.slippy_ice_texture;
-		case .Grass; return *store.grass_texture;
-		case .Dirt; return *store.dirt_texture;
-		case .Mark; return *store.mark_texture;
-		case .Vehicle_Colormap; return *store.vehicle_colormap;
-	}
-	return null;
-}
+// get_texture :: (store: Store, id: Texture_Id) -> *Render.Texture {
+// 	if #complete id == {
+// 		case .Ice; return *store.ice_texture;
+// 		case .Coin; return *store.coin_texture;
+// 		case .Slippy_Ice; return *store.slippy_ice_texture;
+// 		case .Grass; return *store.grass_texture;
+// 		case .Dirt; return *store.dirt_texture;
+// 		case .Mark; return *store.mark_texture;
+// 		case .Vehicle_Colormap; return *store.vehicle_colormap;
+// 	}
+// 	return null;
+// }
 
-get_shader :: (store: Store, id: Shader_Id) -> *Render.Shader {
-	if #complete id == {
-		case .Font; return *store.font_shader;
-		case .Model; return *store.model_shader;
-		case .Texture; return *store.texture_shader;
-		case .Instance; return *store.instance_shader;
-		case .Tile; return *store.tile_shader;
-	}
-	return null;
-}
+// get_shader :: (store: Store, id: Shader_Id) -> *Render.Shader {
+// 	if #complete id == {
+// 		case .Font; return *store.font_shader;
+// 		case .Model; return *store.model_shader;
+// 		case .Texture; return *store.texture_shader;
+// 		case .Instance; return *store.instance_shader;
+// 		case .Tile; return *store.tile_shader;
+// 	}
+// 	return null;
+// }
 
 get_footstep_sound :: (store: Store, index: int) -> *Platform.Audio {
 	if index == 0 {
@@ -505,9 +505,9 @@ get_wprop :: (store: Store, id: Assets.Prop_Id) -> *WRender.Model {
 	return null;
 }
 
-get_prop :: (store: Store, id: Assets.Prop_Id) -> *Render.Geometry {
-	return null;
-}
+// get_prop :: (store: Store, id: Assets.Prop_Id) -> *Render.Geometry {
+// 	return null;
+// }
 
 init_store :: (platform: Platform.Platform, store: *Store) {
 	if Assets.RUNTIME {
@@ -602,6 +602,7 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.gate_finish_close_model = WRender.Model.make_from_obj(Assets.GATE_FINISH_CLOSE_OBJ);
 	store.flag_model = WRender.Model.make_from_obj(Assets.FLAG_OBJ);
 	store.flag_down_model = WRender.Model.make_from_obj(Assets.FLAG_DOWN_OBJ);
+	store.trophy_model = WRender.Model.make_from_obj(Assets.TROPHY_OBJ);
 	store.robot_a0_model = WRender.Model.make_from_obj(Assets.ROBOT_A0_OBJ);
 	store.robot_a1_model = WRender.Model.make_from_obj(Assets.ROBOT_A1_OBJ);
 	store.robot_a2_model = WRender.Model.make_from_obj(Assets.ROBOT_A2_OBJ);
@@ -804,26 +805,26 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 check_change :: (store: *Store, paths: [] string) {
 	#if Assets.RUNTIME {
 
-		handle_shader :: (change: string, name: string, shader: *Render.Shader) #expand {
-			if ends_with(change, tprint("%.vert", name))
-			|| ends_with(change, tprint("%.frag", name))
-			{
-				print("Recompiling % shader\n", name);
+		// handle_shader :: (change: string, name: string, shader: *Render.Shader) #expand {
+		// 	if ends_with(change, tprint("%.vert", name))
+		// 	|| ends_with(change, tprint("%.frag", name))
+		// 	{
+		// 		print("Recompiling % shader\n", name);
 
-				vertex_code, ok := read_entire_file(
-					tprint("%/../assets/Shader/%.vert", #filepath, name),, temp
-				);
-				if ok {
-					fragment_code:, ok = read_entire_file(
-						tprint("%/../assets/Shader/%.frag", #filepath, name),, temp
-					);
-					if ok {
-						Render.release(shader);
-						shader.* = Render.Shader.make(vertex_code, fragment_code);
-					}
-				}
-			}
-		}
+		// 		vertex_code, ok := read_entire_file(
+		// 			tprint("%/../assets/Shader/%.vert", #filepath, name),, temp
+		// 		);
+		// 		if ok {
+		// 			fragment_code:, ok = read_entire_file(
+		// 				tprint("%/../assets/Shader/%.frag", #filepath, name),, temp
+		// 			);
+		// 			if ok {
+		// 				Render.release(shader);
+		// 				shader.* = Render.Shader.make(vertex_code, fragment_code);
+		// 			}
+		// 		}
+		// 	}
+		// }
 
 		handle_wshader :: (change: string, name: string, wshader: *WRender.WShader) #expand {
 			if ends_with(change, tprint("%.wgsl", name)) {
@@ -840,16 +841,16 @@ check_change :: (store: *Store, paths: [] string) {
 		}
 
 		for paths {
-			handle_shader(it, "tile", *store.tile_shader);
-			handle_shader(it, "instance", *store.instance_shader);
-			handle_shader(it, "plain", *store.model_shader);
-			handle_shader(it, "postpro", *store.postpro_shader);
-			handle_shader(it, "shadow", *store.shadow_shader);
-			handle_shader(it, "shadow_instanced", *store.shadow_instanced_shader);
-			handle_shader(it, "instance_texture", *store.instanced_texture_shader);
-			handle_shader(it, "shadow_instance_texture", *store.shadow_instanced_texture_shader);
-			handle_shader(it, "skybox", *store.skybox_shader);
-			handle_shader(it, "particles", *store.particle_shader);
+			// handle_shader(it, "tile", *store.tile_shader);
+			// handle_shader(it, "instance", *store.instance_shader);
+			// handle_shader(it, "plain", *store.model_shader);
+			// handle_shader(it, "postpro", *store.postpro_shader);
+			// handle_shader(it, "shadow", *store.shadow_shader);
+			// handle_shader(it, "shadow_instanced", *store.shadow_instanced_shader);
+			// handle_shader(it, "instance_texture", *store.instanced_texture_shader);
+			// handle_shader(it, "shadow_instance_texture", *store.shadow_instanced_texture_shader);
+			// handle_shader(it, "skybox", *store.skybox_shader);
+			// handle_shader(it, "particles", *store.particle_shader);
 		}
 	}
 }

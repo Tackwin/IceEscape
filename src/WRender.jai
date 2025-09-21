@@ -1214,6 +1214,8 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		render_props(framegraph, encoder, shadowPass, scene, store);
 		render_gates(framegraph, encoder, shadowPass, scene, store);
 		render_tombstones(framegraph, encoder, shadowPass, scene, store);
+		render_coins(framegraph, encoder, shadowPass, scene, store);
+		render_trophies(framegraph, encoder, shadowPass, scene, store);
 		render_robots(framegraph, encoder, shadowPass, scene, store, *extra);
 		render_flags(framegraph, encoder, shadowPass, scene, store, *extra);
 		render_extra(framegraph, encoder, shadowPass, scene, store, *extra);
@@ -1246,7 +1248,9 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		render_props(framegraph, encoder, geometryPass, scene, store);
 		render_gates(framegraph, encoder, geometryPass, scene, store);
 		render_tombstones(framegraph, encoder, geometryPass, scene, store);
+		render_coins(framegraph, encoder, geometryPass, scene, store);
 		render_robots(framegraph, encoder, geometryPass, scene, store, *extra);
+		render_trophies(framegraph, encoder, geometryPass, scene, store);
 		render_flags(framegraph, encoder, geometryPass, scene, store, *extra);
 		render_explosions(framegraph, encoder, geometryPass, scene, store, *extra);
 
@@ -1647,6 +1651,62 @@ render_explosions :: (
 	defer context.gpu.bindGroupRelease(bindGroup);
 	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
 	encode_and_draw(framegraph, pass, store.unit_sphere_model, instanced.count);
+}
+
+render_coins :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store
+) {
+	instanced := NewArray(scene.coins.count, WFramegraph.Instance, false,, temp);
+	instanced.count = 0;
+	for scene.coins {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		R := to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, it.client.theta));
+
+		M := M4f.translate(it.client.position) * R;
+		instance.M = M;
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count == 0
+		return;
+
+	bindGroup := instance_bind_group(framegraph, "Coins", instanced.count);
+	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
+	defer context.gpu.bindGroupRelease(bindGroup);
+	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
+	encode_and_draw(framegraph, pass, store.coin_model, instanced.count);
+}
+
+render_trophies :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store
+) {
+	instanced := NewArray(scene.trophies.count, WFramegraph.Instance, false,, temp);
+	instanced.count = 0;
+	for scene.trophies {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		M := M4f.translate(it.position);
+		instance.M = M;
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count == 0
+		return;
+
+	bindGroup := instance_bind_group(framegraph, "Trophies", instanced.count);
+	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
+	defer context.gpu.bindGroupRelease(bindGroup);
+	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
+	encode_and_draw(framegraph, pass, store.trophy_model, instanced.count);
 }
 
 render_robots :: (

@@ -61,7 +61,7 @@ struct VertexOutput {
 
 	var color = instance.color;
 	if (instance.texture_rect.z > 0.0 && instance.texture_rect.w > 0.0) {
-		if (instance.z30sdf2 >= 4) {
+		if ((instance.z30sdf2 % 4) > 0) {
 			color = textureSample(sdfMap, sdfSampler, uv);
 		}
 		else {
