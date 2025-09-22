@@ -45,6 +45,7 @@ Scene :: struct {
 	trophies: [..] Trophy;
 	robots: [..] Robot;
 	explosions: [..] Explosion;
+	antiairs: [..] AntiAir;
 	terrain: Terrain;
 
 	camera_min: V2f;
@@ -91,6 +92,7 @@ clear :: (scene: *Scene) {
 	scene.particles.count = 0;
 	scene.explosions.count = 0;
 	scene.trophies.count = 0;
+	scene.antiairs.count = 0;
 	table_reset(*scene.trigger_activated);
 }
 
@@ -102,6 +104,7 @@ make_sync :: (scene: *Scene) -> Command.Sync_Scene {
 	sync_scene.skulls = NewArray(scene.skulls.count, Command.Sync_Skull, false,, temp);
 	sync_scene.moving_frames = NewArray(scene.moving_frames.count, Command.Sync_Moving_Frame, false,, temp);
 	sync_scene.robots = NewArray(scene.robots.count, Command.Sync_Robot, false,, temp);
+	sync_scene.antiairs = NewArray(scene.antiairs.count, Command.Sync_AntiAir, false,, temp);
 	for * sync_scene.players {
 		it.* = make_sync(*scene.players[it_index]);
 	}
@@ -113,6 +116,9 @@ make_sync :: (scene: *Scene) -> Command.Sync_Scene {
 	}
 	for * sync_scene.robots {
 		it.* = make_sync(*scene.robots[it_index]);
+	}
+	for * sync_scene.antiairs {
+		it.* = make_sync(*scene.antiairs[it_index]);
 	}
 	sync_scene.rng = scene.server_rng;
 	return sync_scene;
@@ -152,6 +158,16 @@ make_sync :: (robot: *Robot) -> Command.Sync_Robot {
 	return sync_robot;
 }
 
+make_sync :: (antiair: *AntiAir) -> Command.Sync_AntiAir {
+	sync_antiair: Command.Sync_AntiAir;
+	sync_antiair.id = antiair.id;
+	sync_antiair.position = antiair.server.position;
+	sync_antiair.target = antiair.server.target;
+	sync_antiair.cooldown = antiair.server.cooldown;
+	sync_antiair.t = antiair.server.t;
+	return sync_antiair;
+}
+
 Frame_Result :: struct {
 	died: [..] Command.Die;
 	respawn: [..] Command.Respawn;
@@ -178,6 +194,21 @@ clear :: (frame_result: *Frame_Result) {
 	frame_result.wipe_scene.count = 0;
 	frame_result.end_level.count = 0;
 	frame_result.explode.count = 0;
+}
+
+AntiAir :: struct {
+	id: int;
+	server: struct {
+		position: V3f;
+		target: V3f;
+		cooldown: float = 2.0;
+		radius := 1.0;
+		t := 0.0;
+		just_shooted := false;
+	}
+	client: struct {
+		t := 0.0;
+	}
 }
 
 Prop :: struct {
@@ -709,6 +740,14 @@ find_by_robot_id :: (scene: Scene, id: int) -> *Robot {
 	return null;
 }
 
+find_by_antiair_id :: (scene: Scene, id: int) -> *AntiAir {
+	for * scene.antiairs {
+		if it.id == id
+			return it;
+	}
+	return null;
+}
+
 find_by_frame_id :: (scene: Scene, id: int) -> *Moving_Frame {
 	for * scene.moving_frames {
 		if it.id == id
@@ -788,7 +827,7 @@ restart :: (scene: *Scene) {
 
 add_snow :: (scene: *Scene, dt: float32) {
 	// Add snow particles
-	n_snow := dt * (scene.camera_max.x - scene.camera_min.x) * (scene.camera_max.y - scene.camera_min.y) * 0.2;
+	n_snow := dt * (scene.camera_max.x - scene.camera_min.x) * (scene.camera_max.y - scene.camera_min.y) * 0.1;
 	while n_snow > 0.0 {
 		r := Rand.random_uniform(*scene.client_rng, 0.0, 1.0);
 		if r > n_snow
@@ -927,6 +966,10 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	}
 
 	for * scene.robots {
+		update(scene, it, dt);
+	}
+
+	for * scene.antiairs {
 		update(scene, it, dt);
 	}
 
@@ -1201,6 +1244,25 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 			}
 			robot.just_shooted = false;
 		}
+
+		for * antiair: scene.antiairs {
+			if antiair.server.just_shooted {
+				explosion: Explosion;
+				explosion.position = antiair.server.target;
+				explosion.lifetime = 1.0;
+				explosion.max_size = antiair.server.radius;
+
+				array_add(*scene.explosions, explosion);
+
+				cmd: Command.Explode;
+				cmd.id = 0;
+				cmd.lifetime = explosion.lifetime;
+				cmd.max_size = explosion.max_size;
+				cmd.position = explosion.position;
+				array_add(*result.explode, cmd);
+			}
+			antiair.server.just_shooted = false;
+		}
 	}
 }
 
@@ -1276,6 +1338,22 @@ server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 	if !any_alive {
 		array_add(*result.wipe_scene, .{});
 		restart(scene);
+	}
+}
+
+update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
+	antiair.client.t += dt;
+	if antiair.client.t > antiair.server.cooldown {
+		antiair.client.t = 0.0;
+	}
+
+	if scene.is_server {
+		antiair.server.t += dt;
+		
+		if antiair.server.t > antiair.server.cooldown {
+			antiair.server.t = 0.0;
+			antiair.server.just_shooted = true;
+		}
 	}
 }
 
@@ -1723,6 +1801,19 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 			robot.shooting_time = sync_robot.shooting_time;
 			robot.position = sync_robot.position;
 			robot.shooting_cd = sync_robot.shooting_cd;
+			return true;
+		}
+	}
+
+	sync_antiair: *Command.Sync_AntiAir = isa(command.payload, Command.Sync_AntiAir);
+	if sync_antiair {
+		antiair := find_by_antiair_id(scene, sync_antiair.id);
+		if antiair {
+			antiair.server.t = sync_antiair.t;
+			antiair.client.t = antiair.server.t;
+			antiair.server.cooldown = sync_antiair.cooldown;
+			antiair.server.position = sync_antiair.position;
+			antiair.server.target = sync_antiair.target;
 			return true;
 		}
 	}

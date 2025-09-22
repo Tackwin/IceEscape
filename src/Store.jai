@@ -12,6 +12,7 @@ Scene :: #import "Scene";
 Colormaps_Rect :: struct {
 	prop    :: V4f.{ 0 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
 	vehicle :: V4f.{ 1 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
+	pirate  :: V4f.{ 0 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
 }
 
 Model_Id :: enum {
@@ -98,6 +99,7 @@ Store :: struct {
 	spaceship_model: WRender.Model;
 	tombstone_model: WRender.Model;
 	skull_model: WRender.Model;
+	pirateship_model: WRender.Model;
 	coin_model: WRender.Model;
 	key_model: WRender.Model;
 	mark_model: WRender.Model;
@@ -110,6 +112,10 @@ Store :: struct {
 	flag_model: WRender.Model;
 	flag_down_model: WRender.Model;
 	trophy_model: WRender.Model;
+
+	antiair_camion_model: WRender.Model;
+	antiair_canon_model: WRender.Model;
+	missile_model: WRender.Model;
 
 	robot_a0_model: WRender.Model;
 	robot_a1_model: WRender.Model;
@@ -324,7 +330,7 @@ get_model :: (store: Store, id: Model_Id) -> *WRender.Model {
 		case .Tile; return *store.tile_model;
 		case .Speedster; return *store.speedster_model;
 		case .Tombstone; return *store.tombstone_model;
-		case .Skull; return *store.skull_model;
+		case .Skull; return *store.pirateship_model;
 		case .Coin; return *store.coin_model;
 		case .Key; return *store.key_model;
 		case .Mark; return *store.mark_model;
@@ -591,6 +597,7 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.spaceship_model = WRender.Model.make_from_obj(Assets.SPACESHIP_OBJ);
 	store.tombstone_model = WRender.Model.make_from_obj(Assets.TOMBSTONE_OBJ);
 	store.skull_model = WRender.Model.make_from_obj(Assets.SKULL_OBJ);
+	store.pirateship_model = WRender.Model.make_from_obj(Assets.PIRATE_SHIP_OBJ);
 	store.coin_model = WRender.Model.make_from_obj(Assets.COIN_OBJ);
 	store.key_model = WRender.Model.make_from_obj(Assets.KEY_OBJ);
 	store.mark_model = WRender.Model.make_from_obj(Assets.MARK_OBJ);
@@ -603,6 +610,9 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.flag_model = WRender.Model.make_from_obj(Assets.FLAG_OBJ);
 	store.flag_down_model = WRender.Model.make_from_obj(Assets.FLAG_DOWN_OBJ);
 	store.trophy_model = WRender.Model.make_from_obj(Assets.TROPHY_OBJ);
+	store.antiair_camion_model = WRender.Model.make_from_obj(Assets.ANTIAIR_CAMION_OBJ);
+	store.antiair_canon_model = WRender.Model.make_from_obj(Assets.ANTIAIR_CANON_OBJ);
+	store.missile_model = WRender.Model.make_from_obj(Assets.MISSILE_OBJ);
 	store.robot_a0_model = WRender.Model.make_from_obj(Assets.ROBOT_A0_OBJ);
 	store.robot_a1_model = WRender.Model.make_from_obj(Assets.ROBOT_A1_OBJ);
 	store.robot_a2_model = WRender.Model.make_from_obj(Assets.ROBOT_A2_OBJ);

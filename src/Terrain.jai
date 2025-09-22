@@ -47,6 +47,43 @@ parse_terrain :: (text: string, scene: *Scene) {
 		if starts_with(line, "//")
 			continue;
 
+		if scan2(line, "antiair") {
+			antiair: AntiAir;
+			antiair.id = scene.antiairs.count + 1;
+			defer array_add(*scene.antiairs, antiair);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *antiair.server.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+				target := *antiair.server.target;
+				if scan2(line, "- target: % % %", *target.x, *target.y, *target.z)
+					continue;
+				if scan2(line, "- cooldown: %", *antiair.server.cooldown)
+					continue;
+				if scan2(line, "- radius: %", *antiair.server.radius)
+					continue;
+
+				print("Error reading antiair, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
+
 		if scan2(line, "trophy") {
 			trophy: Trophy;
 			trophy.id = scene.trophies.count + 1;
@@ -558,30 +595,30 @@ parse_terrain :: (text: string, scene: *Scene) {
 	get_probability :: (id: Assets.Prop_Id) -> float {
 		if #complete id == {
 			case .TERRAIN_TREE_SNOW_A;
-				return 0.35;
+				return 0.40;
 			case .TERRAIN_TREE_SNOW_B;
-				return 0.25;
+				return 0.30;
 			case .TERRAIN_TREE_SNOW_C;
-				return 0.125;
+				return 0.175;
 			case .TERRAIN_SNOWMAN;
 				return 0.04;
 			case .TERRAIN_SNOWMAN_HAT;
 				return 0.01;
 			case .TERRAIN_SNOW_FLAT;
-				return 0.0;
+				return 0.05;
 			case .TERRAIN_SNOW_FLAT_LARGE;
-				return 0.0;
+				return 0.025;
 			case .TERRAIN_SNOW_PILE;
-				return 0.0;
+				return 0.01;
 			case .TERRAIN_SNOWFLAKE_A;
 			case .TERRAIN_SNOWFLAKE_B;
 			case .TERRAIN_SNOWFLAKE_C;
 			case .ROCK_SMALL;
-				return 0.075;
+				return 0.1;
 			case .ROCK_MEDIUM;
-				return 0.05;
+				return 0.075;
 			case .ROCK_LARGE;
-				return 0.02;
+				return 0.025;
 		}
 		return 0.0;
 	}

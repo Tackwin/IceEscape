@@ -121,6 +121,13 @@ Command :: struct {
 		shooting_time: float;
 		shooting_cd: float;
 	}
+	Sync_AntiAir :: struct {
+		id: int;
+		position: V3f;
+		target: V3f;
+		cooldown: float;
+		t: float; // Time since spawn
+	}
 	Sync_Scene :: struct {
 		id: int;
 		terrain: string;
@@ -128,6 +135,7 @@ Command :: struct {
 		skulls: [] Sync_Skull;
 		moving_frames: [] Sync_Moving_Frame;
 		robots: [] Sync_Robot;
+		antiairs: [] Sync_AntiAir;
 		rng: Rand.State;
 	}
 	Explode :: struct {
@@ -142,7 +150,7 @@ Command :: struct {
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
-		Wipe_Scene, End_Level, Sync_Robot, Explode
+		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir
 	);
 	sent_timestamp: float64;
 }
@@ -203,6 +211,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
 		case .Sync_Robot; #through;
+		case .Sync_AntiAir; #through;
 		case .Sync_Moving_Frame; #through;
 		case .NTP; #through;
 		case .Explode; #through;
@@ -224,6 +233,8 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 				size_of(type_of(sync_scene.moving_frames.data.*)) * sync_scene.moving_frames.count;
 			additional_data_size +=
 				size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count;
+			additional_data_size +=
+				size_of(type_of(sync_scene.antiairs.data.*)) * sync_scene.antiairs.count;
 
 			array_reserve(buffer, dry_size + additional_data_size);
 
@@ -259,6 +270,12 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 				size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count
 			);
 			cursor += size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count;
+			memcpy(
+				buffer.data + cursor,
+				sync_scene.antiairs.data,
+				size_of(type_of(sync_scene.antiairs.data.*)) * sync_scene.antiairs.count
+			);
+			cursor += size_of(type_of(sync_scene.antiairs.data.*)) * sync_scene.antiairs.count;
 			buffer.count = cursor;
 	}
 }
@@ -292,6 +309,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Sync_Gate; #through;
 		case .Sync_Robot; #through;
 		case .Sync_Moving_Frame; #through;
+		case .Sync_AntiAir; #through;
 		case .NTP; #through;
 		case .Explode; #through;
 		case .Move_To_Play_World;
@@ -314,6 +332,8 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 				size_of(type_of(sync_scene.moving_frames.data.*)) * sync_scene.moving_frames.count;
 			sync_scene.robots.data = (buffer.data + cursor).(*Command.Sync_Robot);
 			cursor += size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count;
+			sync_scene.antiairs.data = (buffer.data + cursor).(*Command.Sync_AntiAir);
+			cursor += size_of(type_of(sync_scene.antiairs.data.*)) * sync_scene.antiairs.count;
 
 			return cmd, true;
 	}

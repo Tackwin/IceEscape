@@ -554,8 +554,13 @@ ease_quad :: (x: float) -> float {
 	return x * x;
 }
 
+ease_in_quad :: ease_quad;
+
 ease_out_quad :: (x: float) -> float {
 	return 1 - (1 - x) * (1 - x);
+}
+ease_in_cubic :: (x: float) -> float {
+	return x * x * x;
 }
 
 ease_up_and_back :: (x: float) -> float {
@@ -585,4 +590,9 @@ ease_in_out_bounce :: (x: float) -> float {
 	return ifx x < 0.5
 		then (1 - ease_out_bounce(1 - 2 * x)) / 2
 		else (1 + ease_out_bounce(2 * x - 1)) / 2;
+}
+
+linear_step :: (x: float, edge0: float, edge1: float) -> float {
+	t := clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+	return t;
 }

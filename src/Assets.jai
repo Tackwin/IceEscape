@@ -259,8 +259,12 @@ FORMAT;
 #insert #run embed_data("BOAT_FISHING_OBJ", "boat_fishing.obj", #filepath);
 #insert #run embed_data("TAXI_OBJ", "taxi.obj", #filepath);
 #insert #run embed_data("POLICE_OBJ", "police.obj", #filepath);
+#insert #run embed_data("PIRATE_SHIP_OBJ", "pirate_ship.obj", #filepath);
 #insert #run embed_data("AMBULANCE_OBJ", "ambulance.obj", #filepath);
 #insert #run embed_data("SPACESHIP_OBJ", "spaceship.obj", #filepath);
+#insert #run embed_data("ANTIAIR_CAMION_OBJ", "antiair_camion.obj", #filepath);
+#insert #run embed_data("ANTIAIR_CANON_OBJ", "antiair_canon.obj", #filepath);
+#insert #run embed_data("MISSILE_OBJ", "missile.obj", #filepath);
 
 #insert #run embed_data("TROPHY_OBJ", "trophy.obj", #filepath);
 
@@ -449,8 +453,12 @@ load_everything :: () {
 			"BOAT_FISHING_OBJ",
 			"TAXI_OBJ",
 			"POLICE_OBJ",
+			"PIRATE_SHIP_OBJ",
 			"AMBULANCE_OBJ",
 			"SPACESHIP_OBJ",
+			"ANTIAIR_CAMION_OBJ",
+			"ANTIAIR_CANON_OBJ",
+			"MISSILE_OBJ",
 			"TROPHY_OBJ",
 			"NUMBER_0_OBJ",
 			"NUMBER_1_OBJ",

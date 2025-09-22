@@ -1217,6 +1217,7 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		render_coins(framegraph, encoder, shadowPass, scene, store);
 		render_trophies(framegraph, encoder, shadowPass, scene, store);
 		render_robots(framegraph, encoder, shadowPass, scene, store, *extra);
+		render_antiairs(framegraph, encoder, shadowPass, scene, store, *extra);
 		render_flags(framegraph, encoder, shadowPass, scene, store, *extra);
 		render_extra(framegraph, encoder, shadowPass, scene, store, *extra);
 
@@ -1251,6 +1252,7 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		render_coins(framegraph, encoder, geometryPass, scene, store);
 		render_robots(framegraph, encoder, geometryPass, scene, store, *extra);
 		render_trophies(framegraph, encoder, geometryPass, scene, store);
+		render_antiairs(framegraph, encoder, geometryPass, scene, store, *extra);
 		render_flags(framegraph, encoder, geometryPass, scene, store, *extra);
 		render_explosions(framegraph, encoder, geometryPass, scene, store, *extra);
 
@@ -1682,6 +1684,102 @@ render_coins :: (
 	encode_and_draw(framegraph, pass, store.coin_model, instanced.count);
 }
 
+render_antiairs :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store,
+	extra: *Extra
+) {
+	instanced := NewArray(scene.antiairs.count, WFramegraph.Instance, false,, temp);
+	instanced.count = 0;
+	for scene.antiairs {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		M := M4f.translate(it.server.position);
+		instance.M = M;
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0 {
+		bindGroup := instance_bind_group(framegraph, "Antiairs camion", instanced.count);
+		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
+		defer context.gpu.bindGroupRelease(bindGroup);
+		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
+		encode_and_draw(framegraph, pass, store.antiair_camion_model, instanced.count);
+	}
+
+	instanced.count = 0;
+	for scene.antiairs {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		dt := normalize(it.server.target - it.server.position);
+		dt.z = 0;
+		dt = normalize(dt);
+		R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, dt));
+		M := M4f.translate(it.server.position + V3f.{ -0.5, 0, 0.7 } * 0.7 * 0.8);
+		instance.M = M * R;
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0 {
+		bindGroup := instance_bind_group(framegraph, "Antiairs canon", instanced.count);
+		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
+		defer context.gpu.bindGroupRelease(bindGroup);
+		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
+		encode_and_draw(framegraph, pass, store.antiair_canon_model, instanced.count);
+	}
+
+	instanced.count = 0;
+	for scene.antiairs {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		dt := normalize(it.server.target - it.server.position);
+		dt.z = 0;
+		dt = normalize(dt);
+		{
+			R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, dt));
+			dt = v3(R * V4f.{ 0.58, 0.0, 0.82, 0.0 });
+			dt = normalize(dt);
+		}
+
+		M := M4f.translate(it.server.position + V3f.{ -0.55, 0, 0.9 } * 0.7 * 0.8);
+		R := to_rotation_matrix(from_unit_vectors(V3f.{ 0, 0, 1 }, dt));
+		// In the chamber
+		if it.client.t < (it.server.cooldown - 1.5) {
+			instance.M = M * R;
+		}
+		// Taking off
+		else if it.client.t < (it.server.cooldown - 1.0) {
+			t := linear_step(it.client.t, it.server.cooldown - 1.5, it.server.cooldown - 0.75);
+			t = ease_in_quad(t);
+			instance.M = M * R * M4f.translate(V3f.{ 0, 0, 15 * t });
+		}
+		// In flight some place random
+		else if it.client.t < (it.server.cooldown - 0.5) {
+			instance.M = M4f.translate(.{ 0, 0, -100 });
+		}
+		// landing
+		else {
+			t := linear_step(it.client.t, it.server.cooldown - 0.5, it.server.cooldown);
+			t = ease_in_quad(t);
+			instance.M = M4f.translate(.{ it.server.target.x, it.server.target.y, 10 * (1 - t) });
+			R := to_rotation_matrix(from_unit_vectors(V3f.{ 0, 0, 1 }, V3f.{ 0, 0, -1 }));
+			instance.M = instance.M * R;
+		}
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0 {
+		bindGroup := instance_bind_group(framegraph, "Antiairs missile", instanced.count);
+		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
+		defer context.gpu.bindGroupRelease(bindGroup);
+		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
+		encode_and_draw(framegraph, pass, store.missile_model, instanced.count);
+	}
+}
+
 render_trophies :: (
 	framegraph: *WFramegraph,
 	encoder: WGPUCommandEncoder,
@@ -2087,7 +2185,7 @@ render_skulls :: (
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
 		instance.M = Scene.compute_skull_matrix(scene, it);
-		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+		instance.texture_rect = Store.Colormaps_Rect.pirate;
 	}
 
 	if instanced.count == 0
@@ -2099,7 +2197,7 @@ render_skulls :: (
 	defer context.gpu.bindGroupRelease(bindGroup);
 	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
 
-	encode_and_draw(framegraph, pass, store.skull_model, instanced.count);
+	encode_and_draw(framegraph, pass, store.pirateship_model, instanced.count);
 
 }
 
