@@ -72,6 +72,10 @@ parse_terrain :: (text: string, scene: *Scene) {
 				target := *antiair.server.target;
 				if scan2(line, "- target: % % %", *target.x, *target.y, *target.z)
 					continue;
+
+				target_size := *antiair.server.target_size;
+				if scan2(line, "- target_size: % %", *target_size.x, *target_size.y)
+					continue;
 				if scan2(line, "- cooldown: %", *antiair.server.cooldown)
 					continue;
 				if scan2(line, "- radius: %", *antiair.server.radius)
@@ -583,6 +587,39 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading within zone, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
+
+		if scan2("trap", line) {
+			trap: Trap;
+			trap.id = scene.traps.count + 1;
+			defer array_add(*scene.traps, trap);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *trap.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+
+				if scan2(line, "- radius_hitbox: %", *trap.radius_hitbox)
+					continue;
+
+				print("Error reading trap, unrecognized line: % (L%)\n", line, cursor);
 				cursor -= 1;
 			}
 

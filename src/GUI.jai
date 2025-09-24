@@ -1,6 +1,5 @@
 #scope_file
 Platform :: #import "Platform";
-Store :: #import "Store";
 #import "Basic";
 #import "Math";
 #import "Algebra";
@@ -42,6 +41,7 @@ IM_t :: struct {
 		color: V4f = .{ 1.0, 1.0, 1.0, 1.0 };
 		z: float32 = 0;
 		texture_rect: V4f = .{ 0, 0, 0, 0 };
+		late := false;
 	}
 	quads: [..] Quad;
 
@@ -66,13 +66,11 @@ IM_t :: struct {
 	pressed: [Platform.Key_COUNT] bool;
 
 	mouse_pos: V2f;
-	store: *Store.Store;
 }
 
 IM: IM_t;
-im_init :: (store: *Store.Store) {
+im_init :: () {
 	IM = .{};
-	IM.store = store;
 }
 
 handle_frame_info :: (info: Platform.Frame_Info) {
@@ -169,14 +167,15 @@ push_quad_texture :: (pos: V2f, size: V2f, color: V3f, tex_slot: V2f, z := 0.0) 
 push_late_quad_screen :: (pos: V2f, size: V2f, color: V4f, z := 0.0) {
 	quad: IM.Quad;
 	// IM.display_size
-	quad.pos.x = pos.x / IM.display_size.x * 2 - 1.0;
-	quad.pos.y = pos.y / IM.display_size.y * 2 - 1.0;
-	quad.size.x = size.x / IM.display_size.x * 2;
-	quad.size.y = size.y / IM.display_size.y * 2;
+	quad.pos.x = pos.x;
+	quad.pos.y = pos.y;
+	quad.size.x = size.x;
+	quad.size.y = size.y;
 	quad.color = color;
 	quad.z = z;
+	quad.late = true;
 
-	array_add(*IM.quads_late, quad);
+	array_add(*IM.quads, quad);
 }
 
 Text_Align :: enum {

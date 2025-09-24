@@ -265,6 +265,9 @@ FORMAT;
 #insert #run embed_data("ANTIAIR_CAMION_OBJ", "antiair_camion.obj", #filepath);
 #insert #run embed_data("ANTIAIR_CANON_OBJ", "antiair_canon.obj", #filepath);
 #insert #run embed_data("MISSILE_OBJ", "missile.obj", #filepath);
+#insert #run embed_data("DRONE_OBJ", "drone.obj", #filepath);
+#insert #run embed_data("DRONE_BLADE_OBJ", "drone_blade.obj", #filepath);
+#insert #run embed_data("TRAP_SPIKE_OBJ", "trap_spike.obj", #filepath);
 
 #insert #run embed_data("TROPHY_OBJ", "trophy.obj", #filepath);
 
@@ -459,6 +462,9 @@ load_everything :: () {
 			"ANTIAIR_CAMION_OBJ",
 			"ANTIAIR_CANON_OBJ",
 			"MISSILE_OBJ",
+			"DRONE_OBJ",
+			"TRAP_SPIKE_OBJ",
+			"DRONE_BLADE_OBJ",
 			"TROPHY_OBJ",
 			"NUMBER_0_OBJ",
 			"NUMBER_1_OBJ",

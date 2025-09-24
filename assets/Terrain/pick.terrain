@@ -166,3 +166,7 @@ trigger_zone
 
 trophy
 - position: 11.5 13.5 0.0
+
+trap
+- position: 11.5 7.5 0.0
+- radius_hitbox: 0.5

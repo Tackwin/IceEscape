@@ -8,6 +8,7 @@
 #import "Hash_Table";
 #import "Terrain";
 Rand :: #import "Rand";
+GUI :: #import "GUI";
 
 #scope_export
 
@@ -46,6 +47,7 @@ Scene :: struct {
 	robots: [..] Robot;
 	explosions: [..] Explosion;
 	antiairs: [..] AntiAir;
+	traps: [..] Trap;
 	terrain: Terrain;
 
 	camera_min: V2f;
@@ -93,6 +95,7 @@ clear :: (scene: *Scene) {
 	scene.explosions.count = 0;
 	scene.trophies.count = 0;
 	scene.antiairs.count = 0;
+	scene.traps.count = 0;
 	table_reset(*scene.trigger_activated);
 }
 
@@ -164,6 +167,8 @@ make_sync :: (antiair: *AntiAir) -> Command.Sync_AntiAir {
 	sync_antiair.position = antiair.server.position;
 	sync_antiair.target = antiair.server.target;
 	sync_antiair.cooldown = antiair.server.cooldown;
+	sync_antiair.target_size = antiair.server.target_size;
+	sync_antiair.next_target = antiair.server.next_target;
 	sync_antiair.t = antiair.server.t;
 	return sync_antiair;
 }
@@ -176,6 +181,7 @@ Frame_Result :: struct {
 	wipe_scene: [..] Command.Wipe_Scene;
 	end_level: [..] Command.End_Level;
 	explode: [..] Command.Explode;
+	antiair_shoot: [..] Command.AntiAir_Shoot;
 }
 free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.died);
@@ -185,6 +191,7 @@ free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.wipe_scene);
 	array_free(frame_result.end_level);
 	array_free(frame_result.explode);
+	array_free(frame_result.antiair_shoot);
 }
 clear :: (frame_result: *Frame_Result) {
 	frame_result.died.count = 0;
@@ -194,6 +201,7 @@ clear :: (frame_result: *Frame_Result) {
 	frame_result.wipe_scene.count = 0;
 	frame_result.end_level.count = 0;
 	frame_result.explode.count = 0;
+	frame_result.antiair_shoot.count = 0;
 }
 
 AntiAir :: struct {
@@ -201,14 +209,25 @@ AntiAir :: struct {
 	server: struct {
 		position: V3f;
 		target: V3f;
+		target_size: V2f = .{ 0.25, 0.25 };
 		cooldown: float = 2.0;
 		radius := 1.0;
 		t := 0.0;
 		just_shooted := false;
+
+		next_target: V2f = .{ FLOAT32_MAX, FLOAT32_MAX };
+		curr_target: V2f = .{ FLOAT32_MAX, FLOAT32_MAX };
 	}
 	client: struct {
 		t := 0.0;
+		next_target: V2f = .{ FLOAT32_MAX, FLOAT32_MAX };
 	}
+}
+
+Trap :: struct {
+	id: int;
+	position: V3f;
+	radius_hitbox := 0.5;
 }
 
 Prop :: struct {
@@ -827,7 +846,9 @@ restart :: (scene: *Scene) {
 
 add_snow :: (scene: *Scene, dt: float32) {
 	// Add snow particles
-	n_snow := dt * (scene.camera_max.x - scene.camera_min.x) * (scene.camera_max.y - scene.camera_min.y) * 0.1;
+	n_snow :=
+		dt * (scene.camera_max.x - scene.camera_min.x) * (scene.camera_max.y - scene.camera_min.y);
+	n_snow *= 0.5;
 	while n_snow > 0.0 {
 		r := Rand.random_uniform(*scene.client_rng, 0.0, 1.0);
 		if r > n_snow
@@ -875,12 +896,12 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					clamp(alpha, 0.0, 1.0)
 				};
 
-				// Render.push_late_quad_screen(
-				// 	.{ 0, 0 },
-				// 	Render.IM.display_size,
-				// 	color,
-				// 	-1.0
-				// );
+				GUI.push_late_quad_screen(
+					.{ 0, 0 },
+					GUI.IM.display_size,
+					color,
+					-1.0
+				);
 			} else {
 				scene.state = .Wipe_Fade_Out;
 				restart(scene);
@@ -899,12 +920,12 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					clamp(alpha, 0.0, 1.0)
 				};
 
-				// Render.push_late_quad_screen(
-				// 	.{ 0, 0 },
-				// 	Render.IM.display_size,
-				// 	color,
-				// 	-1.0
-				// );
+				GUI.push_late_quad_screen(
+					.{ 0, 0 },
+					GUI.IM.display_size,
+					color,
+					-1.0
+				);
 			}
 	}
 }
@@ -1011,6 +1032,22 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	update_particles(scene, dt);
 
 	if scene.is_server && result {
+		// >RULE Player die on contact with trap
+		for * scene.traps {
+			p := it.position;
+
+			for * player: scene.players {
+				if !player.server.dead {
+					q := player.server.position;
+
+					d := max(abs((p - q).x), abs((p - q).y));
+					if d < it.radius_hitbox {
+						server_die(scene, player, result);
+						continue;
+					}
+				}
+			}
+		}
 
 		// >RULE Trigger zone check
 		for * scene.trigger_zones {
@@ -1193,27 +1230,25 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 			}
 		}
 
-		// >RULE First player to reach the end gate win.
-		if !scene.end_scene_countdown_started for * scene.gates {
-			if it.is_end {
-				p := v2(it.position);
+		// >RULE First player to reach a trophy wins.
+		if !scene.end_scene_countdown_started for * scene.trophies {
+			p := v2(it.position);
 
-				for * player: scene.players {
-					if player.server.dead
-						continue;
+			for * player: scene.players {
+				if player.server.dead
+					continue;
 
-					q := v2(player.server.position);
-					d := norm(p - q);
-					if d < 0.5 {
-						winner: Command.End_Level;
-						winner.winner_id = player.id;
-						winner.next_level_scheduled_in_seconds = 6;
-						winner.next_scene_id = scene.next_id;
-						array_add(*result.end_level, winner);
+				q := v2(player.server.position);
+				d := norm(p - q);
+				if d < 0.25 {
+					winner: Command.End_Level;
+					winner.winner_id = player.id;
+					winner.next_level_scheduled_in_seconds = 6;
+					winner.next_scene_id = scene.next_id;
+					array_add(*result.end_level, winner);
 
-						win_level(scene, player.id);
-						break it;
-					}
+					win_level(scene, player.id);
+					break it;
 				}
 			}
 		}
@@ -1248,18 +1283,27 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 		for * antiair: scene.antiairs {
 			if antiair.server.just_shooted {
 				explosion: Explosion;
-				explosion.position = antiair.server.target;
+				explosion.position = v3(antiair.server.curr_target, 0.0);
 				explosion.lifetime = 1.0;
 				explosion.max_size = antiair.server.radius;
 
 				array_add(*scene.explosions, explosion);
 
-				cmd: Command.Explode;
-				cmd.id = 0;
-				cmd.lifetime = explosion.lifetime;
-				cmd.max_size = explosion.max_size;
-				cmd.position = explosion.position;
-				array_add(*result.explode, cmd);
+				{
+					cmd: Command.Explode;
+					cmd.id = 0;
+					cmd.lifetime = explosion.lifetime;
+					cmd.max_size = explosion.max_size;
+					cmd.position = explosion.position;
+					array_add(*result.explode, cmd);
+				}
+
+				{
+					cmd: Command.AntiAir_Shoot;
+					cmd.antiair_id = antiair.id;
+					cmd.next_target = antiair.server.next_target;
+					array_add(*result.antiair_shoot, cmd);
+				}
 			}
 			antiair.server.just_shooted = false;
 		}
@@ -1343,6 +1387,8 @@ server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 
 update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
 	antiair.client.t += dt;
+	if 0.1 < antiair.client.t && antiair.client.t + 1 < antiair.server.cooldown
+		antiair.client.next_target = antiair.server.next_target;
 	if antiair.client.t > antiair.server.cooldown {
 		antiair.client.t = 0.0;
 	}
@@ -1353,7 +1399,19 @@ update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
 		if antiair.server.t > antiair.server.cooldown {
 			antiair.server.t = 0.0;
 			antiair.server.just_shooted = true;
+			antiair.server.curr_target = antiair.server.next_target;
+			antiair.server.next_target = .{ FLOAT32_MAX, FLOAT32_MAX };
 		}
+	}
+
+	if antiair.server.next_target.x == FLOAT32_MAX {
+		x := Rand.random_uniform(*scene.server_rng, -0.5, +0.5);
+		y := Rand.random_uniform(*scene.server_rng, -0.5, +0.5);
+		x *= antiair.server.target_size.x;
+		y *= antiair.server.target_size.y;
+		x += antiair.server.target.x;
+		y += antiair.server.target.y;
+		antiair.server.next_target = .{ x, y };
 	}
 }
 
@@ -1643,10 +1701,13 @@ update :: (scene: Scene, player: *Player, dt: float32) {
 	// If we aren't then we switch to the tile we are currently on.
 	if !is_still_on {
 		if #complete tile.kind == {
-			case .Ice; #through;
+			case .Ice;
+				player.server.slipping = true;
+				player.server.walking_toward = false;
 			case .Slippy_Ice;
 				player.server.slipping = true;
 				player.server.walking_toward = false;
+				player.server.target_direction = player.server.direction;
 			case .Dirt; #through;
 			case .Grass;
 				player.server.slipping = false;
@@ -1814,6 +1875,19 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 			antiair.server.cooldown = sync_antiair.cooldown;
 			antiair.server.position = sync_antiair.position;
 			antiair.server.target = sync_antiair.target;
+			antiair.server.target_size = sync_antiair.target_size;
+			antiair.server.next_target = sync_antiair.next_target;
+			return true;
+		}
+	}
+
+	anitiar_shoot: *Command.AntiAir_Shoot = isa(command.payload, Command.AntiAir_Shoot);
+	if anitiar_shoot {
+		antiair := find_by_antiair_id(scene, anitiar_shoot.antiair_id);
+		if antiair {
+			antiair.server.curr_target = antiair.server.next_target;
+			antiair.server.next_target = anitiar_shoot.next_target;
+			print("next target % %\n", antiair.server.next_target.x, antiair.server.next_target.y);
 			return true;
 		}
 	}
@@ -2013,6 +2087,7 @@ Terrain :: struct {
 
 	tiles_count: V2i;
 	spawn_tile: V2i;
+	tile_size: V2f = V2f.{ 3.0 / 3.0, 3.0 / 3.0 };
 
 	tiles: [..] Tile;
 	paths: [..] Path;
@@ -2184,12 +2259,31 @@ spawn_into :: (player: *Player, scene: Scene) {
 	player.server.dead = false;
 }
 
+terrain_size :: (scene: Scene) -> V2f {
+	return V2f.{
+		xx scene.terrain.tiles_count.x * scene.terrain.tile_size.x,
+		xx scene.terrain.tiles_count.y * scene.terrain.tile_size.y
+	};
+}
+
 tile_center :: (scene: Scene, tile: V2i) -> V3f {
-	return V3f.{ xx tile.x + 0.5 - scene.camera_min.x, xx tile.y + 0.5 - scene.camera_min.y, 0 };
+	return V3f.{
+		xx (tile.x + 0.5) * scene.terrain.tile_size.x - scene.camera_min.x,
+		xx (tile.y + 0.5) * scene.terrain.tile_size.y - scene.camera_min.y,
+		0
+	};
+}
+tile_bottom_left :: (scene: Scene, tile: V2i) -> V3f {
+	return V3f.{
+		xx (tile.x + 0.0) * scene.terrain.tile_size.x - scene.camera_min.x,
+		xx (tile.y + 0.0) * scene.terrain.tile_size.y - scene.camera_min.y,
+		0
+	};
 }
 position_to_tile :: (scene: Scene, pos: V3f) -> V2i {
 	return V2i.{
-		cast(int) floor(pos.x + scene.camera_min.x), cast(int) floor(pos.y + scene.camera_min.y)
+		cast(int) floor((pos.x + scene.camera_min.x) / scene.terrain.tile_size.x),
+		cast(int) floor((pos.y + scene.camera_min.y) / scene.terrain.tile_size.y)
 	};
 }
 

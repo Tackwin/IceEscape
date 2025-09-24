@@ -177,7 +177,7 @@ main :: () {
 	Graphics.init_graphics();
 	store: Store;
 	init_store(platform, *store);
-	GUI.im_init(*store);
+	GUI.im_init();
 
 	frame_info := New(Frame_Info);
 	defer free(frame_info);
@@ -477,6 +477,10 @@ main :: () {
 
 		context.gpu.surfacePresent(context.graphics.surface);
 		platform.end_frame();
+
+		while to_float64_seconds(current_time_monotonic() - t00) < 1.0 / 200.0 {
+			print("Waiting\n");
+		}
 	}
 }
 

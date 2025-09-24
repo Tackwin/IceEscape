@@ -112,6 +112,9 @@ Store :: struct {
 	flag_model: WRender.Model;
 	flag_down_model: WRender.Model;
 	trophy_model: WRender.Model;
+	drone_model: WRender.Model;
+	drone_blade_model: WRender.Model;
+	trap_spike_model: WRender.Model;
 
 	antiair_camion_model: WRender.Model;
 	antiair_canon_model: WRender.Model;
@@ -348,6 +351,7 @@ get_model :: (store: Store, id: Model_Id) -> *WRender.Model {
 		case .Ambulance; return *store.ambulance_model;
 		case .Spaceship; return *store.spaceship_model;
 	}
+	return null;
 }
 // get_geometry :: (store: Store, id: Model_Id) -> *Render.Geometry {
 // 	return null;
@@ -610,6 +614,9 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.flag_model = WRender.Model.make_from_obj(Assets.FLAG_OBJ);
 	store.flag_down_model = WRender.Model.make_from_obj(Assets.FLAG_DOWN_OBJ);
 	store.trophy_model = WRender.Model.make_from_obj(Assets.TROPHY_OBJ);
+	store.drone_model = WRender.Model.make_from_obj(Assets.DRONE_OBJ);
+	store.drone_blade_model = WRender.Model.make_from_obj(Assets.DRONE_BLADE_OBJ);
+	store.trap_spike_model = WRender.Model.make_from_obj(Assets.TRAP_SPIKE_OBJ);
 	store.antiair_camion_model = WRender.Model.make_from_obj(Assets.ANTIAIR_CAMION_OBJ);
 	store.antiair_canon_model = WRender.Model.make_from_obj(Assets.ANTIAIR_CANON_OBJ);
 	store.missile_model = WRender.Model.make_from_obj(Assets.MISSILE_OBJ);

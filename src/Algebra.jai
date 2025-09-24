@@ -301,6 +301,7 @@ norm :: (a: V2($T)) -> T {
 
 operator * :: (A: M4($T), B: M4(T)) -> M4(T) {
 	C: M4(T);
+
 	for i: 0..3
 	for j: 0..3
 	for k: 0..3 {

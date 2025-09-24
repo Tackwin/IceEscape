@@ -1128,8 +1128,7 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 	framegraph.typicalUniform.P =
 		Scene.perspective(scene.camera);
 	center := V3f.{ 0, 0, 0 };
-	center.x += scene.terrain.tiles_count.x / 2.0;
-	center.y += scene.terrain.tiles_count.y / 2.0;
+	center = v3(Scene.terrain_size(scene), 0.0) / 2.0;
 	if false && scene.players.count > 0 {
 		center.x = scene.players[0].client.position.x +
 			random_uniform(*framegraph.rng, -0.001, 0.001);
@@ -1219,6 +1218,7 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		render_robots(framegraph, encoder, shadowPass, scene, store, *extra);
 		render_antiairs(framegraph, encoder, shadowPass, scene, store, *extra);
 		render_flags(framegraph, encoder, shadowPass, scene, store, *extra);
+		render_traps(framegraph, encoder, shadowPass, scene, store, *extra);
 		render_extra(framegraph, encoder, shadowPass, scene, store, *extra);
 
 		context.gpu.renderPassEncoderEnd(shadowPass);
@@ -1254,6 +1254,7 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		render_trophies(framegraph, encoder, geometryPass, scene, store);
 		render_antiairs(framegraph, encoder, geometryPass, scene, store, *extra);
 		render_flags(framegraph, encoder, geometryPass, scene, store, *extra);
+		render_traps(framegraph, encoder, geometryPass, scene, store, *extra);
 		render_explosions(framegraph, encoder, geometryPass, scene, store, *extra);
 
 		context.gpu.renderPassEncoderSetBindGroup(
@@ -1329,6 +1330,8 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		framegraph.uiInstances.count = 0;
 
 		for GUI.IM.quads {
+			if it.late
+				continue;
 			framegraph.uiInstances.count += 1;
 			instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
 			instance.* = .{};
@@ -1390,9 +1393,56 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 			);
 			context.gpu.renderPassEncoderSetBindGroup(uiPass, 0, bindGroup, 0, null);
 			defer context.gpu.bindGroupRelease(bindGroup);
-			writeTo(framegraph.uiInstanceBuffer, 0, framegraph.uiInstances);
+			// writeTo(framegraph.uiInstanceBuffer, 0, framegraph.uiInstances);
 			context.gpu.renderPassEncoderDraw(uiPass, 6, xx framegraph.uiInstances.count, 0, 0);
 		}
+
+		
+		before := framegraph.uiInstances.count;
+
+		for GUI.IM.quads {
+			if !it.late
+				continue;
+			framegraph.uiInstances.count += 1;
+			instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
+			instance.* = .{};
+			instance.pos = it.pos;
+			instance.size = it.size;
+			instance.color = it.color;
+			instance.z30sdf2 = xx (it.z * 400);
+			instance.texture_rect = it.texture_rect;
+		}
+		if framegraph.uiInstances.count > before {
+			view: [] WFramegraph.UI_Instance;
+			view.data = framegraph.uiInstances.data + before;
+			view.count = framegraph.uiInstances.count - before;
+			quick_sort(
+				view,
+				(a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
+					az := a.z30sdf2 / 4;
+					bz := b.z30sdf2 / 4;
+					if az < bz
+						return -1;
+					if az > bz
+						return 1;
+					return 0;
+				});
+
+			bindGroup := ui_instance_bind_group(
+				framegraph,
+				"UI late Instances",
+				framegraph.uiInstances.count,
+				store.ui_atlas,
+				store.font_atlas
+			);
+			context.gpu.renderPassEncoderSetBindGroup(uiPass, 0, bindGroup, 0, null);
+			defer context.gpu.bindGroupRelease(bindGroup);
+			context.gpu.renderPassEncoderDraw(
+				uiPass, 6, xx view.count, 0, xx before
+			);
+		}
+		writeTo(framegraph.uiInstanceBuffer, 0, framegraph.uiInstances);
+
 
 		context.gpu.renderPassEncoderEnd(uiPass);
 		context.gpu.renderPassEncoderRelease(uiPass);
@@ -1715,7 +1765,7 @@ render_antiairs :: (
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
-		dt := normalize(it.server.target - it.server.position);
+		dt := normalize(v3(it.server.next_target, 0.0) - it.server.position);
 		dt.z = 0;
 		dt = normalize(dt);
 		R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, dt));
@@ -1736,7 +1786,7 @@ render_antiairs :: (
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
-		dt := normalize(it.server.target - it.server.position);
+		dt := normalize(v3(it.server.next_target, 0.0) - it.server.position);
 		dt.z = 0;
 		dt = normalize(dt);
 		{
@@ -1765,7 +1815,9 @@ render_antiairs :: (
 		else {
 			t := linear_step(it.client.t, it.server.cooldown - 0.5, it.server.cooldown);
 			t = ease_in_quad(t);
-			instance.M = M4f.translate(.{ it.server.target.x, it.server.target.y, 10 * (1 - t) });
+			instance.M = M4f.translate(
+				.{ it.client.next_target.x, it.client.next_target.y, 10 * (1 - t) }
+			);
 			R := to_rotation_matrix(from_unit_vectors(V3f.{ 0, 0, 1 }, V3f.{ 0, 0, -1 }));
 			instance.M = instance.M * R;
 		}
@@ -1778,6 +1830,35 @@ render_antiairs :: (
 		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
 		encode_and_draw(framegraph, pass, store.missile_model, instanced.count);
 	}
+}
+
+
+render_traps :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store,
+	extra: *Extra
+) {
+	instanced := NewArray(scene.traps.count, WFramegraph.Instance, false,, temp);
+	instanced.count = 0;
+	for scene.traps {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		M := M4f.translate(it.position);
+		instance.M = M;
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count == 0
+		return;
+
+	bindGroup := instance_bind_group(framegraph, "Traps", instanced.count);
+	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
+	defer context.gpu.bindGroupRelease(bindGroup);
+	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
+	encode_and_draw(framegraph, pass, store.trap_spike_model, instanced.count);
 }
 
 render_trophies :: (
@@ -2153,22 +2234,75 @@ render_shurikens :: (
 		instance.M = Scene.compute_moving_frame_server_world_matrix(
 			scene, Scene.find_by_frame_id(scene, it.frame_id)
 		);
-		instance.M *= M4f.translate(it.server.position) * to_rotation_matrix(
-			axis_angle(V3f.{ 0, 0, 1 }, it.client.theta)
+		pos := instance.M * v4(it.server.position, 1);
+		instance.M = M4f.translate(v3(pos));
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+
+	if instanced.count > 0 {
+		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
+		bindGroup := instance_bind_group(framegraph, "Shuriken", instanced.count);
+		defer context.gpu.bindGroupRelease(bindGroup);
+		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
+
+		encode_and_draw(framegraph, pass, store.drone_model, instanced.count);
+	}
+
+	instanced.count = 0;
+	for scene.shurikens {
+		M := Scene.compute_moving_frame_server_world_matrix(
+			scene, Scene.find_by_frame_id(scene, it.frame_id)
+		);
+		pos := v3(M * v4(it.server.position, 1));
+		off := V2f.{ 0.29259, 0.32137 };
+
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(pos + V3f.{ -off.x, -off.y, 0.0 }) * to_rotation_matrix(
+			axis_angle(V3f.{ 0, 0, 1 }, 2 * it.client.theta)
+		);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+
+		instanced.count += 1;
+		instance = *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(
+			pos + V3f.{ +off.x, -off.y, 0.0 }
+		) * to_rotation_matrix(
+			axis_angle(V3f.{ 0, 0, 1 }, 2 * it.client.theta + 3.14159 / 2)
+		);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+
+		instanced.count += 1;
+		instance = *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(
+			pos + V3f.{ +off.x, +off.y, 0.0 }
+		) * to_rotation_matrix(
+			axis_angle(V3f.{ 0, 0, 1 }, 2 * it.client.theta + 3.14159)
+		);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+
+		instanced.count += 1;
+		instance = *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(
+			pos + V3f.{ -off.x, +off.y, 0.0 }
+		) * to_rotation_matrix(
+			axis_angle(V3f.{ 0, 0, 1 }, 2 * it.client.theta - 3.14159 / 2)
 		);
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 
-	if instanced.count == 0
-		return;
+	if instanced.count > 0 {
+		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
+		bindGroup := instance_bind_group(framegraph, "Shuriken", instanced.count);
+		defer context.gpu.bindGroupRelease(bindGroup);
+		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
 
-
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	bindGroup := instance_bind_group(framegraph, "Shuriken", instanced.count);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-
-	encode_and_draw(framegraph, pass, store.shuriken_model, instanced.count);
+		encode_and_draw(framegraph, pass, store.drone_blade_model, instanced.count);
+	}
 }
 
 render_skulls :: (
@@ -2185,6 +2319,7 @@ render_skulls :: (
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
 		instance.M = Scene.compute_skull_matrix(scene, it);
+		instance.M = M4f.translate(.{ 0, 0, -0.15 }) * instance.M;
 		instance.texture_rect = Store.Colormaps_Rect.pirate;
 	}
 
@@ -2283,33 +2418,43 @@ render_players :: (
 	store: Store.Store
 ) {
 	instanced := NewArray(scene.players.count, WFramegraph.Instance, false,, temp);
+	max_model_id := 0;
+	for scene.players
+		max_model_id = max(max_model_id, it.server.model_id);
+
 	instanced.count = 0;
-	for scene.players {
-		if it.server.dead
-			continue;
-		instanced.count += 1;
-		instance := *instanced[instanced.count - 1];
-		instance.* = .{};
-		M := M4f.identity();
+	for model_id: 0..max_model_id {
+		for scene.players {
+			if it.server.dead
+				continue;
+			if it.server.model_id != model_id
+				continue;
+			instanced.count += 1;
+			instance := *instanced[instanced.count - 1];
+			instance.* = .{};
+			M := M4f.identity();
 
-		q := from_unit_vectors(V3f.{ 1, 0, 0 }, it.client.direction);
-		M = to_rotation_matrix(q);
+			q := from_unit_vectors(V3f.{ 1, 0, 0 }, it.client.direction);
+			M = to_rotation_matrix(q);
 
-		M = M4f.translate(it.client.position) * M;
-		instance.M = M;
-		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+			M = M4f.translate(it.client.position) * M;
+			instance.M = M;
+			instance.texture_rect = Store.Colormaps_Rect.vehicle;
+		}
+
+		if instanced.count > 0 {
+			writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
+
+			bindGroup := instance_bind_group(framegraph, "Player", instanced.count);
+			defer context.gpu.bindGroupRelease(bindGroup);
+			context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
+
+			model := Store.get_model(store, xx model_id);
+			if !model
+				model = *store.spirit_model;
+			encode_and_draw(framegraph, pass, model, instanced.count);
+		}
 	}
-
-	if instanced.count == 0
-		return;
-
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-
-	bindGroup := instance_bind_group(framegraph, "Player", instanced.count);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-
-	encode_and_draw(framegraph, pass, store.racer_model, instanced.count);
 }
 
 render_terrain :: (
@@ -2330,9 +2475,8 @@ render_terrain :: (
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
-		pos := V3f.{ x.(float), y.(float), 0 };
-		pos -= v3(scene.camera_min, 0.0);
-		instance.M = M4f.translate(pos);
+		pos := Scene.tile_bottom_left(scene, V2i.{ x, y });
+		instance.M = M4f.translate(pos) * scale_matrix(v3(terrain.tile_size, 1.0));
 		instance.texture_rect = Store.get_tile_rect(it.kind);
 		instance.useNormalMap = 1;
 	}

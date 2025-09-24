@@ -125,18 +125,24 @@ Command :: struct {
 		id: int;
 		position: V3f;
 		target: V3f;
+		target_size: V2f;
 		cooldown: float;
+		next_target: V2f;
 		t: float; // Time since spawn
+	}
+	AntiAir_Shoot :: struct {
+		antiair_id: int;
+		next_target: V2f;
 	}
 	Sync_Scene :: struct {
 		id: int;
 		terrain: string;
+		rng: Rand.State;
 		players: [] Sync_Player; // Would usually point to a temporary buffer.
 		skulls: [] Sync_Skull;
 		moving_frames: [] Sync_Moving_Frame;
 		robots: [] Sync_Robot;
 		antiairs: [] Sync_AntiAir;
-		rng: Rand.State;
 	}
 	Explode :: struct {
 		id: int;
@@ -150,7 +156,7 @@ Command :: struct {
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
-		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir
+		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot
 	);
 	sent_timestamp: float64;
 }
@@ -210,6 +216,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Sync_Skull; #through;
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
+		case .AntiAir_Shoot; #through;
 		case .Sync_Robot; #through;
 		case .Sync_AntiAir; #through;
 		case .Sync_Moving_Frame; #through;
@@ -307,6 +314,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Sync_Skull; #through;
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
+		case .AntiAir_Shoot; #through;
 		case .Sync_Robot; #through;
 		case .Sync_Moving_Frame; #through;
 		case .Sync_AntiAir; #through;

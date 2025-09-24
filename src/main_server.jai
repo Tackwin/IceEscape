@@ -117,6 +117,7 @@ State :: struct {
 	first_world_id: int;
 	second_world_id: int;
 	third_world_id: int;
+	forth_world_id: int;
 
 	playing_scene_id: int;
 }
@@ -353,6 +354,9 @@ tick :: (state: *State) {
 		for frame_result.explode {
 			scene_scoped_broadcast(scene.id, make_command(it));
 		}
+		for frame_result.antiair_shoot {
+			scene_scoped_broadcast(scene.id, make_command(it));
+		}
 
 		if scene.end_scene_countdown_started {
 			t := current_time_monotonic();
@@ -513,6 +517,8 @@ add_scene :: (text: string) -> int {
 	scene: Scene.Scene;
 	scene.id = state.scenes.count + 1;
 	scene.is_server = true;
+	scene.server_rng.s[0] = 123456789;
+	scene.server_rng.s[1] = 987654321;
 	Terrain.parse_terrain(text, *scene);
 	array_add(*state.scenes, scene);
 	return scene.id;
@@ -630,10 +636,18 @@ main :: () {
 		table_add(*name_to_scene_id, "pick.terrain", state.pick_scene_id);
 	}
 	{
-		plain_terrain_txt := sprint("%/../assets/terrain/gain_time.terrain", #filepath);
+		plain_terrain_txt := sprint("%/../assets/terrain/pounding.terrain", #filepath);
 		data, ok := read_entire_file(plain_terrain_txt);
-		state.third_world_id = add_scene(data);
-		table_add(*name_to_scene_id, "gain_time.terrain", state.third_world_id);
+		id := add_scene(data);
+
+		table_add(*name_to_scene_id, "pounding.terrain", id);
+	}
+	{
+		plain_terrain_txt := sprint("%/../assets/terrain/movement.terrain", #filepath);
+		data, ok := read_entire_file(plain_terrain_txt);
+		id := add_scene(data);
+
+		table_add(*name_to_scene_id, "movement.terrain", id);
 	}
 	{
 		plain_terrain_txt := sprint("%/../assets/terrain/here_and_there.terrain", #filepath);
@@ -643,13 +657,24 @@ main :: () {
 		table_add(*name_to_scene_id, "here_and_there.terrain", state.second_world_id);
 	}
 	{
+		plain_terrain_txt := sprint("%/../assets/terrain/crisscross.terrain", #filepath);
+		data, ok := read_entire_file(plain_terrain_txt);
+		state.forth_world_id = add_scene(data);
+		table_add(*name_to_scene_id, "crisscross.terrain", state.forth_world_id);
+	}
+	{
+		plain_terrain_txt := sprint("%/../assets/terrain/gain_time.terrain", #filepath);
+		data, ok := read_entire_file(plain_terrain_txt);
+		state.third_world_id = add_scene(data);
+		table_add(*name_to_scene_id, "gain_time.terrain", state.third_world_id);
+	}
+	{
 		plain_terrain_txt := sprint("%/../assets/terrain/roundabout.terrain", #filepath);
 		data, ok := read_entire_file(plain_terrain_txt);
 		state.first_world_id = add_scene(data);
 
 		table_add(*name_to_scene_id, "roundabout.terrain", state.first_world_id);
 	}
-
 	for 0..state.scenes.count-2 {
 		state.scenes[it].next_id = state.scenes[it+1].id;
 	}
