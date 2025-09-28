@@ -22,7 +22,7 @@ curl: *CURL;
 curl_errbuf: [CURL_ERROR_SIZE] u8;
 curl_buffer: [] u8;
 
-fake_one_way_ping := 50.0;
+fake_one_way_ping := 0.0;
 
 map_sdl_to_key :: (key: int) -> int {
 	if key == {

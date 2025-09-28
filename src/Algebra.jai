@@ -220,14 +220,20 @@ angle_between :: (from: V3($T), to: V3(T), up: V3(T)) -> T {
 DEG_RAD :: PI / 180;
 RAD_DEG :: 180 / PI;
 
-operator / :: (v: V4($T), f: T) -> V4(T) #symmetric {
+operator / :: (v: V4($T), f: T) -> V4(T) {
 	return .{ v.x / f, v.y / f, v.z / f, v.w / f };
 }
-operator / :: (v: V3($T), f: T) -> V3(T) #symmetric {
+operator / :: (v: V3($T), f: T) -> V3(T) {
 	return .{ v.x / f, v.y / f, v.z / f };
 }
 operator * :: (v: V3($T), f: T) -> V3(T) #symmetric {
 	return .{ v.x * f, v.y * f, v.z * f };
+}
+operator * :: (v: V2($T), f: T) -> V2(T) #symmetric {
+	return .{ v.x * f, v.y * f };
+}
+operator / :: (v: V2($T), f: T) -> V2(T) {
+	return .{ v.x / f, v.y / f };
 }
 operator * :: (v: V3($T), f: float64) -> V3(T) #symmetric {
 	return .{ cast(T)(v.x * f), cast(T)(v.y * f), cast(T)(v.z * f) };

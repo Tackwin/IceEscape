@@ -1887,7 +1887,6 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		if antiair {
 			antiair.server.curr_target = antiair.server.next_target;
 			antiair.server.next_target = anitiar_shoot.next_target;
-			print("next target % %\n", antiair.server.next_target.x, antiair.server.next_target.y);
 			return true;
 		}
 	}

@@ -320,7 +320,7 @@ WFramegraph :: struct {
 		useAlbedoMap: u32 = 1;
 		useNormalMap: u32 = 0;
 		useShadowMap: u32 = 1;
-		padding1: u32 = 0;
+		flags: u32 = 0;
 		color: V4f = .{ 1, 1, 1, 1 };
 	};
 	instanceBuffer: WGPUBuffer;
@@ -1829,6 +1829,19 @@ render_antiairs :: (
 		defer context.gpu.bindGroupRelease(bindGroup);
 		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
 		encode_and_draw(framegraph, pass, store.missile_model, instanced.count);
+	}
+
+	for scene.antiairs {
+		if !(it.client.t > (it.server.cooldown - 0.5))
+			continue;
+
+		particle: Extra.Quad;
+		particle.M =
+		M4f.translate(v3(it.client.next_target - V2f.{ it.server.radius, it.server.radius } / 2, 0.05))
+		* scale_matrix(V3f.{ it.server.radius, it.server.radius, 1.0 });
+		particle.texture_rect = V4f.{ 0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
+		particle.color = V4f.{ 1.0, 1.0, 1.0, 0.5 };
+		array_add(*extra.quads, particle);
 	}
 }
 
