@@ -1,5 +1,6 @@
 #scope_file
 Platform :: #import "Platform";
+Controls :: #import "Controls";
 #import "Basic";
 #import "Math";
 #import "Algebra";
@@ -60,7 +61,6 @@ IM_t :: struct {
 		checked: bool;
 	}
 
-	frame_info: Platform.Frame_Info;
 	just_pressed: [Platform.Key_COUNT] bool;
 	just_released: [Platform.Key_COUNT] bool;
 	pressed: [Platform.Key_COUNT] bool;

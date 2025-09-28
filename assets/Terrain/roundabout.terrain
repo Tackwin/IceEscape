@@ -92,47 +92,47 @@ flag
 
 skull
 - path_id: 0
-- speed: 1.1
-- t: 0
+- speed: 3.1415926
+- offset: 0
 
 skull
 - path_id: 0
-- speed: 1.1
-- t: 2
+- speed: 3.1415926
+- offset: 0.25
 
 skull
 - path_id: 0
-- speed: 1.1
-- t: 4
+- speed: 3.1415926
+- offset: 0.5
 
 skull
 - path_id: 0
-- speed: 1.1
-- t: 6
+- speed: 3.1415926
+- offset: 0.75
 
 skull
 - path_id: 1
-- speed: 1.1
-- t: 0
+- speed: 3.1415926
+- offset: 0.0
 
 skull
 - path_id: 1
-- speed: 1.1
-- t: 2
+- speed: 3.1415926
+- offset: 0.25
 
 skull
 - path_id: 1
-- speed: 1.1
-- t: 4
+- speed: 3.1415926
+- offset: 0.50
 
 skull
 - path_id: 1
-- speed: 1.1
-- t: 6
+- speed: 3.1415926
+- offset: 0.75
 
 skull
 - path_id: 3
-- speed: 0.5
+- speed: 1.8
 
 key
 - position: 46 6 0

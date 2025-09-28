@@ -323,6 +323,7 @@ WFramegraph :: struct {
 		flags: u32 = 0;
 		color: V4f = .{ 1, 1, 1, 1 };
 	};
+	mainInstances: [..] Instance;
 	instanceBuffer: WGPUBuffer;
 	instances: [..] Instance;
 	instanceBufferCursor := 0;
@@ -1917,7 +1918,7 @@ render_robots :: (
 			instance := *instanced[instanced.count - 1];
 			instance.* = .{};
 			instance.M = Scene.robot_to_axis(it, axe);
-			instance.texture_rect = Store.Colormaps_Rect.vehicle;
+			instance.texture_rect = Store.Colormaps_Rect.conveyor;
 		}
 		if instanced.count == 0
 			continue;
@@ -2403,7 +2404,7 @@ render_standin :: (
 			instance.* = .{};
 			instance.M = M4f.translate(it.position);
 			instance.M = instance.M * to_rotation_matrix(it.orientation);
-			instance.texture_rect = Store.Colormaps_Rect.vehicle;
+			instance.texture_rect = Store.get_rect(xx it.model_id);
 		}
 
 		if instanced.count == 0
@@ -2435,8 +2436,8 @@ render_players :: (
 	for scene.players
 		max_model_id = max(max_model_id, it.server.model_id);
 
-	instanced.count = 0;
 	for model_id: 0..max_model_id {
+		instanced.count = 0;
 		for scene.players {
 			if it.server.dead
 				continue;
@@ -2452,7 +2453,7 @@ render_players :: (
 
 			M = M4f.translate(it.client.position) * M;
 			instance.M = M;
-			instance.texture_rect = Store.Colormaps_Rect.vehicle;
+			instance.texture_rect = Store.get_rect(xx it.server.model_id);
 		}
 
 		if instanced.count > 0 {

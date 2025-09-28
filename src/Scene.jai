@@ -7,6 +7,8 @@
 #import "Pool";
 #import "Hash_Table";
 #import "Terrain";
+Platform :: #import "Platform";
+Controls :: #import "Controls";
 Rand :: #import "Rand";
 GUI :: #import "GUI";
 
@@ -142,6 +144,7 @@ make_sync :: (skull: *Skull) -> Command.Sync_Skull {
 	sync_skull.skull_id = skull.id;
 	sync_skull.t = skull.server.t;
 	sync_skull.speed = skull.server.speed;
+	sync_skull.offset = skull.server.offset;
 	return sync_skull;
 }
 
@@ -685,6 +688,7 @@ Skull :: struct {
 	server: struct {
 		t: float;
 		speed: float = 1.0;
+		offset: float = 0.0;
 	}
 	client: struct {
 		t: float;
@@ -878,6 +882,48 @@ add_snow :: (scene: *Scene, dt: float32) {
 		p.drag = Rand.random_uniform(*scene.client_rng, 0.6, 0.85);
 		array_add(*scene.particles, p);
 		n_snow -= 1.0;
+	}
+}
+
+input :: (scene: *Scene, controls: *Controls.State, dt: float32) {
+	any_camera_move := false;
+	dt := V3f.{ 0, 0, 0 };
+	if controls.frame_info.mouse_wheel > 0 {
+		scene.camera.wanted_target_to_position *= 0.9;
+	}
+	if controls.frame_info.mouse_wheel < 0 {
+		scene.camera.wanted_target_to_position *= (1.0 / 0.9);
+		l := norm(scene.camera.wanted_target_to_position);
+		if l > scene.camera.max_distance {
+			l = scene.camera.max_distance;
+		}
+		scene.camera.wanted_target_to_position =
+			l * normalize(scene.camera.wanted_target_to_position);
+	}
+	if controls.pressed[Platform.Key.Q] {
+		dt.x -= scene.camera.speed * controls.frame_info.delta_time;
+		any_camera_move = true;
+	}
+	if controls.pressed[Platform.Key.D] {
+		dt.x += scene.camera.speed * controls.frame_info.delta_time;
+		any_camera_move = true;
+	}
+	if controls.pressed[Platform.Key.S] {
+		dt.y -= scene.camera.speed * controls.frame_info.delta_time;
+		any_camera_move = true;
+	}
+	if controls.pressed[Platform.Key.Z] {
+		dt.y += scene.camera.speed * controls.frame_info.delta_time;
+		any_camera_move = true;
+	}
+	scene.camera.locked = controls.pressed[Platform.Key.Space];
+	scene.camera.target_target += dt;
+	if scene.camera.locked {
+		scene.camera.target += dt;
+	}
+
+	if !any_camera_move {
+		scene.camera.target_target = scene.camera.target;
 	}
 }
 
@@ -1660,14 +1706,12 @@ update :: (scene: Scene, skull: *Skull, dt: float32) {
 		interpolate_to_server(skull);
 
 	skull.server.t += skull.server.speed * dt;
+	if scene.is_server
+		skull.client.t = skull.server.t;
 
 	path: *Path = *scene.terrain.paths[skull.path_id];
 	if path.checkpoints_count > 0 {
-		t := fmod_cycling(skull.client.t, path.checkpoints_count - 1.0);
-		pos_before := path.checkpoints[cast(int) (floor(t) + 0)];
-		pos_after  := path.checkpoints[cast(int) (floor(t) + 1)];
-
-		dir := normalize(pos_after - pos_before);
+		dir := compute_skull_dir(scene, skull);
 		skull.client.direction = damp_angle_between(skull.client.direction, dir, 20.0, dt);
 	}
 }
@@ -2020,6 +2064,7 @@ process :: (scene: Scene, skull: *Skull, command: Command, response: *Process_Re
 
 		if skull.id == sync.skull_id {
 			skull.server.t = sync.t;
+			skull.server.offset = sync.offset;
 			skull.server.speed = sync.speed;
 			return true;
 		}
@@ -2159,32 +2204,93 @@ compute_skull_matrix :: (scene: Scene, skull: Skull) -> M4f {
 	if path.checkpoints_count == 0
 		return M4f.identity();
 
-	t := fmod_cycling(skull.client.t, path.checkpoints_count - 1.0);
-	pos_before := path.checkpoints[cast(int) (floor(t) + 0)];
-	pos_after  := path.checkpoints[cast(int) (floor(t) + 1)];
-	t -= floor(t);
+	total_t := 0.0;
+	for 1..path.checkpoints_count - 1 {
+		a := path.checkpoints[it - 1];
+		b := path.checkpoints[it + 0];
+		d := norm(b - a);
+		total_t += d;
+	}
 
-	pos := pos_before + (pos_after - pos_before) * t;
+	t := fmod_cycling(skull.client.t + skull.server.offset * total_t, total_t);
 
-	return M4f.translate(pos) * to_rotation_matrix(
-		from_unit_vectors(V3f.{ 1, 0, 0 }, skull.client.direction)
-	);
+	for 1..path.checkpoints_count - 1 {
+		a := path.checkpoints[it - 1];
+		b := path.checkpoints[it + 0];
+		d := norm(b - a);
+		if t <= d {
+			dir := normalize(b - a);
+			pos := a + (b - a) * (t / d);
+			M := M4f.translate(pos) * to_rotation_matrix(
+				from_unit_vectors(V3f.{ 1, 0, 0 }, dir)
+			);
+			return M;
+		}
+		t -= d;
+	}
+	return M4f.identity();
+}
+
+compute_skull_dir :: (scene: Scene, skull: Skull) -> V3f {
+	if skull.path_id >= scene.terrain.paths.count
+		return V3f.{ 1, 0, 0 };
+
+	path: *Path = *scene.terrain.paths[skull.path_id];
+	if path.checkpoints_count == 0
+		return V3f.{ 1, 0, 0 };
+
+	total_t := 0.0;
+	for 1..path.checkpoints_count - 1 {
+		a := path.checkpoints[it - 1];
+		b := path.checkpoints[it + 0];
+		d := norm(b - a);
+		total_t += d;
+	}
+
+	t := fmod_cycling(skull.client.t + skull.server.offset * total_t, total_t);
+
+	for 1..path.checkpoints_count - 1 {
+		a := path.checkpoints[it - 1];
+		b := path.checkpoints[it + 0];
+		d := norm(b - a);
+		if t <= d {
+			dir := normalize(b - a);
+			return dir;
+		}
+		t -= d;
+	}
+	return V3f.{ 1, 0, 0 };
 }
 
 compute_skull_pos :: (scene: Scene, skull: Skull) -> V3f {
 	if skull.path_id >= scene.terrain.paths.count
-		return .{ 0, 0, 0 };
+		return V3f.{ 0, 0, 0 };
 
 	path: *Path = *scene.terrain.paths[skull.path_id];
 	if path.checkpoints_count == 0
-		return .{ 0, 0, 0 };
+		return V3f.{ 0, 0, 0 };
 
-	t := fmod_cycling(skull.server.t, path.checkpoints_count - 1.0);
-	pos_before := path.checkpoints[cast(int) (floor(t) + 0)];
-	pos_after  := path.checkpoints[cast(int) (floor(t) + 1)];
-	t -= floor(t);
+	total_t := 0.0;
+	for 1..path.checkpoints_count - 1 {
+		a := path.checkpoints[it - 1];
+		b := path.checkpoints[it + 0];
+		d := norm(b - a);
+		total_t += d;
+	}
 
-	return pos_before + (pos_after - pos_before) * t;
+	t := fmod_cycling(skull.client.t + skull.server.offset * total_t, total_t);
+
+	for 1..path.checkpoints_count - 1 {
+		a := path.checkpoints[it - 1];
+		b := path.checkpoints[it + 0];
+		d := norm(b - a);
+		if t <= d {
+			pos := a + (b - a) * (t / d);
+			return pos;
+		}
+		t -= d;
+	}
+	return V3f.{ 0, 0, 0 };
 }
 
 compute_moving_frame_server_world_matrix :: (scene: Scene, frame: Moving_Frame) -> M4f {

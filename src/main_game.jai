@@ -11,6 +11,7 @@ Terrain :: #import "Terrain";
 #import "Communication";
 #import "Utils";
 #import "Hash_Table";
+Controls :: #import "Controls";
 WRender :: #import "WRender";
 Scene :: #import "Scene";
 Assets :: #import "Assets";
@@ -166,6 +167,82 @@ respond :: (platform: Platform, response: Scene.Process_Response) {
 
 #add_context _platform: Platform;
 
+
+handle_gui :: (frame_info: *Frame_Info, state: *State) {
+	GUI.handle_frame_info(frame_info);
+	defer {
+		state.history_cursor += 1;
+		state.history_cursor %= state.history_dt.count;
+	}
+	state.history_dt[state.history_cursor] = frame_info.delta_time;
+
+	GUI.push_action_palette(frame_info);
+	GUI.push_settings(*state.volume_on, frame_info);
+	if state.render_command_debug {
+		n := min(100, state.received_command_history.count);
+		y := 0;
+		cursor := 0;
+		while y < n && cursor < state.received_command_history.count {
+			kind := state.received_command_history[
+				state.received_command_history.count - 1 - cursor
+			];
+			cursor += 1;
+			kind_idx := kind.(int);
+			if !state.filter_command_debug[kind_idx]
+				continue;
+
+			GUI.push_text(tprint("%", kind), V2f.{ 500.0, 10.0 + y * 20.0 }, 18);
+			y += 1;
+		}
+
+		for * state.filter_command_debug {
+			GUI.push_text(
+				tprint("%", it_index.(Command.payload.Kind)),
+				V2f.{ 310.0, 10.0 + it_index * 20.0 },
+				18,
+				-0.5
+			);
+			if GUI.push_checkbox(
+				V2f.{ 475, 20.0 + it_index * 20.0 }, 18, state.filter_command_debug[it_index]
+			)
+				state.filter_command_debug[it_index] = !state.filter_command_debug[it_index];
+		}
+	}
+
+	if state.render_fps {
+		GUI.push_fps_histogram(.{ 10, 10 }, .{ 300, 150 }, state.history_dt, state.history_cursor);
+
+		history_ping := NewArray(state.ntp_history.count, float32, false,, temp);
+		for * history_ping {
+			it.* = xx state.ntp_history[it_index].ping;
+		}
+		ping_cursor := (state.ntp_history_cursor + history_ping.count - 1) % history_ping.count;
+		GUI.push_ping_histogram(.{ 10, 170 }, .{ 300, 150 }, history_ping, ping_cursor);
+
+		#if OS == .WASM {
+			header := get_header();
+			bit_array := cast(*u8)(header + 1);
+			n := header.total_number_of_pages_allocated;
+			for 0..n-1 {
+				x := it % 300;
+				y := it / 300;
+
+				B := it / 8;
+				b := it % 8;
+
+				x *= 4;
+				y *= 4;
+				x += 200;
+				y += 200;
+				color := ifx (bit_array[B] & (1 << b)) != 0
+					then V3f.{ 0.0, 1.0, 0.0 }
+					else V3f.{ 1.0, 0.0, 0.0 };
+				GUI.push_quad_screen(V2f.{ xx x, xx y }, V2f.{ xx 3, xx 3 }, color, 100);
+			}
+		}
+	}
+}
+
 main :: () {
 	context.allocator = .{ wallocator_proc, null };
 	context.temporary_storage.overflow_allocator = context.allocator;
@@ -202,24 +279,12 @@ main :: () {
 	scene.camera.fov = 55;
 	scene.camera.max_distance = norm(scene.camera.wanted_target_to_position);
 
-	just_pressed := NewArray(Key_COUNT, bool);
-	just_released := NewArray(Key_COUNT, bool);
-	pressed := NewArray(Key_COUNT, bool);
-	defer {
-		array_free(just_pressed);
-		array_free(just_released);
-		array_free(pressed);
-	};
+	controls := New(Controls.State);
 
-	history_dt: [100] float;
-	history_cursor := 0;
-	render_fps := false;
-	render_command_debug := false;
-	filter_command_debug: [#run enum_highest_value(Command.payload.Kind) + 1] bool;
-	for * filter_command_debug
+	for * state.filter_command_debug
 		it.* = true;
-	filter_command_debug[xx Command.payload.Kind.Sync_Player] = false;
-	filter_command_debug[xx Command.payload.Kind.NTP] = false;
+	state.filter_command_debug[xx Command.payload.Kind.Sync_Player] = false;
+	state.filter_command_debug[xx Command.payload.Kind.NTP] = false;
 
 	footstep_trigger_index := 0;
 	process_response: Scene.Process_Response;
@@ -242,77 +307,19 @@ main :: () {
 			send_web_message(platform, make_command(connect));
 			state.connected_last_try = current_time_monotonic();
 		}
-
 		platform.get_frame_info(frame_info);
-		GUI.handle_frame_info(frame_info);
-		defer {
-			history_cursor += 1;
-			history_cursor %= history_dt.count;
-		}
-		history_dt[history_cursor] = frame_info.delta_time;
+		Controls.update(controls, frame_info);
+		handle_gui(frame_info, *state);
 
 		if frame_info.quit
 			done = true;
-		for * just_pressed {
-			if frame_info.key_pressed[it_index] && !pressed[it_index]
-				it.* = true;
-			else
-				it.* = false;
-		}
-		for * just_released {
-			if !frame_info.key_pressed[it_index] && pressed[it_index]
-				it.* = true;
-			else
-				it.* = false;
-		}
-		for * pressed {
-			it.* = frame_info.key_pressed[it_index];
-		}
-		any_camera_move := false;
-		dt := V3f.{ 0, 0, 0 };
-		if frame_info.mouse_wheel > 0 {
-			scene.camera.wanted_target_to_position *= 0.9;
-		}
-		if frame_info.mouse_wheel < 0 {
-			scene.camera.wanted_target_to_position *= (1.0 / 0.9);
-			l := norm(scene.camera.wanted_target_to_position);
-			if l > scene.camera.max_distance {
-				l = scene.camera.max_distance;
-			}
-			scene.camera.wanted_target_to_position =
-				l * normalize(scene.camera.wanted_target_to_position);
-		}
-		if pressed[Key.Q] {
-			dt.x -= scene.camera.speed * frame_info.delta_time;
-			any_camera_move = true;
-		}
-		if pressed[Key.D] {
-			dt.x += scene.camera.speed * frame_info.delta_time;
-			any_camera_move = true;
-		}
-		if pressed[Key.S] {
-			dt.y -= scene.camera.speed * frame_info.delta_time;
-			any_camera_move = true;
-		}
-		if pressed[Key.Z] {
-			dt.y += scene.camera.speed * frame_info.delta_time;
-			any_camera_move = true;
-		}
-		scene.camera.locked = pressed[Key.Space];
-		scene.camera.target_target += dt;
-		if scene.camera.locked {
-			scene.camera.target += dt;
-		}
 
-		if !any_camera_move {
-			scene.camera.target_target = scene.camera.target;
+		Scene.input(scene, controls, frame_info.delta_time);
+		if controls.just_pressed[Key.H] {
+			state.render_fps = !state.render_fps;
 		}
-
-		if just_pressed[Key.H] {
-			render_fps = !render_fps;
-		}
-		if just_pressed[Key.P] {
-			render_command_debug = !render_command_debug;
+		if controls.just_pressed[Key.P] {
+			state.render_command_debug = !state.render_command_debug;
 		}
 		if scene.end_scene_countdown_started {
 			dt := to_float64_seconds(current_time_monotonic() - scene.end_scene_countdown_time);
@@ -331,7 +338,7 @@ main :: () {
 		V := Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
 		P := Scene.perspective(scene.camera);
 
-		if just_pressed[Key.MouseLeft] {
+		if controls.just_pressed[Key.MouseLeft] {
 			r := Scene.unproject_ndc(
 				.{
 					frame_info.mouse_position.x / frame_info.window_size.x * 2 - 1,
@@ -361,7 +368,7 @@ main :: () {
 			}
 		}
 		
-		if just_pressed[Key.C] {
+		if controls.just_pressed[Key.C] {
 			player := Scene.find_by_player_id(scene, scene.controlled_player_id);
 			if player && !player.server.dead {
 				command: Command.Spawn_Coin;
@@ -398,80 +405,12 @@ main :: () {
 		respond(platform, process_response);
 		Scene.update(scene, frame_info.delta_time, null);
 
-		GUI.push_action_palette(frame_info);
-		GUI.push_settings(*state.volume_on, frame_info);
 		if state.volume_on {
 			state.platform.volume_audio(1.0);
 		} else {
 			state.platform.volume_audio(0.0);
 		}
 
-		if render_command_debug {
-			n := min(100, state.received_command_history.count);
-			y := 0;
-			cursor := 0;
-			while y < n && cursor < state.received_command_history.count {
-				kind := state.received_command_history[
-					state.received_command_history.count - 1 - cursor
-				];
-				cursor += 1;
-				kind_idx := kind.(int);
-				if !filter_command_debug[kind_idx]
-					continue;
-
-				GUI.push_text(tprint("%", kind), V2f.{ 500.0, 10.0 + y * 20.0 }, 18);
-				y += 1;
-			}
-
-			for * filter_command_debug {
-				GUI.push_text(
-					tprint("%", it_index.(Command.payload.Kind)),
-					V2f.{ 310.0, 10.0 + it_index * 20.0 },
-					18,
-					-0.5
-				);
-				if GUI.push_checkbox(
-					V2f.{ 475, 20.0 + it_index * 20.0 }, 18, filter_command_debug[it_index]
-				)
-					filter_command_debug[it_index] = !filter_command_debug[it_index];
-			}
-		}
-
-		if render_fps {
-			GUI.push_fps_histogram(.{ 10, 10 }, .{ 300, 150 }, history_dt, history_cursor);
-
-			history_ping := NewArray(state.ntp_history.count, float32, false,, temp);
-			for * history_ping {
-				it.* = xx state.ntp_history[it_index].ping;
-			}
-			ping_cursor := (state.ntp_history_cursor + history_ping.count - 1) % history_ping.count;
-			GUI.push_ping_histogram(.{ 10, 170 }, .{ 300, 150 }, history_ping, ping_cursor);
-
-			#if OS == .WASM {
-				header := get_header();
-				bit_array := cast(*u8)(header + 1);
-				n := header.total_number_of_pages_allocated;
-				for 0..n-1 {
-					x := it % 300;
-					y := it / 300;
-
-					B := it / 8;
-					b := it % 8;
-
-					x *= 4;
-					y *= 4;
-					x += 200;
-					y += 200;
-					color := ifx (bit_array[B] & (1 << b)) != 0 then V3f.{ 0.0, 1.0, 0.0 } else V3f.{ 1.0, 0.0, 0.0 };
-					GUI.push_quad_screen(
-						V2f.{ xx x, xx y },
-						V2f.{ xx 3, xx 3 },
-						color,
-						100
-					);
-				}
-			}
-		}
 
 		WRender.render(*framegraph, scene, store);
 
@@ -501,6 +440,12 @@ State :: struct {
 	ntp_history_cursor := 0;
 
 	received_command_history: [..] Command.payload.Kind;
+	
+	history_dt: [100] float;
+	history_cursor := 0;
+	render_fps := false;
+	render_command_debug := false;
+	filter_command_debug: [#run enum_highest_value(Command.payload.Kind) + 1] bool;
 
 	volume_on := true;
 }

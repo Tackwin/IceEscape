@@ -306,13 +306,35 @@ norm :: (a: V2($T)) -> T {
 }
 
 operator * :: (A: M4($T), B: M4(T)) -> M4(T) {
-	C: M4(T);
+	C: M4(T) = ---;
 
-	for i: 0..3
-	for j: 0..3
-	for k: 0..3 {
-		C.data[i * 4 + j] += A.data[k * 4 + j] * B.data[i * 4 + k];
+	ad := A.data.data;
+	bd := B.data.data;
+	cd := C.data.data;
+
+	elem :: (x: int, y: int) #expand {
+		cd[y * 4 + x] = ad[0 * 4 + x] * bd[y * 4 + 0];
+		cd[y * 4 + x] += ad[1 * 4 + x] * bd[y * 4 + 1];
+		cd[y * 4 + x] += ad[2 * 4 + x] * bd[y * 4 + 2];
+		cd[y * 4 + x] += ad[3 * 4 + x] * bd[y * 4 + 3];
+
 	}
+	elem(0, 0);
+	elem(0, 1);
+	elem(0, 2);
+	elem(0, 3);
+	elem(1, 0);
+	elem(1, 1);
+	elem(1, 2);
+	elem(1, 3);
+	elem(2, 0);
+	elem(2, 1);
+	elem(2, 2);
+	elem(2, 3);
+	elem(3, 0);
+	elem(3, 1);
+	elem(3, 2);
+	elem(3, 3);
 	return C;
 }
 

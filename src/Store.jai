@@ -13,6 +13,9 @@ Colormaps_Rect :: struct {
 	prop    :: V4f.{ 0 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
 	vehicle :: V4f.{ 1 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
 	pirate  :: V4f.{ 0 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
+	conveyor :: V4f.{ 1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
+	car :: V4f.{ 2 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
+	watercraft :: V4f.{ 2 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
 }
 
 Model_Id :: enum {
@@ -326,6 +329,34 @@ get_number_model ::  (store: Store, digit: int) -> *WRender.Model {
 // 	return get_geometry(store, id.(Model_Id));
 // }
 
+get_rect :: (id: Model_Id) -> V4f {
+	if #complete id == {
+		case .Racer; return Colormaps_Rect.vehicle;
+		case .SUV; return Colormaps_Rect.vehicle;
+		case .Tile; return .{ 0, 0, 1, 1 };
+		case .Speedster; return Colormaps_Rect.vehicle;
+		case .Tombstone; return Colormaps_Rect.vehicle;
+		case .Skull; return Colormaps_Rect.pirate;
+		case .Coin; return Colormaps_Rect.vehicle;
+		case .Key; return Colormaps_Rect.vehicle;
+		case .Mark; return .{ 0, 0, 1, 1 };
+		case .Gate; return Colormaps_Rect.vehicle;
+		case .Gate_Close; return Colormaps_Rect.vehicle;
+		case .Shuriken; return Colormaps_Rect.vehicle;
+		case .Spirit; return Colormaps_Rect.vehicle;
+		case .Drag_Racer; return Colormaps_Rect.vehicle;
+		case .Monster_Truck; return Colormaps_Rect.vehicle;
+		case .Vintage_Racer; return Colormaps_Rect.vehicle;
+		case .Boat_Row; return Colormaps_Rect.watercraft;
+		case .Boat_Fishing; return Colormaps_Rect.watercraft;
+		case .Taxi; return Colormaps_Rect.car;
+		case .Police; return Colormaps_Rect.car;
+		case .Ambulance; return Colormaps_Rect.car;
+		case .Spaceship; return Colormaps_Rect.vehicle;
+	}
+
+	return Colormaps_Rect.vehicle;
+}
 get_model :: (store: Store, id: Model_Id) -> *WRender.Model {
 	if #complete id == {
 		case .Racer; return *store.racer_model;

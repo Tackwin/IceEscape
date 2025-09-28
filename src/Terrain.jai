@@ -388,6 +388,9 @@ parse_terrain :: (text: string, scene: *Scene) {
 				if scan2(line, "- t: %", *skull.server.t)
 					continue;
 
+				if scan2(line, "- offset: %", *skull.server.offset)
+					continue;
+
 				print("Error reading skull, unrecognized line: % (L%)\n", line, cursor);
 				cursor -= 1;
 			}

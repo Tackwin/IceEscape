@@ -81,6 +81,7 @@ Command :: struct {
 	Sync_Skull :: struct {
 		skull_id: int;
 		t: float;
+		offset: float;
 		speed: float;
 	}
 	Sync_Key :: struct {
