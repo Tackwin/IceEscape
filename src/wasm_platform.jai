@@ -149,38 +149,133 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 // audio_table: Table(int, *Sound.Sound_Data);
 // audio_counter := 0;
 
-load_audio :: (data: string) -> Audio {
-	// audio_counter += 1;
+load_audio :: (data: string, compressed: bool) -> Audio {
+	Params :: struct {
+		data: *u8;
+		count: s64;
+		id: *s64;
+		compressed: u64;
+	}
+	js_load_audio :: (params: *Params) #foreign;
+	audio: Audio;
+	params: Params;
+	params.data = cast(*u8) data.data;
+	params.count = xx data.count;
+	params.compressed = xx compressed;
+	params.id = *audio.id;
+	js_load_audio(*params);
 
-	// audio: Audio;
-	// audio.id = audio_counter;
-	// // Load audio data
-	// sound := Sound.load_audio_data("Machin", data);
-	// sound_ptr := New(Sound.Sound_Data);
-	// sound_ptr.* = sound;
-	// table_set(*audio_table, audio.id, sound_ptr);
+	return audio;
+}
+play_audio :: (audio: Audio, position: V3f) -> Sound {
+	Params :: struct {
+		id: s64;
+		x: float32;
+		y: float32;
+		z: float32;
+		volume: float32;
+		pitch: float32;
+		repeating: u32;
+		kind: s32;
+		fade_in: s32;
 
-	// return audio;
-	return .{};
+		sound_id: *s64;
+	}
+
+	js_play_audio :: (params: *Params) #foreign;
+	sound: Sound;
+	params: Params;
+	params.id = xx audio.id;
+	params.x = xx position.x;
+	params.y = xx position.y;
+	params.z = xx position.z;
+	params.volume = xx audio.volume;
+	params.pitch = xx audio.pitch;
+	params.repeating = xx audio.repeating;
+	params.kind = xx audio.kind;
+	params.fade_in = xx audio.fade_in;
+	params.sound_id = *sound.id;
+	js_play_audio(*params);
+
+	sound.audio_id = audio.id;
+	sound.playing = true;
+	sound.position = position;
+	sound.loop = audio.repeating || audio.kind == .Music;
+	return sound;
 }
-play_audio :: (audio: *Audio) {
-	// ok, sound := table_find_new(*audio_table, audio.id);
-	// if ok {
-	// 	stream: *Sound.Sound_Stream;
-	// 	if audio.kind == {
-	// 		case .Music;
-	// 			stream = Sound.make_stream(sound, .MUSIC);
-	// 		case .Sound;
-	// 			stream = Sound.make_stream(sound, .GENERAL_SFX);
-	// 	}
-	// 	stream.user_volume_scale = audio.volume;
-	// 	stream.internal_flags &= ~.WAITING_FOR_INITIAL_DECODER_PAGES;
-	// 	Sound.set_repeating(stream, audio.repeating);
-	// 	Sound.start_playing(stream);
-	// }
+query_sound :: (sound_id: int) -> Sound {
+	Params :: struct {
+		sound_id: s64;
+		id: *s64;
+		x: *float32;
+		y: *float32;
+		z: *float32;
+		volume: *float32;
+		pitch: *float32;
+		playing: *u32;
+		looping: *u32;
+	}
+	js_query_sound :: (params: *Params) #foreign;
+	params: Params;
+	sound: Sound;
+	params.sound_id = xx sound_id;
+	params.id = *sound.id;
+	params.x = *sound.position.x;
+	params.y = *sound.position.y;
+	params.z = *sound.position.z;
+	params.volume = *sound.volume;
+	params.pitch = *sound.pitch;
+	u32_looping : u32 = 0;
+	params.looping = *u32_looping;
+	u32_playing : u32 = 0;
+	params.playing = *u32_playing;
+	js_query_sound(*params);
+	sound.playing = u32_playing != 0;
+	sound.loop = u32_looping != 0;
+	return sound;
 }
-query_audio :: (audio: *Audio) -> bool {
-	return false;
+set_sound :: (sound: Sound) {
+	Params :: struct {
+		sound_id: s64;
+		x: float32;
+		y: float32;
+		z: float32;
+		volume: float32;
+		pitch: float32;
+		playing: u32;
+		looping: u32;
+	}
+	js_set_sound :: (params: *Params) #foreign;
+	params: Params;
+	params.sound_id = xx sound.id;
+	params.x = xx sound.position.x;
+	params.y = xx sound.position.y;
+	params.z = xx sound.position.z;
+	params.volume = xx sound.volume;
+	params.pitch = xx sound.pitch;
+	params.playing = xx sound.playing;
+	params.looping = xx sound.loop;
+	js_set_sound(*params);
+	// Sound.update();
+}
+set_listener_info :: (listener: Listener) {
+	Params :: struct {
+		x: float32;
+		y: float32;
+		z: float32;
+		dx: float32;
+		dy: float32;
+		dz: float32;
+	}
+	js_set_listener_info :: (params: *Params) #foreign;
+	params: Params;
+	params.x = xx listener.position.x;
+	params.y = xx listener.position.y;
+	params.z = xx listener.position.z;
+	params.dx = xx listener.direction.x;
+	params.dy = xx listener.direction.y;
+	params.dz = xx listener.direction.z;
+	js_set_listener_info(*params);
 }
 
 wasm_end_frame ::  () {
@@ -207,9 +302,11 @@ init_platform :: () -> Platform {
 	platform.send_web_message = send_web_message;
 	platform.get_token = get_token;
 	platform.set_token = set_token;
-	platform.query_audio = query_audio;
 	platform.load_audio = load_audio;
 	platform.play_audio = play_audio;
+	platform.query_sound = query_sound;
+	platform.set_sound = set_sound;
+	platform.set_listener_info = set_listener_info;
 	platform.volume_audio = (x: float) -> float {
 		// Clamp the volume between 0.0 and 1.0
 		if x < 0.0 {

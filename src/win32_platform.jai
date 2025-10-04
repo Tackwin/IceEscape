@@ -2,7 +2,7 @@
 #import "Window_Creation";
 #import "Input";
 #import "File_Watcher";
-Sound :: #import "Sound_Player"(VERBOSE = false);
+#import "miniaudio";
 #import "Basic";
 #import "Hash_Table";
 #import "String";
@@ -270,44 +270,131 @@ win32_end_frame :: () {
 	}
 
 	messages_pending.count = cursor;
-	Sound.update();
 	process_changes(*watcher);
 }
 
-audio_table: Table(int, *Sound.Sound_Data);
-audio_counter := 0;
+Win32_Sound :: struct {
+	audio_id: int;
+	sound: *ma_sound;
+	decoder: *ma_decoder;
+}
 
-load_audio :: (data: string) -> Audio {
+audio_id_to_data: Table(int, string);
+sound_id_to_sound: Table(int, Win32_Sound);
+
+audio_counter := 0;
+sound_counter := 0;
+
+load_audio :: (data: string, compressed: bool) -> Audio {
 	audio_counter += 1;
 
 	audio: Audio;
 	audio.id = audio_counter;
 	// Load audio data
-	sound := Sound.load_audio_data("Machin", data);
-	sound_ptr := New(Sound.Sound_Data);
-	sound_ptr.* = sound;
-	table_set(*audio_table, audio.id, sound_ptr);
 
+	table_add(*audio_id_to_data, audio.id, data);
+	audio.loaded = true;
 	return audio;
 }
-play_audio :: (audio: *Audio) {
-	ok, sound := table_find_new(*audio_table, audio.id);
+play_audio :: (audio: Audio, position: V3f) -> Sound {
+	ok, data := table_find_new(*audio_id_to_data, audio.id);
+	
+	config := ma_decoder_config_init(.unknown, 0, 0);
+	sound_counter += 1;
+	sound: Sound;
+	sound.audio_id = audio.id;
+	sound.id = sound_counter;
+	sound.position = position;
+	sound.playing = false;
+	sound.volume = audio.volume;
+	sound.pitch = audio.pitch;
+	sound.loop = audio.repeating || audio.kind == .Music;
+
 	if ok {
-		stream: *Sound.Sound_Stream;
-		if audio.kind == {
-			case .Music;
-				stream = Sound.make_stream(sound, .MUSIC);
-			case .Sound;
-				stream = Sound.make_stream(sound, .GENERAL_SFX);
+		decoder := New(ma_decoder);
+		result := ma_decoder_init_memory(xx data.data, xx data.count, *config, decoder);
+		if result != ma_result.SUCCESS {
+			free(decoder);
+			return sound;
 		}
-		stream.user_volume_scale = audio.volume;
-		stream.internal_flags &= ~.WAITING_FOR_INITIAL_DECODER_PAGES;
-		Sound.set_repeating(stream, audio.repeating);
-		Sound.start_playing(stream);
+
+		msound := New(ma_sound);
+		flags : ma_sound_flags = xx 0;
+		if audio.kind == .Music {
+			flags = ma_sound_flags.NO_SPATIALIZATION;
+		}
+		ma_sound_init_from_data_source(*audio_engine, decoder.ds.pCurrent, xx flags, null, msound);
+		ma_sound_set_looping(msound, xx sound.loop);
+		ma_sound_set_volume(msound, audio.volume * master_volume);
+		// ma_sound_set_pitch(msound, audio.pitch);
+		ma_sound_set_min_gain(msound, 0.0);
+		ma_sound_set_max_gain(msound, 1.0);
+		ma_sound_set_min_distance(msound, 1.0);
+		ma_sound_set_max_distance(msound, 1000.0);
+		ma_sound_set_rolloff(msound, 3.0);
+		ma_sound_set_attenuation_model(msound, .exponential);
+		ma_sound_set_pinned_listener_index(msound, 0);
+		ma_sound_set_position(msound, position.x, position.y, position.z);
+		ma_sound_set_fade_in_milliseconds(msound, 0.0, 1.0, xx audio.fade_in);
+		ma_sound_start(msound);
+
+		sound.playing = true;
+		win32_sound: Win32_Sound;
+		win32_sound.audio_id = audio.id;
+		win32_sound.sound = msound;
+		win32_sound.decoder = decoder;
+		table_add(*sound_id_to_sound, sound.id, win32_sound);
 	}
+	return sound;
 }
-query_audio :: (audio: *Audio) -> bool {
-	return false;
+set_listener_info :: (listener: Listener) {
+	ma_engine_listener_set_position(
+		*audio_engine, 0, listener.position.x, listener.position.y, listener.position.z
+	);
+	ma_engine_listener_set_direction(
+		*audio_engine, 0, listener.direction.x, listener.direction.y, listener.direction.z
+	);
+	ma_engine_listener_set_world_up(*audio_engine, 0, 0.0, 0.0, 1.0);
+	ma_engine_listener_set_enabled(*audio_engine, 0, xx true);
+}
+query_sound :: (sound_id: int) -> Sound {
+	sound: Sound;
+	sound.id = -1;
+	ok, win32_sound := table_find_new(*sound_id_to_sound, sound_id);
+	if ok {
+		sound.audio_id = win32_sound.audio_id;
+		sound.position = .{0,0,0};
+		sound.playing = false;
+		sound.volume = 1.0;
+		sound.pitch = 1.0;
+		sound.loop = false;
+
+		if win32_sound.sound {
+			pos := ma_sound_get_position(win32_sound.sound);
+			sound.position = .{ pos.x, pos.y, pos.z };
+			sound.playing = ma_sound_is_playing(win32_sound.sound) != 0;
+			sound.volume = ma_sound_get_volume(win32_sound.sound);
+			sound.pitch = ma_sound_get_pitch(win32_sound.sound);
+			sound.loop = ma_sound_is_looping(win32_sound.sound) != 0;
+		}
+	}
+	return sound;
+}
+set_sound :: (sound: Sound) {
+	ok, win32_sound := table_find_new(*sound_id_to_sound, sound.id);
+	if ok && win32_sound.sound {
+		ma_sound_set_position(
+			win32_sound.sound, sound.position.x, sound.position.y, sound.position.z
+		);
+		if sound.playing && !ma_sound_is_playing(win32_sound.sound) {
+			ma_sound_start(win32_sound.sound);
+		} else if !sound.playing && ma_sound_is_playing(win32_sound.sound) {
+			ma_sound_stop(win32_sound.sound);
+		}
+		ma_sound_set_looping(win32_sound.sound, xx sound.loop);
+		ma_sound_set_volume(win32_sound.sound, sound.volume * master_volume);
+		// ma_sound_set_pitch(win32_sound.sound, sound.pitch);
+	}
 }
 
 master_volume := 1.0;
@@ -315,13 +402,14 @@ volume_audio :: (x: float) -> float {
 	if x < 0
 		return master_volume;
 	master_volume = x;
-	Sound.set_master_volume(master_volume);
 	return master_volume;
 }
 
 watcher: File_Watcher(Platform);
 frame_file_change: [1024] string;
 frame_file_change_count := 0;
+
+audio_engine: ma_engine;
 
 init_platform :: () -> Platform {
 	platform: Platform;
@@ -346,10 +434,21 @@ init_platform :: () -> Platform {
 	}, *platform);
 	add_directories(*watcher, tprint("%/../assets/", #filepath));
 
-	Sound.sound_player_init(.{
-		audible_when_window_is_not_in_focus = true,
-		update_from_a_thread = false
-	});
+	{
+		config: ma_engine_config = ma_engine_config_init();
+		config.listenerCount = 1;
+		ok := ma_engine_init(null, *audio_engine);
+		if ok != ma_result.SUCCESS {
+			print("Failed to initialize audio engine.\n");
+		}
+
+		ok2 := ma_engine_start(*audio_engine);
+		if ok2 != ma_result.SUCCESS {
+			print("Failed to start audio engine.\n");
+		}
+
+		ma_engine_listener_set_enabled(*audio_engine, 0, xx true);
+	}
 
 	curl_buffer = NewArray(1024*1024*32, u8, false);
 
@@ -382,10 +481,12 @@ init_platform :: () -> Platform {
 	platform.send_web_message = send_web_message;
 	platform.get_token = win32_get_token;
 	platform.set_token = win32_set_token;
-	platform.query_audio = query_audio;
+	platform.query_sound = query_sound;
+	platform.set_sound = set_sound;
 	platform.load_audio = load_audio;
 	platform.play_audio = play_audio;
 	platform.volume_audio = volume_audio;
+	platform.set_listener_info = set_listener_info;
 
 	// GL.gl_load(*GL.gl, SDL_GL_GetProcAddress);
 

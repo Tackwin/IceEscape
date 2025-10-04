@@ -268,6 +268,7 @@ WFramegraph :: struct {
 	surfaceTexture: WGPUSurfaceTexture;
 
 	geometryBindGroup: WGPUBindGroup;
+	instanceBindGroup: WGPUBindGroup;
 	textureBindGroup: WGPUBindGroup;
 	particleBindGroup: WGPUBindGroup;
 
@@ -324,6 +325,7 @@ WFramegraph :: struct {
 		color: V4f = .{ 1, 1, 1, 1 };
 	};
 	mainInstances: [..] Instance;
+	
 	instanceBuffer: WGPUBuffer;
 	instances: [..] Instance;
 	instanceBufferCursor := 0;
@@ -348,6 +350,7 @@ init_bindgroup_layout :: (framegraph: *WFramegraph) {
 		layout.label = toWGPUStringView("Instance Bind Group Layout");
 		framegraph.instanceBindGroupLayout =
 			context.gpu.deviceCreateBindGroupLayout(context.graphics.device, *layout);
+		framegraph.instanceBindGroup = instance_bind_group(framegraph, "Geometry", 32 * 1024);
 	}
 	{
 		layout: WGPUBindGroupLayoutDescriptor = .{};
@@ -1046,17 +1049,24 @@ texture_bind_group :: (
 	return context.gpu.deviceCreateBindGroup(context.graphics.device, *desc);
 }
 
-encode_and_draw :: (
-	framegraph: *WFramegraph, pass: WGPURenderPassEncoder, model: Model, instanced_count: int
-) {
+append_instance_buffer :: (framegraph: *WFramegraph) -> [] WFramegraph.Instance {
+	data: [] WFramegraph.Instance;
+	data.data = framegraph.mainInstances.data + framegraph.mainInstances.count;
+	data.count = 0;
+	return data;
+}
+
+draw :: (framegraph: *WFramegraph, pass: WGPURenderPassEncoder, model: Model, count: int) {
+	if count <= 0 {
+		return;
+	}
 	context.gpu.renderPassEncoderSetVertexBuffer(
 		pass, 0, model.gpu, 0, xx (model.prim_count * size_of(WFramegraph.Vertex))
 	);
 	context.gpu.renderPassEncoderDraw(
-		pass, xx model.prim_count, xx instanced_count, 0, 0
+		pass, xx model.prim_count, xx count, 0, xx framegraph.mainInstances.count
 	);
-	framegraph.instanceBufferCursor += xx (instanced_count * size_of(WFramegraph.Instance));
-	align_up(*framegraph.instanceBufferCursor, 256);
+	framegraph.mainInstances.count += xx count;
 }
 
 Extra :: struct {
@@ -1184,13 +1194,13 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 	shadowAttachment.stencilLoadOp = .Undefined;
 	shadowAttachment.stencilStoreOp = .Undefined;
 	shadowAttachment.stencilClearValue = 0;
-
 	extra: Extra;
 	reserve(*extra, 16);
 	defer {
 		free(*extra);
 	}
-
+	array_resize(*framegraph.mainInstances, 64 * 1024, false);
+	framegraph.mainInstances.count = 0;
 	if true {
 		clear(*extra);
 
@@ -1204,6 +1214,9 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		shadowPass := context.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
 		context.gpu.renderPassEncoderSetPipeline(
 			shadowPass, framegraph.geometryShadowPipeline
+		);
+		context.gpu.renderPassEncoderSetBindGroup(
+			shadowPass, 0, framegraph.instanceBindGroup, 0, null
 		);
 
 		render_players(framegraph, encoder, shadowPass, scene, store);
@@ -1238,6 +1251,9 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		geometryPass := context.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
 		context.gpu.renderPassEncoderSetPipeline(geometryPass, framegraph.geometryPipeline);
 
+		context.gpu.renderPassEncoderSetBindGroup(
+			geometryPass, 0, framegraph.instanceBindGroup, 0, null
+		);
 		context.gpu.renderPassEncoderSetBindGroup(
 			geometryPass, 1, framegraph.geometryBindGroup, 0, null
 		);
@@ -1284,9 +1300,7 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		context.gpu.renderPassEncoderRelease(geometryPass);
 	}
 
-	if true {
-		
-	}
+	writeTo(framegraph.instanceBuffer, 0, framegraph.mainInstances);
 
 	if true {
 		passDesc: WGPURenderPassDescriptor = .{};
@@ -1444,7 +1458,6 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		}
 		writeTo(framegraph.uiInstanceBuffer, 0, framegraph.uiInstances);
 
-
 		context.gpu.renderPassEncoderEnd(uiPass);
 		context.gpu.renderPassEncoderRelease(uiPass);
 	}
@@ -1467,18 +1480,17 @@ render_particles :: (
 	extra: *Extra
 ) {
 	dt := normalize(scene.camera.target - scene.camera.position);
-	instanced := NewArray(scene.particles.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	R := to_rotation_matrix(from_unit_vectors(V3f.{ 0, 0, -1 }, dt));
+	instanced := append_instance_buffer(framegraph);
 	for scene.particles {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
-		instance.M = M4f.identity();
-		instance.M *= M4f.translate(it.position);
-		instance.M *= to_rotation_matrix(from_unit_vectors(V3f.{ 0, 0, -1 }, dt));
-		instance.M *= scale_matrix(it.size);
+		instance.M = R;
+		M4f.translate(*instance.M, it.position);
 		instance.M *= to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, it.rotation));
-		instance.M *= M4f.translate(V3f.{ -0.5, -0.5, 0 });
+		M4f.scale(*instance.M, .{ it.size, it.size, it.size });
+		M4f.translate(*instance.M, V3f.{ -0.5, -0.5, 0 });
 		instance.texture_rect = .{
 			it.texture_rec.x, it.texture_rec.y, it.texture_rec.z, it.texture_rec.w
 		};
@@ -1491,11 +1503,7 @@ render_particles :: (
 	if instanced.count == 0
 		return;
 
-	bindGroup := instance_bind_group(framegraph, "Particles bind group", instanced.count);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	encode_and_draw(framegraph, pass, store.tile_model, instanced.count);
+	draw(framegraph, pass, store.tile_model, instanced.count);
 }
 
 render_extra  :: (
@@ -1518,8 +1526,7 @@ render_extra_cylinders :: (
 	store: Store.Store,
 	extra: *Extra
 ) {
-	instanced := NewArray(extra.cylinders.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for extra.cylinders {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1530,11 +1537,7 @@ render_extra_cylinders :: (
 	if instanced.count == 0
 		return;
 
-	bindGroup := instance_bind_group(framegraph, "Extra Cylinders", instanced.count);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	encode_and_draw(framegraph, pass, store.unit_cylinder_model, instanced.count);
+	draw(framegraph, pass, store.unit_cylinder_model, instanced.count);
 }
 
 render_extra_numbers :: (
@@ -1545,9 +1548,8 @@ render_extra_numbers :: (
 	store: Store.Store,
 	extra: *Extra
 ) {
-	instanced := NewArray(extra.numbers.count, WFramegraph.Instance, false,, temp);
 	for n: 0..9 {
-		instanced.count = 0;
+		instanced := append_instance_buffer(framegraph);
 		for extra.numbers {
 			if it.number != n
 				continue;
@@ -1561,13 +1563,7 @@ render_extra_numbers :: (
 		if instanced.count == 0
 			continue;
 
-		bindGroup := instance_bind_group(framegraph, tprint("Number %", n), instanced.count);
-		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-		defer context.gpu.bindGroupRelease(bindGroup);
-		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-		encode_and_draw(framegraph, pass, Store.get_number_model(store, n), instanced.count);
-
-		instanced.count = 0;
+		draw(framegraph, pass, Store.get_number_model(store, n), instanced.count);
 	}
 }
 
@@ -1579,8 +1575,7 @@ render_extra_quads :: (
 	store: Store.Store,
 	extra: *Extra
 ) {
-	instanced := NewArray(extra.quads.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for extra.quads {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1592,11 +1587,7 @@ render_extra_quads :: (
 	if instanced.count == 0
 		return;
 
-	bindGroup := instance_bind_group(framegraph, "Extra Quads", instanced.count);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	encode_and_draw(framegraph, pass, store.tile_model, instanced.count);
+	draw(framegraph, pass, store.tile_model, instanced.count);
 }
 
 render_within_zones :: (
@@ -1607,8 +1598,7 @@ render_within_zones :: (
 	store: Store.Store,
 	extra: *Extra
 ) {
-	instanced := NewArray(scene.within_zones.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 
 	for scene.within_zones {
 		instanced.count += 1;
@@ -1620,14 +1610,10 @@ render_within_zones :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0 {
-		bindGroup := instance_bind_group(framegraph, "Within zone", instanced.count);
-		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-		defer context.gpu.bindGroupRelease(bindGroup);
-		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-		encode_and_draw(framegraph, pass, store.indicator_outline_model, instanced.count);
+		draw(framegraph, pass, store.indicator_outline_model, instanced.count);
 	}
 
-	instanced.count = 0;
+	instanced = append_instance_buffer(framegraph);
 	for scene.within_zones {
 		if it.time_stayed <= 0.0
 			continue;
@@ -1642,11 +1628,7 @@ render_within_zones :: (
 		instance.color = V4f.{ 1.0, 1.0, 1.0, 0.25 };
 	}
 	if instanced.count > 0 {
-		bindGroup := instance_bind_group(framegraph, "Within zone stroked", instanced.count);
-		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-		defer context.gpu.bindGroupRelease(bindGroup);
-		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-		encode_and_draw(framegraph, pass, store.indicator_stroke_model, instanced.count);
+		draw(framegraph, pass, store.indicator_stroke_model, instanced.count);
 	}
 
 
@@ -1685,8 +1667,7 @@ render_explosions :: (
 	store: Store.Store,
 	extra: *Extra
 ) {
-	instanced := NewArray(scene.explosions.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for scene.explosions {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1699,11 +1680,7 @@ render_explosions :: (
 	if instanced.count == 0
 		return;
 
-	bindGroup := instance_bind_group(framegraph, "Explosion", instanced.count);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	encode_and_draw(framegraph, pass, store.unit_sphere_model, instanced.count);
+	draw(framegraph, pass, store.unit_sphere_model, instanced.count);
 }
 
 render_coins :: (
@@ -1713,8 +1690,7 @@ render_coins :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-	instanced := NewArray(scene.coins.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for scene.coins {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1728,11 +1704,7 @@ render_coins :: (
 	if instanced.count == 0
 		return;
 
-	bindGroup := instance_bind_group(framegraph, "Coins", instanced.count);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	encode_and_draw(framegraph, pass, store.coin_model, instanced.count);
+	draw(framegraph, pass, store.coin_model, instanced.count);
 }
 
 render_antiairs :: (
@@ -1743,8 +1715,7 @@ render_antiairs :: (
 	store: Store.Store,
 	extra: *Extra
 ) {
-	instanced := NewArray(scene.antiairs.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for scene.antiairs {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1754,14 +1725,10 @@ render_antiairs :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0 {
-		bindGroup := instance_bind_group(framegraph, "Antiairs camion", instanced.count);
-		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-		defer context.gpu.bindGroupRelease(bindGroup);
-		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-		encode_and_draw(framegraph, pass, store.antiair_camion_model, instanced.count);
+		draw(framegraph, pass, store.antiair_camion_model, instanced.count);
 	}
 
-	instanced.count = 0;
+	instanced = append_instance_buffer(framegraph);
 	for scene.antiairs {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1775,14 +1742,9 @@ render_antiairs :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0 {
-		bindGroup := instance_bind_group(framegraph, "Antiairs canon", instanced.count);
-		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-		defer context.gpu.bindGroupRelease(bindGroup);
-		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-		encode_and_draw(framegraph, pass, store.antiair_canon_model, instanced.count);
+		draw(framegraph, pass, store.antiair_canon_model, instanced.count);
 	}
-
-	instanced.count = 0;
+	instanced = append_instance_buffer(framegraph);
 	for scene.antiairs {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1825,11 +1787,7 @@ render_antiairs :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0 {
-		bindGroup := instance_bind_group(framegraph, "Antiairs missile", instanced.count);
-		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-		defer context.gpu.bindGroupRelease(bindGroup);
-		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-		encode_and_draw(framegraph, pass, store.missile_model, instanced.count);
+		draw(framegraph, pass, store.missile_model, instanced.count);
 	}
 
 	for scene.antiairs {
@@ -1855,8 +1813,7 @@ render_traps :: (
 	store: Store.Store,
 	extra: *Extra
 ) {
-	instanced := NewArray(scene.traps.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for scene.traps {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1868,11 +1825,7 @@ render_traps :: (
 	if instanced.count == 0
 		return;
 
-	bindGroup := instance_bind_group(framegraph, "Traps", instanced.count);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	encode_and_draw(framegraph, pass, store.trap_spike_model, instanced.count);
+	draw(framegraph, pass, store.trap_spike_model, instanced.count);
 }
 
 render_trophies :: (
@@ -1882,8 +1835,7 @@ render_trophies :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-	instanced := NewArray(scene.trophies.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for scene.trophies {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1895,11 +1847,7 @@ render_trophies :: (
 	if instanced.count == 0
 		return;
 
-	bindGroup := instance_bind_group(framegraph, "Trophies", instanced.count);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	encode_and_draw(framegraph, pass, store.trophy_model, instanced.count);
+	draw(framegraph, pass, store.trophy_model, instanced.count);
 }
 
 render_robots :: (
@@ -1910,9 +1858,8 @@ render_robots :: (
 	store: Store.Store,
 	extra: *Extra
 ) {
-	instanced := NewArray(scene.robots.count, WFramegraph.Instance, false,, temp);
 	for axe: 0..5 {
-		instanced.count = 0;
+		instanced := append_instance_buffer(framegraph);
 		for scene.robots {
 			instanced.count += 1;
 			instance := *instanced[instanced.count - 1];
@@ -1923,11 +1870,7 @@ render_robots :: (
 		if instanced.count == 0
 			continue;
 
-		bindGroup := instance_bind_group(framegraph, tprint("Robot axe %", axe), instanced.count);
-		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-		defer context.gpu.bindGroupRelease(bindGroup);
-		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-		encode_and_draw(framegraph, pass, Store.get_axes_model(store, axe), instanced.count);
+		draw(framegraph, pass, Store.get_axes_model(store, axe), instanced.count);
 	}
 	for robot: scene.robots {
 		M := Scene.robot_matrix_local_to_joint(robot, 6);
@@ -1978,9 +1921,8 @@ render_flags :: (
 	store: Store.Store,
 	extra: *Extra
 ) {
-	instanced := NewArray(scene.flags.count, WFramegraph.Instance, false,, temp);
 	{
-		instanced.count = 0;
+		instanced := append_instance_buffer(framegraph);
 		for scene.flags {
 			if (it.activated && it.activated_juice_t < 0.5)
 				continue;
@@ -2026,15 +1968,11 @@ render_flags :: (
 			}
 		}
 		if instanced.count > 0 {
-			bindGroup := instance_bind_group(framegraph, "Flag", instanced.count);
-			context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-			defer context.gpu.bindGroupRelease(bindGroup);
-			writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-			encode_and_draw(framegraph, pass, store.flag_down_model, instanced.count);
+			draw(framegraph, pass, store.flag_down_model, instanced.count);
 		}
 	}
 	{
-		instanced.count = 0;
+		instanced := append_instance_buffer(framegraph);
 		for scene.flags {
 			if !(it.activated && it.activated_juice_t < 0.5)
 				continue;
@@ -2059,11 +1997,7 @@ render_flags :: (
 			instance.texture_rect = Store.Colormaps_Rect.vehicle;
 		}
 		if instanced.count > 0 {
-			bindGroup := instance_bind_group(framegraph, "Flag", instanced.count);
-			context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-			defer context.gpu.bindGroupRelease(bindGroup);
-			writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-			encode_and_draw(framegraph, pass, store.flag_model, instanced.count);
+			draw(framegraph, pass, store.flag_model, instanced.count);
 		}
 	}
 }
@@ -2075,9 +2009,7 @@ render_tombstones :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-
-	instanced := NewArray(scene.tombstones.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for scene.tombstones {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2088,11 +2020,7 @@ render_tombstones :: (
 	if instanced.count == 0
 		return;
 
-	bindGroup := instance_bind_group(framegraph, "Tombstone", instanced.count);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	encode_and_draw(framegraph, pass, store.tombstone_model, instanced.count);
+	draw(framegraph, pass, store.tombstone_model, instanced.count);
 }
 
 render_gates :: (
@@ -2115,8 +2043,7 @@ render_gates_regular_open :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-	instanced := NewArray(scene.gates.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for scene.gates {
 		if !(!it.is_end && !it.is_closed)
 			continue;
@@ -2132,11 +2059,7 @@ render_gates_regular_open :: (
 	if instanced.count == 0
 		return;
 
-	bindGroup := instance_bind_group(framegraph, "Gate", instanced.count);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	encode_and_draw(framegraph, pass, store.gate_model, instanced.count);
+	draw(framegraph, pass, store.gate_model, instanced.count);
 }
 
 render_gates_regular_closed :: (
@@ -2146,8 +2069,7 @@ render_gates_regular_closed :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-	instanced := NewArray(scene.gates.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for scene.gates {
 		if !(!it.is_end && it.is_closed)
 			continue;
@@ -2163,11 +2085,7 @@ render_gates_regular_closed :: (
 	if instanced.count == 0
 		return;
 
-	bindGroup := instance_bind_group(framegraph, "Gate", instanced.count);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	encode_and_draw(framegraph, pass, store.gate_close_model, instanced.count);
+	draw(framegraph, pass, store.gate_close_model, instanced.count);
 }
 
 render_gates_finished_open :: (
@@ -2194,11 +2112,7 @@ render_gates_finished_open :: (
 	if instanced.count == 0
 		return;
 
-	bindGroup := instance_bind_group(framegraph, "Gate", instanced.count);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	encode_and_draw(framegraph, pass, store.gate_finish_model, instanced.count);
+	draw(framegraph, pass, store.gate_finish_model, instanced.count);
 }
 
 render_gates_finished_closed :: (
@@ -2208,8 +2122,7 @@ render_gates_finished_closed :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-	instanced := NewArray(scene.gates.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for scene.gates {
 		if !(it.is_end && it.is_closed)
 			continue;
@@ -2225,11 +2138,7 @@ render_gates_finished_closed :: (
 	if instanced.count == 0
 		return;
 
-	bindGroup := instance_bind_group(framegraph, "Gate", instanced.count);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-	encode_and_draw(framegraph, pass, store.gate_finish_close_model, instanced.count);
+	draw(framegraph, pass, store.gate_finish_close_model, instanced.count);
 }
 
 render_shurikens :: (
@@ -2239,30 +2148,25 @@ render_shurikens :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-	instanced := NewArray(scene.shurikens.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for scene.shurikens {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
-		instance.M = Scene.compute_moving_frame_server_world_matrix(
-			scene, Scene.find_by_frame_id(scene, it.frame_id)
-		);
+		frame := Scene.find_by_frame_id(scene, it.frame_id);
+		if !frame
+			continue;
+		instance.M = Scene.compute_moving_frame_server_world_matrix(scene, frame);
 		pos := instance.M * v4(it.server.position, 1);
 		instance.M = M4f.translate(v3(pos));
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 
 	if instanced.count > 0 {
-		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-		bindGroup := instance_bind_group(framegraph, "Shuriken", instanced.count);
-		defer context.gpu.bindGroupRelease(bindGroup);
-		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-
-		encode_and_draw(framegraph, pass, store.drone_model, instanced.count);
+		draw(framegraph, pass, store.drone_model, instanced.count);
 	}
 
-	instanced.count = 0;
+	instanced = append_instance_buffer(framegraph);
 	for scene.shurikens {
 		M := Scene.compute_moving_frame_server_world_matrix(
 			scene, Scene.find_by_frame_id(scene, it.frame_id)
@@ -2310,12 +2214,7 @@ render_shurikens :: (
 	}
 
 	if instanced.count > 0 {
-		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-		bindGroup := instance_bind_group(framegraph, "Shuriken", instanced.count);
-		defer context.gpu.bindGroupRelease(bindGroup);
-		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-
-		encode_and_draw(framegraph, pass, store.drone_blade_model, instanced.count);
+		draw(framegraph, pass, store.drone_blade_model, instanced.count);
 	}
 }
 
@@ -2326,8 +2225,7 @@ render_skulls :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-	instanced := NewArray(scene.skulls.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for * scene.skulls {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2340,13 +2238,7 @@ render_skulls :: (
 	if instanced.count == 0
 		return;
 
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-
-	bindGroup := instance_bind_group(framegraph, "Skull", instanced.count);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-
-	encode_and_draw(framegraph, pass, store.pirateship_model, instanced.count);
+	draw(framegraph, pass, store.pirateship_model, instanced.count);
 
 }
 
@@ -2357,9 +2249,7 @@ render_keys :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-
-	instanced := NewArray(scene.keys.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for scene.keys {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2375,14 +2265,7 @@ render_keys :: (
 	if instanced.count == 0
 		return;
 
-
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-
-	bindGroup := instance_bind_group(framegraph, "Key", instanced.count);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-
-	encode_and_draw(framegraph, pass, store.key_model, instanced.count);
+	draw(framegraph, pass, store.key_model, instanced.count);
 }
 
 render_standin :: (
@@ -2392,9 +2275,8 @@ render_standin :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-	instanced := NewArray(scene.stand_in.count, WFramegraph.Instance, false,, temp);
 	for model_id: 0..Store.Model_Id_Count {
-		instanced.count = 0;
+		instanced := append_instance_buffer(framegraph);
 		for scene.stand_in {
 			if it.model_id != model_id
 				continue;
@@ -2414,13 +2296,7 @@ render_standin :: (
 		if !model
 			continue;
 
-
-		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-
-		bindGroup := instance_bind_group(framegraph, "Standin", instanced.count);
-		defer context.gpu.bindGroupRelease(bindGroup);
-		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-		encode_and_draw(framegraph, pass, model, instanced.count);
+		draw(framegraph, pass, model, instanced.count);
 	}
 }
 
@@ -2431,13 +2307,12 @@ render_players :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-	instanced := NewArray(scene.players.count, WFramegraph.Instance, false,, temp);
 	max_model_id := 0;
 	for scene.players
 		max_model_id = max(max_model_id, it.server.model_id);
 
 	for model_id: 0..max_model_id {
-		instanced.count = 0;
+		instanced := append_instance_buffer(framegraph);
 		for scene.players {
 			if it.server.dead
 				continue;
@@ -2457,16 +2332,10 @@ render_players :: (
 		}
 
 		if instanced.count > 0 {
-			writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-
-			bindGroup := instance_bind_group(framegraph, "Player", instanced.count);
-			defer context.gpu.bindGroupRelease(bindGroup);
-			context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-
 			model := Store.get_model(store, xx model_id);
 			if !model
 				model = *store.spirit_model;
-			encode_and_draw(framegraph, pass, model, instanced.count);
+			draw(framegraph, pass, model, instanced.count);
 		}
 	}
 }
@@ -2480,8 +2349,7 @@ render_terrain :: (
 ) {
 	terrain := *scene.terrain;
 
-	instanced := NewArray(terrain.tiles.count, WFramegraph.Instance, false,, temp);
-	instanced.count = 0;
+	instanced := append_instance_buffer(framegraph);
 	for terrain.tiles {
 		x := it_index % terrain.tiles_count.x;
 		y := it_index / terrain.tiles_count.x;
@@ -2498,12 +2366,7 @@ render_terrain :: (
 		return;
 	}
 
-	writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-
-	bindGroup := instance_bind_group(framegraph, "Terrain", instanced.count);
-	defer context.gpu.bindGroupRelease(bindGroup);
-	context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-	encode_and_draw(framegraph, pass, store.tile_model, instanced.count);
+	draw(framegraph, pass, store.tile_model, instanced.count);
 
 }
 
@@ -2521,9 +2384,8 @@ render_props :: (
 	for scene.props
 		max_id = max(max_id, it.id);
 
-	instanced := NewArray(scene.props.count, WFramegraph.Instance, false,, temp);
 	for prop_id: 0..max_id {
-		instanced.count = 0;
+		instanced := append_instance_buffer(framegraph);
 		for scene.props {
 			if it.id != prop_id
 				continue;
@@ -2536,12 +2398,7 @@ render_props :: (
 		if instanced.count == 0
 			continue;
 
-		writeTo(framegraph.instanceBuffer, framegraph.instanceBufferCursor, instanced);
-
-		bindGroup := instance_bind_group(framegraph, "Prop", instanced.count);
-		defer context.gpu.bindGroupRelease(bindGroup);
-		context.gpu.renderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, null);
-		encode_and_draw(framegraph, pass, Store.get_wprop(store, xx prop_id), instanced.count);
+		draw(framegraph, pass, Store.get_wprop(store, xx prop_id), instanced.count);
 	}
 }
 

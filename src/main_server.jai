@@ -636,6 +636,13 @@ main :: () {
 		table_add(*name_to_scene_id, "pick.terrain", state.pick_scene_id);
 	}
 	{
+		plain_terrain_txt := sprint("%/../assets/terrain/intro.terrain", #filepath);
+		data, ok := read_entire_file(plain_terrain_txt);
+		id := add_scene(data);
+
+		table_add(*name_to_scene_id, "intro.terrain", id);
+	}
+	{
 		plain_terrain_txt := sprint("%/../assets/terrain/pounding.terrain", #filepath);
 		data, ok := read_entire_file(plain_terrain_txt);
 		id := add_scene(data);
@@ -735,11 +742,11 @@ main :: () {
 					scene := find_by_scene_id(id);
 
 					if scene && ok {
+						set_scene(scene, data);
+						sync_scene := Scene.make_sync(scene);
+
 						for user: state.users {
 							if user.scene_id == id {
-								set_scene(scene, data);
-								sync_scene := Scene.make_sync(scene);
-
 								send(user.websocket, make_command(sync_scene));
 							}
 						}

@@ -91,11 +91,30 @@ Audio :: struct {
 	} = .Sound;
 
 	volume := 1.0;
+	pitch := 1.0;
+
+	fade_in := 100; // ms
 
 	repeating: bool;
 
 	loaded: bool;
 	playing: bool;
+}
+
+Sound :: struct {
+	id: int;
+	audio_id: int;
+
+	position: V3f;
+	playing: bool;
+	loop: bool;
+	volume: float;
+	pitch: float;
+}
+
+Listener :: struct {
+	position: V3f;
+	direction: V3f;
 }
 
 Platform :: struct {
@@ -108,9 +127,11 @@ Platform :: struct {
 	end_frame:        #type ()               = null;
 	send_web_message: #type (msg: [] u8)     = null;
 
-	load_audio: #type (data: string) -> Audio = null;
-	play_audio: #type (audio: *Audio) = null;
-	query_audio: #type (audio: *Audio) -> bool = null;
+	set_listener_info: #type (listener: Listener) = null;
+	load_audio: #type (data: string, compressed: bool) -> Audio = null;
+	play_audio: #type (audio: Audio, position: V3f) -> Sound = null;
+	query_sound: #type (sound_id: int) -> Sound = null;
+	set_sound: #type (sound: Sound) = null;
 	volume_audio: #type (x: float) -> float = null;
 }
 

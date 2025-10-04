@@ -14,6 +14,16 @@ GUI :: #import "GUI";
 
 #scope_export
 
+Sound_Trigger :: struct {
+	position: V3f;
+	kind: enum {
+		Footstep_Snow :: 0;
+		Footstep_Ice :: 1;
+		Car_Klaxon :: 2;
+		Explosion :: 3;
+	};
+}
+
 Scene :: struct {
 	State :: enum {
 		Normal :: 0;
@@ -78,6 +88,8 @@ Scene :: struct {
 
 	client_rng: Rand.State;
 	server_rng: Rand.State;
+
+	sound_triggers: [..] Sound_Trigger;
 }
 clear :: (scene: *Scene) {
 	scene.tombstones.count = 0;
@@ -98,6 +110,7 @@ clear :: (scene: *Scene) {
 	scene.trophies.count = 0;
 	scene.antiairs.count = 0;
 	scene.traps.count = 0;
+	scene.sound_triggers.count = 0;
 	table_reset(*scene.trigger_activated);
 }
 
@@ -185,6 +198,8 @@ Frame_Result :: struct {
 	end_level: [..] Command.End_Level;
 	explode: [..] Command.Explode;
 	antiair_shoot: [..] Command.AntiAir_Shoot;
+	spawn_coin: [..] Command.Spawn_Coin;
+	move: [..] Command.Move;
 }
 free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.died);
@@ -195,6 +210,8 @@ free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.end_level);
 	array_free(frame_result.explode);
 	array_free(frame_result.antiair_shoot);
+	array_free(frame_result.spawn_coin);
+	array_free(frame_result.move);
 }
 clear :: (frame_result: *Frame_Result) {
 	frame_result.died.count = 0;
@@ -205,6 +222,8 @@ clear :: (frame_result: *Frame_Result) {
 	frame_result.end_level.count = 0;
 	frame_result.explode.count = 0;
 	frame_result.antiair_shoot.count = 0;
+	frame_result.spawn_coin.count = 0;
+	frame_result.move.count = 0;
 }
 
 AntiAir :: struct {
@@ -450,6 +469,7 @@ Process_Response :: struct {
 	}
 
 	entries: [..] Entry;
+	audios: [..] Platform.Audio;
 }
 free :: (process_response: *Process_Response) {
 	array_free(process_response.entries);
@@ -639,6 +659,7 @@ Moving_Frame :: struct {
 }
 
 Shuriken :: struct {
+	id: int;
 	frame_id := -1;
 
 	server: struct {
@@ -885,7 +906,7 @@ add_snow :: (scene: *Scene, dt: float32) {
 	}
 }
 
-input :: (scene: *Scene, controls: *Controls.State, dt: float32) {
+input :: (scene: *Scene, controls: *Controls.State, dt: float32, result: *Process_Response) {
 	any_camera_move := false;
 	dt := V3f.{ 0, 0, 0 };
 	if controls.frame_info.mouse_wheel > 0 {
@@ -924,6 +945,58 @@ input :: (scene: *Scene, controls: *Controls.State, dt: float32) {
 
 	if !any_camera_move {
 		scene.camera.target_target = scene.camera.target;
+	}
+
+	if controls.just_pressed[Platform.Key.MouseLeft] {
+		V := look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
+		P := perspective(scene.camera);
+		r := unproject_ndc(
+			.{
+				controls.frame_info.mouse_position.x / controls.frame_info.window_size.x * 2 - 1,
+				controls.frame_info.mouse_position.y / controls.frame_info.window_size.y * 2 - 1
+			},
+			V,
+			P
+		);
+
+		target, ok := ray_plane(scene.camera.position, r, .{ 0, 0, 1 });
+		if ok && scene.state == .Normal {
+			command: Command.Move;
+			command.ground_target = v2(target);
+			command.player_id = scene.controlled_player_id;
+			add(result, scene.id, command);
+			scene.mark_clicked_time = current_time_monotonic();
+			scene.mark_clicked_pos = target;
+
+			sound: Sound_Trigger;
+			sound.position = target;
+			sound.kind = .Footstep_Snow;
+			tile, ok := tile_under(scene, target);
+			if ok && (tile.kind == .Ice || tile.kind == .Slippy_Ice) {
+				sound.kind = .Footstep_Ice;
+			}
+
+			array_add(*scene.sound_triggers, sound);
+		}
+	}
+	
+	if controls.just_pressed[Platform.Key.C] {
+		player := find_by_player_id(scene, scene.controlled_player_id);
+		if player && !player.server.dead {
+			command: Command.Spawn_Coin;
+			command.sender = player.id;
+			add(result, scene.id, command);
+		}
+	}
+
+	if controls.just_pressed[Platform.Key.X] {
+		sound: Sound_Trigger;
+		player := find_by_player_id(scene, scene.controlled_player_id);
+		if player && !player.server.dead {
+			command: Command.Klaxon;
+			command.player_id = player.id;
+			add(result, scene.id, command);
+		}
 	}
 }
 
@@ -1478,6 +1551,8 @@ update :: (scene: Scene, robot: *Robot, dt: float32) {
 	}
 
 	if robot.player_targeted_id < 0 {
+		elligibles := NewArray(scene.players.count, int, false,, temp);
+		elligibles.count = 0;
 		for scene.players {
 			if it.server.dead
 				continue;
@@ -1487,9 +1562,14 @@ update :: (scene: Scene, robot: *Robot, dt: float32) {
 			&& p.x <= robot.end_target_aabb.x
 			&& p.y >= robot.start_target_aabb.y
 			&& p.y <= robot.end_target_aabb.y {
-				robot.player_targeted_id = it.id;
-				break;
+				elligibles.count += 1;
+				elligibles[elligibles.count - 1] = it.id;
 			}
+		}
+
+		if elligibles.count > 0 {
+			idx := Rand.random_uniform(*scene.server_rng, 0, elligibles.count);
+			robot.player_targeted_id = elligibles[idx];
 		}
 	}
 
@@ -1517,6 +1597,7 @@ update :: (scene: Scene, robot: *Robot, dt: float32) {
 			if !robot.shooted {
 				robot.shooted = true;
 				robot.just_shooted = true;
+				robot.player_targeted_id = -1;
 			}
 		}
 		// Stay in place if we are just after shooting
@@ -1827,6 +1908,12 @@ process_server_only :: (scene: *Scene, command: Command, response: *Process_Resp
 	if !scene.is_server
 		return false;
 
+	klaxon: *Command.Klaxon = isa(command.payload, Command.Klaxon);
+	if klaxon {
+		print("Klaxon %\n", klaxon.*);
+		add(response, scene.id, klaxon.*);
+		return true;
+	}
 
 	spawn_coin: *Command.Spawn_Coin = isa(command.payload, Command.Spawn_Coin);
 	if spawn_coin {
@@ -1960,6 +2047,23 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		explosion.lifetime = explode.lifetime;
 		explosion.max_size = explode.max_size;
 		array_add(*scene.explosions, explosion);
+
+		sound_trigger: Sound_Trigger;
+		sound_trigger.kind = .Explosion;
+		sound_trigger.position = explode.position;
+		array_add(*scene.sound_triggers, sound_trigger);
+		return true;
+	}
+
+	klaxon: *Command.Klaxon = isa(command.payload, Command.Klaxon);
+	if klaxon {
+		player := find_by_player_id(scene, klaxon.player_id);
+		if player {
+			sound_trigger: Sound_Trigger;
+			sound_trigger.kind = .Car_Klaxon;
+			sound_trigger.position = player.client.position;
+			array_add(*scene.sound_triggers, sound_trigger);
+		}
 		return true;
 	}
 

@@ -110,7 +110,7 @@ FORMAT;
 #insert #run embed_data("PARTICLE_VERTEX", "Shader/particles.vert", #filepath);
 #insert #run embed_data("PARTICLE_FRAGMENT", "Shader/particles.frag", #filepath);
 
-#insert #run embed_data("SNOWFLAKES_AND_LIGHTS_OGG", "Snowflakes and Lights.ogg", #filepath);
+#insert #run embed_data("SNOWFLAKES_AND_LIGHTS_MP3", "Sound/Snowflakes and Lights.mp3", #filepath);
 #insert #run embed_data("tile_cliff_albedo_png", "Tile/cliff_albedo.png", #filepath);
 #insert #run embed_data("tile_cliff_normal_png", "Tile/cliff_normal.png", #filepath);
 #insert #run embed_data("tile_cliff_height_png", "Tile/cliff_height.png", #filepath);
@@ -166,11 +166,33 @@ FORMAT;
 
 #insert #run embed_data("CLICK_WAV", "click.wav", #filepath);
 
-#insert #run embed_data("FOOTSTEP_SNOW_0_OGG", "footstep_snow_000.ogg", #filepath);
-#insert #run embed_data("FOOTSTEP_SNOW_1_OGG", "footstep_snow_001.ogg", #filepath);
-#insert #run embed_data("FOOTSTEP_SNOW_2_OGG", "footstep_snow_002.ogg", #filepath);
-#insert #run embed_data("FOOTSTEP_SNOW_3_OGG", "footstep_snow_003.ogg", #filepath);
-#insert #run embed_data("FOOTSTEP_SNOW_4_OGG", "footstep_snow_004.ogg", #filepath);
+#insert #run embed_data("FOOTSTEP_SNOW_0_MP3", "Sound/footstep_snow_000.mp3", #filepath);
+#insert #run embed_data("FOOTSTEP_SNOW_1_MP3", "Sound/footstep_snow_001.mp3", #filepath);
+#insert #run embed_data("FOOTSTEP_SNOW_2_MP3", "Sound/footstep_snow_002.mp3", #filepath);
+#insert #run embed_data("FOOTSTEP_SNOW_3_MP3", "Sound/footstep_snow_003.mp3", #filepath);
+#insert #run embed_data("FOOTSTEP_SNOW_4_MP3", "Sound/footstep_snow_004.mp3", #filepath);
+
+#insert #run embed_data("FOOTSTEP_ICE_0_MP3", "Sound/impactGlass_medium_000.mp3", #filepath);
+#insert #run embed_data("FOOTSTEP_ICE_1_MP3", "Sound/impactGlass_medium_001.mp3", #filepath);
+#insert #run embed_data("FOOTSTEP_ICE_2_MP3", "Sound/impactGlass_medium_002.mp3", #filepath);
+#insert #run embed_data("FOOTSTEP_ICE_3_MP3", "Sound/impactGlass_medium_003.mp3", #filepath);
+#insert #run embed_data("FOOTSTEP_ICE_4_MP3", "Sound/impactGlass_medium_004.mp3", #filepath);
+
+#insert #run embed_data("BOAT_SAILING_0_WAV", "Sound/boat_sailing0.wav", #filepath);
+#insert #run embed_data("BOAT_SAILING_1_WAV", "Sound/boat_sailing1.wav", #filepath);
+#insert #run embed_data("BOAT_SAILING_2_WAV", "Sound/boat_sailing2.wav", #filepath);
+
+#insert #run embed_data("DRONE_BUZZING_0_WAV", "Sound/drone_buzzing0.wav", #filepath);
+
+#insert #run embed_data("EXPLOSION_0_MP3", "Sound/explosion0.mp3", #filepath);
+#insert #run embed_data("EXPLOSION_1_MP3", "Sound/explosion1.mp3", #filepath);
+#insert #run embed_data("EXPLOSION_2_MP3", "Sound/explosion2.mp3", #filepath);
+#insert #run embed_data("EXPLOSION_3_MP3", "Sound/explosion3.mp3", #filepath);
+#insert #run embed_data("EXPLOSION_4_MP3", "Sound/explosion4.mp3", #filepath);
+#insert #run embed_data("EXPLOSION_5_MP3", "Sound/explosion5.mp3", #filepath);
+#insert #run embed_data("EXPLOSION_6_MP3", "Sound/explosion6.mp3", #filepath);
+#insert #run embed_data("EXPLOSION_7_MP3", "Sound/explosion7.mp3", #filepath);
+#insert #run embed_data("EXPLOSION_8_MP3", "Sound/explosion8.mp3", #filepath);
 
 #insert #run embed_data("LOSER_OGG", "loser.ogg", #filepath);
 
@@ -227,6 +249,16 @@ FORMAT;
 #insert #run embed_data("TERRAIN_TILE_ALBEDO_PNG", "tile_albedo.png", #filepath);
 #insert #run embed_data("TERRAIN_TILE_NORMAL_PNG", "tile_normal.png", #filepath);
 
+#insert #run embed_data("HORN_CAR_0_MP3", "Sound/horn_car0.mp3", #filepath);
+#insert #run embed_data("HORN_CAR_1_MP3", "Sound/horn_car1.mp3", #filepath);
+#insert #run embed_data("HORN_CAR_2_MP3", "Sound/horn_car2.mp3", #filepath);
+#insert #run embed_data("HORN_CAR_3_MP3", "Sound/horn_car3.mp3", #filepath);
+#insert #run embed_data("HORN_CAR_4_MP3", "Sound/horn_car4.mp3", #filepath);
+#insert #run embed_data("HORN_CAR_5_MP3", "Sound/horn_car5.mp3", #filepath);
+#insert #run embed_data("HORN_CAR_6_MP3", "Sound/horn_car6.mp3", #filepath);
+#insert #run embed_data("HORN_CAR_7_MP3", "Sound/horn_car7.mp3", #filepath);
+#insert #run embed_data("HORN_CAR_8_MP3", "Sound/horn_car8.mp3", #filepath);
+
 Prop_Id :: enum {
 	TERRAIN_TREE_SNOW_A :: 0;
 	TERRAIN_TREE_SNOW_B;
@@ -257,7 +289,7 @@ load_everything :: () {
 			"TILE_FRAGMENT",
 			"QUAD_TEXTURE_VERTEX",
 			"QUAD_TEXTURE_FRAGMENT",
-			"SNOWFLAKES_AND_LIGHTS_OGG",
+			"SNOWFLAKES_AND_LIGHTS_MP3",
 			"tile_cliff_albedo_png",
 			"tile_cliff_normal_png",
 			"tile_cliff_height_png",
@@ -280,11 +312,29 @@ load_everything :: () {
 			"FLAG_OBJ",
 			"FLAG_DOWN_OBJ",
 			"CLICK_WAV",
-			"FOOTSTEP_SNOW_0_OGG",
-			"FOOTSTEP_SNOW_1_OGG",
-			"FOOTSTEP_SNOW_2_OGG",
-			"FOOTSTEP_SNOW_3_OGG",
-			"FOOTSTEP_SNOW_4_OGG",
+			"FOOTSTEP_SNOW_0_MP3",
+			"FOOTSTEP_SNOW_1_MP3",
+			"FOOTSTEP_SNOW_2_MP3",
+			"FOOTSTEP_SNOW_3_MP3",
+			"FOOTSTEP_SNOW_4_MP3",
+			"FOOTSTEP_ICE_0_MP3",
+			"FOOTSTEP_ICE_1_MP3",
+			"FOOTSTEP_ICE_2_MP3",
+			"FOOTSTEP_ICE_3_MP3",
+			"FOOTSTEP_ICE_4_MP3",
+			"BOAT_SAILING_0_WAV",
+			"BOAT_SAILING_1_WAV",
+			"BOAT_SAILING_2_WAV",
+			"DRONE_BUZZING_0_WAV",
+			"EXPLOSION_0_MP3",
+			"EXPLOSION_1_MP3",
+			"EXPLOSION_2_MP3",
+			"EXPLOSION_3_MP3",
+			"EXPLOSION_4_MP3",
+			"EXPLOSION_5_MP3",
+			"EXPLOSION_6_MP3",
+			"EXPLOSION_7_MP3",
+			"EXPLOSION_8_MP3",
 			"LOSER_OGG",
 			"TILE_OBJ",
 			"CAR_OBJ",
@@ -373,6 +423,15 @@ load_everything :: () {
 			"COLORMAPS_PNG",
 			"TERRAIN_TILE_ALBEDO_PNG",
 			"TERRAIN_TILE_NORMAL_PNG",
+			"HORN_CAR_0_MP3",
+			"HORN_CAR_1_MP3",
+			"HORN_CAR_2_MP3",
+			"HORN_CAR_3_MP3",
+			"HORN_CAR_4_MP3",
+			"HORN_CAR_5_MP3",
+			"HORN_CAR_6_MP3",
+			"HORN_CAR_7_MP3",
+			"HORN_CAR_8_MP3",
 		];
 		#insert #run -> string {
 			sb: String_Builder;

@@ -232,6 +232,7 @@ parse_terrain :: (text: string, scene: *Scene) {
 
 		if scan2(line, "shuriken") {
 			shuriken: Shuriken;
+			shuriken.id = scene.shurikens.count + 1;
 			defer array_add(*scene.shurikens, shuriken);
 
 			cursor += 1;
@@ -276,8 +277,10 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 				if starts_with(line, "//")
 					continue;
-				if !starts_with(line, "- ")
+				if !starts_with(line, "- ") {
+					cursor -= 1;
 					break;
+				}
 
 				if scan2(line, "- key") {
 					key: Moving_Frame.Key;
@@ -635,26 +638,26 @@ parse_terrain :: (text: string, scene: *Scene) {
 	get_probability :: (id: Assets.Prop_Id) -> float {
 		if #complete id == {
 			case .TERRAIN_TREE_SNOW_A;
-				return 0.40;
+				return 0.45;
 			case .TERRAIN_TREE_SNOW_B;
-				return 0.30;
+				return 0.35;
 			case .TERRAIN_TREE_SNOW_C;
-				return 0.175;
+				return 0.2;
 			case .TERRAIN_SNOWMAN;
 				return 0.04;
 			case .TERRAIN_SNOWMAN_HAT;
 				return 0.01;
 			case .TERRAIN_SNOW_FLAT;
-				return 0.05;
+				return 0.075;
 			case .TERRAIN_SNOW_FLAT_LARGE;
-				return 0.025;
+				return 0.05;
 			case .TERRAIN_SNOW_PILE;
-				return 0.01;
+				return 0.015;
 			case .TERRAIN_SNOWFLAKE_A;
 			case .TERRAIN_SNOWFLAKE_B;
 			case .TERRAIN_SNOWFLAKE_C;
 			case .ROCK_SMALL;
-				return 0.1;
+				return 0.15;
 			case .ROCK_MEDIUM;
 				return 0.075;
 			case .ROCK_LARGE;

@@ -54,6 +54,24 @@ M4 :: struct(T: Type) {
 		return M;
 	}
 
+	translate :: (M: *M4(T), v:  V3(T)) {
+		M.data[0 + 3 * 4] += v.x;
+		M.data[1 + 3 * 4] += v.y;
+		M.data[2 + 3 * 4] += v.z;
+	}
+
+	scale :: (M: *M4(T), s: V3(T)) {
+		M.data[0 + 0 * 4] *= s.x;
+		M.data[0 + 1 * 4] *= s.x;
+		M.data[0 + 2 * 4] *= s.x;
+		M.data[1 + 0 * 4] *= s.y;
+		M.data[1 + 1 * 4] *= s.y;
+		M.data[1 + 2 * 4] *= s.y;
+		M.data[2 + 0 * 4] *= s.z;
+		M.data[2 + 1 * 4] *= s.z;
+		M.data[2 + 2 * 4] *= s.z;
+	}
+
 	by_cols :: (a: V4($T), b: V4(T), c: V4(T), d: V4(T)) -> M4(T) {
 		M: M4(T);
 		M.data[0 + 0 * 4] = a.x;

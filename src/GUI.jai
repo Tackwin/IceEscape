@@ -25,9 +25,11 @@ S_OUTLINE_SLOT :: V2f.{ 3, 12 };
 D_OUTLINE_SLOT :: V2f.{ 4, 15 };
 Z_OUTLINE_SLOT :: V2f.{ 4, 14 };
 C_OUTLINE_SLOT :: V2f.{ 4, 13 };
+X_OUTLINE_SLOT :: V2f.{ 5, 15 };
 COIN_SLOT :: V2f.{ 4, 12 };
 VOLUME_ON_SLOT :: V2f.{ 0, 11 };
 VOLUME_OFF_SLOT :: V2f.{ 1, 11 };
+KLAXON_SLOT :: V2f.{ 2, 11 };
 
 Key :: Platform.Key;
 
@@ -66,6 +68,8 @@ IM_t :: struct {
 	pressed: [Platform.Key_COUNT] bool;
 
 	mouse_pos: V2f;
+
+	handled_mouse := false;
 }
 
 IM: IM_t;
@@ -74,6 +78,7 @@ im_init :: () {
 }
 
 handle_frame_info :: (info: Platform.Frame_Info) {
+	IM.handled_mouse = false;
 	for * IM.just_pressed {
 		if info.key_pressed[it_index] && !IM.pressed[it_index]
 			it.* = true;
@@ -112,8 +117,15 @@ push_checkbox :: (
 	low := center - V2f.{ size / 2 - 1, size / 2 - 1 };
 	high := center + V2f.{ size / 2 - 1, size / 2 - 1 };
 
-	if IM.just_pressed[Key.MouseLeft] && point_aabb(IM.mouse_pos, low, high) {
-		return true;
+	if point_aabb(IM.mouse_pos, low, high) {
+		if IM.just_released[Key.MouseLeft] {
+			IM.handled_mouse = true;
+		}
+
+		if IM.just_pressed[Key.MouseLeft] {
+			IM.handled_mouse = true;
+			return true;
+		}
 	}
 	return false;
 }
@@ -126,8 +138,15 @@ push_button :: (center: V2f, size: float, tex_slot: V2f, z := 0.0) -> bool {
 	low := center - V2f.{ size / 2, size / 2 };
 	high := center + V2f.{ size / 2, size / 2 };
 
-	if IM.just_pressed[Key.MouseLeft] && point_aabb(IM.mouse_pos, low, high) {
-		return true;
+	if point_aabb(IM.mouse_pos, low, high) {
+		if IM.just_released[Key.MouseLeft] {
+			IM.handled_mouse = true;
+		}
+
+		if IM.just_pressed[Key.MouseLeft] {
+			IM.handled_mouse = true;
+			return true;
+		}
 	}
 	return false;
 }
@@ -448,6 +467,9 @@ push_action_palette :: (info: *Platform.Frame_Info) {
 	
 	render_texture_at(2, 0, COIN_SLOT);
 	render_hint_at(2, 0, C_OUTLINE_SLOT);
+
+	render_texture_at(1, 0, KLAXON_SLOT);
+	render_hint_at(1, 0, X_OUTLINE_SLOT);
 }
 
 push_settings :: (volume: *bool, info: *Platform.Frame_Info) {

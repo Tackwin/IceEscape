@@ -11,6 +11,7 @@ Terrain :: #import "Terrain";
 #import "Communication";
 #import "Utils";
 #import "Hash_Table";
+RNG :: #import "Rand";
 Controls :: #import "Controls";
 WRender :: #import "WRender";
 Scene :: #import "Scene";
@@ -162,6 +163,12 @@ respond :: (platform: Platform, response: Scene.Process_Response) {
 	for * response.entries {
 		if isa(it.command.payload, Command.NTP)
 			send_web_message(platform, it.command);
+		if isa(it.command.payload, Command.Move)
+			send_web_message(platform, it.command);
+		if isa(it.command.payload, Command.Spawn_Coin)
+			send_web_message(platform, it.command);
+		if isa(it.command.payload, Command.Klaxon)
+			send_web_message(platform, it.command);
 	}
 }
 
@@ -286,14 +293,13 @@ main :: () {
 	state.filter_command_debug[xx Command.payload.Kind.Sync_Player] = false;
 	state.filter_command_debug[xx Command.payload.Kind.NTP] = false;
 
-	footstep_trigger_index := 0;
 	process_response: Scene.Process_Response;
 	{
-		store.snowflakes_and_lights_ogg.repeating = true;
-		store.snowflakes_and_lights_ogg.volume = 0.15;
-		platform.play_audio(*store.snowflakes_and_lights_ogg);
+		store.snowflakes_and_lights_mp3.kind = .Music;
+		store.snowflakes_and_lights_mp3.repeating = true;
+		store.snowflakes_and_lights_mp3.volume = 0.01;
+		platform.play_audio(*store.snowflakes_and_lights_mp3, .{});
 	}
-
 
 	// Main loop
 	done := false;
@@ -308,13 +314,16 @@ main :: () {
 			state.connected_last_try = current_time_monotonic();
 		}
 		platform.get_frame_info(frame_info);
-		Controls.update(controls, frame_info);
 		handle_gui(frame_info, *state);
+		{
+			maskoff: Controls.Maskoff;
+			maskoff.mouse = GUI.IM.handled_mouse;
+			Controls.update(controls, frame_info, maskoff);
+		}
 
 		if frame_info.quit
 			done = true;
 
-		Scene.input(scene, controls, frame_info.delta_time);
 		if controls.just_pressed[Key.H] {
 			state.render_fps = !state.render_fps;
 		}
@@ -334,49 +343,6 @@ main :: () {
 			GUI.push_text(text, cursor, 48, -0.5, align = .Center);
 		}
 
-
-		V := Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
-		P := Scene.perspective(scene.camera);
-
-		if controls.just_pressed[Key.MouseLeft] {
-			r := Scene.unproject_ndc(
-				.{
-					frame_info.mouse_position.x / frame_info.window_size.x * 2 - 1,
-					frame_info.mouse_position.y / frame_info.window_size.y * 2 - 1
-				},
-				V,
-				P
-			);
-
-			target, ok := ray_plane(scene.camera.position, r, .{ 0, 0, 1 });
-			if ok && scene.state == .Normal {
-				if true {
-					footstep_trigger_index *= 3;
-					footstep_trigger_index += 17;
-					index := footstep_trigger_index % 5;
-					footstep_trigger_index %= 5 * 1024 * 1024;
-					footstep_sound := get_footstep_sound(store, index);
-					footstep_sound.volume = (random_get_zero_to_one_new() * 0.2 + 0.1).(float);
-					platform.play_audio(footstep_sound);
-				}
-				command: Command.Move;
-				command.ground_target = v2(target);
-				command.player_id = scene.controlled_player_id;
-				send_web_message(platform, make_command(command));
-				scene.mark_clicked_time = current_time_monotonic();
-				scene.mark_clicked_pos = target;
-			}
-		}
-		
-		if controls.just_pressed[Key.C] {
-			player := Scene.find_by_player_id(scene, scene.controlled_player_id);
-			if player && !player.server.dead {
-				command: Command.Spawn_Coin;
-				command.sender = player.id;
-				send_web_message(platform, make_command(command));
-			}
-		}
-
 		#if OS == .WINDOWS {
 			changes: [] string;
 			changes.data = frame_info.file_change.data;
@@ -385,6 +351,10 @@ main :: () {
 		}
 
 		Scene.clear(*process_response);
+		scene.sound_triggers.count = 0;
+		if !GUI.IM.handled_mouse {
+			Scene.input(scene, controls, frame_info.delta_time, *process_response);
+		}
 		commands := parse_web_message(*state, frame_info);
 		for commands {
 			if process(*state, it, *process_response)
@@ -405,13 +375,57 @@ main :: () {
 		respond(platform, process_response);
 		Scene.update(scene, frame_info.delta_time, null);
 
+		listener: Listener;
+		listener.position = scene.camera.position;
+		listener.direction = scene.camera.target - scene.camera.position;
+		listener.position += listener.direction * 0.65;
+		listener.direction = normalize(listener.direction);
+		platform.set_listener_info(listener);
+		for scene.sound_triggers {
+			audio: Audio;
+			audio.id = -1;
+			if it.kind == {
+				case .Footstep_Snow;
+					idx := RNG.random_uniform(*scene.client_rng, 0, 5);
+					audio_ptr := get_footstep_snow_sound(store, idx);
+					if audio_ptr
+						audio = audio_ptr.*;
+					audio.volume = RNG.random_uniform(*scene.client_rng, 0.8, 1.0);
+				case .Footstep_Ice;
+					idx := RNG.random_uniform(*scene.client_rng, 0, 5);
+					audio_ptr := get_footstep_ice_sound(store, idx);
+					if audio_ptr
+						audio = audio_ptr.*;
+					audio.volume = RNG.random_uniform(*scene.client_rng, 0.75, 0.95);
+				case .Car_Klaxon;
+					idx := RNG.random_uniform(*scene.client_rng, 0, 3);
+					audio_ptr := get_horn_car(store, idx);
+					if audio_ptr
+						audio = audio_ptr.*;
+					audio.volume = RNG.random_uniform(*scene.client_rng, 0.65, 0.75);
+				case .Explosion;
+					idx := RNG.random_uniform(*scene.client_rng, 0, 9);
+					audio_ptr := get_explosion_sound(store, idx);
+					if audio_ptr
+						audio = audio_ptr.*;
+					audio.volume = RNG.random_uniform(*scene.client_rng, 0.9, 1.2);
+			}
+			if audio.id == -1
+				continue;
+
+			audio.pitch = RNG.random_uniform(*scene.client_rng, 0.8, 1.2);
+			audio.kind = .Sound;
+			audio.repeating = false;
+			state.platform.play_audio(*audio, it.position);
+		}
+
 		if state.volume_on {
 			state.platform.volume_audio(1.0);
 		} else {
 			state.platform.volume_audio(0.0);
 		}
 
-
+		sounding(*state, scene, store);
 		WRender.render(*framegraph, scene, store);
 
 		context.gpu.surfacePresent(context.graphics.surface);
@@ -421,6 +435,72 @@ main :: () {
 		// }
 	}
 }
+
+sounding :: (state: *State, scene: *Scene.Scene, store: Store) {
+	skull_seen: Table(int, bool);
+	skull_seen.allocator = temp;
+
+	shurikens_seen: Table(int, bool);
+	shurikens_seen.allocator = temp;
+
+	for * scene.skulls {
+		ok, sound := table_find_new(*state.skull_id_to_sound, it.id);
+		if !ok {
+			audio := get_boat_sailing(store, 0);
+			if !audio
+				continue;
+			audio.kind = .Sound;
+			sound = context._platform.play_audio(audio, .{});
+			sound.volume = 0.11;
+			sound.loop = true;
+			context._platform.set_sound(sound);
+			table_set(*state.skull_id_to_sound, it.id, sound);
+		}
+		sound.position = Scene.compute_skull_pos(scene, it.*);
+		context._platform.set_sound(sound);
+		table_set(*skull_seen, it.id, true);
+	}
+
+	for * scene.shurikens {
+		ok, sound := table_find_new(*state.shurikens_id_to_sound, it.id);
+		if !ok {
+			audio := get_drone_buzzing(store, 0);
+			if !audio
+				continue;
+			audio.kind = .Sound;
+			sound = context._platform.play_audio(audio, .{});
+			sound.volume = 0.05;
+			sound.loop = true;
+			context._platform.set_sound(sound);
+			table_set(*state.shurikens_id_to_sound, it.id, sound);
+		}
+		frame := Scene.find_by_frame_id(scene, it.frame_id);
+		if !frame
+			continue;
+		M := Scene.compute_moving_frame_server_world_matrix(scene, frame);
+		pos := M * v4(it.server.position, 1);
+		sound.position = v3(pos);
+		context._platform.set_sound(sound);
+		table_set(*shurikens_seen, it.id, true);
+	}
+
+	for value, key: state.skull_id_to_sound {
+		if !table_contains(*skull_seen, key) {
+			value.playing = false;
+			context._platform.set_sound(value);
+			table_remove(*state.skull_id_to_sound, key);
+		}
+	}
+
+	for value, key: state.shurikens_id_to_sound {
+		if !table_contains(*shurikens_seen, key) {
+			value.playing = false;
+			context._platform.set_sound(value);
+			table_remove(*state.shurikens_id_to_sound, key);
+		}
+	}
+}
+
 
 State :: struct {
 	platform: *Platform;
@@ -448,4 +528,7 @@ State :: struct {
 	filter_command_debug: [#run enum_highest_value(Command.payload.Kind) + 1] bool;
 
 	volume_on := true;
+
+	skull_id_to_sound: Table(int, Sound);
+	shurikens_id_to_sound: Table(int, Sound);
 }

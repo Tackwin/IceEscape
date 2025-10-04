@@ -195,13 +195,46 @@ Store :: struct {
 
 
 	loser_ogg: Platform.Audio;
-	footstep_0_ogg: Platform.Audio;
-	footstep_1_ogg: Platform.Audio;
-	footstep_2_ogg: Platform.Audio;
-	footstep_3_ogg: Platform.Audio;
-	footstep_4_ogg: Platform.Audio;
 	click_wav: Platform.Audio;
-	snowflakes_and_lights_ogg: Platform.Audio;
+	snowflakes_and_lights_mp3: Platform.Audio;
+
+	footstep_snow_0_mp3: Platform.Audio;
+	footstep_snow_1_mp3: Platform.Audio;
+	footstep_snow_2_mp3: Platform.Audio;
+	footstep_snow_3_mp3: Platform.Audio;
+	footstep_snow_4_mp3: Platform.Audio;
+
+	footstep_ice_0_mp3: Platform.Audio;
+	footstep_ice_1_mp3: Platform.Audio;
+	footstep_ice_2_mp3: Platform.Audio;
+	footstep_ice_3_mp3: Platform.Audio;
+	footstep_ice_4_mp3: Platform.Audio;
+
+	horn_car_0_mp3: Platform.Audio;
+	horn_car_1_mp3: Platform.Audio;
+	horn_car_2_mp3: Platform.Audio;
+	horn_car_3_mp3: Platform.Audio;
+	horn_car_4_mp3: Platform.Audio;
+	horn_car_5_mp3: Platform.Audio;
+	horn_car_6_mp3: Platform.Audio;
+	horn_car_7_mp3: Platform.Audio;
+	horn_car_8_mp3: Platform.Audio;
+
+	boat_sailing_0_wav: Platform.Audio;
+	boat_sailing_1_wav: Platform.Audio;
+	boat_sailing_2_wav: Platform.Audio;
+
+	drone_buzzing_0_wav: Platform.Audio;
+
+	explosion_0_mp3: Platform.Audio;
+	explosion_1_mp3: Platform.Audio;
+	explosion_2_mp3: Platform.Audio;
+	explosion_3_mp3: Platform.Audio;
+	explosion_4_mp3: Platform.Audio;
+	explosion_5_mp3: Platform.Audio;
+	explosion_6_mp3: Platform.Audio;
+	explosion_7_mp3: Platform.Audio;
+	explosion_8_mp3: Platform.Audio;
 
 	// font_shader: Render.Shader;
 	// model_shader: Render.Shader;
@@ -275,6 +308,70 @@ Store :: struct {
 	// robot_a3_geometry: Render.Geometry;
 	// robot_a4_geometry: Render.Geometry;
 	// robot_a5_geometry: Render.Geometry;
+}
+
+get_horn_car :: (store: Store, idx: int) -> *Platform.Audio {
+	if idx == 0 {
+		return *store.horn_car_0_mp3;
+	} else if idx == 1 {
+		return *store.horn_car_1_mp3;
+	} else if idx == 2 {
+		return *store.horn_car_2_mp3;
+	} else if idx == 3 {
+		return *store.horn_car_3_mp3;
+	} else if idx == 4 {
+		return *store.horn_car_4_mp3;
+	} else if idx == 5 {
+		return *store.horn_car_5_mp3;
+	} else if idx == 6 {
+		return *store.horn_car_6_mp3;
+	} else if idx == 7 {
+		return *store.horn_car_7_mp3;
+	} else if idx == 8 {
+		return *store.horn_car_8_mp3;
+	}
+	return null;
+}
+
+get_boat_sailing :: (store: Store, idx: int) -> *Platform.Audio {
+	if idx == 0 {
+		return *store.boat_sailing_0_wav;
+	} else if idx == 1 {
+		return *store.boat_sailing_1_wav;
+	} else if idx == 2 {
+		return *store.boat_sailing_2_wav;
+	}
+	return null;
+}
+
+get_drone_buzzing :: (store: Store, idx: int) -> *Platform.Audio {
+	if idx == 0 {
+		return *store.drone_buzzing_0_wav;
+	}
+	return null;
+}
+
+get_explosion_sound :: (store: Store, idx: int) -> *Platform.Audio {
+	if idx == 0 {
+		return *store.explosion_0_mp3;
+	} else if idx == 1 {
+		return *store.explosion_1_mp3;
+	} else if idx == 2 {
+		return *store.explosion_2_mp3;
+	} else if idx == 3 {
+		return *store.explosion_3_mp3;
+	} else if idx == 4 {
+		return *store.explosion_4_mp3;
+	} else if idx == 5 {
+		return *store.explosion_5_mp3;
+	} else if idx == 6 {
+		return *store.explosion_6_mp3;
+	} else if idx == 7 {
+		return *store.explosion_7_mp3;
+	} else if idx == 8 {
+		return *store.explosion_8_mp3;
+	}
+	return null;
 }
 
 get_number_model ::  (store: Store, digit: int) -> *WRender.Model {
@@ -497,17 +594,32 @@ get_tile_rect :: (id: Scene.Tile.Kind) -> V4f {
 // 	return null;
 // }
 
-get_footstep_sound :: (store: Store, index: int) -> *Platform.Audio {
+get_footstep_snow_sound :: (store: Store, index: int) -> *Platform.Audio {
 	if index == 0 {
-		return *store.footstep_0_ogg;
+		return *store.footstep_snow_0_mp3;
 	} else if index == 1 {
-		return *store.footstep_1_ogg;
+		return *store.footstep_snow_1_mp3;
 	} else if index == 2 {
-		return *store.footstep_2_ogg;
+		return *store.footstep_snow_2_mp3;
 	} else if index == 3 {
-		return *store.footstep_3_ogg;
+		return *store.footstep_snow_3_mp3;
 	} else if index == 4 {
-		return *store.footstep_4_ogg;
+		return *store.footstep_snow_4_mp3;
+	}
+	return null;
+}
+
+get_footstep_ice_sound :: (store: Store, index: int) -> *Platform.Audio {
+	if index == 0 {
+		return *store.footstep_ice_0_mp3;
+	} else if index == 1 {
+		return *store.footstep_ice_1_mp3;
+	} else if index == 2 {
+		return *store.footstep_ice_2_mp3;
+	} else if index == 3 {
+		return *store.footstep_ice_3_mp3;
+	} else if index == 4 {
+		return *store.footstep_ice_4_mp3;
 	}
 	return null;
 }
@@ -673,6 +785,47 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 
 	store.indicator_outline_model = WRender.Model.make_from_obj(Assets.INDICATOR_OUTLINE_OBJ);
 	store.indicator_stroke_model = WRender.Model.make_from_obj(Assets.INDICATOR_STROKE_OBJ);
+	store.snowflakes_and_lights_mp3 = platform.load_audio(
+		xx Assets.SNOWFLAKES_AND_LIGHTS_MP3, true
+	);
+
+	store.footstep_snow_0_mp3 = platform.load_audio(xx Assets.FOOTSTEP_SNOW_0_MP3, true);
+	store.footstep_snow_1_mp3 = platform.load_audio(xx Assets.FOOTSTEP_SNOW_1_MP3, true);
+	store.footstep_snow_2_mp3 = platform.load_audio(xx Assets.FOOTSTEP_SNOW_2_MP3, true);
+	store.footstep_snow_3_mp3 = platform.load_audio(xx Assets.FOOTSTEP_SNOW_3_MP3, true);
+	store.footstep_snow_4_mp3 = platform.load_audio(xx Assets.FOOTSTEP_SNOW_4_MP3, true);
+
+	store.footstep_ice_0_mp3 = platform.load_audio(xx Assets.FOOTSTEP_ICE_0_MP3, true);
+	store.footstep_ice_1_mp3 = platform.load_audio(xx Assets.FOOTSTEP_ICE_1_MP3, true);
+	store.footstep_ice_2_mp3 = platform.load_audio(xx Assets.FOOTSTEP_ICE_2_MP3, true);
+	store.footstep_ice_3_mp3 = platform.load_audio(xx Assets.FOOTSTEP_ICE_3_MP3, true);
+	store.footstep_ice_4_mp3 = platform.load_audio(xx Assets.FOOTSTEP_ICE_4_MP3, true);
+
+	store.horn_car_0_mp3 = platform.load_audio(xx Assets.HORN_CAR_0_MP3, true);
+	store.horn_car_1_mp3 = platform.load_audio(xx Assets.HORN_CAR_1_MP3, true);
+	store.horn_car_2_mp3 = platform.load_audio(xx Assets.HORN_CAR_2_MP3, true);
+	store.horn_car_3_mp3 = platform.load_audio(xx Assets.HORN_CAR_3_MP3, true);
+	store.horn_car_4_mp3 = platform.load_audio(xx Assets.HORN_CAR_4_MP3, true);
+	store.horn_car_5_mp3 = platform.load_audio(xx Assets.HORN_CAR_5_MP3, true);
+	store.horn_car_6_mp3 = platform.load_audio(xx Assets.HORN_CAR_6_MP3, true);
+	store.horn_car_7_mp3 = platform.load_audio(xx Assets.HORN_CAR_7_MP3, true);
+	store.horn_car_8_mp3 = platform.load_audio(xx Assets.HORN_CAR_8_MP3, true);
+
+	store.boat_sailing_0_wav = platform.load_audio(xx Assets.BOAT_SAILING_0_WAV, true);
+	store.boat_sailing_1_wav = platform.load_audio(xx Assets.BOAT_SAILING_1_WAV, false);
+	store.boat_sailing_2_wav = platform.load_audio(xx Assets.BOAT_SAILING_2_WAV, false);
+
+	store.drone_buzzing_0_wav = platform.load_audio(xx Assets.DRONE_BUZZING_0_WAV, true);
+
+	store.explosion_0_mp3 = platform.load_audio(xx Assets.EXPLOSION_0_MP3, false);
+	store.explosion_1_mp3 = platform.load_audio(xx Assets.EXPLOSION_1_MP3, false);
+	store.explosion_2_mp3 = platform.load_audio(xx Assets.EXPLOSION_2_MP3, false);
+	store.explosion_3_mp3 = platform.load_audio(xx Assets.EXPLOSION_3_MP3, false);
+	store.explosion_4_mp3 = platform.load_audio(xx Assets.EXPLOSION_4_MP3, false);
+	store.explosion_5_mp3 = platform.load_audio(xx Assets.EXPLOSION_5_MP3, false);
+	store.explosion_6_mp3 = platform.load_audio(xx Assets.EXPLOSION_6_MP3, false);
+	store.explosion_7_mp3 = platform.load_audio(xx Assets.EXPLOSION_7_MP3, false);
+	store.explosion_8_mp3 = platform.load_audio(xx Assets.EXPLOSION_8_MP3, false);
 
 	// store.tile_atlas_png = Assets.Image.make_from_memory(Assets.tile_atlas_png, 4);
 	// store.tile_atlas = Render.Texture.make_from_image(store.tile_atlas_png);

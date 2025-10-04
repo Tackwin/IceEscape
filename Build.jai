@@ -108,8 +108,17 @@ build_wasm :: () {
 	if !ok {
 		return;
 	}
+	sound:, ok = read_entire_file("src/sound.js");
+	if !ok {
+		return;
+	}
 
-	write_entire_file("./web/runtime.js", tprint("%\n\n\n//WEBGPU\n%\n\n\n//IO\n%\n", runtime, webgpu, io));
+	write_entire_file(
+		"./web/runtime.js",
+		tprint(
+			"%\n\n\n//WEBGPU\n%\n\n\n//IO\n%\n\n\n//SOUND\n%\n", runtime, webgpu, io, sound
+		)
+	);
 }
 
 build :: () {

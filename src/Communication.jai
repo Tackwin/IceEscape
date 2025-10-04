@@ -52,6 +52,9 @@ Command :: struct {
 		position: V3f;
 		direction: V3f;
 	}
+	Klaxon :: struct {
+		player_id: int;
+	}
 	Despawn_Coin :: struct {
 		id: int;
 	}
@@ -157,7 +160,7 @@ Command :: struct {
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
-		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot
+		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot, Klaxon
 	);
 	sent_timestamp: float64;
 }
@@ -220,6 +223,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .AntiAir_Shoot; #through;
 		case .Sync_Robot; #through;
 		case .Sync_AntiAir; #through;
+		case .Klaxon; #through;
 		case .Sync_Moving_Frame; #through;
 		case .NTP; #through;
 		case .Explode; #through;
@@ -310,6 +314,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Respawn; #through;
 		case .Die; #through;
 		case .Quit; #through;
+		case .Klaxon; #through;
 		case .New_Terrain; #through;
 		case .Sync_Player; #through;
 		case .Sync_Skull; #through;
