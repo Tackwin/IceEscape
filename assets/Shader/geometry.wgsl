@@ -16,10 +16,11 @@ struct UniformData {
 struct InstanceData {
 	M: mat4x4<f32>,
 	texture_rect: vec4f, // x, y, width, height
-	useAlbedoMap: u32,
-	useNormalMap: u32,
+	useAlbedoNormalMap: u32,
 	useShadowMap: u32,
+	fadeout_z: f32,
 	flags: u32,
+	uv_offset: vec2f,
 	color: vec4f,
 };
 
@@ -54,9 +55,7 @@ struct VertexOutput {
 	let worldPos = (model * vec4f(pos, 1.0)).xyz;
 	output.worldPos = worldPos;
 	output.worldNor = (model * vec4f(normal, 0.0)).xyz;
-	output.uv = uv;
-	output.uv = output.uv * instanceData[instanceIndex].texture_rect.zw;
-	output.uv += instanceData[instanceIndex].texture_rect.xy;
+	output.uv = uv + instanceData[instanceIndex].uv_offset;
 	output.instanceIndex = instanceIndex;
 	output.Position = uniforms.P * uniforms.V * vec4f(worldPos, 1.0);
 	return output;
@@ -133,21 +132,44 @@ fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
 	@location(2) uv: vec2f,
 	@interpolate(flat) @location(3) instanceIndex: u32
 ) -> @location(0) vec4f {
+	var true_uv = uv;
+
+	if ((instanceData[instanceIndex].flags & 1) != 0) {
+		// UV_REPEAT
+		var wrapped_uv = vec2f(
+			true_uv.x - floor(true_uv.x),
+			true_uv.y - floor(true_uv.y)
+		);
+		true_uv = wrapped_uv;
+	}
+	true_uv = true_uv * instanceData[instanceIndex].texture_rect.zw;
+	true_uv += instanceData[instanceIndex].texture_rect.xy;
+
 	// let shadowCoord = uniforms.shadowP * uniforms.shadowV * vec4f(worldPos, 1.0);
 	// let shadowUV = shadowCoord.xy * 0.5 + vec2f(0.5, 0.5);
 	// return vec4f(shadowUV, shadowCoord.z / shadowCoord.w, 1.0);
 
 	var color: vec4f = vec4f(1.0, 0.0, 1.0, 1.0);
-	if (instanceData[instanceIndex].useAlbedoMap > 0u) {
-		color = textureSample(albedoMap, albedoSampler, uv);
+	if ((instanceData[instanceIndex].useAlbedoNormalMap & 1u) != 0u) {
+		color = textureSample(albedoMap, albedoSampler, true_uv);
 	}
-	if (color.w < 0.05) {
+
+	var alpha = color.w;
+
+	if (instanceData[instanceIndex].fadeout_z > 0.0) {
+		var fade_start: f32 = instanceData[instanceIndex].fadeout_z - 1.0;
+		var fade_end: f32 = instanceData[instanceIndex].fadeout_z;
+		var fade_factor: f32 = clamp((fade_end - worldPos.z) / 1.0, 0.0, 1.0);
+		alpha = alpha * fade_factor;
+	}
+
+	if (alpha < 0.05) {
 		discard;
 	}
 
 	var normal: vec3f = normalize(worldNor);
-	if (instanceData[instanceIndex].useNormalMap > 0u) {
-		normal = textureSample(normalMap, normalSampler, uv).xyz * 2.0 - 1.0;
+	if ((instanceData[instanceIndex].useAlbedoNormalMap & 2u) != 0u) {
+		normal = textureSample(normalMap, normalSampler, true_uv).xyz * 2.0 - 1.0;
 		normal = normalize(normal);
 	}
 
@@ -156,7 +178,7 @@ fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
 		f32(instanceData[instanceIndex].useShadowMap), worldPos, normal
 	);
 	return vec4f(
-		light * instanceData[instanceIndex].color.xyz * color.xyz / color.w,
-		instanceData[instanceIndex].color.w * color.w
+		light * instanceData[instanceIndex].color.xyz * color.xyz / alpha,
+		instanceData[instanceIndex].color.w * alpha
 	);
 }

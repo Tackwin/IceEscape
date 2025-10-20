@@ -67,6 +67,9 @@ Websocket :: struct {
   // state         : STATE;
   parsing_state : Websocket_Parsing_Frame_State;
 
+  send_semaphore: Semaphore;
+  recv_semaphore: Semaphore;
+
   broadcast    :: websocket_broadcast;
   send         :: websocket_send;
   send_ping    :: websocket_send_ping; // this should really be public? just here for testing
@@ -82,6 +85,8 @@ Websocket_Server :: struct {
 
   path          : string;
   websockets    : [..] *Websocket;
+
+  delete_semaphore: Semaphore;
 }
 
 
@@ -92,6 +97,7 @@ websocket_listen :: (path: string = "") -> *Websocket_Server {
 
   ws_server: Websocket_Server;
   ws_server.path = normalize_path(path);
+  init(*ws_server.delete_semaphore, 1);
 
   return table_set(*websocket_servers, ws_server.path, ws_server);
 }
@@ -190,7 +196,9 @@ websocket_read_frame :: (ws: *Websocket) {
   while 1 {
     if ws.err then return;
     if buffer.count < bytes_needed - bytes_read then die("why?");
+    wait_for(*ws.recv_semaphore);
     bytes_received := recv(ws.socket, buffer.data + bytes_read, xx (bytes_needed - bytes_read) );
+    signal(*ws.recv_semaphore);
 
     #if OS==.LINUX if bytes_received < 0 && errno() == EWOULDBLOCK return;
 
@@ -350,6 +358,8 @@ websocket_read_frame :: (ws: *Websocket) {
 websocket_new :: (request: Request) -> *Websocket {
   ws := table_add(*all_websockets, request.socket, .{});
   ws.socket = request.socket;
+  init(*ws.send_semaphore, 1);
+  init(*ws.recv_semaphore, 1);
 
   path_normal := normalize_path(request.path);
 
@@ -363,23 +373,35 @@ websocket_new :: (request: Request) -> *Websocket {
 }
 
 websocket_delete :: (ws: *Websocket) {
+  // wait_for(*ws.server.delete_semaphore);
+  // defer {
+  //   signal(*ws.server.delete_semaphore);
+  // }
+
+  ok, found := table_find_new(*all_websockets, ws.socket);
+  if !ok || found.err return; // already deleted
+
   if ws.server.onclose then ws.server.onclose(ws);
 
   socket_close(ws.socket); // not sure if this is necessary. also it might already be closed?
+  ws.err = true;
 
   // is unordered a problem?
-  table_remove(*all_websockets, ws.socket);
-  array_unordered_remove_by_value(*ws.server.websockets, ws);
+  // table_remove(*all_websockets, ws.socket);
+  // array_unordered_remove_by_value(*ws.server.websockets, ws);
 
-  free(ws.parsing_state.buffer);               // these may or may not be allocated. freeing null isn't a problem, right?
-  free(ws.parsing_state.payload_continuation); // these may or may not be allocated. freeing null isn't a problem, right?
+  // free(ws.parsing_state.buffer);               // these may or may not be allocated. freeing null isn't a problem, right?
+  // free(ws.parsing_state.payload_continuation); // these may or may not be allocated. freeing null isn't a problem, right?
 }
 
 
 websocket_send_bytes :: (ws: *Websocket, bytes: string) {
   if ws.err return;
 
+  wait_for(*ws.send_semaphore);
   sent_byte_count := send(ws.socket, bytes);
+  signal(*ws.send_semaphore);
+
   if sent_byte_count == -1 {
     ws.err = true;
     websocket_delete(ws);

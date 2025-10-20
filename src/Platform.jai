@@ -56,6 +56,7 @@ Key :: enum s32 {
 	MouseLeft;
 	MouseRight;
 	MouseMiddle;
+	Tab;
 }
 Key_COUNT :: #run enum_values_as_s64(Key).count;
 
@@ -90,6 +91,7 @@ Audio :: struct {
 		Music;
 	} = .Sound;
 
+	exponent: float = 3.0;
 	volume := 1.0;
 	pitch := 1.0;
 

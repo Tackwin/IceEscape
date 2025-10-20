@@ -50,11 +50,13 @@ const Key_F12 = 48;
 const Key_MouseLeft = 49;
 const Key_MouseRight = 50;
 const Key_MouseMiddle = 51;
+const Key_Tab = 52;
 
 let key_buffer = [];
 
 let mouse_x = 0;
 let mouse_y = 0;
+let mouse_wheel_delta = 0;
 
 const mapKeyNameToKeyIndex = (e) => {
 	const lowered = e.toLowerCase();
@@ -108,6 +110,7 @@ const mapKeyNameToKeyIndex = (e) => {
 		case "f10": return Key_F10;
 		case "f11": return Key_F11;
 		case "f12": return Key_F12;
+		case "tab": return Key_Tab;
 		default: return -1;
 	}
 
@@ -117,6 +120,9 @@ document.addEventListener("keydown", (e) => {
 	const keyIndex = mapKeyNameToKeyIndex(e.key);
 	if (keyIndex !== -1) {
 		key_buffer[keyIndex] = true;
+		if (e.preventDefault) {
+			e.preventDefault();
+		}
 	}
 });
 
@@ -124,6 +130,9 @@ document.addEventListener("keyup", (e) => {
 	const keyIndex = mapKeyNameToKeyIndex(e.key);
 	if (keyIndex !== -1) {
 		key_buffer[keyIndex] = false;
+		if (e.preventDefault) {
+			e.preventDefault();
+		}
 	}
 });
 
@@ -157,6 +166,13 @@ document.addEventListener("mousemove", (e) => {
 	mouse_y = e.clientY - rect.top;
 });
 
+document.addEventListener("wheel", (e) => {
+	// Prevent scrolling the page
+	e.preventDefault();
+
+	mouse_wheel_delta -= e.deltaY;
+});
+
 jai_imports.jsGetKeyState = (key_map_ptr, key_map_count) => {
 	for (let i = 0; i < key_map_count; i++) {
 		const index = key_buffer[i] ? 1 : 0;
@@ -167,6 +183,11 @@ jai_imports.jsGetKeyState = (key_map_ptr, key_map_count) => {
 jai_imports.jsGetMousePointer = (x_ptr, y_ptr) => {
 	setU32(x_ptr, 0, mouse_x);
 	setU32(y_ptr, 0, mouse_y);
+}
+
+jai_imports.jsGetMouseWheelDelta = (delta_ptr) => {
+	setF32(delta_ptr, 0, mouse_wheel_delta);
+	mouse_wheel_delta = 0;
 }
 
 jai_imports.jsGetDimensions = (dim_ptr) => {

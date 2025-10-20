@@ -12,13 +12,39 @@ Assets :: #import "Assets";
 // 9 Center 9
 //     3
 
+Config :: struct {
+	antiair_offset_std := 0.0;
+}
+
+
 parse_terrain :: (text: string, scene: *Scene) {
 	clear(scene);
+	rng := Rand.seed(123456789);
 
 	ascii_tiles: string;
 	// Look for the first empty line, above would be the ascii tiles, and the rest is the entities.
 
 	lines := split(text, "\n",, temp);
+
+	config_stack: [..] Config;
+	push_stack :: () #expand {
+		if config_stack.count == 0
+			array_add(*config_stack, .{});
+		else
+			array_add(*config_stack, config_stack[config_stack.count - 1]);
+	}
+	pop_stack :: () #expand {
+		if config_stack.count > 0
+			config_stack.count -= 1;
+		else
+			print("Warning: pop_stack on empty stack\n");
+	}
+	current_config :: () -> *Config #expand {
+		if config_stack.count == 0
+			return null;
+		return *config_stack[config_stack.count - 1];
+	}
+	push_stack();
 
 	cursor := 0;
 	for lines {
@@ -46,6 +72,83 @@ parse_terrain :: (text: string, scene: *Scene) {
 			continue;
 		if starts_with(line, "//")
 			continue;
+
+		if scan2(line, "- autorevive") {
+			scene.auto_revive = true;
+			continue;
+		}
+
+		if scan2(line, "push") {
+			push_stack();
+			config := current_config();
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				if scan2(line, "- antiair_offset_std: %", *config.antiair_offset_std)
+					continue;
+
+				print("Error reading config, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
+
+		if scan2(line, "pop") {
+			pop_stack();
+			continue;
+		}
+
+		if scan2(line, "present") {
+			present: Present;
+			present.id = scene.presents.count + 1;
+			defer array_add(*scene.presents, present);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *present.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+
+				if scan2(line, "- kind: %", *present.kind)
+					continue;
+
+				if scan2(line, "- refresh_cooldown: %", *present.server.refresh_cooldown)
+					continue;
+
+				if scan2(line, "- depends_on_flag_id: %", *present.server.depends_on_flag_id)
+					continue;
+
+				print("Error reading present, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
 
 		if scan2(line, "antiair") {
 			antiair: AntiAir;
@@ -84,6 +187,8 @@ parse_terrain :: (text: string, scene: *Scene) {
 				print("Error reading antiair, unrecognized line: % (L%)\n", line, cursor);
 				cursor -= 1;
 			}
+
+			antiair.server.t = Rand.random_uniform(*rng, 0.0, current_config().antiair_offset_std);
 
 			cursor -= 1;
 		}
@@ -141,6 +246,11 @@ parse_terrain :: (text: string, scene: *Scene) {
 				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
 					continue;
 
+				if scan2(line, "- max_rotation_speed: %", *robot.max_rotation_speed) {
+					robot.max_rotation_speed *= 2 * 3.141592;
+					continue;
+				}
+
 				if scan2(
 					line,
 					"- start_target_aabb: % %",
@@ -156,8 +266,19 @@ parse_terrain :: (text: string, scene: *Scene) {
 					*robot.end_target_aabb.y
 				)
 					continue;
+				if scan2(line, "- charging_time: %", *robot.charging_time)
+					continue;
+
+				if scan2(line, "- effectshoot_time: %", *robot.effectshoot_time)
+					continue;
+					
+				if scan2(line, "- predict: %", *robot.predict)
+					continue;
 
 				if scan2(line, "- shooting_cd: %", *robot.shooting_cd)
+					continue;
+
+				if scan2(line, "- shooting_time: %", *robot.shooting_time)
 					continue;
 
 				print("Error reading robot, unrecognized line: % (L%)\n", line, cursor);
@@ -199,6 +320,8 @@ parse_terrain :: (text: string, scene: *Scene) {
 
 		if scan2(line, "flag") {
 			flag: Flag;
+			flag.id = scene.flags.count + 1;
+			flag.index = flag.id - 1;
 			defer array_add(*scene.flags, flag);
 
 			cursor += 1;
@@ -633,8 +756,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 		}
 	}
 
-	rng := Rand.seed(123456789);
-
 	get_probability :: (id: Assets.Prop_Id) -> float {
 		if #complete id == {
 			case .TERRAIN_TREE_SNOW_A;
@@ -737,6 +858,8 @@ load_terrain_from_ascii :: (ascii: string) -> Terrain {
 					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Slippy_Ice;
 				case #char "X";
 					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Dirt;
+				case #char "R";
+					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Funny_Ice;
 				case #char "S";
 					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Grass;
 					terrain.spawn_tile = .{ x, y };

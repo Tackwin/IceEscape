@@ -58,6 +58,7 @@ map_key_to_key :: (key: int) -> int {
 		case xx Key_Code.F10; return xx Key.F10;
 		case xx Key_Code.F11; return xx Key.F11;
 		case xx Key_Code.F12; return xx Key.F12;
+		case xx Key_Code.TAB; return xx Key.Tab;
 	}
 	return -1;
 }
@@ -108,6 +109,11 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	jsGetMousePointer(*x, *y);
 	info.mouse_position.x = xx x;
 	info.mouse_position.y = xx y;
+
+	delta: float32;
+	jsGetMouseWheelDelta :: (delta_ptr: *float32) #foreign;
+	jsGetMouseWheelDelta(*delta);
+	info.mouse_wheel = xx delta;
 
 	dim: [4] u32;
 	jsGetDimensions :: (dim_ptr: *u32) #foreign;
@@ -178,6 +184,7 @@ play_audio :: (audio: Audio, position: V3f) -> Sound {
 		repeating: u32;
 		kind: s32;
 		fade_in: s32;
+		exponent: float32;
 
 		sound_id: *s64;
 	}
@@ -195,6 +202,7 @@ play_audio :: (audio: Audio, position: V3f) -> Sound {
 	params.kind = xx audio.kind;
 	params.fade_in = xx audio.fade_in;
 	params.sound_id = *sound.id;
+	params.exponent = xx audio.exponent;
 	js_play_audio(*params);
 
 	sound.audio_id = audio.id;

@@ -282,7 +282,7 @@ WFramegraph :: struct {
 		texture_rect: V4f = .{ 0, 0, 0, 0 }; // x, y, width, height
 		color: V4f = .{ 1, 1, 1, 1 };
 		z30sdf2: u32 = 0;
-		padding0: u32 = 0;
+		rotation: float = 0;
 		padding1: u32 = 0;
 		padding2: u32 = 0;
 	}
@@ -316,12 +316,17 @@ WFramegraph :: struct {
 	};
 
 	Instance :: struct {
+		UV_REPEAT :: 1;
+
 		M: M4f;
 		texture_rect: V4f = .{ 0, 0, 1, 1 }; // x, y, width, height
-		useAlbedoMap: u32 = 1;
-		useNormalMap: u32 = 0;
+		useAlbedoNormalMap: u32 = 1;
 		useShadowMap: u32 = 1;
+		fadeout_z: float32 = 1000.0;
 		flags: u32 = 0;
+		uv_offset: V2f = .{ 0, 0 };
+		padding0: u32 = 0;
+		padding1: u32 = 0;
 		color: V4f = .{ 1, 1, 1, 1 };
 	};
 	mainInstances: [..] Instance;
@@ -1229,11 +1234,14 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		render_tombstones(framegraph, encoder, shadowPass, scene, store);
 		render_coins(framegraph, encoder, shadowPass, scene, store);
 		render_trophies(framegraph, encoder, shadowPass, scene, store);
+		render_hooks(framegraph, encoder, shadowPass, scene, store, *extra);
+		render_presents(framegraph, encoder, shadowPass, scene, store);
 		render_robots(framegraph, encoder, shadowPass, scene, store, *extra);
 		render_antiairs(framegraph, encoder, shadowPass, scene, store, *extra);
 		render_flags(framegraph, encoder, shadowPass, scene, store, *extra);
 		render_traps(framegraph, encoder, shadowPass, scene, store, *extra);
 		render_extra(framegraph, encoder, shadowPass, scene, store, *extra);
+		//render_mark(framegraph, encoder, shadowPass, scene, store);
 
 		context.gpu.renderPassEncoderEnd(shadowPass);
 		context.gpu.renderPassEncoderRelease(shadowPass);
@@ -1270,7 +1278,9 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		render_robots(framegraph, encoder, geometryPass, scene, store, *extra);
 		render_trophies(framegraph, encoder, geometryPass, scene, store);
 		render_antiairs(framegraph, encoder, geometryPass, scene, store, *extra);
+		render_hooks(framegraph, encoder, geometryPass, scene, store, *extra);
 		render_flags(framegraph, encoder, geometryPass, scene, store, *extra);
+		render_presents(framegraph, encoder, geometryPass, scene, store);
 		render_traps(framegraph, encoder, geometryPass, scene, store, *extra);
 		render_explosions(framegraph, encoder, geometryPass, scene, store, *extra);
 
@@ -1291,10 +1301,16 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		);
 		render_within_zones(framegraph, encoder, geometryPass, scene, store, *extra);
 		render_extra(framegraph, encoder, geometryPass, scene, store, *extra);
+		render_safezones(framegraph, encoder, geometryPass, scene, store);
 		context.gpu.renderPassEncoderSetBindGroup(
 			geometryPass, 1, framegraph.particleBindGroup, 0, null
 		);
 		render_extra_quads(framegraph, encoder, geometryPass, scene, store, *extra);
+
+		context.gpu.renderPassEncoderSetBindGroup(
+			geometryPass, 1, framegraph.geometryBindGroup, 0, null
+		);
+		render_mark(framegraph, encoder, geometryPass, scene, store);
 
 		context.gpu.renderPassEncoderEnd(geometryPass);
 		context.gpu.renderPassEncoderRelease(geometryPass);
@@ -1469,6 +1485,33 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 
 	submit: [1] WGPUCommandBuffer = .[buffer];
 	context.gpu.queueSubmit(context.graphics.mainQueue, 1, submit.data);
+}
+
+render_mark :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store
+) {
+	if to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time) < 0.25 {
+		instanced := append_instance_buffer(framegraph);
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(scene.mark_clicked_pos);
+		M4f.scale(*instance.M, V3f.{ 0.5, 0.5, 0.33 });
+		t := clamp(
+			(to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time) / 0.5),
+			0.0,
+			1.0
+		);
+		t = 1 - ((1 - t) * (1 - t) * (1 - t) * (1 - t) * (1 - t));
+		instance.texture_rect = Store.Colormaps_Rect.down_arrow;
+		instance.uv_offset = V2f.{ 0, xx t };
+		instance.flags = WFramegraph.Instance.UV_REPEAT;
+		draw(framegraph, pass, store.mark_model, instanced.count);
+	}
 }
 
 render_particles :: (
@@ -2218,6 +2261,106 @@ render_shurikens :: (
 	}
 }
 
+render_hooks :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store,
+	extra: *Extra
+) {
+	{
+		instanced := append_instance_buffer(framegraph);
+		for scene.hooks {
+			instanced.count += 1;
+			instance := *instanced[instanced.count - 1];
+			instance.* = .{};
+			pos := it.server.last_anchor_position + it.server.direction * it.server.length;
+			M := M4f.translate(pos);
+			M = M * to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, it.server.direction));
+			instance.M = M;
+			instance.texture_rect = Store.Colormaps_Rect.vehicle;
+
+			cylinder: Extra.Cylinder;
+			cylinder.color = V3f.{ 0.8, 0.8, 0.8 };
+			cylinder.M = M4f.translate(it.server.last_anchor_position);
+			cylinder.M *= to_rotation_matrix(
+				from_unit_vectors(V3f.{ 0, 0, 1 }, it.server.direction)
+			);
+			cylinder.M *= scale_matrix(V3f.{ 0.02, 0.02, it.server.length });
+			array_add(*extra.cylinders, cylinder);
+		}
+		if instanced.count > 0
+			draw(framegraph, pass, store.end_hook_model, instanced.count);
+	}
+}
+
+render_presents :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store
+) {
+	instanced := append_instance_buffer(framegraph);
+	for scene.presents {
+		if !it.server.available
+			continue;
+		if it.kind == .A {
+			instanced.count += 1;
+			instance := *instanced[instanced.count - 1];
+			instance.* = .{};
+			instance.M = M4f.translate(it.position);
+			M4f.scale(*instance.M, .{ 0.35, 0.35, 0.35 });
+			instance.texture_rect = Store.Colormaps_Rect.prop;
+		}
+	}
+	if instanced.count > 0
+		draw(framegraph, pass, store.present_a_model, instanced.count);
+		
+	instanced = append_instance_buffer(framegraph);
+	for scene.presents {
+		if !it.server.available
+			continue;
+		if it.kind == .B {
+			instanced.count += 1;
+			instance := *instanced[instanced.count - 1];
+			instance.* = .{};
+			instance.M = M4f.translate(it.position);
+			M4f.scale(*instance.M, .{ 0.35, 0.35, 0.35 });
+			instance.texture_rect = Store.Colormaps_Rect.prop;
+		}
+	}
+	if instanced.count > 0
+		draw(framegraph, pass, store.present_b_model, instanced.count);
+}
+
+render_safezones :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store
+) {
+	instanced := append_instance_buffer(framegraph);
+	for scene.safe_zones {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		M4f.scale(*instance.M, .{ it.radius, it.radius, 1.0 });
+		instance.texture_rect = Store.Colormaps_Rect.safe_zone;
+		instance.uv_offset = V2f.{ 0, xx -it.client.time };
+		instance.flags = WFramegraph.Instance.UV_REPEAT;
+		instance.color.w = 0.5;
+		instance.fadeout_z = 1.0;
+	}
+	if instanced.count == 0
+		return;
+
+	draw(framegraph, pass, store.zone_wall_model, instanced.count);
+}
+
 render_skulls :: (
 	framegraph: *WFramegraph,
 	encoder: WGPUCommandEncoder,
@@ -2275,7 +2418,7 @@ render_standin :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-	for model_id: 0..Store.Model_Id_Count {
+	for model_id: 0..Scene.Model_Id_Count {
 		instanced := append_instance_buffer(framegraph);
 		for scene.stand_in {
 			if it.model_id != model_id
@@ -2292,7 +2435,7 @@ render_standin :: (
 		if instanced.count == 0
 			continue;
 
-		model := Store.get_model(store, model_id.(Store.Model_Id));
+		model := Store.get_model(store, model_id.(Scene.Model_Id));
 		if !model
 			continue;
 
@@ -2340,6 +2483,16 @@ render_players :: (
 	}
 }
 
+set_use_normal_map :: (instance: *WFramegraph.Instance, use: bool) {
+	if use {
+		instance.useAlbedoNormalMap |= 2;
+	} else {
+		x := instance.useAlbedoNormalMap.(s64);
+		x &= ~2;
+		instance.useAlbedoNormalMap = x.(u32);
+	}
+}
+
 render_terrain :: (
 	framegraph: *WFramegraph,
 	encoder: WGPUCommandEncoder,
@@ -2360,7 +2513,7 @@ render_terrain :: (
 		pos := Scene.tile_bottom_left(scene, V2i.{ x, y });
 		instance.M = M4f.translate(pos) * scale_matrix(v3(terrain.tile_size, 1.0));
 		instance.texture_rect = Store.get_tile_rect(it.kind);
-		instance.useNormalMap = 1;
+		set_use_normal_map(instance, true);
 	}
 	if instanced.count == 0 {
 		return;

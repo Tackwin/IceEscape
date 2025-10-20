@@ -132,10 +132,12 @@ FORMAT;
 #insert #run embed_data("VEHICLE_MONSTER_TRUCK_OBJ", "vehicle-monster-truck.obj", #filepath);
 #insert #run embed_data("VEHICLE_VINTAGE_RACER_OBJ", "vehicle-vintage-racer.obj", #filepath);
 #insert #run embed_data("VEHICLE_DRAG_RACER_OBJ", "vehicle-drag-racer.obj", #filepath);
+#insert #run embed_data("BOAT_SAIL_OBJ", "boat_sail.obj", #filepath);
 #insert #run embed_data("BOAT_ROW_OBJ", "boat_row.obj", #filepath);
 #insert #run embed_data("BOAT_FISHING_OBJ", "boat_fishing.obj", #filepath);
 #insert #run embed_data("TAXI_OBJ", "taxi.obj", #filepath);
 #insert #run embed_data("POLICE_OBJ", "police.obj", #filepath);
+#insert #run embed_data("TRACTOR_OBJ", "tractor.obj", #filepath);
 #insert #run embed_data("PIRATE_SHIP_OBJ", "pirate_ship.obj", #filepath);
 #insert #run embed_data("AMBULANCE_OBJ", "ambulance.obj", #filepath);
 #insert #run embed_data("SPACESHIP_OBJ", "spaceship.obj", #filepath);
@@ -194,7 +196,7 @@ FORMAT;
 #insert #run embed_data("EXPLOSION_7_MP3", "Sound/explosion7.mp3", #filepath);
 #insert #run embed_data("EXPLOSION_8_MP3", "Sound/explosion8.mp3", #filepath);
 
-#insert #run embed_data("LOSER_OGG", "loser.ogg", #filepath);
+#insert #run embed_data("LOSER_MP3", "Sound/loser.mp3", #filepath);
 
 #insert #run embed_data("TILE_OBJ", "tile.obj", #filepath);
 #insert #run embed_data("CAR_OBJ", "car.obj", #filepath);
@@ -229,6 +231,7 @@ FORMAT;
 #insert #run embed_data("PROP_COLORMAP", "Terrain/prop_colormap.png", #filepath);
 #insert #run embed_data("SKYBOX_SKI_PNG", "skybox_ski.png", #filepath);
 #insert #run embed_data("SKYBOX_OBJ", "skybox.obj", #filepath);
+#insert #run embed_data("END_HOOK_OBJ", "end_hook.obj", #filepath);
 
 #insert #run embed_data("ROBOT_A0_OBJ", "robot_A0.obj", #filepath);
 #insert #run embed_data("ROBOT_A1_OBJ", "robot_A1.obj", #filepath);
@@ -236,6 +239,10 @@ FORMAT;
 #insert #run embed_data("ROBOT_A3_OBJ", "robot_A3.obj", #filepath);
 #insert #run embed_data("ROBOT_A4_OBJ", "robot_A4.obj", #filepath);
 #insert #run embed_data("ROBOT_A5_OBJ", "robot_A5.obj", #filepath);
+
+#insert #run embed_data("PRESENT_A_OBJ", "present_a.obj", #filepath);
+#insert #run embed_data("PRESENT_B_OBJ", "present_b.obj", #filepath);
+#insert #run embed_data("ZONE_WALL_OBJ", "zone_wall.obj", #filepath);
 
 #insert #run embed_data("UNIT_CYLINDER_OBJ", "unit_cylinder.obj", #filepath);
 #insert #run embed_data("UNIT_SPHERE_OBJ", "unit_sphere.obj", #filepath);
@@ -258,6 +265,12 @@ FORMAT;
 #insert #run embed_data("HORN_CAR_6_MP3", "Sound/horn_car6.mp3", #filepath);
 #insert #run embed_data("HORN_CAR_7_MP3", "Sound/horn_car7.mp3", #filepath);
 #insert #run embed_data("HORN_CAR_8_MP3", "Sound/horn_car8.mp3", #filepath);
+
+#insert #run embed_data("DRIFT_0_MP3", "Sound/drift_0.mp3", #filepath);
+#insert #run embed_data("DRIFT_1_MP3", "Sound/drift_1.mp3", #filepath);
+#insert #run embed_data("CHECKPOINT_OK_MP3", "Sound/checkpoint_ok.mp3", #filepath);
+#insert #run embed_data("RES_MP3", "Sound/res.mp3", #filepath);
+#insert #run embed_data("COIN_LAUNCH_MP3", "Sound/coin_launch.mp3", #filepath);
 
 Prop_Id :: enum {
 	TERRAIN_TREE_SNOW_A :: 0;
@@ -335,7 +348,7 @@ load_everything :: () {
 			"EXPLOSION_6_MP3",
 			"EXPLOSION_7_MP3",
 			"EXPLOSION_8_MP3",
-			"LOSER_OGG",
+			"LOSER_MP3",
 			"TILE_OBJ",
 			"CAR_OBJ",
 			"TOMBSTONE_OBJ",
@@ -377,12 +390,15 @@ load_everything :: () {
 			"ROCK_MEDIUM",
 			"SKYBOX_SKI_PNG",
 			"SKYBOX_OBJ",
+			"END_HOOK_OBJ",
 			"SKYBOX_VERTEX",
 			"SKYBOX_FRAGMENT",
 			"BOAT_ROW_OBJ",
+			"BOAT_SAIL_OBJ",
 			"BOAT_FISHING_OBJ",
 			"TAXI_OBJ",
 			"POLICE_OBJ",
+			"TRACTOR_OBJ",
 			"PIRATE_SHIP_OBJ",
 			"AMBULANCE_OBJ",
 			"SPACESHIP_OBJ",
@@ -414,6 +430,9 @@ load_everything :: () {
 			"ROBOT_A3_OBJ",
 			"ROBOT_A4_OBJ",
 			"ROBOT_A5_OBJ",
+			"PRESENT_A_OBJ",
+			"PRESENT_B_OBJ",
+			"ZONE_WALL_OBJ",
 			"UNIT_CYLINDER_OBJ",
 			"UNIT_SPHERE_OBJ",
 			"GEOMETRY_WGSL",
@@ -432,6 +451,11 @@ load_everything :: () {
 			"HORN_CAR_6_MP3",
 			"HORN_CAR_7_MP3",
 			"HORN_CAR_8_MP3",
+			"DRIFT_0_MP3",
+			"DRIFT_1_MP3",
+			"CHECKPOINT_OK_MP3",
+			"RES_MP3",
+			"COIN_LAUNCH_MP3"
 		];
 		#insert #run -> string {
 			sb: String_Builder;

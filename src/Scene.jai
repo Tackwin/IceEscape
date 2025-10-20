@@ -14,13 +14,46 @@ GUI :: #import "GUI";
 
 #scope_export
 
+Model_Id :: enum {
+	Racer :: 1;
+	SUV :: 2;
+	Speedster :: 3;
+	Drag_Racer :: 4;
+	Monster_Truck :: 5;
+	Vintage_Racer :: 6;
+	Boat_Row :: 7;
+	Boat_Fishing :: 8;
+	Taxi :: 9;
+	Police :: 10;
+	Ambulance :: 11;
+	Spaceship :: 12;
+	Tombstone :: 13;
+	Tile :: 14;
+	Skull :: 15;
+	Coin :: 16;
+	Key :: 17;
+	Mark :: 18;
+	Gate :: 19;
+	Gate_Close :: 20;
+	Shuriken :: 21;
+	Spirit :: 22;
+	Boat_Sail :: 23;
+	Tractor :: 24;
+}
+Model_Id_Count :: #run enum_highest_value(Model_Id) + 1;
+
 Sound_Trigger :: struct {
+	inhead := false;
 	position: V3f;
 	kind: enum {
 		Footstep_Snow :: 0;
 		Footstep_Ice :: 1;
 		Car_Klaxon :: 2;
 		Explosion :: 3;
+		Loser :: 4;
+		Checkpoint_Ok :: 5;
+		Res :: 6;
+		Coin_Launch :: 7;
 	};
 }
 
@@ -60,12 +93,16 @@ Scene :: struct {
 	explosions: [..] Explosion;
 	antiairs: [..] AntiAir;
 	traps: [..] Trap;
+	presents: [..] Present;
+	safe_zones: [..] Safe_Zone;
+	hooks: [..] Hook;
 	terrain: Terrain;
 
 	camera_min: V2f;
 	camera_max: V2f;
 
 	coin_generation := 0;
+	generation := 0;
 
 	mark_clicked_time: Apollo_Time;
 	mark_clicked_pos: V3f;
@@ -89,6 +126,9 @@ Scene :: struct {
 	client_rng: Rand.State;
 	server_rng: Rand.State;
 
+	auto_revive := false;
+	camera_locked := false;
+
 	sound_triggers: [..] Sound_Trigger;
 }
 clear :: (scene: *Scene) {
@@ -111,6 +151,9 @@ clear :: (scene: *Scene) {
 	scene.antiairs.count = 0;
 	scene.traps.count = 0;
 	scene.sound_triggers.count = 0;
+	scene.presents.count = 0;
+	scene.safe_zones.count = 0;
+	scene.auto_revive = false;
 	table_reset(*scene.trigger_activated);
 }
 
@@ -123,6 +166,9 @@ make_sync :: (scene: *Scene) -> Command.Sync_Scene {
 	sync_scene.moving_frames = NewArray(scene.moving_frames.count, Command.Sync_Moving_Frame, false,, temp);
 	sync_scene.robots = NewArray(scene.robots.count, Command.Sync_Robot, false,, temp);
 	sync_scene.antiairs = NewArray(scene.antiairs.count, Command.Sync_AntiAir, false,, temp);
+	sync_scene.tombstones = NewArray(scene.tombstones.count, Command.Sync_Tombstone, false,, temp);
+	sync_scene.presents = NewArray(scene.presents.count, Command.Sync_Present, false,, temp);
+	sync_scene.safe_zones = NewArray(scene.safe_zones.count, Command.Sync_Safe_Zone, false,, temp);
 	for * sync_scene.players {
 		it.* = make_sync(*scene.players[it_index]);
 	}
@@ -138,6 +184,16 @@ make_sync :: (scene: *Scene) -> Command.Sync_Scene {
 	for * sync_scene.antiairs {
 		it.* = make_sync(*scene.antiairs[it_index]);
 	}
+	for * sync_scene.tombstones {
+		it.* = make_sync(*scene.tombstones[it_index]);
+	}
+	for * sync_scene.presents {
+		if scene.presents[it_index].server.available
+			it.* = make_sync(*scene.presents[it_index]);
+	}
+	for * sync_scene.safe_zones {
+		it.* = make_sync(*scene.safe_zones[it_index]);
+	}
 	sync_scene.rng = scene.server_rng;
 	return sync_scene;
 }
@@ -149,6 +205,8 @@ make_sync :: (player: *Player) -> Command.Sync_Player {
 	sync_player.direction = player.server.direction;
 	sync_player.dead = player.server.dead;
 	sync_player.model_id = player.server.model_id;
+	sync_player.has_safe_present = player.server.has_safe_present;
+	sync_player.has_hook_present = player.server.has_hook_present;
 	return sync_player;
 }
 
@@ -159,6 +217,24 @@ make_sync :: (skull: *Skull) -> Command.Sync_Skull {
 	sync_skull.speed = skull.server.speed;
 	sync_skull.offset = skull.server.offset;
 	return sync_skull;
+}
+
+make_sync :: (hook: *Hook) -> Command.Sync_Hook {
+	sync_hook: Command.Sync_Hook;
+	sync_hook.hook_id = hook.id;
+	sync_hook.last_anchor_position = hook.server.last_anchor_position;
+	sync_hook.direction = hook.server.direction;
+	sync_hook.length = hook.server.length;
+	sync_hook.hooker_id = hook.hooker_id;
+	sync_hook.hooked_id = hook.hooked_id;
+	return sync_hook;
+}
+
+make_sync :: (tombstone: *Tombstone) -> Command.Sync_Tombstone {
+	sync_tombstone: Command.Sync_Tombstone;
+	sync_tombstone.player_id = tombstone.player_id;
+	sync_tombstone.position = tombstone.position;
+	return sync_tombstone;
 }
 
 make_sync :: (moving_frame: *Moving_Frame) -> Command.Sync_Moving_Frame {
@@ -189,6 +265,24 @@ make_sync :: (antiair: *AntiAir) -> Command.Sync_AntiAir {
 	return sync_antiair;
 }
 
+make_sync :: (present: *Present) -> Command.Sync_Present {
+	sync_present: Command.Sync_Present;
+	sync_present.present_id = present.id;
+	sync_present.position = present.position;
+	sync_present.kind = xx present.kind;
+	sync_present.available = present.server.available;
+	return sync_present;
+}
+
+make_sync :: (safe_zone: *Safe_Zone) -> Command.Sync_Safe_Zone {
+	sync_safe_zone: Command.Sync_Safe_Zone;
+	sync_safe_zone.id = safe_zone.id;
+	sync_safe_zone.position = safe_zone.position;
+	sync_safe_zone.radius = safe_zone.radius;
+	sync_safe_zone.expire = safe_zone.expire;
+	return sync_safe_zone;
+}
+
 Frame_Result :: struct {
 	died: [..] Command.Die;
 	respawn: [..] Command.Respawn;
@@ -200,6 +294,15 @@ Frame_Result :: struct {
 	antiair_shoot: [..] Command.AntiAir_Shoot;
 	spawn_coin: [..] Command.Spawn_Coin;
 	move: [..] Command.Move;
+	sync_present: [..] Command.Sync_Present;
+	sync_safe_zone: [..] Command.Sync_Safe_Zone;
+	sync_player: [..] Command.Sync_Player;
+
+	Add_Score :: struct {
+		player_id: int;
+		score: Score;
+	}
+	add_scores: [..] Add_Score;
 }
 free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.died);
@@ -212,6 +315,10 @@ free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.antiair_shoot);
 	array_free(frame_result.spawn_coin);
 	array_free(frame_result.move);
+	array_free(frame_result.add_scores);
+	array_free(frame_result.sync_present);
+	array_free(frame_result.sync_safe_zone);
+	array_free(frame_result.sync_player);
 }
 clear :: (frame_result: *Frame_Result) {
 	frame_result.died.count = 0;
@@ -224,6 +331,27 @@ clear :: (frame_result: *Frame_Result) {
 	frame_result.antiair_shoot.count = 0;
 	frame_result.spawn_coin.count = 0;
 	frame_result.move.count = 0;
+	frame_result.add_scores.count = 0;
+	frame_result.sync_present.count = 0;
+	frame_result.sync_safe_zone.count = 0;
+	frame_result.sync_player.count = 0;
+}
+
+Safe_Zone :: struct {
+	id: int;
+	position: V3f;
+	radius: float;
+	expire: int;
+
+	server: struct {
+		expire_started := false;
+		expire_start: Apollo_Time;
+		expire_duration: float;
+	}
+
+	client: struct {
+		time := 0.0;
+	}
 }
 
 AntiAir :: struct {
@@ -250,6 +378,23 @@ Trap :: struct {
 	id: int;
 	position: V3f;
 	radius_hitbox := 0.5;
+}
+
+Present :: struct {
+	id: int;
+	position: V3f;
+
+	kind: enum {
+		A :: 0;
+		B :: 1;
+	};
+
+	server: struct {
+		refresh_cooldown: float = 10.0;
+		time_since_taken := 0.0;
+		available := false;
+		depends_on_flag_id := -1;
+	};
 }
 
 Prop :: struct {
@@ -302,6 +447,8 @@ Robot :: struct {
 	effectshoot_time := 0.5;
 	shooting_cd := 5.0;
 	shooting_time := 0.0;
+
+	predict := 0.0;
 
 	shooted := false;
 	just_shooted := false;
@@ -465,6 +612,7 @@ robot_forward :: (robot: Robot) -> M4f {
 Process_Response :: struct {
 	Entry :: struct {
 		scene_id: int;
+		player_id: int;
 		command: Command;
 	}
 
@@ -473,13 +621,23 @@ Process_Response :: struct {
 }
 free :: (process_response: *Process_Response) {
 	array_free(process_response.entries);
+	array_free(process_response.audios);
 }
 clear :: (response: *Process_Response) {
 	response.entries.count = 0;
+	response.audios.count = 0;
 }
 add :: (process_response: *Process_Response, scene_id: int, command: $T) {
 	entry: Process_Response.Entry;
 	entry.scene_id = scene_id;
+	entry.player_id = -1;
+	entry.command = make_command(command);
+	array_add(*process_response.entries, entry);
+}
+add_single_reply :: (process_response: *Process_Response, player_id: int, command: $T) {
+	entry: Process_Response.Entry;
+	entry.scene_id = -1;
+	entry.player_id = player_id;
 	entry.command = make_command(command);
 	array_add(*process_response.entries, entry);
 }
@@ -635,6 +793,7 @@ Stand_In :: struct {
 	model_id: int;
 	position: V3f;
 	orientation: Qf;
+	retired := false;
 }
 
 Moving_Frame :: struct {
@@ -737,6 +896,30 @@ Gate :: struct {
 	is_end := false;
 }
 
+Hook :: struct {
+	id: int;
+	hooker_id: int;
+	hooked_id: int;
+
+	server: struct {
+		direction: V3f;
+		length: float;
+		max_length: float = 40.0;
+
+		speed: float = 20.0;
+
+		radius: float = 0.25;
+
+		last_anchor_position: V3f;
+	}
+}
+
+Score :: struct {
+	dead   := 0;
+	score  := 0;
+	revive := 0;
+	trophy := 0;
+}
 Player :: struct {
 	Model :: enum {
 		Racer :: 0;
@@ -767,6 +950,11 @@ Player :: struct {
 		confirmed_tile := Tile.Kind.Grass;
 
 		model_id := 0;
+
+		score: Score;
+
+		has_safe_present := false;
+		has_hook_present := false;
 	};
 
 	// This is the stuff that gets optimistically updated by the client. For rendering
@@ -776,8 +964,40 @@ Player :: struct {
 	};
 }
 
+find_tombstone_by_player_id :: (scene: Scene, id: int) -> *Tombstone {
+	for * scene.tombstones {
+		if it.player_id == id
+			return it;
+	}
+	return null;
+}
+
+find_by_hook_id :: (scene: Scene, id: int) -> *Hook {
+	for * scene.hooks {
+		if it.id == id
+			return it;
+	}
+	return null;
+}
+
+find_by_safe_zone_id :: (scene: Scene, id: int) -> *Safe_Zone {
+	for * scene.safe_zones {
+		if it.id == id
+			return it;
+	}
+	return null;
+}
+
 find_by_robot_id :: (scene: Scene, id: int) -> *Robot {
 	for * scene.robots {
+		if it.id == id
+			return it;
+	}
+	return null;
+}
+
+find_by_present_id :: (scene: Scene, id: int) -> *Present {
+	for * scene.presents {
 		if it.id == id
 			return it;
 	}
@@ -814,6 +1034,13 @@ find_by_coin_id :: (scene: Scene, id: int) -> *Coin {
 	}
 	return null;
 }
+find_by_flag_id :: (scene: Scene, id: int) -> *Flag {
+	for * scene.flags {
+		if it.id == id
+			return it;
+	}
+	return null;
+}
 find_key_by_holder_id :: (scene: Scene, id: int) -> [..] *Key {
 	keys: [..] *Key;
 	keys.allocator = temp;
@@ -831,13 +1058,6 @@ find_by_key_id :: (scene: Scene, id: int) -> *Key {
 			return it;
 	}
 
-	return null;
-}
-find_tombstone_by_player_id :: (scene: Scene, id: int) -> *Tombstone {
-	for * scene.tombstones {
-		if it.player_id == id
-			return it;
-	}
 	return null;
 }
 
@@ -906,7 +1126,9 @@ add_snow :: (scene: *Scene, dt: float32) {
 	}
 }
 
-input :: (scene: *Scene, controls: *Controls.State, dt: float32, result: *Process_Response) {
+input :: (
+	scene: *Scene, controls: *Controls.State, dt: float32, result: *Process_Response
+) {
 	any_camera_move := false;
 	dt := V3f.{ 0, 0, 0 };
 	if controls.frame_info.mouse_wheel > 0 {
@@ -937,7 +1159,16 @@ input :: (scene: *Scene, controls: *Controls.State, dt: float32, result: *Proces
 		dt.y += scene.camera.speed * controls.frame_info.delta_time;
 		any_camera_move = true;
 	}
-	scene.camera.locked = controls.pressed[Platform.Key.Space];
+
+	if controls.just_pressed[Platform.Key.W] {
+		scene.camera_locked = !scene.camera_locked;
+	}
+
+	if scene.camera_locked {
+		scene.camera.locked = !controls.pressed[Platform.Key.Space];
+	} else {
+		scene.camera.locked =  controls.pressed[Platform.Key.Space];
+	}
 	scene.camera.target_target += dt;
 	if scene.camera.locked {
 		scene.camera.target += dt;
@@ -947,39 +1178,41 @@ input :: (scene: *Scene, controls: *Controls.State, dt: float32, result: *Proces
 		scene.camera.target_target = scene.camera.target;
 	}
 
-	if controls.just_pressed[Platform.Key.MouseLeft] {
-		V := look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
-		P := perspective(scene.camera);
-		r := unproject_ndc(
-			.{
-				controls.frame_info.mouse_position.x / controls.frame_info.window_size.x * 2 - 1,
-				controls.frame_info.mouse_position.y / controls.frame_info.window_size.y * 2 - 1
-			},
-			V,
-			P
-		);
 
-		target, ok := ray_plane(scene.camera.position, r, .{ 0, 0, 1 });
-		if ok && scene.state == .Normal {
-			command: Command.Move;
-			command.ground_target = v2(target);
-			command.player_id = scene.controlled_player_id;
-			add(result, scene.id, command);
-			scene.mark_clicked_time = current_time_monotonic();
-			scene.mark_clicked_pos = target;
+	if !controls.maskoff.mouse {
+		if controls.just_pressed[Platform.Key.MouseLeft] {
+			V := look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
+			P := perspective(scene.camera);
+			r := unproject_ndc(
+				.{
+					controls.frame_info.mouse_position.x / controls.frame_info.window_size.x * 2 - 1,
+					controls.frame_info.mouse_position.y / controls.frame_info.window_size.y * 2 - 1
+				},
+				V,
+				P
+			);
 
-			sound: Sound_Trigger;
-			sound.position = target;
-			sound.kind = .Footstep_Snow;
-			tile, ok := tile_under(scene, target);
-			if ok && (tile.kind == .Ice || tile.kind == .Slippy_Ice) {
-				sound.kind = .Footstep_Ice;
+			target, ok := ray_plane(scene.camera.position, r, .{ 0, 0, 1 });
+			if ok && scene.state == .Normal {
+				command: Command.Move;
+				command.ground_target = v2(target);
+				command.player_id = scene.controlled_player_id;
+				add(result, scene.id, command);
+				scene.mark_clicked_time = current_time_monotonic();
+				scene.mark_clicked_pos = target;
+
+				sound: Sound_Trigger;
+				sound.position = target;
+				sound.kind = .Footstep_Snow;
+				tile, ok := tile_under(scene, target);
+				if ok && (tile.kind == .Ice || tile.kind == .Slippy_Ice) {
+					sound.kind = .Footstep_Ice;
+				}
+
+				array_add(*scene.sound_triggers, sound);
 			}
-
-			array_add(*scene.sound_triggers, sound);
 		}
 	}
-	
 	if controls.just_pressed[Platform.Key.C] {
 		player := find_by_player_id(scene, scene.controlled_player_id);
 		if player && !player.server.dead {
@@ -996,6 +1229,32 @@ input :: (scene: *Scene, controls: *Controls.State, dt: float32, result: *Proces
 			command: Command.Klaxon;
 			command.player_id = player.id;
 			add(result, scene.id, command);
+		}
+	}
+
+	if controls.just_pressed[Platform.Key.E] {
+		player := find_by_player_id(scene, scene.controlled_player_id);
+		if player && !player.server.dead {
+			if player.server.has_safe_present {
+				command: Command.Active_Item;
+				command.player_id = player.id;
+				command.safe_zone = true;
+				command.hook = false;
+				add(result, scene.id, command);
+			}
+		}
+	}
+
+	if controls.just_pressed[Platform.Key.A] {
+		player := find_by_player_id(scene, scene.controlled_player_id);
+		if player && !player.server.dead {
+			if player.server.has_hook_present {
+				command: Command.Active_Item;
+				command.player_id = player.id;
+				command.safe_zone = false;
+				command.hook = true;
+				add(result, scene.id, command);
+			}
 		}
 	}
 }
@@ -1051,6 +1310,53 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 
 update_client :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	add_snow(scene, dt);
+
+	for * scene.safe_zones {
+		it.client.time += dt;
+	}
+}
+
+update :: (scene: *Scene, hook: *Hook, dt: float32, result: *Frame_Result) {
+	if hook.hooked_id < 0 {
+		hook.server.length += hook.server.speed * dt;
+		if hook.server.length > hook.server.max_length
+			hook.server.length = hook.server.max_length;
+
+		for * scene.players {
+			if it.id == hook.hooker_id
+				continue;
+
+			p := it.server.position;
+			hooker := find_by_player_id(scene, hook.hooker_id);
+			if !hooker
+				continue;
+
+			q := hooker.server.position + hook.server.direction * hook.server.length;
+
+			d := norm(p - q);
+			if d < hook.server.radius {
+				hook.hooked_id = it.id;
+				hook.server.length = norm(p - hooker.server.position);
+				break;
+			}
+		}
+	} else {
+		hooker := find_by_player_id(scene, hook.hooker_id);
+		hooked := find_by_player_id(scene, hook.hooked_id);
+
+		if hooker {
+			hook.server.last_anchor_position = hooker.server.position;
+		}
+
+		hook.server.length -= hook.server.speed * dt;
+		if hook.server.length < 0.0
+			hook.server.length = 0.0;
+
+		if hooked {
+			dt := normalize(hooked.server.position - hook.server.last_anchor_position);
+			hooked.server.position = hook.server.last_anchor_position + dt * hook.server.length;
+		}
+	}
 }
 
 update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
@@ -1113,6 +1419,19 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 		update(scene, it, dt);
 	}
 
+	for * scene.hooks {
+		update(scene, it, dt, result);
+
+		if it.hooked_id >= 0 && it.server.length <= 0.0 {
+			remove it;
+			continue it;
+		}
+		if it.hooked_id < 0 && it.server.length >= it.server.max_length {
+			remove it;
+			continue it;
+		}
+	}
+
 	update_explosions(scene, dt);
 
 	for * scene.keys {
@@ -1150,161 +1469,246 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 
 	update_particles(scene, dt);
 
-	if scene.is_server && result {
-		// >RULE Player die on contact with trap
-		for * scene.traps {
-			p := it.position;
+	if scene.is_server
+		update_server(scene, dt, result);
+}
 
-			for * player: scene.players {
-				if !player.server.dead {
-					q := player.server.position;
+update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 
-					d := max(abs((p - q).x), abs((p - q).y));
-					if d < it.radius_hitbox {
-						server_die(scene, player, result);
-						continue;
-					}
+	Should_Die :: struct {
+		hard_die: bool = false;
+		soft_die: bool = false;
+	}
+	should_die := NewArray(scene.players.count, Should_Die,, temp);
+
+	// >RULE Presents respawn.
+	for * scene.presents {
+		if !it.server.available {
+			can_countdown := false;
+			if it.server.depends_on_flag_id == -1 {
+				can_countdown = true;
+			} else {
+				flag := find_by_flag_id(scene, it.server.depends_on_flag_id);
+				if flag && flag.activated {
+					can_countdown = true;
+				}
+			}
+
+			if can_countdown {
+				it.server.time_since_taken += dt;
+				if it.server.time_since_taken >= it.server.refresh_cooldown {
+					it.server.available = true;
+					it.server.time_since_taken = 0.0;
+
+					array_add(*result.sync_present, make_sync(it));
 				}
 			}
 		}
+	}
 
-		// >RULE Trigger zone check
-		for * scene.trigger_zones {
-			tpos := it.pos;
+	// >RULE Player pickup present
+	for * scene.players {
+		if it.server.dead
+			continue;
+		
+		p := it.server.position;
 
-			for * player: scene.players {
-				if player.server.dead
+		for * present: scene.presents {
+			if !present.server.available
+				continue;
+
+			q := present.position;
+
+			d := norm(p - q);
+			if d < 0.5 {
+				if #complete present.kind == {
+					case .A;
+						it.server.has_safe_present = true;
+					case .B;
+						it.server.has_hook_present = true;
+				}
+				array_add(*result.sync_player, make_sync(it));
+
+				present.server.available = false;
+				present.server.time_since_taken = 0.0;
+				array_add(*result.sync_present, make_sync(present));
+				continue;
+			}
+		}
+	}
+
+	// >RULE Player die on contact with trap
+	for * scene.traps {
+		p := it.position;
+
+		for * player, player_idx: scene.players {
+			if !player.server.dead {
+				q := player.server.position;
+
+				d := max(abs((p - q).x), abs((p - q).y));
+				if d < it.radius_hitbox {
+					should_die[player_idx].soft_die = true;
 					continue;
-
-				if it.accept_player_id != -1 && it.accept_player_id != player.id
-					continue;
-
-				d := norm(tpos - player.server.position);
-
-				if d < it.radius {
-					if #complete it.trigger == {
-					case .Move_To_Play_World;
-						move: Command.Move_To_Play_World;
-						move.player_id = player.id;
-						move.model_id = it.model_id;
-						move.play_world_id = 0;
-						array_add(*result.move_to_player_world, move);
-					}
 				}
 			}
 		}
+	}
 
-		// >RULE Coin revive dead player on tombstone collision
-		for * scene.coins {
-			pos := it.server.position;
+	// >RULE Trigger zone check
+	for * scene.trigger_zones {
+		tpos := it.pos;
 
-			for * tombstone: scene.tombstones {
-				// You can't revive yourself
-				if it.sender != tombstone.player_id {
-					dt := norm(pos - tombstone.position);
+		for * player: scene.players {
+			if player.server.dead
+				continue;
 
-					if dt < it.server.radius_hitbox {
-						respawn: Command.Respawn;
-						respawn.player_id = tombstone.player_id;
-						respawn.coin_id = it.id;
+			if it.accept_player_id != -1 && it.accept_player_id != player.id
+				continue;
 
-						array_add(*result.respawn, respawn);
+			d := norm(tpos - player.server.position);
 
-						player_to_respawn := find_by_player_id(scene, tombstone.player_id);
-						if player_to_respawn {
-							spawn_into(player_to_respawn, scene);
-						}
+			if d < it.radius {
+				if #complete it.trigger == {
+				case .Move_To_Play_World;
+					move: Command.Move_To_Play_World;
+					move.player_id = player.id;
+					move.model_id = it.model_id;
+					move.play_world_id = 0;
+					array_add(*result.move_to_player_world, move);
+				}
+			}
+		}
+	}
 
+	// >RULE Player auto revive on scene with auto_revive OR if the scene has ended
+	if scene.auto_revive || scene.end_scene_countdown_started {
+		for * scene.players {
+			if it.server.dead {
+				respawn: Command.Respawn;
+				respawn.player_id = it.id;
+				array_add(*result.respawn, respawn);
+				spawn_into(it, scene);
+
+				for * scene.tombstones {
+					if it.player_id == respawn.player_id {
 						remove it;
-						remove tombstone;
-						continue it;
 					}
 				}
 			}
 		}
+	}
 
-		// >RULE Player die when not under any tile or under a dirt tile
-		for * scene.players {
-			if !it.server.dead {
-				tile, ok := tile_under(scene, it.server.position);
-				if !ok || tile.kind == .Dirt {
-					server_die(scene, it, result);
+	// >RULE Coin revive dead player on tombstone collision
+	for * scene.coins {
+		pos := it.server.position;
+
+		for * tombstone: scene.tombstones {
+			// You can't revive yourself
+			if it.sender != tombstone.player_id {
+				dt := norm(pos - tombstone.position);
+
+				if dt < (it.server.radius_hitbox + 0.25) {
+					respawn: Command.Respawn;
+					respawn.player_id = tombstone.player_id;
+					respawn.coin_id = it.id;
+					respawn.cause_player_id = it.sender;
+
+					array_add(*result.respawn, respawn);
+
+					player_to_respawn := find_by_player_id(scene, tombstone.player_id);
+					if player_to_respawn {
+						spawn_into(player_to_respawn, scene);
+					}
+
+					if result {
+						add_score: Frame_Result.Add_Score;
+						add_score.player_id = it.sender;
+						add_score.score.revive = 1;
+						array_add(*result.add_scores, add_score);
+					}
+
+					remove it;
+					remove tombstone;
+					continue it;
+				}
+			}
+		}
+	}
+
+	// >RULE Player die when not under any tile or under a dirt tile
+	for * player, player_idx: scene.players {
+		if !player.server.dead {
+			tile, ok := tile_under(scene, player.server.position);
+			if !ok || tile.kind == .Dirt {
+				should_die[player_idx].hard_die = true;
+				continue;
+			}
+		}
+	}
+
+	// >RULE Player revive dead player on tombstone collision
+	for * scene.players {
+		if !it.server.dead {
+			for tomb: scene.tombstones {
+				dt := norm(it.server.position - tomb.position);
+
+				if dt < it.server.radius_hitbox_tombstone {
+					respawn: Command.Respawn;
+					respawn.player_id = tomb.player_id;
+					respawn.cause_player_id = it.id;
+
+					array_add(*result.respawn, respawn);
+
+					player_to_respawn := find_by_player_id(scene, tomb.player_id);
+					if player_to_respawn {
+						spawn_into(player_to_respawn, scene);
+					}
+
+					if result {
+						add_score: Frame_Result.Add_Score;
+						add_score.player_id = it.id;
+						add_score.score.revive = 1;
+						array_add(*result.add_scores, add_score);
+					}
+
+					remove tomb;
 					continue;
 				}
 			}
 		}
+	}
 
-		// >RULE Player revivde dead player on tombstone collision
-		for * scene.players {
-			if !it.server.dead {
-				for tomb: scene.tombstones {
-					dt := norm(it.server.position - tomb.position);
+	// >RULE Player dies on contact with a skull
+	for * player, player_idx: scene.players {
+		if !player.server.dead {
+			for skull: scene.skulls {
+				skull_pos := compute_skull_pos(scene, skull);
 
-					if dt < it.server.radius_hitbox_tombstone {
-						respawn: Command.Respawn;
-						respawn.player_id = tomb.player_id;
-
-						array_add(*result.respawn, respawn);
-
-						player_to_respawn := find_by_player_id(scene, tomb.player_id);
-						if player_to_respawn {
-							spawn_into(player_to_respawn, scene);
-						}
-
-						remove tomb;
-						continue;
-					}
+				dt := norm(player.server.position - skull_pos);
+				if dt < player.server.radius_hurtbox_skull {
+					should_die[player_idx].soft_die = true;
+					continue;
 				}
 			}
 		}
+	}
 
-		// >RULE Player dies on contact with a skull
-		for * scene.players {
-			if !it.server.dead {
-				for skull: scene.skulls {
-					skull_pos := compute_skull_pos(scene, skull);
+	// >RULE Key open gate
+	for * scene.keys {
+		p := it.server.position;
 
-					dt := norm(it.server.position - skull_pos);
-					if dt < it.server.radius_hurtbox_skull {
-						server_die(scene, it, result);
-						continue;
-					}
-				}
-			}
-		}
+		for * gate: scene.gates {
+			if gate.is_closed && gate.wait_for_key_id == it.id {
+				q := gate.position;
 
-		// >RULE Key open gate
-		for * scene.keys {
-			p := it.server.position;
-
-			for * gate: scene.gates {
-				if gate.is_closed && gate.wait_for_key_id == it.id {
-					q := gate.position;
-
-					d := norm(p - q);
-					if d < 0.5 {
-						gate.is_closed = false;
-						gate.wait_for_key_id = -1;
-
-						it.holder = -1;
-						it.server.position = .{ 100000, 100000, 100000 };
-
-						sync: Command.Sync_Gate;
-						sync.gate_id = gate.id;
-						sync.is_closed = gate.is_closed;
-						array_add(*result.sync_gate, sync);
-					}
-				}
-			}
-		}
-
-		// >RULE Gate open on trigger
-		for *gate: scene.gates {
-			if gate.is_closed && gate.wait_for_trigger_id != -1 {
-				ok, triggered := table_find_new(*scene.trigger_activated, gate.wait_for_trigger_id);
-				if triggered {
+				d := norm(p - q);
+				if d < 0.5 {
 					gate.is_closed = false;
-					gate.wait_for_trigger_id = -1;
+					gate.wait_for_key_id = -1;
+
+					it.holder = -1;
+					it.server.position = .{ 100000, 100000, 100000 };
+
 					sync: Command.Sync_Gate;
 					sync.gate_id = gate.id;
 					sync.is_closed = gate.is_closed;
@@ -1312,119 +1716,193 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 				}
 			}
 		}
+	}
 
-		// >RULE Player die on contact with an explosion
-		for *expl: scene.explosions {
-			p := expl.position;
-			t := ease_out_quad(clamp(expl.age / expl.lifetime, 0.0, 1.0));
-			dt := t * expl.max_size / 2;
-
-			for * player: scene.players {
-				if !player.server.dead {
-					q := player.server.position;
-
-					d := norm(p - q);
-					if d < dt {
-						server_die(scene, player, result);
-						continue;
-					}
-				}
+	// >RULE Gate open on trigger
+	for *gate: scene.gates {
+		if gate.is_closed && gate.wait_for_trigger_id != -1 {
+			ok, triggered := table_find_new(*scene.trigger_activated, gate.wait_for_trigger_id);
+			if triggered {
+				gate.is_closed = false;
+				gate.wait_for_trigger_id = -1;
+				sync: Command.Sync_Gate;
+				sync.gate_id = gate.id;
+				sync.is_closed = gate.is_closed;
+				array_add(*result.sync_gate, sync);
 			}
 		}
+	}
 
-		// >RULE Player die on contact with a shuriken
-		for * scene.shurikens {
-			p := compute_shuriken_server_world_pos(scene, it);
+	// >RULE Player die on contact with an explosion
+	for *expl: scene.explosions {
+		p := expl.position;
+		t := ease_out_quad(clamp(expl.age / expl.lifetime, 0.0, 1.0));
+		dt := t * expl.max_size / 2;
 
-			for * player: scene.players {
-				if !player.server.dead {
-					q := player.server.position;
+		for * player, player_idx: scene.players {
+			if !player.server.dead {
+				q := player.server.position;
 
-					d := norm(p - q);
-					if d < (it.server.radius_hitbox + player.server.radius_hurtbox_shuriken) {
-						server_die(scene, player, result);
-						continue;
-					}
-				}
-			}
-		}
-
-		// >RULE First player to reach a trophy wins.
-		if !scene.end_scene_countdown_started for * scene.trophies {
-			p := v2(it.position);
-
-			for * player: scene.players {
-				if player.server.dead
-					continue;
-
-				q := v2(player.server.position);
 				d := norm(p - q);
-				if d < 0.25 {
-					winner: Command.End_Level;
-					winner.winner_id = player.id;
-					winner.next_level_scheduled_in_seconds = 6;
-					winner.next_scene_id = scene.next_id;
-					array_add(*result.end_level, winner);
-
-					win_level(scene, player.id);
-					break it;
+				if d < dt {
+					should_die[player_idx].soft_die = true;
+					continue;
 				}
 			}
 		}
+	}
 
-		// >RULE Robots shoots explosions
-		for * robot: scene.robots {
-			if robot.just_shooted {
-				explosion: Explosion;
-				M := robot_matrix_local_to_joint(robot, 6);
-				ray_origin := v3(M * V4f.{ 0, 0, 0, 1 });
-				ray_direction := normalize(v3(M * V4f.{ 0, 0, 1, 0 }));
+	// >RULE Player die on contact with a shuriken
+	for * scene.shurikens {
+		p := compute_shuriken_server_world_pos(scene, it);
 
-				target, hit := ray_plane(ray_origin, ray_direction, V3f.{ 0, 0, 1 });
-				if hit {
-					explosion.position = target;
-					explosion.lifetime = 0.75;
-					explosion.max_size = 1.5;
+		for * player, player_idx: scene.players {
+			if !player.server.dead {
+				q := player.server.position;
 
-					array_add(*scene.explosions, explosion);
-					
-					cmd: Command.Explode;
-					cmd.id = 0;
-					cmd.lifetime = explosion.lifetime;
-					cmd.max_size = explosion.max_size;
-					cmd.position = explosion.position;
-					array_add(*result.explode, cmd);
+				d := norm(p - q);
+				if d < (it.server.radius_hitbox + player.server.radius_hurtbox_shuriken) {
+					should_die[player_idx].soft_die = true;
+					continue;
 				}
 			}
-			robot.just_shooted = false;
 		}
+	}
 
-		for * antiair: scene.antiairs {
-			if antiair.server.just_shooted {
-				explosion: Explosion;
-				explosion.position = v3(antiair.server.curr_target, 0.0);
-				explosion.lifetime = 1.0;
-				explosion.max_size = antiair.server.radius;
+	// >RULE First player to reach a trophy wins.
+	if !scene.end_scene_countdown_started for * scene.trophies {
+		p := v2(it.position);
+
+		for * player: scene.players {
+			if player.server.dead
+				continue;
+
+			q := v2(player.server.position);
+			d := norm(p - q);
+			if d < 0.25 {
+				winner: Command.End_Level;
+				winner.winner_id = player.id;
+				winner.next_level_scheduled_in_seconds = 6;
+				winner.next_scene_id = scene.next_id;
+				array_add(*result.end_level, winner);
+
+				win_level(scene, player.id, result);
+				break it;
+			}
+		}
+	}
+
+	// >RULE Robots shoots explosions
+	for * robot: scene.robots {
+		if robot.just_shooted {
+			explosion: Explosion;
+			M := robot_matrix_local_to_joint(robot, 6);
+			ray_origin := v3(M * V4f.{ 0, 0, 0, 1 });
+			ray_direction := normalize(v3(M * V4f.{ 0, 0, 1, 0 }));
+
+			target, hit := ray_plane(ray_origin, ray_direction, V3f.{ 0, 0, 1 });
+			if hit {
+				explosion.position = target;
+				explosion.lifetime = 0.75;
+				explosion.max_size = 1.5;
 
 				array_add(*scene.explosions, explosion);
+				
+				cmd: Command.Explode;
+				cmd.id = 0;
+				cmd.lifetime = explosion.lifetime;
+				cmd.max_size = explosion.max_size;
+				cmd.position = explosion.position;
+				array_add(*result.explode, cmd);
+			}
+		}
+		robot.just_shooted = false;
+	}
 
-				{
-					cmd: Command.Explode;
-					cmd.id = 0;
-					cmd.lifetime = explosion.lifetime;
-					cmd.max_size = explosion.max_size;
-					cmd.position = explosion.position;
-					array_add(*result.explode, cmd);
-				}
+	for * antiair: scene.antiairs {
+		if antiair.server.just_shooted {
+			explosion: Explosion;
+			explosion.position = v3(antiair.server.curr_target, 0.0);
+			explosion.lifetime = 1.0;
+			explosion.max_size = antiair.server.radius;
 
-				{
-					cmd: Command.AntiAir_Shoot;
-					cmd.antiair_id = antiair.id;
-					cmd.next_target = antiair.server.next_target;
-					array_add(*result.antiair_shoot, cmd);
+			array_add(*scene.explosions, explosion);
+
+			{
+				cmd: Command.Explode;
+				cmd.id = 0;
+				cmd.lifetime = explosion.lifetime;
+				cmd.max_size = explosion.max_size;
+				cmd.position = explosion.position;
+				array_add(*result.explode, cmd);
+			}
+
+			{
+				cmd: Command.AntiAir_Shoot;
+				cmd.antiair_id = antiair.id;
+				cmd.next_target = antiair.server.next_target;
+				array_add(*result.antiair_shoot, cmd);
+			}
+		}
+		antiair.server.just_shooted = false;
+	}
+
+	// >RULE Apply deaths
+	// >RULE safe_zone prevents soft deaths
+	// >RULE hooked players are immune to death
+	for should_die {
+		is_hooked := false;
+		for *hook, hook_idx: scene.hooks {
+			if hook.hooked_id == scene.players[it_index].id {
+				is_hooked = true;
+				break;
+			}
+		}
+
+		if is_hooked {
+			print("Is hooked\n");
+			continue;
+		}
+
+		if it.hard_die {
+			server_die(scene, *scene.players[it_index], result);
+		} else if it.soft_die {
+			player := *scene.players[it_index];
+			in_safe_zone := false;
+			for * safe_zone: scene.safe_zones {
+				d := norm(player.server.position - safe_zone.position);
+				if d < safe_zone.radius {
+					in_safe_zone = true;
+					safe_zone.expire -= 1;
+					break;
 				}
 			}
-			antiair.server.just_shooted = false;
+			if !in_safe_zone {
+				server_die(scene, player, result);
+			}
+		}
+	}
+
+	// >RULE Safe zone with 0 expire will start expiration
+	for * scene.safe_zones {
+		if !it.server.expire_started && it.expire <= 0 {
+			it.server.expire_started = true;
+			it.server.expire_start = current_time_monotonic();
+			it.server.expire_duration = 1.0;
+		}
+	}
+
+	// >RULE remove expired safe zone
+	for * scene.safe_zones {
+		if it.server.expire_started {
+			dt := to_float64_seconds(
+				current_time_monotonic() - it.server.expire_start
+			);
+			if dt < it.server.expire_duration
+				continue;
+
+			array_add(*result.sync_safe_zone, make_sync(it));
+			remove it;
 		}
 	}
 }
@@ -1466,10 +1944,29 @@ activate_trigger :: (scene: *Scene, trigger_id: int) {
 	table_set(*scene.trigger_activated, trigger_id, true);
 }
 
-win_level :: (scene: *Scene, player_id: int) {
+win_level :: (scene: *Scene, player_id: int, result: *Frame_Result) {
 	scene.end_scene_countdown_started = true;
 	scene.end_scene_countdown_time = current_time_monotonic();
 	scene.end_scene_countdown = 6;
+
+	for * scene.players {
+		if it.server.dead {
+			spawn_into(it, scene);
+
+			for tomb: scene.tombstones {
+				if tomb.player_id == it.id {
+					remove tomb;
+				}
+			}
+		}
+	}
+
+	if result {
+		add_score: Frame_Result.Add_Score;
+		add_score.player_id = player_id;
+		add_score.score.trophy = 1;
+		array_add(*result.add_scores, add_score);
+	}
 }
 
 server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
@@ -1498,9 +1995,16 @@ server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 		}
 	}
 
-	if !any_alive {
-		array_add(*result.wipe_scene, .{});
-		restart(scene);
+	if result {
+		if !any_alive {
+			array_add(*result.wipe_scene, .{});
+			restart(scene);
+		}
+
+		add_score: Frame_Result.Add_Score;
+		add_score.player_id = player.id;
+		add_score.score.dead = 1;
+		array_add(*result.add_scores, add_score);
 	}
 }
 
@@ -1605,6 +2109,10 @@ update :: (scene: Scene, robot: *Robot, dt: float32) {
 	}
 
 	target := player.server.position;
+	target += player.server.direction * player.server.speed * robot.predict;
+
+	og_target := target;
+
 	target.z = 2.0;
 
 	target.x = clamp(target.x, robot.position.x - 2.0, robot.position.x + 2.0);
@@ -1619,7 +2127,7 @@ update :: (scene: Scene, robot: *Robot, dt: float32) {
 			Oi := robot_pivot(robot, it);
 			ti := normalize(T - Oi);
 			if it > 3 {
-				ti = normalize(player.server.position - Oi);
+				ti = normalize(og_target - Oi);
 			}
 			ei := normalize(E - Oi);
 
@@ -1669,6 +2177,11 @@ update :: (scene: Scene, flag: *Flag, dt: float32) {
 		if (count * 1.5).(s64) >= scene.players.count && scene.players.count > 0 {
 			flag.activated = true;
 			flag.activated_juice_t = 1.0;
+			
+			sound: Sound_Trigger;
+			sound.position = flag.position;
+			sound.kind = .Checkpoint_Ok;
+			array_add(*scene.sound_triggers, sound);
 		}
 
 		if flag.last_player_count != count {
@@ -1810,6 +2323,13 @@ update :: (scene: Scene, player: *Player, dt: float32) {
 	if player.server.dead
 		return;
 
+	// If we are hooked, there is no movement update to do.
+	for scene.hooks {
+		if it.hooked_id == player.id {
+			return;
+		}
+	}
+
 	tile, ok := tile_under(scene, player.server.position);
 	if !ok {
 		return;
@@ -1826,7 +2346,8 @@ update :: (scene: Scene, player: *Player, dt: float32) {
 	// If we aren't then we switch to the tile we are currently on.
 	if !is_still_on {
 		if #complete tile.kind == {
-			case .Ice;
+			case .Ice; #through;
+			case .Funny_Ice;
 				player.server.slipping = true;
 				player.server.walking_toward = false;
 			case .Slippy_Ice;
@@ -1910,9 +2431,11 @@ process_server_only :: (scene: *Scene, command: Command, response: *Process_Resp
 
 	klaxon: *Command.Klaxon = isa(command.payload, Command.Klaxon);
 	if klaxon {
-		print("Klaxon %\n", klaxon.*);
-		add(response, scene.id, klaxon.*);
-		return true;
+		player := find_by_player_id(scene, klaxon.player_id);
+		if player {
+			add(response, scene.id, klaxon.*);
+			return true;
+		}
 	}
 
 	spawn_coin: *Command.Spawn_Coin = isa(command.payload, Command.Spawn_Coin);
@@ -1940,10 +2463,61 @@ process_server_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		}
 	}
 
+	active_item: *Command.Active_Item = isa(command.payload, Command.Active_Item);
+	if active_item {
+		player := find_by_player_id(scene, active_item.player_id);
+		if player {
+			if active_item.safe_zone {
+				if !player.server.dead && player.server.has_safe_present {
+					sz: Safe_Zone;
+					sz.id = scene.generation;
+					scene.generation += 1;
+					tile := position_to_tile(scene, player.server.position);
+					sz.position = tile_center(scene, tile);
+					sz.radius = sqrt(2) / 2;
+					sz.expire = 1;
+					array_add(*scene.safe_zones, sz);
+
+					player.server.has_safe_present = false;
+					add(response, scene.id, make_sync(player));
+					add(response, scene.id, make_sync(*sz));
+				}
+				return true;
+			}
+			if active_item.hook {
+				if !player.server.dead && player.server.has_hook_present {
+					hook: Hook;
+					hook.id = scene.generation;
+					scene.generation += 1;
+					hook.hooker_id = player.id;
+					hook.hooked_id = -1;
+					hook.server.direction = player.server.direction;
+					hook.server.last_anchor_position = player.server.position;
+					hook.server.length = 0.0;
+					array_add(*scene.hooks, hook);
+
+					player.server.has_hook_present = false;
+					add(response, scene.id, make_sync(player));
+					add(response, scene.id, make_sync(*hook));
+				}
+			}
+		}
+	}
+
 	return false;
 }
 
 process_client_only :: (scene: *Scene, command: Command, response: *Process_Response) -> bool {
+	sync_score: *Command.Sync_Score = isa(command.payload, Command.Sync_Score);
+	if sync_score {
+		for * scene.players {
+			if it.id == sync_score.player_id {
+				it.server.score = sync_score.score;
+			}
+		}
+		return true;
+	}
+	
 	wipe_scene: *Command.Wipe_Scene = isa(command.payload, Command.Wipe_Scene);
 	if wipe_scene {
 		scene.fade_screen.start = current_time_monotonic();
@@ -1959,6 +2533,11 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		coin.server.direction = spawn_coin.direction;
 		coin.client.position = spawn_coin.position;
 		array_add(*scene.coins, coin);
+
+		trigger: Sound_Trigger;
+		trigger.kind = .Coin_Launch;
+		trigger.position = spawn_coin.position;
+		array_add(*scene.sound_triggers, trigger);
 		return true;
 	}
 	died: *Command.Die = isa(command.payload, Command.Die);
@@ -1971,7 +2550,80 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 			tombstone.player_id = died.player_id;
 			tombstone.position = died.position;
 
+			if player.id == scene.controlled_player_id {
+				trigger: Sound_Trigger;
+				trigger.kind = .Loser;
+				trigger.position = died.position;
+				array_add(*scene.sound_triggers, trigger);
+			}
+
 			array_add(*scene.tombstones, tombstone);
+			return true;
+		}
+	}
+
+	sync_tombstone: *Command.Sync_Tombstone = isa(command.payload, Command.Sync_Tombstone);
+	if sync_tombstone {
+		tombstone := find_tombstone_by_player_id(scene, sync_tombstone.player_id);
+		if tombstone {
+			tombstone.position = sync_tombstone.position;
+			return true;
+		}
+		else {
+			tombstone: Tombstone;
+			tombstone.player_id = sync_tombstone.player_id;
+			tombstone.position = sync_tombstone.position;
+			array_add(*scene.tombstones, tombstone);
+			return true;
+		}
+	}
+
+	sync_hook: *Command.Sync_Hook = isa(command.payload, Command.Sync_Hook);
+	if sync_hook {
+		hook := find_by_hook_id(scene, sync_hook.hook_id);
+		if hook {
+			hook.server.last_anchor_position = sync_hook.last_anchor_position;
+			hook.server.direction = sync_hook.direction;
+			hook.hooker_id = sync_hook.hooker_id;
+			hook.hooked_id = sync_hook.hooked_id;
+			hook.server.length = sync_hook.length;
+		} else {
+			hook: Hook;
+			hook.id = sync_hook.hook_id;
+			hook.hooker_id = sync_hook.hooker_id;
+			hook.hooked_id = sync_hook.hooked_id;
+			hook.server.last_anchor_position = sync_hook.last_anchor_position;
+			hook.server.direction = sync_hook.direction;
+			hook.server.length = sync_hook.length;
+			array_add(*scene.hooks, hook);
+		}
+		return true;
+	}
+
+	sync_safe_zone: *Command.Sync_Safe_Zone = isa(command.payload, Command.Sync_Safe_Zone);
+	if sync_safe_zone {
+		sz := find_by_safe_zone_id(scene, sync_safe_zone.id);
+		if sz {
+			sz.position = sync_safe_zone.position;
+			sz.radius = sync_safe_zone.radius;
+			sz.expire = sync_safe_zone.expire;
+			if sz.expire {
+				for * scene.safe_zones {
+					if it == sz {
+						remove it;
+						break;
+					}
+				}
+			}
+			return true;
+		}
+		else {
+			sz: Safe_Zone;
+			sz.id = sync_safe_zone.id;
+			sz.position = sync_safe_zone.position;
+			sz.radius = sync_safe_zone.radius;
+			sz.expire = sync_safe_zone.expire;
+			array_add(*scene.safe_zones, sz);
 			return true;
 		}
 	}
@@ -2008,6 +2660,26 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 			antiair.server.target = sync_antiair.target;
 			antiair.server.target_size = sync_antiair.target_size;
 			antiair.server.next_target = sync_antiair.next_target;
+			return true;
+		}
+	}
+
+	sync_present: *Command.Sync_Present = isa(command.payload, Command.Sync_Present);
+	if sync_present {
+		present := find_by_present_id(scene, sync_present.present_id);
+		if present {
+			present.position = sync_present.position;
+			present.kind = xx sync_present.kind;
+			present.server.available = sync_present.available;
+			return true;
+		}
+		else {
+			new_present: Present;
+			new_present.id = sync_present.present_id;
+			new_present.position = sync_present.position;
+			new_present.kind = xx sync_present.kind;
+			new_present.server.available = sync_present.available;
+			array_add(*scene.presents, new_present);
 			return true;
 		}
 	}
@@ -2113,23 +2785,35 @@ process :: (scene: *Scene, command: Command, response: *Process_Response) -> boo
 	respawn: *Command.Respawn = isa(command.payload, Command.Respawn);
 	if respawn {
 
+		pos := V3f.{ 0, 0, 0 };
 		for * scene.tombstones {
 			if it.player_id == respawn.player_id {
-
+				pos = it.position;
 				player := find_by_player_id(scene, it.player_id);
 				if player {
 					spawn_into(player, scene);
 				}
 				remove it;
+				break;
 			}
 		}
 
 		coin := find_by_coin_id(scene, respawn.coin_id);
 		if coin {
 			for * scene.coins {
-				if it.id == coin.id
+				if it.id == coin.id {
 					remove it;
+					break;
+				}
 			}
+		}
+
+		if respawn.cause_player_id >= 0 && !scene.is_server {
+			trigger: Sound_Trigger;
+			trigger.kind = .Res;
+			trigger.position = pos;
+			trigger.inhead = scene.controlled_player_id == respawn.cause_player_id;
+			array_add(*scene.sound_triggers, trigger);
 		}
 	}
 
@@ -2191,6 +2875,12 @@ process :: (scene: Scene, player: *Player, command: Command, response: *Process_
 				player.server.walking_toward_position = v3(move.ground_target);
 			case .None;
 			case .Dirt;
+			case .Funny_Ice;
+				player.server.target_direction = normalize(
+					v3(v2(player.server.position) - move.ground_target)
+				);
+				player.server.walking_toward = false;
+
 		}
 
 		if scene.is_server && response {
@@ -2209,6 +2899,8 @@ process :: (scene: Scene, player: *Player, command: Command, response: *Process_
 			it.server.direction = sync.direction;
 			it.server.position = sync.position;
 			it.server.dead = sync.dead;
+			it.server.has_safe_present = sync.has_safe_present;
+			it.server.has_hook_present = sync.has_hook_present;
 			if sync.model_id >= 0
 				it.server.model_id = sync.model_id;
 		}
@@ -2225,6 +2917,7 @@ Tile :: struct {
 		Grass      :: 2;
 		Slippy_Ice :: 3;
 		Dirt       :: 4;
+		Funny_Ice  :: 5;
 	}
 
 	kind: Kind;
@@ -2466,6 +3159,8 @@ spawn_into :: (player: *Player, scene: Scene) {
 	player.server.walking_toward = false;
 	player.server.slipping = false;
 	player.server.dead = false;
+	player.server.has_safe_present = false;
+	player.server.has_hook_present = false;
 }
 
 terrain_size :: (scene: Scene) -> V2f {

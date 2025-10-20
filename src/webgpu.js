@@ -565,6 +565,9 @@ const getF64 = (ptr, offset) => {
 const getF32 = (ptr, offset) => {
 	return data_view.getFloat32(Number(ptr) + Number(offset), true);
 }
+const setF32 = (ptr, offset, value) => {
+	data_view.setFloat32(Number(ptr) + Number(offset), Number(value), true);
+}
 
 const setU8 = (ptr, offset, value) => {
 	data_view.setUint8(Number(ptr) + Number(offset), Number(value));

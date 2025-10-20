@@ -17,7 +17,8 @@ struct InstanceData {
 	useAlbedoMap: u32,
 	useNormalMap: u32,
 	useShadowMap: u32,
-	padding: u32,
+	flags: u32,
+	uv_offset: vec2f,
 	color: vec4f,
 };
 

@@ -63,6 +63,7 @@ Command :: struct {
 		spawn_position: V3f;
 		spawn_direction: V3f;
 		coin_id := -1;
+		cause_player_id := -1;
 	}
 	Die :: struct {
 		player_id: int;
@@ -80,6 +81,18 @@ Command :: struct {
 		position: V3f;
 		direction: V3f;
 		dead: bool;
+		has_safe_present: bool;
+		has_hook_present: bool;
+	}
+	Give_Control :: struct {
+		player_id: int;
+	}
+	Sync_Score :: struct {
+		player_id: int;
+		score: Score;
+	}
+	Request_Score :: struct {
+		player_ids: [8] int;
 	}
 	Sync_Skull :: struct {
 		skull_id: int;
@@ -91,6 +104,14 @@ Command :: struct {
 		key_id: int;
 		position: V3f;
 		holder: int;
+	}
+	Sync_Hook :: struct {
+		hook_id: int;
+		last_anchor_position: V3f;
+		direction: V3f;
+		hooker_id: int;
+		hooked_id: int;
+		length: float;
 	}
 	Sync_Gate :: struct {
 		gate_id: int;
@@ -147,6 +168,19 @@ Command :: struct {
 		moving_frames: [] Sync_Moving_Frame;
 		robots: [] Sync_Robot;
 		antiairs: [] Sync_AntiAir;
+		tombstones: [] Sync_Tombstone;
+		presents: [] Sync_Present;
+		safe_zones: [] Sync_Safe_Zone;
+	}
+	Sync_Tombstone :: struct {
+		player_id: int;
+		position: V3f;
+	}
+	Sync_Present :: struct {
+		present_id: int;
+		position: V3f;
+		kind: int;
+		available: bool;
 	}
 	Explode :: struct {
 		id: int;
@@ -156,11 +190,32 @@ Command :: struct {
 	}
 	Wipe_Scene :: struct {
 	}
+	Retire :: struct {
+		standin_id: int;
+		trigger_id: int;
+	}
+	Sync_Safe_Zone :: struct {
+		id: int;
+		position: V3f;
+		radius: float;
+		expire: int;
+	}
+	Active_Item :: struct {
+		player_id: int;
+		safe_zone: bool;
+		hook: bool;
+	}
+	Hooked_Player :: struct {
+		hooker_id: int;
+		hooked_id: int;
+	}
 
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
-		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot, Klaxon
+		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot, Klaxon,
+		Give_Control, Sync_Score, Request_Score, Sync_Tombstone, Retire, Sync_Present,
+		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook
 	);
 	sent_timestamp: float64;
 }
@@ -215,17 +270,27 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Respawn; #through;
 		case .Die; #through;
 		case .Quit; #through;
+		case .Give_Control; #through;
+		case .Request_Score; #through;
+		case .Retire; #through;
+		case .Sync_Tombstone; #through;
 		case .New_Terrain; #through;
 		case .Sync_Player; #through;
+		case .Sync_Safe_Zone; #through;
 		case .Sync_Skull; #through;
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
 		case .AntiAir_Shoot; #through;
 		case .Sync_Robot; #through;
+		case .Sync_Present; #through;
+		case .Sync_Hook; #through;
+		case .Active_Item; #through;
 		case .Sync_AntiAir; #through;
 		case .Klaxon; #through;
 		case .Sync_Moving_Frame; #through;
 		case .NTP; #through;
+		case .Hooked_Player; #through;
+		case .Sync_Score; #through;
 		case .Explode; #through;
 		case .Move_To_Play_World;
 			// Nothing
@@ -247,6 +312,12 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 				size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count;
 			additional_data_size +=
 				size_of(type_of(sync_scene.antiairs.data.*)) * sync_scene.antiairs.count;
+			additional_data_size +=
+				size_of(type_of(sync_scene.tombstones.data.*)) * sync_scene.tombstones.count;
+			additional_data_size +=
+				size_of(type_of(sync_scene.presents.data.*)) * sync_scene.presents.count;
+			additional_data_size +=
+				size_of(type_of(sync_scene.safe_zones.data.*)) * sync_scene.safe_zones.count;
 
 			array_reserve(buffer, dry_size + additional_data_size);
 
@@ -288,6 +359,24 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 				size_of(type_of(sync_scene.antiairs.data.*)) * sync_scene.antiairs.count
 			);
 			cursor += size_of(type_of(sync_scene.antiairs.data.*)) * sync_scene.antiairs.count;
+			memcpy(
+				buffer.data + cursor,
+				sync_scene.tombstones.data,
+				size_of(type_of(sync_scene.tombstones.data.*)) * sync_scene.tombstones.count
+			);
+			cursor += size_of(type_of(sync_scene.tombstones.data.*)) * sync_scene.tombstones.count;
+			memcpy(
+				buffer.data + cursor,
+				sync_scene.presents.data,
+				size_of(type_of(sync_scene.presents.data.*)) * sync_scene.presents.count
+			);
+			cursor += size_of(type_of(sync_scene.presents.data.*)) * sync_scene.presents.count;
+			memcpy(
+				buffer.data + cursor,
+				sync_scene.safe_zones.data,
+				size_of(type_of(sync_scene.safe_zones.data.*)) * sync_scene.safe_zones.count
+			);
+			cursor += size_of(type_of(sync_scene.safe_zones.data.*)) * sync_scene.safe_zones.count;
 			buffer.count = cursor;
 	}
 }
@@ -304,15 +393,20 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 	cursor := 8 + size_of(type_of(cmd));
 
 	if #complete cmd.payload.kind == {
+		case .Active_Item; #through;
 		case .Wipe_Scene; #through;
 		case .Move; #through;
 		case .End_Level; #through;
+		case .Sync_Score; #through;
 		case .Spawn; #through;
 		case .Connect; #through;
 		case .Spawn_Coin; #through;
 		case .Despawn_Coin; #through;
 		case .Respawn; #through;
+		case .Request_Score; #through;
 		case .Die; #through;
+		case .Give_Control; #through;
+		case .Hooked_Player; #through;
 		case .Quit; #through;
 		case .Klaxon; #through;
 		case .New_Terrain; #through;
@@ -320,12 +414,17 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Sync_Skull; #through;
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
+		case .Sync_Hook; #through;
+		case .Sync_Tombstone; #through;
+		case .Retire; #through;
 		case .AntiAir_Shoot; #through;
 		case .Sync_Robot; #through;
 		case .Sync_Moving_Frame; #through;
 		case .Sync_AntiAir; #through;
 		case .NTP; #through;
+		case .Sync_Present; #through;
 		case .Explode; #through;
+		case .Sync_Safe_Zone; #through;
 		case .Move_To_Play_World;
 			return cmd, true;
 		case .Sync_Scene;
@@ -348,6 +447,12 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 			cursor += size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count;
 			sync_scene.antiairs.data = (buffer.data + cursor).(*Command.Sync_AntiAir);
 			cursor += size_of(type_of(sync_scene.antiairs.data.*)) * sync_scene.antiairs.count;
+			sync_scene.tombstones.data = (buffer.data + cursor).(*Command.Sync_Tombstone);
+			cursor += size_of(type_of(sync_scene.tombstones.data.*)) * sync_scene.tombstones.count;
+			sync_scene.presents.data = (buffer.data + cursor).(*Command.Sync_Present);
+			cursor += size_of(type_of(sync_scene.presents.data.*)) * sync_scene.presents.count;
+			sync_scene.safe_zones.data = (buffer.data + cursor).(*Command.Sync_Safe_Zone);
+			cursor += size_of(type_of(sync_scene.safe_zones.data.*)) * sync_scene.safe_zones.count;
 
 			return cmd, true;
 	}

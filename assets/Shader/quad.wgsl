@@ -6,7 +6,7 @@ struct InstanceData {
 	texture_rect: vec4f, // x, y, width, height
 	color: vec4f,
 	z30sdf2: u32,
-	padding0: u32,
+	rotation: f32,
 	padding1: u32,
 	padding2: u32,
 };

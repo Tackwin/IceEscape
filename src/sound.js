@@ -44,7 +44,8 @@ jai_imports.js_play_audio = (params_ptr) => {
 	let loop = getU32(params_ptr, 28) != 0;
 	const kind = getS32(params_ptr, 32);
 	const fade_in = getS32(params_ptr, 36);
-	const sound_id_ptr = getU64(params_ptr, 40);
+	const exponent = getF32(params_ptr, 40);
+	const sound_id_ptr = getU64(params_ptr, 48);
 
 	const buffer = audio_id_to_buffer[id];
 	if (!buffer) {
@@ -60,7 +61,7 @@ jai_imports.js_play_audio = (params_ptr) => {
 	
 	const gainNode = audio_context.createGain();
 	gainNode.gain.setValueAtTime(0, audio_context.currentTime);
-	gainNode.gain.linearRampToValueAtTime(volume, audio_context.currentTime + fade_in / 1000);
+	gainNode.gain.linearRampToValueAtTime(0.2 * volume, audio_context.currentTime + fade_in / 1000);
 	
 	let panner = null;
 	if (kind == 0) {
@@ -69,7 +70,7 @@ jai_imports.js_play_audio = (params_ptr) => {
 		panner.distanceModel = 'exponential';
 		panner.refDistance = 1.0;
 		panner.maxDistance = 1000;
-		panner.rolloffFactor = 3.0;
+		panner.rolloffFactor = exponent;
 		panner.setPosition(x, y, z);
 		
 		source.connect(gainNode);

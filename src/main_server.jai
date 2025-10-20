@@ -1,10 +1,11 @@
+#import "Basic"()(MEMORY_DEBUGGER=false);
 Terrain :: #import "Terrain";
 #import "http";
 #import "String";
-#import "Basic";
 #import "Math";
 #import "Communication";
 Scene :: #import "Scene";
+Instance :: #import "Instance";
 #import "Thread";
 #import "Hash_Table";
 #import "Utils";
@@ -64,6 +65,7 @@ send_prepared :: (ws: *Websocket, prepared_payload: [] u8) {
 User :: struct {
 	token := -1;
 
+	person_id: int;
 	player_id: int;
 	scene_id: int;
 	websocket: *Websocket;
@@ -74,6 +76,7 @@ User :: struct {
 State :: struct {
 	server: *Websocket_Server = null;
 	last_sync_sent_time: Apollo_Time;
+	instance: Instance.Instance;
 
 	users: [..] User;
 
@@ -118,8 +121,6 @@ State :: struct {
 	second_world_id: int;
 	third_world_id: int;
 	forth_world_id: int;
-
-	playing_scene_id: int;
 }
 state: State;
 
@@ -323,7 +324,14 @@ tick :: (state: *State) {
 				}
 			}
 		} else {
-			scene_scoped_broadcast(it.scene_id, it.command);
+			if it.scene_id >= 0
+				scene_scoped_broadcast(it.scene_id, it.command);
+			else {
+				user := find_user_by_player_id(it.player_id);
+				if user {
+					send(user.websocket, it.command);
+				}
+			}
 		}
 	}
 
@@ -336,7 +344,7 @@ tick :: (state: *State) {
 		}
 
 		for frame_result.move_to_player_world {
-			move_player_to_scene(it.player_id, state.playing_scene_id, it.model_id);
+			move_player_to_scene(it.player_id, state.instance.playing_scene_id, it.model_id);
 		}
 
 		for frame_result.died {
@@ -357,6 +365,15 @@ tick :: (state: *State) {
 		for frame_result.antiair_shoot {
 			scene_scoped_broadcast(scene.id, make_command(it));
 		}
+		for frame_result.sync_present {
+			scene_scoped_broadcast(scene.id, make_command(it));
+		}
+		for frame_result.sync_player {
+			scene_scoped_broadcast(scene.id, make_command(it));
+		}
+		for frame_result.sync_safe_zone {
+			scene_scoped_broadcast(scene.id, make_command(it));
+		}
 
 		if scene.end_scene_countdown_started {
 			t := current_time_monotonic();
@@ -366,8 +383,27 @@ tick :: (state: *State) {
 				move_playing_scene(scene.next_id);
 			}
 		}
-	}
 
+		for frame_result.add_scores {
+			user := find_user_by_player_id(it.player_id);
+			if user {
+
+				person := Instance.find_person_by_id(state.instance, user.person_id);
+				if person {
+					person.score.dead += it.score.dead;
+					person.score.score += it.score.score;
+					person.score.revive += it.score.revive;
+					person.score.trophy += it.score.trophy;
+
+					sync_score: Command.Sync_Score;
+					sync_score.player_id = user.player_id;
+					sync_score.score = person.score;
+					scene_scoped_broadcast(scene.id, make_command(sync_score));
+				}
+
+			}
+		}
+	}
 
 	for * state.users {
 		if to_float64_seconds(current_time_monotonic() - it.last_ping) > TIMEOUT_DURATION {
@@ -387,10 +423,41 @@ process_complete_ntp :: (state: *State, ntp: Command.NTP) {
 	state.ntp_history_cursor %= state.ntp_history.count;
 }
 
+find_user_by_socket :: (ws: *Websocket) -> *User {
+	for * user: state.users {
+		if user.websocket == ws
+			return user;
+	}
+	return null;
+}
 
 process :: (
 	state: *State, command: Command, socket: *Websocket, response: *Scene.Process_Response
 ) -> bool {
+	request_score: *Command.Request_Score = isa(command.payload, Command.Request_Score);
+	if request_score {
+		sender := find_user_by_socket(socket);
+		if sender {
+			for request_score.player_ids {
+				if it < 0
+					continue;
+				
+				user := find_user_by_player_id(it);
+				if user {
+					person := Instance.find_person_by_id(state.instance, user.person_id);
+					if person {
+						sync_score: Command.Sync_Score;
+						sync_score.player_id = user.player_id;
+						sync_score.score = person.score;
+						Scene.add_single_reply(response, sender.player_id, sync_score);
+					}
+				}
+			}
+		}
+
+		return true;
+	}
+
 	ntp: *Command.NTP = isa(command.payload, Command.NTP);
 	if ntp {
 		is_over := false;
@@ -458,12 +525,18 @@ process :: (
 
 			new_user: User;
 			new_user.token = connect.token;
+			new_user.person_id = state.instance.persons.count;
 			new_user.player_id = state.player_generation;
 			new_user.scene_id = state.pick_scene_id;
 			new_user.last_ping = current_time_monotonic();
 			new_user.websocket = socket;
 			array_add(*state.users, new_user);
 			user = *state.users[state.users.count - 1];
+
+			person: Instance.Person;
+			person.person_id = new_user.person_id;
+			person.score = .{};
+			array_add(*state.instance.persons, person);
 
 			for state.users {
 				// Notify the existing player of a new player
@@ -531,23 +604,39 @@ set_scene :: (scene: *Scene.Scene, text: string) -> int {
 }
 
 move_playing_scene :: (scene_id: int) {
-	old_scene := find_by_scene_id(state.playing_scene_id);
+	old_scene := find_by_scene_id(state.instance.playing_scene_id);
 
 	scene := find_by_scene_id(scene_id);
 	if !scene
 		return;
 
 	Scene.restart(scene);
+
+	for old_scene.players {
+		spawn: Command.Spawn;
+		spawn.player_id = it.id;
+		spawn.scene_id = scene_id;
+		spawn.model_id = it.server.model_id;
+		Scene.process(scene, make_command(spawn), null);
+	}
+
 	sync_scene := Scene.make_sync(scene);
-	for state.users {
-		if it.scene_id == state.playing_scene_id {
+	for * state.users {
+		if it.scene_id == state.instance.playing_scene_id {
 			send(it.websocket, make_command(sync_scene));
+			control: Command.Give_Control;
+			control.player_id = it.player_id;
+			send(it.websocket, make_command(control));
+			it.scene_id = scene_id;
 		}
 	}
-	state.playing_scene_id = scene_id;
-	for old_scene.players {
-		move_player_to_scene(it.id, scene_id, it.server.model_id);
-	}
+	state.instance.playing_scene_id = scene_id;
+
+	old_scene.players.count = 0;
+
+	// for old_scene.players {
+	// 	move_player_to_scene(it.id, scene_id, it.server.model_id);
+	// }
 }
 
 move_player_to_scene :: (player_id: int, scene_id: int, model_id: int) {
@@ -628,65 +717,34 @@ main :: () {
 	state.sync_period.last = current_time_monotonic();
 	state.tick_period.last = current_time_monotonic();
 
-	{
-		plain_terrain_txt := sprint("%/../assets/terrain/pick.terrain", #filepath);
-		data, ok := read_entire_file(plain_terrain_txt);
-		state.pick_scene_id = add_scene(data);
-
-		table_add(*name_to_scene_id, "pick.terrain", state.pick_scene_id);
-	}
-	{
-		plain_terrain_txt := sprint("%/../assets/terrain/intro.terrain", #filepath);
-		data, ok := read_entire_file(plain_terrain_txt);
+	terrains :: string.[
+		"pick",
+		"buzz",
+		"funny",
+		"robots",
+		"pounding",
+		"roundabout",
+		"movement",
+		"crisscross",
+		"intro",
+		"here_and_there",
+	];
+	
+	for terrains {
+		txt := sprint("%/../assets/terrain/%.terrain", #filepath, it);
+		data, ok := read_entire_file(txt);
 		id := add_scene(data);
 
-		table_add(*name_to_scene_id, "intro.terrain", id);
+		table_add(*name_to_scene_id, it, id);
 	}
-	{
-		plain_terrain_txt := sprint("%/../assets/terrain/pounding.terrain", #filepath);
-		data, ok := read_entire_file(plain_terrain_txt);
-		id := add_scene(data);
-
-		table_add(*name_to_scene_id, "pounding.terrain", id);
-	}
-	{
-		plain_terrain_txt := sprint("%/../assets/terrain/movement.terrain", #filepath);
-		data, ok := read_entire_file(plain_terrain_txt);
-		id := add_scene(data);
-
-		table_add(*name_to_scene_id, "movement.terrain", id);
-	}
-	{
-		plain_terrain_txt := sprint("%/../assets/terrain/here_and_there.terrain", #filepath);
-		data, ok := read_entire_file(plain_terrain_txt);
-		state.second_world_id = add_scene(data);
-
-		table_add(*name_to_scene_id, "here_and_there.terrain", state.second_world_id);
-	}
-	{
-		plain_terrain_txt := sprint("%/../assets/terrain/crisscross.terrain", #filepath);
-		data, ok := read_entire_file(plain_terrain_txt);
-		state.forth_world_id = add_scene(data);
-		table_add(*name_to_scene_id, "crisscross.terrain", state.forth_world_id);
-	}
-	{
-		plain_terrain_txt := sprint("%/../assets/terrain/gain_time.terrain", #filepath);
-		data, ok := read_entire_file(plain_terrain_txt);
-		state.third_world_id = add_scene(data);
-		table_add(*name_to_scene_id, "gain_time.terrain", state.third_world_id);
-	}
-	{
-		plain_terrain_txt := sprint("%/../assets/terrain/roundabout.terrain", #filepath);
-		data, ok := read_entire_file(plain_terrain_txt);
-		state.first_world_id = add_scene(data);
-
-		table_add(*name_to_scene_id, "roundabout.terrain", state.first_world_id);
-	}
-	for 0..state.scenes.count-2 {
-		state.scenes[it].next_id = state.scenes[it+1].id;
+	if state.scenes.count > 0 {
+		state.pick_scene_id = state.scenes[0].id;
+		for 0..state.scenes.count-2 {
+			state.scenes[it].next_id = state.scenes[it+1].id;
+		}
+		state.instance.playing_scene_id = state.scenes[0].next_id;
 	}
 
-	state.playing_scene_id = state.scenes[0].next_id;
 
 	http_listen(port=5623);
 
@@ -736,7 +794,7 @@ main :: () {
 			change := frame_file_change[it];
 
 			for id, name: name_to_scene_id {
-				if ends_with(change, name) {
+				if ends_with(change, tprint("%.terrain", name)) {
 
 					data, ok := read_entire_file(change);
 					scene := find_by_scene_id(id);

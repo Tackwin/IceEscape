@@ -7,8 +7,15 @@
 + Add models
 - Add lever
 - Add status bar for people
-- Add particles
++ Add particles
 - Add emotes
 - Add debris animation
-- Add spikes box
-- Fix the sound
++ Add spikes box
++ Fix the sound
++ Scoreboard
++ Add Loser
++ Add death indicator
++ Sync correctly tombstones
++ Stagger explosions
++ Added funny ice
++ Added sail boat

@@ -1,0 +1,366 @@
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXGGGXXGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIIGGGIIGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXGGGXXGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXIIIXXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXIIIXXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXIIIXXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXXGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXGGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXGGGXXXXIIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXXIXXXXXIIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXIIIXXXXIIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXIIIXXXXIIIXXXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXIIIXXXXIIIXXXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXIIIXXXXIIIXXXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXIIIXXXXIIIXXXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXIXXXXXXXIIIXXXXIIIXXXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXGGGXXXXXXIIIIIIIIIIXIIIIIIXGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXGSGXXXXXXIIIIIIIIIIXIIIIIIIGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXGGGXXXXXXIIIIIIIIIIXIIIIIIXGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+
+frame
+- position: 7.0 3.0
+- size: 38.0 28.0
+
+
+robot
+- position: 9.5 7.5 0.0
+- start_target_aabb: 5 6
+- end_target_aabb: 8 15
+- shooting_cd: 1.0
+- predict: 0.85
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- effectshoot_time: 0.2
+- shooting_time: 0.1
+
+
+robot
+- position: 9.5 10.5 0.0
+- start_target_aabb: 5 7
+- end_target_aabb: 8 18
+- shooting_cd: 1.0
+- predict: 0.9
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- effectshoot_time: 0.2
+- shooting_time: 0.0
+
+
+robot
+- position: 9.5 13.5 0.0
+- start_target_aabb: 5 10
+- end_target_aabb: 8 21
+- shooting_cd: 1.0
+- predict: 0.85
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- effectshoot_time: 0.2
+- shooting_time: 0.1
+
+
+robot
+- position: 9.5 16.5 0.0
+- start_target_aabb: 5 13
+- end_target_aabb: 8 24
+- shooting_cd: 1.0
+- predict: 0.9
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+robot
+- position: 9.5 16.5 0.0
+- start_target_aabb: 5 13
+- end_target_aabb: 8 24
+- shooting_cd: 1.0
+- predict: 0.85
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- effectshoot_time: 0.2
+- shooting_time: 0.3
+
+
+robot
+- position: 9.5 19.5 0.0
+- start_target_aabb: 5 16
+- end_target_aabb: 8 27
+- shooting_cd: 1.0
+- predict: 0.9
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.4
+
+robot
+- position: 9.5 22.5 0.0
+- start_target_aabb: 5 19
+- end_target_aabb: 8 30
+- shooting_cd: 1.0
+- predict: 0.85
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- effectshoot_time: 0.2
+- shooting_time: 0.3
+
+
+robot
+- position: 9.5 25.5 0.0
+- start_target_aabb: 5 22
+- end_target_aabb: 8 33
+- shooting_cd: 1.0
+- predict: 0.9
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+
+
+within_zone
+- position: 11.5 17.5
+- size: 8 8
+- min_player_percent: 0.75
+- time_to_stay: 40.0
+- trigger_id: 1
+gate
+- position: 15.5 16 0.0
+- wait_for_trigger_id: 1
+- direction: 0 1 0
+
+robot
+- position: 14.5 22.5 0.0
+- start_target_aabb: 11 17
+- end_target_aabb: 20 26
+- shooting_cd: 3.0
+- predict: 0.5
+- max_rotation_speed: 0.5
+robot
+- position: 15.5 22.5 0.0
+- start_target_aabb: 11 17
+- end_target_aabb: 20 26
+- shooting_cd: 2.0
+- predict: 0.5
+- max_rotation_speed: 0.5
+robot
+- position: 16.5 22.5 0.0
+- start_target_aabb: 11 17
+- end_target_aabb: 20 26
+- shooting_cd: 3.5
+- predict: 0.5
+- max_rotation_speed: 0.5
+
+robot
+- position: 14.5 21.5 0.0
+- start_target_aabb: 11 17
+- end_target_aabb: 20 26
+- shooting_cd: 2.8
+- predict: 0.5
+- max_rotation_speed: 0.5
+robot
+- position: 15.5 21.5 0.0
+- start_target_aabb: 11 17
+- end_target_aabb: 20 26
+- shooting_cd: 2.5
+- predict: 0.5
+- max_rotation_speed: 0.5
+robot
+- position: 16.5 21.5 0.0
+- start_target_aabb: 11 17
+- end_target_aabb: 20 26
+- shooting_cd: 3.1
+- predict: 0.5
+- max_rotation_speed: 0.5
+
+robot
+- position: 14.5 20.5 0.0
+- start_target_aabb: 11 17
+- end_target_aabb: 20 26
+- shooting_cd: 2.1
+- predict: 0.25
+- max_rotation_speed: 0.5
+robot
+- position: 15.5 20.5 0.0
+- start_target_aabb: 11 17
+- end_target_aabb: 20 26
+- shooting_cd: 2.1
+- predict: 0.25
+- max_rotation_speed: 0.5
+robot
+- position: 16.5 20.5 0.0
+- start_target_aabb: 11 17
+- end_target_aabb: 20 26
+- shooting_cd: 2.7
+- predict: 0.5
+- max_rotation_speed: 0.5
+
+flag
+- position: 10.5 31 0
+
+trophy
+- position: 26.5 4.5 0
+flag
+- position: 17.5 14.5 0
+
+
+
+robot
+- position: 18.25 9.5 0.0
+- start_target_aabb: 14 3
+- end_target_aabb: 30 13
+- shooting_cd: 2.1
+- predict: 0.4
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- effectshoot_time: 0.2
+- shooting_time: 0.1
+
+
+robot
+- position: 18.25 7.5 0.0
+- start_target_aabb: 14 3
+- end_target_aabb: 30 13
+- shooting_cd: 1.5
+- predict: 1.0
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- effectshoot_time: 0.2
+- shooting_time: 0.1
+
+
+robot
+- position: 19.75 9.5 0.0
+- start_target_aabb: 14 3
+- end_target_aabb: 30 13
+- shooting_cd: 1.4
+- predict: 0.2
+- max_rotation_speed: 0.5
+- charging_time: 0.5
+- effectshoot_time: 0.1
+- shooting_time: 0.1
+
+
+robot
+- position: 19.75 7.5 0.0
+- start_target_aabb: 14 3
+- end_target_aabb: 30 13
+- shooting_cd: 1.5
+- predict: 0.1
+- max_rotation_speed: 0.5
+- charging_time: 0.23
+- effectshoot_time: 0.21
+- shooting_time: 0.1
+
+robot
+- position: 25.25 9.5 0.0
+- start_target_aabb: 14 3
+- end_target_aabb: 30 13
+- shooting_cd: 1.8
+- predict: 0.8
+- max_rotation_speed: 0.5
+- charging_time: 0.23
+- effectshoot_time: 0.25
+- shooting_time: 0.1
+
+
+robot
+- position: 25.25 7.5 0.0
+- start_target_aabb: 14 3
+- end_target_aabb: 30 13
+- shooting_cd: 1.3
+- predict: 1.1
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- effectshoot_time: 0.4
+- shooting_time: 0.1
+
+
+robot
+- position: 26.75 9.5 0.0
+- start_target_aabb: 14 3
+- end_target_aabb: 30 13
+- shooting_cd: 1.7
+- predict: 0.84
+- max_rotation_speed: 0.5
+- charging_time: 0.27
+- effectshoot_time: 0.2
+- shooting_time: 0.1
+
+
+robot
+- position: 26.75 7.5 0.0
+- start_target_aabb: 14 3
+- end_target_aabb: 30 13
+- shooting_cd: 1.5
+- predict: 1.0
+- max_rotation_speed: 0.5
+- charging_time: 0.25
+- effectshoot_time: 0.2
+- shooting_time: 0.1
+
+trap
+- position: 14.5 10.5 0
+
+trap
+- position: 16.5 7.5 0
+
+trap
+- position: 14.5 4.5 0
+
+trap
+- position: 17.5 4.5 0
+
+trap
+- position: 20.5 4.5 0
+
+trap
+- position: 23.5 4.5 0
+
+trap
+- position: 21.5 7.5 0
+
+trap
+- position: 23.5 10.5 0
+trap
+- position: 23.5 12.5 0
+trap
+- position: 25.25 12.5 0
+trap
+- position: 27 12.5 0
+trap
+- position: 29.25 12.5 0
+
+trap
+- position: 30.5 9.5 0
+
+trap
+- position: 28.5 4.5 0
+
+trap
+- position: 25.5 4.5 0

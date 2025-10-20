@@ -1,6 +1,7 @@
 #scope_file
 Platform :: #import "Platform";
 Controls :: #import "Controls";
+Scene :: #import "Scene";
 #import "Basic";
 #import "Math";
 #import "Algebra";
@@ -26,12 +27,60 @@ D_OUTLINE_SLOT :: V2f.{ 4, 15 };
 Z_OUTLINE_SLOT :: V2f.{ 4, 14 };
 C_OUTLINE_SLOT :: V2f.{ 4, 13 };
 X_OUTLINE_SLOT :: V2f.{ 5, 15 };
+E_OUTLINE_SLOT :: V2f.{ 6, 13 };
 COIN_SLOT :: V2f.{ 4, 12 };
 VOLUME_ON_SLOT :: V2f.{ 0, 11 };
 VOLUME_OFF_SLOT :: V2f.{ 1, 11 };
 KLAXON_SLOT :: V2f.{ 2, 11 };
+LOCKED_SLOT :: V2f.{ 3, 11 };
+UNLOCKED_SLOT :: V2f.{ 4, 11 };
+BUBBLE_INDICATOR_SLOT :: V2f.{ 5, 14 };
+BUBBLE_INDICATOR_SLOT_DOWN :: V2f.{ 5, 14 };
+BUBBLE_INDICATOR_SLOT_LEFT :: V2f.{ 6, 14 };
+BUBBLE_INDICATOR_SLOT_UP :: V2f.{ 7, 14 };
+BUBBLE_INDICATOR_SLOT_RIGHT :: V2f.{ 8, 14 };
+AWARD_SLOT :: V2f.{ 5, 13 };
+REVIVE_SLOT :: V2f.{ 5, 12 };
+DEATH_SLOT :: V2f.{ 5, 11 };
+SCORE_SLOT :: V2f.{ 6, 11 };
+SAFE_ZONE_SLOT :: V2f.{ 7, 15 };
+HOOK_SLOT :: V2f.{ 8, 15 };
+
+PLAYER_ICON_SLOT :: V2f.{ 0, 10 };
+AMBULANCE_SLOT :: V2f.{ 0, 10 };
+TAXI_SLOT :: V2f.{ 1, 10 };
+POLICE_SLOT :: V2f.{ 2, 10 };
+RACER_SLOT :: V2f.{ 3, 10 };
+SPEEDSTER_SLOT :: V2f.{ 4, 10 };
+DRAG_RACER_SLOT :: V2f.{ 5, 10 };
+SPACESHIP_SLOT :: V2f.{ 6, 10 };
+BOAT_FISHING_SLOT :: V2f.{ 7, 10 };
+BOAT_ROW_SLOT :: V2f.{ 8, 10 };
+MONSTER_TRUCK_SLOT :: V2f.{ 9, 10 };
+SUV_SLOT :: V2f.{ 10, 10 };
+BOAT_SAIL_SLOT :: V2f.{ 11, 10 };
+TRACTOR_SLOT :: V2f.{ 12, 10 };
 
 Key :: Platform.Key;
+
+model_id_to_slot :: (id: Scene.Model_Id) -> V2f {
+	if id == {
+		case .Racer; return RACER_SLOT;
+		case .SUV; return SUV_SLOT;
+		case .Speedster; return SPEEDSTER_SLOT;
+		case .Drag_Racer; return DRAG_RACER_SLOT;
+		case .Monster_Truck; return MONSTER_TRUCK_SLOT;
+		case .Boat_Row; return BOAT_ROW_SLOT;
+		case .Boat_Fishing; return BOAT_FISHING_SLOT;
+		case .Spaceship; return SPACESHIP_SLOT;
+		case .Ambulance; return AMBULANCE_SLOT;
+		case .Taxi; return TAXI_SLOT;
+		case .Police; return POLICE_SLOT;
+		case .Boat_Sail; return BOAT_SAIL_SLOT;
+		case .Tractor; return TRACTOR_SLOT;
+	}
+	return .{0, 0};
+}
 
 #scope_export
 
@@ -118,12 +167,8 @@ push_checkbox :: (
 	high := center + V2f.{ size / 2 - 1, size / 2 - 1 };
 
 	if point_aabb(IM.mouse_pos, low, high) {
-		if IM.just_released[Key.MouseLeft] {
-			IM.handled_mouse = true;
-		}
-
+		IM.handled_mouse = true;
 		if IM.just_pressed[Key.MouseLeft] {
-			IM.handled_mouse = true;
 			return true;
 		}
 	}
@@ -139,12 +184,8 @@ push_button :: (center: V2f, size: float, tex_slot: V2f, z := 0.0) -> bool {
 	high := center + V2f.{ size / 2, size / 2 };
 
 	if point_aabb(IM.mouse_pos, low, high) {
-		if IM.just_released[Key.MouseLeft] {
-			IM.handled_mouse = true;
-		}
-
+		IM.handled_mouse = true;
 		if IM.just_pressed[Key.MouseLeft] {
-			IM.handled_mouse = true;
 			return true;
 		}
 	}
@@ -209,6 +250,8 @@ Text_Align :: enum {
 	Bottom_Right :: 0b0110;
 	Top_Left :: 0b1001;
 	Top_Right :: 0b1010;
+	Center_Left :: 0b1101;
+	Center_Right :: 0b1110;
 }
 push_text :: (
 	text: string, pos: V2f, height := 12.0, z := 0.0, align := Text_Align.Bottom_Left
@@ -238,17 +281,17 @@ push_text :: (
 	}
 
 	for before..IM.chars.count-1 {
-		char := IM.chars[it];
+		char := *IM.chars[it];
 		if (align & Text_Align.HCenter) == Text_Align.HCenter {
 			char.pos.x -= (x - pos.x) / 2;
 		}
-		if (align & Text_Align.Right) == Text_Align.Right {
+		else if (align & Text_Align.Right) == Text_Align.Right {
 			char.pos.x -= (x - pos.x);
 		}
 		if (align & Text_Align.VCenter) == Text_Align.VCenter {
 			char.pos.y -= max_height/ 2;
 		}
-		if (align & Text_Align.Top) == Text_Align.Bottom {
+		else if (align & Text_Align.Top) == Text_Align.Bottom {
 			char.pos.y -= max_height;
 		}
 	}
@@ -396,11 +439,255 @@ push_ping_histogram :: (pos: V2f, size: V2f, data: [] float32, current_idx: int)
 	}
 }
 
-push_action_palette :: (info: *Platform.Frame_Info) {
+push_score_tab :: (scene: Scene.Scene) {
+	scoreboard_center := IM.display_size / 2;
+	scoreboard_center.y += IM.display_size.y / 12;
+	scoreboard_size := V2f.{ 600, 400 };
+	header_height := 32.0;
+
+	cursor := V2f.{
+		scoreboard_center.x - scoreboard_size.x / 2,
+		scoreboard_center.y - scoreboard_size.y / 2
+	};
+
+	push_quad_screen(
+		pos = cursor,
+		size = scoreboard_size,
+		color = .{ 0.0, 0.0, 0.0 },
+		z = 5
+	);
+
+	cursor += V2f.{ 0, scoreboard_size.y };
+	push_quad_screen(
+		pos = .{ cursor.x, cursor.y - header_height },
+		size = .{ scoreboard_size.x, header_height },
+		color = .{ 0.1, 0.1, 0.1 },
+		z = 6
+	);
+
+	push_text(
+		"Scoreboard",
+		.{ cursor.x + scoreboard_size.x / 2, cursor.y - header_height / 2 },
+		24,
+		z=7,
+		align=Text_Align.Center
+	);
+
+	cursor -= V2f.{ 0, header_height };
+	push_quad_screen(
+		pos = .{ cursor.x, cursor.y - 1 },
+		size = .{ scoreboard_size.x, 1 },
+		color = .{ 1.0, 1.0, 1.0 },
+		z = 7
+	);
+
+	scoreline_size := V2f.{ scoreboard_size.x / 2, 48 };
+
+	push_scoreline :: (x: float, y: float, player: Scene.Player) #expand {
+		cursor := scoreboard_center;
+		cursor.x -= scoreboard_size.x / 2;
+		cursor.y += scoreboard_size.y / 2;
+		cursor.y -= header_height + 1;
+		cursor.x += x * scoreline_size.x;
+		cursor.y -= (y + 1) * scoreline_size.y;
+
+		model_size :: V2f.{ 48, 48 };
+		icon_size :: V2f.{ 24, 24 };
+
+		push_quad_screen(
+			pos = cursor,
+			size = scoreline_size,
+			color = .{ 0.2, 0.2, 0.2 },
+			z = 10
+		);
+		push_quad_screen(
+			pos = .{ cursor.x + 1, cursor.y + 1 },
+			size = .{ scoreline_size.x - 2, scoreline_size.y - 2 },
+			color = .{ 0.0, 0.0, 0.0 },
+			z = 11
+		);
+
+		push_quad_texture(
+			pos = .{ cursor.x + 4, cursor.y + (scoreline_size.y - model_size.y) / 2 },
+			size = model_size,
+			color = .{ 1.0, 1.0, 1.0 },
+			tex_slot = model_id_to_slot(xx player.server.model_id),
+			z = 12
+		);
+
+		cursor.x += 16;
+
+		push_quad_texture(
+			pos = .{
+				cursor.x + 4 + model_size.x + 4,
+				cursor.y + (scoreline_size.y - icon_size.y) / 2
+			},
+			size = icon_size,
+			color = .{ 1.0, 1.0, 1.0 },
+			tex_slot = AWARD_SLOT,
+			z = 12
+		);
+		push_text(
+			tprint("%", player.server.score.trophy),
+			.{ cursor.x + 4 + model_size.x + 32, cursor.y + scoreline_size.y / 2 },
+			height = 18,
+			z = 12,
+			align = Text_Align.Center_Left
+		);
+
+		push_quad_texture(
+			pos = .{
+				cursor.x + model_size.x + 4 + 32 + icon_size.x + 4,
+				cursor.y + (scoreline_size.y - icon_size.y) / 2
+			},
+			size = icon_size,
+			color = .{ 1.0, 1.0, 1.0 },
+			tex_slot = REVIVE_SLOT,
+			z = 12
+		);
+		push_text(
+			tprint("%", player.server.score.revive),
+			.{
+				cursor.x + 4 + model_size.x + 32 + icon_size.x + 32,
+				cursor.y + scoreline_size.y / 2
+			},
+			height = 18,
+			z = 12,
+			align = Text_Align.Center_Left
+		);
+
+		push_quad_texture(
+			pos = .{
+				cursor.x + model_size.x + 4 + 32 + icon_size.x + 4 + 32 + icon_size.x + 4,
+				cursor.y + (scoreline_size.y - icon_size.y) / 2
+			},
+			size = icon_size,
+			color = .{ 1.0, 1.0, 1.0 },
+			tex_slot = DEATH_SLOT,
+			z = 12
+		);
+		push_text(
+			tprint("%", player.server.score.dead),
+			.{
+				cursor.x + 4 + model_size.x + 32 + icon_size.x + 32 + icon_size.x + 32,
+				cursor.y + scoreline_size.y / 2
+			},
+			height = 18,
+			z = 12,
+			align = Text_Align.Center_Left
+		);
+
+		push_quad_texture(
+			pos = .{
+				cursor.x + model_size.x + 4 + 32 + icon_size.x + 4 + 32 + icon_size.x + 32 + icon_size.x + 4,
+				cursor.y + (scoreline_size.y - icon_size.y) / 2
+			},
+			size = icon_size,
+			color = .{ 1.0, 1.0, 1.0 },
+			tex_slot = SCORE_SLOT,
+			z = 12
+		);
+		push_text(
+			tprint("%", player.server.score.score),
+			.{
+				cursor.x + 4 + model_size.x + 32 + icon_size.x + 32 + icon_size.x + 32 + icon_size.x + 32,
+				cursor.y + scoreline_size.y / 2
+			},
+			height = 18,
+			z = 12,
+			align = Text_Align.Center_Left
+		);
+	}
+
+	for scene.players {
+		x := it_index / 8;
+		y := it_index % 8;
+		push_scoreline(x.(float32), y.(float32), it);
+	}
+}
+
+push_death_indicator :: (scene: Scene.Scene) {
+	V := Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
+	P := Scene.perspective(scene.camera);
+
+	// V * <world> = <view>
+	// P * <view> = <clip>
+
+	for scene.players {
+		if it.server.dead && it.id != scene.controlled_player_id {
+			p := v4(it.server.position, 1);
+			p = V * p;
+			p = P * p;
+			p /= abs(p.w);
+
+			if -1.0 <= p.x && p.x <= 1.0 && -1.0 <= p.y && p.y <= 1.0 // On screen
+				continue;
+
+			p2 := closest_aabb(V2f.{ p.x, p.y }, .{ -1.0, -1.0 }, .{ 1.0, 1.0 });
+			indicator := BUBBLE_INDICATOR_SLOT_UP;
+			indicator_dt := V2f.{ 0, 0 };
+			{
+				dx := p.x - p2.x;
+				dy := p.y - p2.y;
+				if abs(dx) > abs(dy)
+					if dx < 0 {
+						indicator = BUBBLE_INDICATOR_SLOT_LEFT;
+						indicator_dt = V2f.{ -5, 0 };
+					}
+					else {
+						indicator = BUBBLE_INDICATOR_SLOT_RIGHT;
+						indicator_dt = V2f.{ 5, 0 };
+					}
+				else
+					if dy < 0 {
+						indicator = BUBBLE_INDICATOR_SLOT_DOWN;
+						indicator_dt = V2f.{ 0, -5 };
+					}
+					else {
+						indicator = BUBBLE_INDICATOR_SLOT_UP;
+						indicator_dt = V2f.{ 0, 5 };
+					}
+			}
+
+			screen_p2: V2f;
+			screen_p2.x = p2.x * (IM.display_size.x - 50) / 2 + IM.display_size.x / 2;
+			screen_p2.y = p2.y * (IM.display_size.y - 50) / 2 + IM.display_size.y / 2;
+
+			// Check if too close to the bottom left ui palette
+			action_palette_safety := V2f.{ 168 + 25, 168 + 25 };
+			if screen_p2.x < action_palette_safety.x && screen_p2.y < action_palette_safety.y {
+				dx := abs(screen_p2.x - action_palette_safety.x);
+				dy := abs(screen_p2.y - action_palette_safety.y);
+				if dx < dy
+					screen_p2.x = action_palette_safety.x;
+				else
+					screen_p2.y = action_palette_safety.y;
+			}
+
+			push_quad_texture(
+				pos = screen_p2 - V2f.{ 24, 24 } + indicator_dt,
+				size = V2f.{ 48, 48 },
+				tex_slot = indicator,
+				color = .{ 1.0, 1.0, 1.0 },
+				z = 19
+			);
+
+			push_quad_texture(
+				pos = screen_p2 - V2f.{ 20, 20 },
+				size = V2f.{ 40, 40 },
+				tex_slot = model_id_to_slot(xx it.server.model_id),
+				color = .{ 0.3, 0.3, 0.3 },
+				z = 20
+			);
+		}
+	}
+}
+
+push_action_palette :: (scene: Scene.Scene, info: *Platform.Frame_Info) {
 
 	push_quad_screen(
 		pos = .{ 0, 0 },
-		size = .{ 128, 128 },
+		size = .{ 168, 168 },
 		color = .{ 218/255.0, 220/255.0, 231/255.0 },
 		1
 	);
@@ -411,8 +698,8 @@ push_action_palette :: (info: *Platform.Frame_Info) {
 		if info.key_pressed[xx key_code]
 			color = .{ 54/255.0, 189/255.0, 247/255.0 };
 		push_quad_screen(
-			pos = .{ x * 32.0 + 1, y * 32.0 + 1 },
-			size = .{ 30, 30 },
+			pos = .{ x * 42.0 + 1, y * 42.0 + 1 },
+			size = .{ 40, 40 },
 			color = color,
 			z = 2
 		);
@@ -436,8 +723,8 @@ push_action_palette :: (info: *Platform.Frame_Info) {
 
 	render_texture_at :: (x: int, y: int, tex_slot: V2f, color := V3f.{ 1.0, 1.0, 1.0 }) {
 		push_quad_texture(
-			pos = .{ (x * 32 + 4).(float32), (y * 32 + 4).(float32) },
-			size = .{ 24, 24 },
+			pos = .{ (x * 42 + 4).(float32), (y * 42 + 4).(float32) },
+			size = .{ 34, 34 },
 			tex_slot = tex_slot,
 			color = color,
 			z = 3
@@ -445,8 +732,8 @@ push_action_palette :: (info: *Platform.Frame_Info) {
 	}
 	render_hint_at :: (x: int, y: int, tex_slot: V2f) {
 		push_quad_texture(
-			pos = .{ (x * 32 + 18).(float32), (y * 32 + 18).(float32) },
-			size = .{ 14, 14 },
+			pos = .{ (x * 42 + 42 - 18).(float32), (y * 42 + 42 - 18).(float32) },
+			size = .{ 18, 18 },
 			tex_slot = tex_slot,
 			color = .{ 1.0, 1.0, 1.0 },
 			z = 4
@@ -470,6 +757,24 @@ push_action_palette :: (info: *Platform.Frame_Info) {
 
 	render_texture_at(1, 0, KLAXON_SLOT);
 	render_hint_at(1, 0, X_OUTLINE_SLOT);
+
+	if scene.camera_locked
+		render_texture_at(0, 0, UNLOCKED_SLOT);
+	else
+		render_texture_at(0, 0, LOCKED_SLOT);
+	render_hint_at(0, 0, W_OUTLINE_SLOT);
+
+	player := Scene.find_by_player_id(scene, scene.controlled_player_id);
+	if player {
+		if player.server.has_safe_present {
+			render_texture_at(2, 2, SAFE_ZONE_SLOT, .{ 0.5, 1.0, 0.5 });
+			render_hint_at(2, 2, E_OUTLINE_SLOT);
+		}
+		if player.server.has_hook_present {
+			render_texture_at(0, 2, HOOK_SLOT, .{ 0.5, 1.0, 0.5 });
+			render_hint_at(0, 2, A_OUTLINE_SLOT);
+		}
+	}
 }
 
 push_settings :: (volume: *bool, info: *Platform.Frame_Info) {

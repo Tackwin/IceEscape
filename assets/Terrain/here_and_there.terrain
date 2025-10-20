@@ -10,9 +10,9 @@ XXXXXXXXXXIiiIXIGIIGIIGIIIGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXIiiIXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXIIIIXIiiiIIXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXIIIIIIIXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXGGIiiiiIIIIIXXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXGGXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXGGGiiiiXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGXXXXXXXXXXXXX
-XXXXXXXXXXGGGGSGiiiiGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGGXXXXXXXXXXXX
-XXXXXXXXXXXXXGGGiiiiXXXXXXXXXXXXXXXGGXXXXXXXXXXXXXXXXXXXXGGGGXXXXXXXXXXXXX
+XXXXXGGGXXXXXGGGiiiiXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGXXXXXXXXXXXXX
+XXXXXGGGiiGGGGSGiiiiGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGGXXXXXXXXXXXX
+XXXXXGGGXXXXXGGGiiiiXXXXXXXXXXXXXXXGGXXXXXXXXXXXXXXXXXXXXGGGGXXXXXXXXXXXXX
 XXXXXXXXXXXXXGGIiiiiIIIIIXXIIIIIIIIGGIIIIIIIIXXIIIIIIIIXXGGXXXXXXXXXXXXXXX
 XXXXXXXXXXIIIIXIiiiIIXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXIIIIIIIXXXXXXXXXXXXXXX
 XXXXXXXXXXIiiIXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -30,7 +30,6 @@ frame
 gate
 - position: 4.5 7.5 0.0
 - wait_for_key_id: 1
-- is_end: true
 
 path
 - checkpoint: 13.5 9.5 0.0
@@ -52,38 +51,38 @@ path
 
 skull
 - path_id: 0
-
-- speed: 0.125
+- offset: 0.0
+- speed: 4.175
 - t: 0
 skull
 - path_id: 0
-- speed: 0.125
-- t: 0.5
+- speed: 4.175
+- offset: 0.25
 skull
 - path_id: 0
-- speed: 0.125
-- t: 1.0
+- speed: 4.175
+- offset: 0.5
 skull
 - path_id: 0
-- speed: 0.125
-- t: 1.5
+- speed: 4.175
+- offset: 0.75
 
 skull
 - path_id: 1
-- speed: 0.125
-- t: 0.25
+- speed: 4.175
+- offset: 0.125
 skull
 - path_id: 1
-- speed: 0.125
-- t: 0.75
+- speed: 4.175
+- offset: 0.375
 skull
 - path_id: 1
-- speed: 0.125
-- t: 1.25
+- speed: 4.175
+- offset: 0.625
 skull
 - path_id: 1
-- speed: 0.125
-- t: 1.75
+- speed: 4.175
+- offset: 0.875
 
 
 
@@ -116,29 +115,29 @@ skull
 
 skull
 - path_id: 2
-- speed: 0.1
-- t: 0
+- speed: 3.9
+- offset: 0.0
 skull
 - path_id: 2
-- speed: 0.1
-- t: 0.33
+- speed: 3.9
+- offset: 0.33
 skull
 - path_id: 2
-- speed: 0.1
-- t: 0.66
+- speed: 3.9
+- offset: 0.66
 
 skull
 - path_id: 3
-- speed: 0.1
-- t: 0.166
+- speed: 3.9
+- offset: 0.166
 skull
 - path_id: 3
-- speed: 0.1
-- t: 0.5
+- speed: 3.9
+- offset: 0.5
 skull
 - path_id: 3
-- speed: 0.1
-- t: 0.833
+- speed: 3.9
+- offset: 0.833
 
 
 flag
@@ -148,7 +147,7 @@ flag
 
 
 trophy
-- position: 13 8 0.0
+- position: 0 7.5 0.0
 
 key
-- position: 13 8 0.0
+- position: 53 8 0.0

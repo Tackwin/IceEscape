@@ -65,6 +65,7 @@ map_sdl_to_key :: (key: int) -> int {
 		case xx SDLK_F10; return xx Key.F10;
 		case xx SDLK_F11; return xx Key.F11;
 		case xx SDLK_F12; return xx Key.F12;
+		case xx SDLK_TAB; return xx Key.Tab;
 	}
 	return key;
 }
@@ -331,7 +332,7 @@ play_audio :: (audio: Audio, position: V3f) -> Sound {
 		ma_sound_set_max_gain(msound, 1.0);
 		ma_sound_set_min_distance(msound, 1.0);
 		ma_sound_set_max_distance(msound, 1000.0);
-		ma_sound_set_rolloff(msound, 3.0);
+		ma_sound_set_rolloff(msound, audio.exponent);
 		ma_sound_set_attenuation_model(msound, .exponential);
 		ma_sound_set_pinned_listener_index(msound, 0);
 		ma_sound_set_position(msound, position.x, position.y, position.z);

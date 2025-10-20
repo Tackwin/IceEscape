@@ -10,39 +10,16 @@ Scene :: #import "Scene";
 #scope_export
 
 Colormaps_Rect :: struct {
-	prop    :: V4f.{ 0 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
-	vehicle :: V4f.{ 1 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
-	pirate  :: V4f.{ 0 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
-	conveyor :: V4f.{ 1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
-	car :: V4f.{ 2 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
+	prop       :: V4f.{ 0 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
+	vehicle    :: V4f.{ 1 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
+	pirate     :: V4f.{ 0 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
+	conveyor   :: V4f.{ 1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
+	car        :: V4f.{ 2 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
 	watercraft :: V4f.{ 2 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
+	down_arrow :: V4f.{ 3 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
+	safe_zone  :: V4f.{ 3 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
 }
 
-Model_Id :: enum {
-	Racer :: 1;
-	SUV :: 2;
-	Speedster :: 3;
-	Drag_Racer :: 4;
-	Monster_Truck :: 5;
-	Vintage_Racer :: 6;
-	Boat_Row :: 7;
-	Boat_Fishing :: 8;
-	Taxi :: 9;
-	Police :: 10;
-	Ambulance :: 11;
-	Spaceship :: 12;
-	Tombstone :: 13;
-	Tile :: 14;
-	Skull :: 15;
-	Coin :: 16;
-	Key :: 17;
-	Mark :: 18;
-	Gate :: 19;
-	Gate_Close :: 20;
-	Shuriken :: 21;
-	Spirit :: 22;
-}
-Model_Id_Count :: #run enum_highest_value(Model_Id) + 1;
 
 Texture_Id :: enum {
 	Ice :: 0;
@@ -95,9 +72,11 @@ Store :: struct {
 	monster_truck_model: WRender.Model;
 	vintage_racer_model: WRender.Model;
 	boat_row_model: WRender.Model;
+	boat_sail_model: WRender.Model;
 	boat_fishing_model: WRender.Model;
 	taxi_model: WRender.Model;
 	police_model: WRender.Model;
+	tractor_model: WRender.Model;
 	ambulance_model: WRender.Model;
 	spaceship_model: WRender.Model;
 	tombstone_model: WRender.Model;
@@ -118,6 +97,7 @@ Store :: struct {
 	drone_model: WRender.Model;
 	drone_blade_model: WRender.Model;
 	trap_spike_model: WRender.Model;
+	end_hook_model: WRender.Model;
 
 	antiair_camion_model: WRender.Model;
 	antiair_canon_model: WRender.Model;
@@ -129,6 +109,9 @@ Store :: struct {
 	robot_a3_model: WRender.Model;
 	robot_a4_model: WRender.Model;
 	robot_a5_model: WRender.Model;
+
+	present_a_model: WRender.Model;
+	present_b_model: WRender.Model;
 
 	number_0_model: WRender.Model;
 	number_1_model: WRender.Model;
@@ -143,6 +126,7 @@ Store :: struct {
 
 	unit_cylinder_model: WRender.Model;
 	unit_sphere_model: WRender.Model;
+	zone_wall_model: WRender.Model;
 	indicator_outline_model: WRender.Model;
 	indicator_stroke_model: WRender.Model;
 
@@ -153,48 +137,7 @@ Store :: struct {
 	ui_atlas: WRender.WTexture;
 	font_atlas: WRender.WTexture;
 
-	// particle_texture_png: Assets.Image;
-
-	// tile_snow_albedo_png: Assets.Image;
-	// tile_snow_normal_png: Assets.Image;
-	// tile_snow_height_png: Assets.Image;
-
-	// tile_cliff_albedo_png: Assets.Image;
-	// tile_cliff_normal_png: Assets.Image;
-	// tile_cliff_height_png: Assets.Image;
-
-	// tile_grass_albedo_png: Assets.Image;
-	// tile_grass_normal_png: Assets.Image;
-	// tile_grass_height_png: Assets.Image;
-
-	// tile_slippy_albedo_png: Assets.Image;
-	// tile_slippy_normal_png: Assets.Image;
-	// tile_slippy_height_png: Assets.Image;
-
-	// ui_atlas_png: Assets.Image;
-	// tile_atlas_png: Assets.Image;
-
-	// skybox_ski_png: Assets.Image;
-	// skybox_ski: Render.Texture;
-
-	// tile_snow_albedo: Render.Texture;
-	// tile_snow_normal: Render.Texture;
-	// tile_snow_height: Render.Texture;
-
-	// tile_cliff_albedo: Render.Texture;
-	// tile_cliff_normal: Render.Texture;
-	// tile_cliff_height: Render.Texture;
-
-	// tile_grass_albedo: Render.Texture;
-	// tile_grass_normal: Render.Texture;
-	// tile_grass_height: Render.Texture;
-
-	// tile_slippy_albedo: Render.Texture;
-	// tile_slippy_normal: Render.Texture;
-	// tile_slippy_height: Render.Texture;
-
-
-	loser_ogg: Platform.Audio;
+	loser_mp3: Platform.Audio;
 	click_wav: Platform.Audio;
 	snowflakes_and_lights_mp3: Platform.Audio;
 
@@ -236,78 +179,13 @@ Store :: struct {
 	explosion_7_mp3: Platform.Audio;
 	explosion_8_mp3: Platform.Audio;
 
-	// font_shader: Render.Shader;
-	// model_shader: Render.Shader;
-	// texture_shader: Render.Shader;
-	// instance_shader: Render.Shader;
-	// tile_shader: Render.Shader;
-	// quad_texture_shader: Render.Shader;
-	// postpro_shader: Render.Shader;
-	// instanced_texture_shader: Render.Shader;
-	// shadow_shader: Render.Shader;
-	// shadow_instanced_shader: Render.Shader;
-	// shadow_instanced_texture_shader: Render.Shader;
-	// skybox_shader: Render.Shader;
-	// particle_shader: Render.Shader;
+	drift_0_mp3: Platform.Audio;
+	drift_1_mp3: Platform.Audio;
 
-	// ice_texture: Render.Texture;
-	// coin_texture: Render.Texture;
-	// slippy_ice_texture: Render.Texture;
-	// grass_texture: Render.Texture;
-	// dirt_texture: Render.Texture;
-	// mark_texture: Render.Texture;
-	// vehicle_colormap: Render.Texture;
-	// tile_atlas: Render.Texture;
+	checkpoint_ok_mp3: Platform.Audio;
 
-	// z_facing_unit_square_geometry: Render.Geometry;
-	// flag_geometry: Render.Geometry;
-	// flag_down_geometry: Render.Geometry;
-	// player_geometry: Render.Geometry;
-	// drag_racer_geometry: Render.Geometry;
-	// vintage_racer_geometry: Render.Geometry;
-	// monster_truck_geometry: Render.Geometry;
-	// boat_row_geometry: Render.Geometry;
-	// boat_fishing_geometry: Render.Geometry;
-	// taxi_geometry: Render.Geometry;
-	// police_geometry: Render.Geometry;
-	// ambulance_geometry: Render.Geometry;
-	// spaceship_geometry: Render.Geometry;
-	// speedster_geometry: Render.Geometry;
-	// tombstone_geometry: Render.Geometry;
-	// skull_geometry: Render.Geometry;
-	// coin_geometry: Render.Geometry;
-	// key_geometry: Render.Geometry;
-	// mark_geometry: Render.Geometry;
-	// gate_geometry: Render.Geometry;
-	// gate_close_geometry: Render.Geometry;
-	// gate_finish_geometry: Render.Geometry;
-	// gate_finish_close_geometry: Render.Geometry;
-	// shuriken_geometry: Render.Geometry;
-	// spirit_geometry: Render.Geometry;
-	// skybox_geometry: Render.Geometry;
-	// indicator_outline_geometry: Render.Geometry;
-	// indicator_stroke_geometry: Render.Geometry;
-
-	// unit_cylinder_geometry: Render.Geometry;
-	// unit_sphere_geometry: Render.Geometry;
-
-	// number_0_geometry: Render.Geometry;
-	// number_1_geometry: Render.Geometry;
-	// number_2_geometry: Render.Geometry;
-	// number_3_geometry: Render.Geometry;
-	// number_4_geometry: Render.Geometry;
-	// number_5_geometry: Render.Geometry;
-	// number_6_geometry: Render.Geometry;
-	// number_7_geometry: Render.Geometry;
-	// number_8_geometry: Render.Geometry;
-	// number_9_geometry: Render.Geometry;
-
-	// robot_a0_geometry: Render.Geometry;
-	// robot_a1_geometry: Render.Geometry;
-	// robot_a2_geometry: Render.Geometry;
-	// robot_a3_geometry: Render.Geometry;
-	// robot_a4_geometry: Render.Geometry;
-	// robot_a5_geometry: Render.Geometry;
+	res_mp3: Platform.Audio;
+	coin_launch_mp3: Platform.Audio;
 }
 
 get_horn_car :: (store: Store, idx: int) -> *Platform.Audio {
@@ -398,35 +276,8 @@ get_number_model ::  (store: Store, digit: int) -> *WRender.Model {
 	}
 	return null;
 }
-// get_number_geometry :: (store: Store, digit: int) -> *Render.Geometry {
-// 	if digit == 0 {
-// 		return *store.number_0_geometry;
-// 	} else if digit == 1 {
-// 		return *store.number_1_geometry;
-// 	} else if digit == 2 {
-// 		return *store.number_2_geometry;
-// 	} else if digit == 3 {
-// 		return *store.number_3_geometry;
-// 	} else if digit == 4 {
-// 		return *store.number_4_geometry;
-// 	} else if digit == 5 {
-// 		return *store.number_5_geometry;
-// 	} else if digit == 6 {
-// 		return *store.number_6_geometry;
-// 	} else if digit == 7 {
-// 		return *store.number_7_geometry;
-// 	} else if digit == 8 {
-// 		return *store.number_8_geometry;
-// 	} else if digit == 9 {
-// 		return *store.number_9_geometry;
-// 	}
-// 	return null;
-// }
-// get_geometry :: (store: Store, id: int) -> *Render.Geometry {
-// 	return get_geometry(store, id.(Model_Id));
-// }
 
-get_rect :: (id: Model_Id) -> V4f {
+get_rect :: (id: Scene.Model_Id) -> V4f {
 	if #complete id == {
 		case .Racer; return Colormaps_Rect.vehicle;
 		case .SUV; return Colormaps_Rect.vehicle;
@@ -450,11 +301,13 @@ get_rect :: (id: Model_Id) -> V4f {
 		case .Police; return Colormaps_Rect.car;
 		case .Ambulance; return Colormaps_Rect.car;
 		case .Spaceship; return Colormaps_Rect.vehicle;
+		case .Boat_Sail; return Colormaps_Rect.watercraft;
+		case .Tractor; return Colormaps_Rect.car;
 	}
 
 	return Colormaps_Rect.vehicle;
 }
-get_model :: (store: Store, id: Model_Id) -> *WRender.Model {
+get_model :: (store: Store, id: Scene.Model_Id) -> *WRender.Model {
 	if #complete id == {
 		case .Racer; return *store.racer_model;
 		case .SUV; return *store.suv_model;
@@ -478,12 +331,11 @@ get_model :: (store: Store, id: Model_Id) -> *WRender.Model {
 		case .Police; return *store.police_model;
 		case .Ambulance; return *store.ambulance_model;
 		case .Spaceship; return *store.spaceship_model;
+		case .Boat_Sail; return *store.boat_sail_model;
+		case .Tractor; return *store.tractor_model;
 	}
 	return null;
 }
-// get_geometry :: (store: Store, id: Model_Id) -> *Render.Geometry {
-// 	return null;
-// }
 get_axes_model :: (store: Store, i: int) -> *WRender.Model {
 	if i == 0 {
 		return *store.robot_a0_model;
@@ -514,6 +366,8 @@ get_tile_rect :: (id: Scene.Tile.Kind) -> V4f {
 			rect = V4f.{ 0.0, 3.0, 1.0, 1.0 } / 4.0;
 		case .Dirt;
 			rect = V4f.{ 1.0, 1.0, 1.0, 1.0 } / 4.0;
+		case .Funny_Ice;
+			rect = V4f.{ 1.0, 2.0, 1.0, 1.0 } / 4.0;
 	}
 	rect.x += 0.5 / 512.0;
 	rect.y += 0.5 / 512.0;
@@ -521,78 +375,6 @@ get_tile_rect :: (id: Scene.Tile.Kind) -> V4f {
 	rect.w -= 1.0 / 512.0;
 	return rect;
 }
-
-// get_albedo :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
-// 	if #complete id == {
-// 		case .None;
-// 			return null;
-// 		case .Ice;
-// 			return *store.ice_texture;
-// 		case .Slippy_Ice;
-// 			return *store.tile_slippy_albedo;
-// 		case .Grass;
-// 			return *store.tile_grass_albedo;
-// 		case .Dirt;
-// 			return *store.dirt_texture;
-// 	}
-// 	return null;
-// }
-
-// get_height :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
-// 	if #complete id == {
-// 		case .None;
-// 			return null;
-// 		case .Ice;
-// 			return *store.tile_snow_height;
-// 		case .Slippy_Ice;
-// 			return *store.tile_slippy_height;
-// 		case .Grass;
-// 			return *store.tile_grass_height;
-// 		case .Dirt;
-// 			return *store.tile_cliff_height;
-// 	}
-// 	return null;
-// }
-
-// get_normal :: (store: Store, id: Scene.Tile.Kind) -> *Render.Texture {
-// 	if #complete id == {
-// 		case .None;
-// 			return null;
-// 		case .Ice;
-// 			return *store.ice_texture;
-// 		case .Slippy_Ice;
-// 			return *store.tile_slippy_normal;
-// 		case .Grass;
-// 			return *store.tile_grass_normal;
-// 		case .Dirt;
-// 			return *store.dirt_texture;
-// 	}
-// 	return null;
-// }
-
-// get_texture :: (store: Store, id: Texture_Id) -> *Render.Texture {
-// 	if #complete id == {
-// 		case .Ice; return *store.ice_texture;
-// 		case .Coin; return *store.coin_texture;
-// 		case .Slippy_Ice; return *store.slippy_ice_texture;
-// 		case .Grass; return *store.grass_texture;
-// 		case .Dirt; return *store.dirt_texture;
-// 		case .Mark; return *store.mark_texture;
-// 		case .Vehicle_Colormap; return *store.vehicle_colormap;
-// 	}
-// 	return null;
-// }
-
-// get_shader :: (store: Store, id: Shader_Id) -> *Render.Shader {
-// 	if #complete id == {
-// 		case .Font; return *store.font_shader;
-// 		case .Model; return *store.model_shader;
-// 		case .Texture; return *store.texture_shader;
-// 		case .Instance; return *store.instance_shader;
-// 		case .Tile; return *store.tile_shader;
-// 	}
-// 	return null;
-// }
 
 get_footstep_snow_sound :: (store: Store, index: int) -> *Platform.Audio {
 	if index == 0 {
@@ -657,10 +439,6 @@ get_wprop :: (store: Store, id: Assets.Prop_Id) -> *WRender.Model {
 	}
 	return null;
 }
-
-// get_prop :: (store: Store, id: Assets.Prop_Id) -> *Render.Geometry {
-// 	return null;
-// }
 
 init_store :: (platform: Platform.Platform, store: *Store) {
 	if Assets.RUNTIME {
@@ -737,13 +515,16 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.monster_truck_model = WRender.Model.make_from_obj(Assets.VEHICLE_MONSTER_TRUCK_OBJ);
 	store.vintage_racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_VINTAGE_RACER_OBJ);
 	store.boat_row_model = WRender.Model.make_from_obj(Assets.BOAT_ROW_OBJ);
+	store.boat_sail_model = WRender.Model.make_from_obj(Assets.BOAT_SAIL_OBJ);
 	store.boat_fishing_model = WRender.Model.make_from_obj(Assets.BOAT_FISHING_OBJ);
 	store.taxi_model = WRender.Model.make_from_obj(Assets.TAXI_OBJ);
 	store.police_model = WRender.Model.make_from_obj(Assets.POLICE_OBJ);
+	store.tractor_model = WRender.Model.make_from_obj(Assets.TRACTOR_OBJ);
 	store.ambulance_model = WRender.Model.make_from_obj(Assets.AMBULANCE_OBJ);
 	store.spaceship_model = WRender.Model.make_from_obj(Assets.SPACESHIP_OBJ);
 	store.tombstone_model = WRender.Model.make_from_obj(Assets.TOMBSTONE_OBJ);
 	store.skull_model = WRender.Model.make_from_obj(Assets.SKULL_OBJ);
+	store.end_hook_model = WRender.Model.make_from_obj(Assets.END_HOOK_OBJ);
 	store.pirateship_model = WRender.Model.make_from_obj(Assets.PIRATE_SHIP_OBJ);
 	store.coin_model = WRender.Model.make_from_obj(Assets.COIN_OBJ);
 	store.key_model = WRender.Model.make_from_obj(Assets.KEY_OBJ);
@@ -779,9 +560,12 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.number_7_model = WRender.Model.make_from_obj(Assets.NUMBER_7_OBJ);
 	store.number_8_model = WRender.Model.make_from_obj(Assets.NUMBER_8_OBJ);
 	store.number_9_model = WRender.Model.make_from_obj(Assets.NUMBER_9_OBJ);
+	store.present_a_model = WRender.Model.make_from_obj(Assets.PRESENT_A_OBJ);
+	store.present_b_model = WRender.Model.make_from_obj(Assets.PRESENT_B_OBJ);
 
 	store.unit_cylinder_model = WRender.Model.make_from_obj(Assets.UNIT_CYLINDER_OBJ);
 	store.unit_sphere_model = WRender.Model.make_from_obj(Assets.UNIT_SPHERE_OBJ);
+	store.zone_wall_model = WRender.Model.make_from_obj(Assets.ZONE_WALL_OBJ);
 
 	store.indicator_outline_model = WRender.Model.make_from_obj(Assets.INDICATOR_OUTLINE_OBJ);
 	store.indicator_stroke_model = WRender.Model.make_from_obj(Assets.INDICATOR_STROKE_OBJ);
@@ -827,6 +611,15 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.explosion_7_mp3 = platform.load_audio(xx Assets.EXPLOSION_7_MP3, false);
 	store.explosion_8_mp3 = platform.load_audio(xx Assets.EXPLOSION_8_MP3, false);
 
+	store.drift_0_mp3 = platform.load_audio(xx Assets.DRIFT_0_MP3, true);
+	store.drift_1_mp3 = platform.load_audio(xx Assets.DRIFT_1_MP3, true);
+
+	store.checkpoint_ok_mp3 = platform.load_audio(xx Assets.CHECKPOINT_OK_MP3, false);
+	store.res_mp3 = platform.load_audio(xx Assets.RES_MP3, false);
+	store.coin_launch_mp3 = platform.load_audio(xx Assets.COIN_LAUNCH_MP3, false);
+
+	store.loser_mp3 = platform.load_audio(xx Assets.LOSER_MP3, true);
+
 	// store.tile_atlas_png = Assets.Image.make_from_memory(Assets.tile_atlas_png, 4);
 	// store.tile_atlas = Render.Texture.make_from_image(store.tile_atlas_png);
 
@@ -865,7 +658,6 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	// store.skybox_ski_png = Assets.Image.make_from_memory(Assets.SKYBOX_SKI_PNG, 4);
 	// store.skybox_ski = Render.Texture.make_from_image(store.skybox_ski_png);
 
-	// store.loser_ogg = platform.load_audio(xx Assets.LOSER_OGG);
 	// store.footstep_0_ogg = platform.load_audio(xx Assets.FOOTSTEP_SNOW_0_OGG);
 	// store.footstep_1_ogg = platform.load_audio(xx Assets.FOOTSTEP_SNOW_1_OGG);
 	// store.footstep_2_ogg = platform.load_audio(xx Assets.FOOTSTEP_SNOW_2_OGG);
