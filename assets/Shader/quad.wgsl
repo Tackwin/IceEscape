@@ -62,7 +62,13 @@ struct VertexOutput {
 	var color = instance.color;
 	if (instance.texture_rect.z > 0.0 && instance.texture_rect.w > 0.0) {
 		if ((instance.z30sdf2 % 4) > 0) {
-			color = textureSample(sdfMap, sdfSampler, uv);
+			var _2 = 0.70710678118; // SQRT2_DIV_2
+			var d = textureSample(sdfMap, sdfSampler, uv).a;
+			var s = d - 0.5;
+
+			var v = s / fwidth( s );
+			var a = clamp( v + 0.5, 0.0, 1.0 );
+			color = vec4f(color.rgb, color.a * a);
 		}
 		else {
 			color = textureSample(albedoMap, albedoSampler, uv);

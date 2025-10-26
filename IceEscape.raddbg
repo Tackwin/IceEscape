@@ -1,21 +1,22 @@
 // raddbg 0.9.23 project file
 
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/GUI.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Terrain.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/String/module.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Basic/Simple_String.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_game.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Scene.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Pool.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Basic/Array.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Hash_Table.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/String/module.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Basic/float_to_string.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/http/windows.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/http/websocket.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_server.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/http/modules/mysocket/module.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_game.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/WRender.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Communication.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Terrain.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Runtime_Support.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/GUI.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Controls.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/win32_platform.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/File/windows.jai"
@@ -74,11 +75,5 @@ target:
   working_directory: "C:/Users/Tackwin/Documents/Code/IceEscape/bin/"
   arguments: "-token 7"
   environment: "RUST_BACKTRACE=full"
-  enabled: 0
-}
-target:
-{
-  executable: "C:/Users/Tackwin/Documents/Code/IceEscape/bin/server/IceEscape_Server.exe"
-  working_directory: "C:/Users/Tackwin/Documents/Code/IceEscape"
   enabled: 1
 }

@@ -387,7 +387,6 @@ tick :: (state: *State) {
 		for frame_result.add_scores {
 			user := find_user_by_player_id(it.player_id);
 			if user {
-
 				person := Instance.find_person_by_id(state.instance, user.person_id);
 				if person {
 					person.score.dead += it.score.dead;
@@ -434,6 +433,24 @@ find_user_by_socket :: (ws: *Websocket) -> *User {
 process :: (
 	state: *State, command: Command, socket: *Websocket, response: *Scene.Process_Response
 ) -> bool {
+	cheat_action: *Command.Cheat_Action = isa(command.payload, Command.Cheat_Action);
+	if cheat_action {
+		if cheat_action.kind == .Next_Level {
+			for * scene: state.scenes
+				move_playing_scene(scene.next_id);
+			return true;
+		}
+		if cheat_action.kind == .Reset_Level {
+			for * scene: state.scenes
+				move_playing_scene(scene.id);
+			return true;
+		}
+		if cheat_action.kind == .Reset_Progression {
+			move_playing_scene(state.pick_scene_id);
+			return true;
+		}
+	}
+
 	request_score: *Command.Request_Score = isa(command.payload, Command.Request_Score);
 	if request_score {
 		sender := find_user_by_socket(socket);
@@ -634,9 +651,9 @@ move_playing_scene :: (scene_id: int) {
 
 	old_scene.players.count = 0;
 
-	// for old_scene.players {
-	// 	move_player_to_scene(it.id, scene_id, it.server.model_id);
-	// }
+	for * scene.players {
+		it.server.start_score = it.server.score;
+	}
 }
 
 move_player_to_scene :: (player_id: int, scene_id: int, model_id: int) {
@@ -719,15 +736,14 @@ main :: () {
 
 	terrains :: string.[
 		"pick",
-		"buzz",
-		"funny",
-		"robots",
-		"pounding",
-		"roundabout",
-		"movement",
-		"crisscross",
-		"intro",
-		"here_and_there",
+		"intro", // OK
+		"roundabout", // OK
+		"buzz", // OK
+		"volcano", // OK
+		"pounding", // OK
+		"funny", // OK
+		"here_and_there", // OK
+		"tetris",
 	];
 	
 	for terrains {

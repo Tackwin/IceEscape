@@ -82,7 +82,7 @@ Command :: struct {
 		direction: V3f;
 		dead: bool;
 		has_safe_present: bool;
-		has_hook_present: bool;
+		has_hook_present: int;
 	}
 	Give_Control :: struct {
 		player_id: int;
@@ -139,6 +139,11 @@ Command :: struct {
 		winner_id: int;
 		next_scene_id: int;
 		next_level_scheduled_in_seconds := 60.0;
+
+		most_death_id: int = -1;
+		most_revive_id: int = -1;
+
+		best_scores_id: [5] int = .[-1, -1, -1, -1, -1];
 	}
 	Sync_Robot :: struct {
 		robot_id: int;
@@ -210,12 +215,20 @@ Command :: struct {
 		hooked_id: int;
 	}
 
+	Cheat_Action :: struct {
+		kind: enum {
+			Next_Level;
+			Reset_Level;
+			Reset_Progression;
+		}
+	}
+
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
 		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot, Klaxon,
 		Give_Control, Sync_Score, Request_Score, Sync_Tombstone, Retire, Sync_Present,
-		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook
+		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook, Cheat_Action
 	);
 	sent_timestamp: float64;
 }
@@ -275,6 +288,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Retire; #through;
 		case .Sync_Tombstone; #through;
 		case .New_Terrain; #through;
+		case .Cheat_Action; #through;
 		case .Sync_Player; #through;
 		case .Sync_Safe_Zone; #through;
 		case .Sync_Skull; #through;
@@ -402,6 +416,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Connect; #through;
 		case .Spawn_Coin; #through;
 		case .Despawn_Coin; #through;
+		case .Cheat_Action; #through;
 		case .Respawn; #through;
 		case .Request_Score; #through;
 		case .Die; #through;

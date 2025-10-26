@@ -11,6 +11,7 @@ Z_SLOT :: V2f.{ 0, 15 };
 Q_SLOT :: V2f.{ 1, 15 };
 C_SLOT :: V2f.{ 2, 15 };
 UP_SLOT :: V2f.{ 3, 15 };
+QUESTION_SLOT :: V2f.{ 9, 15 };
 S_SLOT :: V2f.{ 0, 14 };
 D_SLOT :: V2f.{ 1, 14 };
 A_SLOT :: V2f.{ 2, 14 };
@@ -79,7 +80,7 @@ model_id_to_slot :: (id: Scene.Model_Id) -> V2f {
 		case .Boat_Sail; return BOAT_SAIL_SLOT;
 		case .Tractor; return TRACTOR_SLOT;
 	}
-	return .{0, 0};
+	return QUESTION_SLOT;
 }
 
 #scope_export
@@ -250,6 +251,7 @@ Text_Align :: enum {
 	Bottom_Right :: 0b0110;
 	Top_Left :: 0b1001;
 	Top_Right :: 0b1010;
+	Top_Center :: 0b1011;
 	Center_Left :: 0b1101;
 	Center_Right :: 0b1110;
 }
@@ -439,6 +441,62 @@ push_ping_histogram :: (pos: V2f, size: V2f, data: [] float32, current_idx: int)
 	}
 }
 
+push_end_screen :: (scene: Scene.Scene) {
+	dt := to_float64_seconds(current_time_monotonic() - scene.end_scene_countdown_time);
+	dt = scene.end_scene_countdown - dt;
+	text := tprint("you have % seconds left to go through the gate !", ceil(dt).(s64));
+	display_player_icon :: (player_id: int, p: V2f) #expand {
+		player := Scene.find_by_player_id(scene, player_id);
+		if !player
+			return;
+		push_quad_screen(
+			pos = .{ p.x - 24 - 1, p.y - 24 - 1 },
+			size = .{ 48 + 2, 48 + 2 },
+			color = COLOR_HIGHLIGHT_A,
+			z = 0
+		);
+		push_quad_screen(
+			pos = .{ p.x - 24, p.y - 24 },
+			size = .{ 48, 48 },
+			color = COLOR_BRIGHT_A,
+			z = 1
+		);
+		push_quad_texture(
+			pos = .{ p.x - 24, p.y - 24 },
+			size = .{ 48, 48 },
+			color = .{ 1.0, 1.0, 1.0 },
+			tex_slot = model_id_to_slot(xx player.server.model_id),
+			z = 2
+		);
+	}
+
+	cursor := V2f.{
+		IM.display_size.x / 2, IM.display_size.y * 0.75
+	};
+	cursor.y -= push_text("Level cleared !", cursor, 48, align = .Center).y;
+	cursor.y -= 8;
+	push_text(text, cursor, 48, -0.5, align = .Center);
+
+	push_text("Top 5 players on this level", V2f.{ 280, 374 }, 24);
+
+	for scene.client.end_level.best_scores_id {
+		display_player_icon(it, V2f.{ 280 + 32 + 64.0 * it_index, 374 - 48 });
+	}
+
+	push_text("Finisher", V2f.{ 762, 374 - 00 }, 24);
+	display_player_icon(scene.client.end_level.winner_id, V2f.{ 762 + 196 + 12, 374 + 12 });
+
+	push_text("Most deaths", V2f.{ 762, 374 - 64}, 24);
+	display_player_icon(
+		scene.client.end_level.most_death_id, V2f.{ 762 + 196 + 12, 374 - 64 + 12 }
+	);
+
+	push_text("Most resurrections", V2f.{ 762, 374 - 128 }, 24);
+	display_player_icon(
+		scene.client.end_level.most_revive_id, V2f.{ 762 + 196 + 12, 374 - 128 + 12 }
+	);
+}
+
 push_score_tab :: (scene: Scene.Scene) {
 	scoreboard_center := IM.display_size / 2;
 	scoreboard_center.y += IM.display_size.y / 12;
@@ -453,7 +511,7 @@ push_score_tab :: (scene: Scene.Scene) {
 	push_quad_screen(
 		pos = cursor,
 		size = scoreboard_size,
-		color = .{ 0.0, 0.0, 0.0 },
+		color = COLOR_BACK_A,
 		z = 5
 	);
 
@@ -461,7 +519,7 @@ push_score_tab :: (scene: Scene.Scene) {
 	push_quad_screen(
 		pos = .{ cursor.x, cursor.y - header_height },
 		size = .{ scoreboard_size.x, header_height },
-		color = .{ 0.1, 0.1, 0.1 },
+		color = COLOR_SOMBER_A,
 		z = 6
 	);
 
@@ -497,13 +555,13 @@ push_score_tab :: (scene: Scene.Scene) {
 		push_quad_screen(
 			pos = cursor,
 			size = scoreline_size,
-			color = .{ 0.2, 0.2, 0.2 },
+			color = COLOR_HIGHLIGHT_A,
 			z = 10
 		);
 		push_quad_screen(
 			pos = .{ cursor.x + 1, cursor.y + 1 },
 			size = .{ scoreline_size.x - 2, scoreline_size.y - 2 },
-			color = .{ 0.0, 0.0, 0.0 },
+			color = COLOR_BACK_A,
 			z = 11
 		);
 
@@ -683,6 +741,12 @@ push_death_indicator :: (scene: Scene.Scene) {
 	}
 }
 
+
+COLOR_SOMBER_A :: V3f.{ 5/255.0, 107/255.0, 150/255.0 };
+COLOR_BRIGHT_A :: V3f.{ 25/255.0, 159/255.0, 215/255.0 };
+COLOR_HIGHLIGHT_A :: V3f.{ 54/255.0, 189/255.0, 247/255.0 };
+COLOR_BACK_A :: V3f.{ 3/255.0, 60/255.0, 84/255.0 };
+
 push_action_palette :: (scene: Scene.Scene, info: *Platform.Frame_Info) {
 
 	push_quad_screen(
@@ -692,11 +756,10 @@ push_action_palette :: (scene: Scene.Scene, info: *Platform.Frame_Info) {
 		1
 	);
 
-
 	render_square_at :: (x: int, y: int, key_code: int) #expand {
-		color := V3f.{ 25/255.0, 159/255.0, 215/255.0 };
+		color := COLOR_BRIGHT_A;
 		if info.key_pressed[xx key_code]
-			color = .{ 54/255.0, 189/255.0, 247/255.0 };
+			color = COLOR_HIGHLIGHT_A;
 		push_quad_screen(
 			pos = .{ x * 42.0 + 1, y * 42.0 + 1 },
 			size = .{ 40, 40 },
@@ -773,6 +836,15 @@ push_action_palette :: (scene: Scene.Scene, info: *Platform.Frame_Info) {
 		if player.server.has_hook_present {
 			render_texture_at(0, 2, HOOK_SLOT, .{ 0.5, 1.0, 0.5 });
 			render_hint_at(0, 2, A_OUTLINE_SLOT);
+
+			for 0..player.server.has_hook_present-1 {
+				push_quad_screen(
+					pos = .{ (0 * 42 + 3 + it * 6).(float32), (2 * 42 + 3).(float32) },
+					size = .{ 4, 4 },
+					color = .{ 1.0, 1.0, 1.0 },
+					z = 5
+				);
+			}
 		}
 	}
 }

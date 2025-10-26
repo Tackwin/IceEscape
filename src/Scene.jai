@@ -65,6 +65,8 @@ Scene :: struct {
 	}
 	state: State;
 
+	name: [64] u8;
+
 	id := 1;
 	next_id := -1;
 
@@ -120,7 +122,7 @@ Scene :: struct {
 
 	succeed := false;
 	end_scene_countdown_time: Apollo_Time;
-	end_scene_countdown := 10.0;
+	end_scene_countdown := 30.0;
 	end_scene_countdown_started := false;
 
 	client_rng: Rand.State;
@@ -130,8 +132,13 @@ Scene :: struct {
 	camera_locked := false;
 
 	sound_triggers: [..] Sound_Trigger;
+
+	client: struct {
+		end_level: Command.End_Level;
+	}
 }
 clear :: (scene: *Scene) {
+	memset(scene.name.data, 0, scene.name.count);
 	scene.tombstones.count = 0;
 	scene.skulls.count = 0;
 	scene.coins.count = 0;
@@ -303,6 +310,8 @@ Frame_Result :: struct {
 		score: Score;
 	}
 	add_scores: [..] Add_Score;
+
+	restarted := false;
 }
 free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.died);
@@ -335,6 +344,7 @@ clear :: (frame_result: *Frame_Result) {
 	frame_result.sync_present.count = 0;
 	frame_result.sync_safe_zone.count = 0;
 	frame_result.sync_player.count = 0;
+	frame_result.restarted = false;
 }
 
 Safe_Zone :: struct {
@@ -920,6 +930,10 @@ Score :: struct {
 	revive := 0;
 	trophy := 0;
 }
+compute_score :: (score: Score) -> int {
+	return score.revive * 2 + score.trophy * 5 - score.dead;
+}
+
 Player :: struct {
 	Model :: enum {
 		Racer :: 0;
@@ -952,9 +966,10 @@ Player :: struct {
 		model_id := 0;
 
 		score: Score;
+		start_score: Score;
 
 		has_safe_present := false;
-		has_hook_present := false;
+		has_hook_present := 0;
 	};
 
 	// This is the stuff that gets optimistically updated by the client. For rendering
@@ -1248,7 +1263,7 @@ input :: (
 	if controls.just_pressed[Platform.Key.A] {
 		player := find_by_player_id(scene, scene.controlled_player_id);
 		if player && !player.server.dead {
-			if player.server.has_hook_present {
+			if player.server.has_hook_present > 0 {
 				command: Command.Active_Item;
 				command.player_id = player.id;
 				command.safe_zone = false;
@@ -1282,6 +1297,8 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 				);
 			} else {
 				scene.state = .Wipe_Fade_Out;
+				if result
+					result.restarted = true;
 				restart(scene);
 			}
 		case .Wipe_Fade_Out;
@@ -1317,6 +1334,11 @@ update_client :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 }
 
 update :: (scene: *Scene, hook: *Hook, dt: float32, result: *Frame_Result) {
+	hooker := find_by_player_id(scene, hook.hooker_id);
+	if hooker {
+		hook.server.last_anchor_position = hooker.server.position;
+	}
+
 	if hook.hooked_id < 0 {
 		hook.server.length += hook.server.speed * dt;
 		if hook.server.length > hook.server.max_length
@@ -1341,12 +1363,8 @@ update :: (scene: *Scene, hook: *Hook, dt: float32, result: *Frame_Result) {
 			}
 		}
 	} else {
-		hooker := find_by_player_id(scene, hook.hooker_id);
 		hooked := find_by_player_id(scene, hook.hooked_id);
 
-		if hooker {
-			hook.server.last_anchor_position = hooker.server.position;
-		}
 
 		hook.server.length -= hook.server.speed * dt;
 		if hook.server.length < 0.0
@@ -1525,7 +1543,7 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					case .A;
 						it.server.has_safe_present = true;
 					case .B;
-						it.server.has_hook_present = true;
+						it.server.has_hook_present = 3;
 				}
 				array_add(*result.sync_player, make_sync(it));
 
@@ -1784,6 +1802,51 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 				winner.winner_id = player.id;
 				winner.next_level_scheduled_in_seconds = 6;
 				winner.next_scene_id = scene.next_id;
+
+				best_death := -1;
+				for scene.players {
+					dt_dead := it.server.score.dead - it.server.start_score.dead;
+					dt_revive := it.server.score.revive - it.server.start_score.revive;
+					if winner.most_death_id < 0 || dt_dead > best_death {
+						best_death = dt_dead;
+						winner.most_death_id = it.id;
+					}
+					if winner.most_revive_id < 0 || dt_revive > best_death {
+						best_death = dt_revive;
+						winner.most_revive_id = it.id;
+					}
+				}
+
+				
+				for top: 0..winner.best_scores_id.count-1 {
+					best_score := -9999;
+					best_player_id := -1;
+					for scene.players {
+						s := compute_score(it.server.score);
+
+						already_in := false;
+						for idx: winner.best_scores_id {
+							if idx == it.id {
+								already_in = true;
+								break;;
+							}
+						}
+						if already_in
+							continue;
+
+						if s > best_score {
+							best_score = s;
+							best_player_id = it.id;
+						}
+					}
+
+					if best_player_id >= 0 {
+						winner.best_scores_id[top] = best_player_id;
+					} else {
+						break;
+					}
+				}
+
 				array_add(*result.end_level, winner);
 
 				win_level(scene, player.id, result);
@@ -1860,7 +1923,6 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 		}
 
 		if is_hooked {
-			print("Is hooked\n");
 			continue;
 		}
 
@@ -1970,6 +2032,9 @@ win_level :: (scene: *Scene, player_id: int, result: *Frame_Result) {
 }
 
 server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
+	player.server.has_safe_present = false;
+	player.server.has_hook_present = 0;
+
 	died: Command.Die;
 	died.player_id = player.id;
 	died.position = player.server.position;
@@ -2006,10 +2071,13 @@ server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 		add_score.score.dead = 1;
 		array_add(*result.add_scores, add_score);
 	}
+
 }
 
 update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
+	antiair.server.t += dt;
 	antiair.client.t += dt;
+	antiair.client.t = damp(antiair.client.t, antiair.server.t, 10.0, dt);
 	if 0.1 < antiair.client.t && antiair.client.t + 1 < antiair.server.cooldown
 		antiair.client.next_target = antiair.server.next_target;
 	if antiair.client.t > antiair.server.cooldown {
@@ -2017,8 +2085,6 @@ update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
 	}
 
 	if scene.is_server {
-		antiair.server.t += dt;
-		
 		if antiair.server.t > antiair.server.cooldown {
 			antiair.server.t = 0.0;
 			antiair.server.just_shooted = true;
@@ -2302,11 +2368,12 @@ update :: (scene: Scene, skull: *Skull, dt: float32) {
 	skull.server.t += skull.server.speed * dt;
 	if scene.is_server
 		skull.client.t = skull.server.t;
-
-	path: *Path = *scene.terrain.paths[skull.path_id];
-	if path.checkpoints_count > 0 {
-		dir := compute_skull_dir(scene, skull);
-		skull.client.direction = damp_angle_between(skull.client.direction, dir, 20.0, dt);
+	if skull.path_id < scene.terrain.paths.count {
+		path: *Path = *scene.terrain.paths[skull.path_id];
+		if path.checkpoints_count > 0 {
+			dir := compute_skull_dir(scene, skull);
+			skull.client.direction = damp_angle_between(skull.client.direction, dir, 20.0, dt);
+		}
 	}
 }
 
@@ -2485,7 +2552,7 @@ process_server_only :: (scene: *Scene, command: Command, response: *Process_Resp
 				return true;
 			}
 			if active_item.hook {
-				if !player.server.dead && player.server.has_hook_present {
+				if !player.server.dead && player.server.has_hook_present > 0 {
 					hook: Hook;
 					hook.id = scene.generation;
 					scene.generation += 1;
@@ -2496,7 +2563,7 @@ process_server_only :: (scene: *Scene, command: Command, response: *Process_Resp
 					hook.server.length = 0.0;
 					array_add(*scene.hooks, hook);
 
-					player.server.has_hook_present = false;
+					player.server.has_hook_present -= 1;
 					add(response, scene.id, make_sync(player));
 					add(response, scene.id, make_sync(*hook));
 				}
@@ -2546,6 +2613,8 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		if player
 		{
 			player.server.dead = true;
+			player.server.has_safe_present = false;
+			player.server.has_hook_present = 0;
 			tombstone: Tombstone;
 			tombstone.player_id = died.player_id;
 			tombstone.position = died.position;
@@ -2690,6 +2759,8 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		if antiair {
 			antiair.server.curr_target = antiair.server.next_target;
 			antiair.server.next_target = anitiar_shoot.next_target;
+			antiair.server.t = 0;
+			antiair.client.t = 0;
 			return true;
 		}
 	}
@@ -2709,6 +2780,7 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		scene.end_scene_countdown = end_level.next_level_scheduled_in_seconds;
 		scene.end_scene_countdown_started = true;
 		scene.next_id = end_level.next_scene_id;
+		scene.client.end_level = end_level;
 		return true;
 	}
 
@@ -3160,7 +3232,7 @@ spawn_into :: (player: *Player, scene: Scene) {
 	player.server.slipping = false;
 	player.server.dead = false;
 	player.server.has_safe_present = false;
-	player.server.has_hook_present = false;
+	player.server.has_hook_present = 0;
 }
 
 terrain_size :: (scene: Scene) -> V2f {

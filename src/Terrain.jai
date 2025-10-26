@@ -78,6 +78,18 @@ parse_terrain :: (text: string, scene: *Scene) {
 			continue;
 		}
 
+		if starts_with(line, "- name: ") {
+			name: string;
+			name.data = line.data + 8;
+			name.count = line.count - 8;
+			for * scene.name {
+				if it_index < name.count
+					it.* = name[it_index];
+				else
+					it.* = 0;
+			}
+		}
+
 		if scan2(line, "push") {
 			push_stack();
 			config := current_config();
@@ -189,6 +201,7 @@ parse_terrain :: (text: string, scene: *Scene) {
 			}
 
 			antiair.server.t = Rand.random_uniform(*rng, 0.0, current_config().antiair_offset_std);
+			antiair.client.t = antiair.server.t;
 
 			cursor -= 1;
 		}
@@ -802,10 +815,21 @@ parse_terrain :: (text: string, scene: *Scene) {
 						offy := Rand.random_uniform(*rng, -0.4, 0.4);
 						offtheta := Rand.random_uniform(*rng, 0, 2 * 3.141592);
 
+						tilt := V3f.{ 0, 0, 2 };
+						tilt.x = Rand.random_uniform(*rng, -0.1, 0.1);
+						tilt.y = Rand.random_uniform(*rng, -0.1, 0.1);
+						tilt = normalize(tilt);
+
+
 						center := tile_center(scene, .{ x, y });
 
 						prop.M = M4f.translate(center + V3f.{ offx, offy, 0 });
+						scale := Rand.random_uniform(*rng, 0.9, 1.1);
+						prop.M = prop.M * scale_matrix(V3f.{ scale, scale, scale });
 						prop.M = prop.M * to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, offtheta));
+						prop.M = prop.M * to_rotation_matrix(
+							from_unit_vectors(V3f.{ 0, 0, 1 }, tilt)
+						);
 
 						array_add(*scene.props, prop);
 					}

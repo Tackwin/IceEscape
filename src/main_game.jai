@@ -381,6 +381,23 @@ main :: () {
 			}
 			send_web_message(platform, make_command(command));
 		}
+		if controls.pressed[Key.W] && controls.pressed[Key.P] {
+			if controls.just_pressed[Key.K] {
+				command: Command.Cheat_Action;
+				command.kind = .Next_Level;
+				send_web_message(platform, make_command(command));
+			}
+			if controls.just_pressed[Key.L] {
+				command: Command.Cheat_Action;
+				command.kind = .Reset_Level;
+				send_web_message(platform, make_command(command));
+			}
+			if controls.just_pressed[Key.M] {
+				command: Command.Cheat_Action;
+				command.kind = .Reset_Progression;
+				send_web_message(platform, make_command(command));
+			}
+		}
 
 		if controls.just_pressed[Key.H] {
 			state.render_fps = !state.render_fps;
@@ -388,17 +405,28 @@ main :: () {
 		if controls.just_pressed[Key.P] {
 			state.render_command_debug = !state.render_command_debug;
 		}
-		if scene.end_scene_countdown_started {
-			dt := to_float64_seconds(current_time_monotonic() - scene.end_scene_countdown_time);
-			dt = scene.end_scene_countdown - dt;
-			text := tprint("you have % seconds left to go through the gate !", ceil(dt).(s64));
+		{
+			name: string;
+			name.data = scene.name.data;
+			name.count = 64;
+			for name if it == 0 { name.count = it_index; break; }
+			size := GUI.push_text(
+				name,
+				V2f.{ 12, frame_info.framebuffer_size.y - 32 },
+				24,
+				1,
+				align = .Top_Left
+			);
+			GUI.push_quad_screen(
+				V2f.{ 10, frame_info.framebuffer_size.y - size.y - 14 },
+				V2f.{ size.x + 10, size.y + 6 },
+				GUI.COLOR_BRIGHT_A,
+				0,
+			);
+		}
 
-			cursor := V2f.{
-				frame_info.framebuffer_size.x / 2, frame_info.framebuffer_size.y * 0.75
-			};
-			cursor.y -= GUI.push_text("Level cleared !", cursor, 48, align = .Center).y;
-			cursor.y -= 8;
-			GUI.push_text(text, cursor, 48, -0.5, align = .Center);
+		if scene.end_scene_countdown_started {
+			GUI.push_end_screen(scene);
 		}
 
 		#if OS == .WINDOWS {

@@ -1834,7 +1834,7 @@ render_antiairs :: (
 	}
 
 	for scene.antiairs {
-		if !(it.client.t > (it.server.cooldown - 0.5))
+		if !(it.client.t > (it.server.cooldown - 0.75))
 			continue;
 
 		particle: Extra.Quad;
@@ -1863,6 +1863,8 @@ render_traps :: (
 		instance.* = .{};
 		M := M4f.translate(it.position);
 		instance.M = M;
+		scale := 2 * it.radius_hitbox;
+		M4f.scale(*instance.M, V3f.{ scale, scale, scale });
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count == 0
