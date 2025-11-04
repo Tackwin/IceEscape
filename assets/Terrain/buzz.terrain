@@ -427,20 +427,16 @@ trap
 
 present
 - position: 35.5 11.5 0.0
-- refresh_cooldown: 15
 
 present
 - position: 35.5 9.5 0.0
-- refresh_cooldown: 15
 - kind: B
 
 present
 - position: 9.5 18.5 0.0
 - depends_on_flag_id: 1
-- refresh_cooldown: 15
 
 present
 - position: 9.5 16.5 0.0
 - depends_on_flag_id: 1
-- refresh_cooldown: 15
 - kind: B

@@ -137,6 +137,10 @@ process :: (state: *State, command: Command, response: *Scene.Process_Response) 
 			Scene.process(*state.scene, make_command(it), response);
 		}
 
+		for sync_scene.standins {
+			Scene.process(*state.scene, make_command(it), response);
+		}
+
 		state.scene.server_rng = sync_scene.rng;
 		return true;
 	}
@@ -193,6 +197,10 @@ respond :: (platform: Platform, response: Scene.Process_Response) {
 			send_web_message(platform, it.command);
 		if isa(it.command.payload, Command.Active_Item)
 			send_web_message(platform, it.command);
+		if isa(it.command.payload, Command.Buy_Ask)
+			send_web_message(platform, it.command);
+		if isa(it.command.payload, Command.Ask_Respawn)
+			send_web_message(platform, it.command);
 	}
 }
 
@@ -209,6 +217,7 @@ handle_gui :: (frame_info: *Frame_Info, state: *State, scene: Scene.Scene) {
 
 	GUI.push_action_palette(scene, frame_info);
 	GUI.push_settings(*state.volume_on, frame_info);
+	GUI.push_buy_prompt(*scene);
 	if state.render_command_debug {
 		n := min(100, state.received_command_history.count);
 		y := 0;
@@ -298,6 +307,27 @@ handle_gui :: (frame_info: *Frame_Info, state: *State, scene: Scene.Scene) {
 	}
 }
 
+update_news :: (scene: *Scene.Scene, news: *[..] Scene.Breaking_News) {
+	current_time := current_time_monotonic();
+	cursor := 0;
+	for * news.* {
+		if to_float64_seconds(current_time - it.time) < 5.0 {
+			news.data[cursor] = it;
+			cursor += 1;
+		} else {
+			// News expired
+			free(it.text);
+		}
+	}
+
+	array_resize(news, cursor + scene.news.count);
+	for 0..scene.news.count-1 {
+		news.data[it + cursor].text = scene.news[it];
+		news.data[it + cursor].time = current_time;
+	}
+	scene.news.count = 0;
+}
+
 main :: () {
 	context.allocator = .{ wallocator_proc, null };
 	context.temporary_storage.overflow_allocator = context.allocator;
@@ -381,7 +411,7 @@ main :: () {
 			}
 			send_web_message(platform, make_command(command));
 		}
-		if controls.pressed[Key.W] && controls.pressed[Key.P] {
+		if controls.pressed[Key.N] && controls.pressed[Key.P] {
 			if controls.just_pressed[Key.K] {
 				command: Command.Cheat_Action;
 				command.kind = .Next_Level;
@@ -396,6 +426,37 @@ main :: () {
 				command: Command.Cheat_Action;
 				command.kind = .Reset_Progression;
 				send_web_message(platform, make_command(command));
+			}
+			if controls.just_pressed[Key.U] {
+				command: Command.Cheat_Action;
+				command.kind = .Kick;
+				V := Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
+				P := Scene.perspective(scene.camera);
+				r := Scene.unproject_ndc(
+					.{
+						controls.frame_info.mouse_position.x / controls.frame_info.window_size.x * 2 - 1,
+						controls.frame_info.mouse_position.y / controls.frame_info.window_size.y * 2 - 1
+					},
+					V,
+					P
+				);
+				target, ok := ray_plane(scene.camera.position, r, .{ 0, 0, 1 });
+				if ok {
+					closest_d := FLOAT32_MAX;
+					closest_player_id := -1;
+					for scene.players {
+						p := it.client.position;
+						d := norm(target - p);
+
+						if d < closest_d {
+							closest_d = d;
+							closest_player_id = it.id;
+						}
+					}
+					command.player_id = closest_player_id;
+					send_web_message(platform, make_command(command));
+				}
+
 			}
 		}
 
@@ -423,6 +484,12 @@ main :: () {
 				GUI.COLOR_BRIGHT_A,
 				0,
 			);
+			cursor := V2f.{ 10, frame_info.framebuffer_size.y - size.y - 14 - 14 - 6 };
+
+			player := Scene.find_by_player_id(scene, scene.controlled_player_id);
+			if player {
+				GUI.push_point_ui(player);
+			}
 		}
 
 		if scene.end_scene_countdown_started {
@@ -460,7 +527,9 @@ main :: () {
 		}
 		respond(platform, process_response);
 		Scene.update(scene, frame_info.delta_time, null);
+		update_news(scene, *state.news);
 
+		GUI.push_breaking_news(state.news);
 		if controls.pressed[Key.Tab] {
 			GUI.push_score_tab(scene);
 		}
@@ -491,8 +560,9 @@ sounding :: (state: *State, scene: *Scene.Scene, store: Store) {
 				continue;
 			audio.kind = .Sound;
 			audio.exponent = 2.5;
+			audio.volume = 0.04;
 			sound = context._platform.play_audio(audio, .{});
-			sound.volume = 0.2;
+			sound.volume = audio.volume;
 			sound.loop = true;
 			context._platform.set_sound(sound);
 			table_set(*state.skull_id_to_sound, it.id, sound);
@@ -510,8 +580,9 @@ sounding :: (state: *State, scene: *Scene.Scene, store: Store) {
 				continue;
 			audio.kind = .Sound;
 			audio.exponent = 2.5;
+			audio.volume = 0.010;
 			sound = context._platform.play_audio(audio, .{});
-			sound.volume = 0.125;
+			sound.volume = audio.volume;
 			sound.loop = true;
 			context._platform.set_sound(sound);
 			table_set(*state.shurikens_id_to_sound, it.id, sound);
@@ -549,63 +620,69 @@ sounding :: (state: *State, scene: *Scene.Scene, store: Store) {
 	listener.direction = normalize(listener.direction);
 	context._platform.set_listener_info(listener);
 	for scene.sound_triggers {
-		audio: Audio;
-		audio.id = -1;
-		if it.kind == {
-			case .Footstep_Snow;
-				idx := RNG.random_uniform(*scene.client_rng, 0, 5);
-				audio_ptr := get_footstep_snow_sound(store, idx);
-				if audio_ptr
-					audio = audio_ptr.*;
-				audio.volume = RNG.random_uniform(*scene.client_rng, 0.2, 0.4);
-				audio.exponent = 1.0;
-			case .Footstep_Ice;
-				idx := RNG.random_uniform(*scene.client_rng, 0, 5);
-				audio_ptr := get_footstep_ice_sound(store, idx);
-				if audio_ptr
-					audio = audio_ptr.*;
-				audio.volume = RNG.random_uniform(*scene.client_rng, 0.75, 1.00);
-				audio.exponent = 1.0;
-			case .Car_Klaxon;
-				idx := RNG.random_uniform(*scene.client_rng, 0, 3);
-				audio_ptr := get_horn_car(store, idx);
-				if audio_ptr
-					audio = audio_ptr.*;
-				audio.volume = RNG.random_uniform(*scene.client_rng, 0.65, 0.75);
-				audio.exponent = 1.0;
-			case .Explosion;
-				idx := RNG.random_uniform(*scene.client_rng, 0, 9);
-				audio_ptr := get_explosion_sound(store, idx);
-				if audio_ptr
-					audio = audio_ptr.*;
-				audio.volume = RNG.random_uniform(*scene.client_rng, 1.0, 1.3);
-				audio.exponent = 2.0;
-			case .Loser;
-				audio = store.loser_mp3;
-				audio.volume = 1.2;
-				audio.exponent = 1.0;
-			case .Checkpoint_Ok;
-				audio = store.checkpoint_ok_mp3;
-				audio.volume = 2.0;
-				audio.exponent = 2.0;
-			case .Res;
-				audio = store.res_mp3;
-				audio.volume = 1.0;
-				audio.exponent = 2.0;
-			case .Coin_Launch;
-				audio = store.coin_launch_mp3;
-				audio.volume = 3.5;
-				audio.exponent = 2.5;
-		}
-		if audio.id == -1
-			continue;
-		if it.inhead
-			audio.exponent = 0.0;
+		for counter: 1..it.count {
+			audio: Audio;
+			audio.id = -1;
+			if it.kind == {
+				case .Footstep_Snow;
+					idx := RNG.random_uniform(*scene.client_rng, 0, 5);
+					audio_ptr := get_footstep_snow_sound(store, idx);
+					if audio_ptr
+						audio = audio_ptr.*;
+					audio.volume = RNG.random_uniform(*scene.client_rng, 0.2, 0.4);
+					audio.exponent = 1.0;
+				case .Footstep_Ice;
+					idx := RNG.random_uniform(*scene.client_rng, 0, 5);
+					audio_ptr := get_footstep_ice_sound(store, idx);
+					if audio_ptr
+						audio = audio_ptr.*;
+					audio.volume = RNG.random_uniform(*scene.client_rng, 0.75, 1.00);
+					audio.exponent = 1.0;
+				case .Car_Klaxon;
+					idx := RNG.random_uniform(*scene.client_rng, 0, 3);
+					audio_ptr := get_horn_car(store, idx);
+					if audio_ptr
+						audio = audio_ptr.*;
+					audio.volume = RNG.random_uniform(*scene.client_rng, 0.65, 0.75);
+					audio.exponent = 1.0;
+				case .Explosion;
+					idx := RNG.random_uniform(*scene.client_rng, 0, 9);
+					audio_ptr := get_explosion_sound(store, idx);
+					if audio_ptr
+						audio = audio_ptr.*;
+					audio.volume = RNG.random_uniform(*scene.client_rng, 1.0, 1.3);
+					audio.exponent = 2.0;
+				case .Loser;
+					audio = store.loser_mp3;
+					audio.volume = 2.0;
+					audio.exponent = 1.0;
+				case .Checkpoint_Ok;
+					audio = store.checkpoint_ok_mp3;
+					audio.volume = 2.0;
+					audio.exponent = 2.0;
+				case .Res;
+					audio = store.res_mp3;
+					audio.volume = 1.0;
+					audio.exponent = 2.0;
+				case .Coin_Launch;
+					audio = store.coin_launch_mp3;
+					audio.volume = 3.5;
+					audio.exponent = 2.5;
+				case .Point_Up;
+					audio = store.point_up_mp3;
+					audio.volume = 0.5;
+			}
+			if audio.id == -1
+				continue;
+			if it.inhead
+				audio.exponent = 0.0;
 
-		audio.pitch = RNG.random_uniform(*scene.client_rng, 0.8, 1.2);
-		audio.kind = .Sound;
-		audio.repeating = false;
-		context._platform.play_audio(*audio, it.position);
+			audio.pitch = RNG.random_uniform(*scene.client_rng, 0.8, 1.2);
+			audio.kind = .Sound;
+			audio.repeating = false;
+			audio.delay = counter * 50; // Stagger sounds to avoid audio clutter.
+			context._platform.play_audio(*audio, it.position);
+		}
 	}
 
 	if state.volume_on {
@@ -645,4 +722,6 @@ State :: struct {
 
 	skull_id_to_sound: Table(int, Sound);
 	shurikens_id_to_sound: Table(int, Sound);
+
+	news: [..] Scene.Breaking_News;
 }

@@ -187,6 +187,8 @@ play_audio :: (audio: Audio, position: V3f) -> Sound {
 		exponent: float32;
 
 		sound_id: *s64;
+
+		delay: float32;
 	}
 
 	js_play_audio :: (params: *Params) #foreign;
@@ -203,6 +205,7 @@ play_audio :: (audio: Audio, position: V3f) -> Sound {
 	params.fade_in = xx audio.fade_in;
 	params.sound_id = *sound.id;
 	params.exponent = xx audio.exponent;
+	params.delay = xx audio.delay;
 	js_play_audio(*params);
 
 	sound.audio_id = audio.id;

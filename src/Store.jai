@@ -124,6 +124,8 @@ Store :: struct {
 	number_8_model: WRender.Model;
 	number_9_model: WRender.Model;
 
+	juukebox_model: WRender.Model;
+
 	unit_cylinder_model: WRender.Model;
 	unit_sphere_model: WRender.Model;
 	zone_wall_model: WRender.Model;
@@ -186,6 +188,8 @@ Store :: struct {
 
 	res_mp3: Platform.Audio;
 	coin_launch_mp3: Platform.Audio;
+
+	point_up_mp3: Platform.Audio;
 }
 
 get_horn_car :: (store: Store, idx: int) -> *Platform.Audio {
@@ -562,6 +566,7 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.number_9_model = WRender.Model.make_from_obj(Assets.NUMBER_9_OBJ);
 	store.present_a_model = WRender.Model.make_from_obj(Assets.PRESENT_A_OBJ);
 	store.present_b_model = WRender.Model.make_from_obj(Assets.PRESENT_B_OBJ);
+	store.juukebox_model = WRender.Model.make_from_obj(Assets.JUKEBOX_OBJ);
 
 	store.unit_cylinder_model = WRender.Model.make_from_obj(Assets.UNIT_CYLINDER_OBJ);
 	store.unit_sphere_model = WRender.Model.make_from_obj(Assets.UNIT_SPHERE_OBJ);
@@ -619,6 +624,8 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.coin_launch_mp3 = platform.load_audio(xx Assets.COIN_LAUNCH_MP3, false);
 
 	store.loser_mp3 = platform.load_audio(xx Assets.LOSER_MP3, true);
+
+	store.point_up_mp3 = platform.load_audio(xx Assets.POINT_UP_MP3, false);
 
 	// store.tile_atlas_png = Assets.Image.make_from_memory(Assets.tile_atlas_png, 4);
 	// store.tile_atlas = Render.Texture.make_from_image(store.tile_atlas_png);

@@ -165,6 +165,7 @@ parse_terrain :: (text: string, scene: *Scene) {
 		if scan2(line, "antiair") {
 			antiair: AntiAir;
 			antiair.id = scene.antiairs.count + 1;
+			antiair.server.t = 0.0;
 			defer array_add(*scene.antiairs, antiair);
 
 			cursor += 1;
@@ -195,12 +196,14 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 				if scan2(line, "- radius: %", *antiair.server.radius)
 					continue;
+				if scan2(line, "- offset_time: %", *antiair.server.t)
+					continue;
 
 				print("Error reading antiair, unrecognized line: % (L%)\n", line, cursor);
 				cursor -= 1;
 			}
 
-			antiair.server.t = Rand.random_uniform(*rng, 0.0, current_config().antiair_offset_std);
+			antiair.server.t += Rand.random_uniform(*rng, 0.0, current_config().antiair_offset_std);
 			antiair.client.t = antiair.server.t;
 
 			cursor -= 1;

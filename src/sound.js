@@ -46,6 +46,7 @@ jai_imports.js_play_audio = (params_ptr) => {
 	const fade_in = getS32(params_ptr, 36);
 	const exponent = getF32(params_ptr, 40);
 	const sound_id_ptr = getU64(params_ptr, 48);
+	const delay = getF32(params_ptr, 56);
 
 	const buffer = audio_id_to_buffer[id];
 	if (!buffer) {
@@ -61,8 +62,12 @@ jai_imports.js_play_audio = (params_ptr) => {
 	
 	const gainNode = audio_context.createGain();
 	gainNode.gain.setValueAtTime(0, audio_context.currentTime);
-	gainNode.gain.linearRampToValueAtTime(0.2 * volume, audio_context.currentTime + fade_in / 1000);
-	
+
+	let mult = 1.0;
+	if (kind == 0)
+		mult = 0.2;
+	gainNode.gain.linearRampToValueAtTime(mult * volume, audio_context.currentTime + fade_in / 1000);
+
 	let panner = null;
 	if (kind == 0) {
 		panner = audio_context.createPanner();
@@ -82,7 +87,7 @@ jai_imports.js_play_audio = (params_ptr) => {
 		gainNode.connect(audio_context.destination);
 	}
 	
-	source.start(0);
+	source.start(delay / 1000);
 	
 	sound_id_counter += 1;
 	const sound_id = sound_id_counter;
@@ -203,13 +208,6 @@ jai_imports.js_set_listener_info = (params_ptr) => {
 	const forward_y = getF32(params_ptr, 16);
 	const forward_z = getF32(params_ptr, 20);
 
-	audio_context.listener.positionX.value = x;
-	audio_context.listener.positionY.value = y;
-	audio_context.listener.positionZ.value = z;
-	audio_context.listener.forwardX.value = forward_x;
-	audio_context.listener.forwardY.value = forward_y;
-	audio_context.listener.forwardZ.value = forward_z;
-	audio_context.listener.upX.value = 0;
-	audio_context.listener.upY.value = 0;
-	audio_context.listener.upZ.value = 1;
+	audio_context.listener.setPosition(x, y, z);
+	audio_context.listener.setOrientation(forward_x, forward_y, forward_z, 0, 0, 1);
 }

@@ -1399,7 +1399,7 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 			instance.size = V2f.{ width, height };
 			instance.texture_rect = .{ pos.x, pos.y, size.x, size.y };
 			instance.z30sdf2 = (it.z * 400).(u32) + 1;
-			instance.color = v4(it.color, 1.0);
+			instance.color = it.color;
 		}
 
 		if framegraph.uiInstances.count > 0 {
@@ -2424,6 +2424,8 @@ render_standin :: (
 		instanced := append_instance_buffer(framegraph);
 		for scene.stand_in {
 			if it.model_id != model_id
+				continue;
+			if it.retired
 				continue;
 
 			instanced.count += 1;

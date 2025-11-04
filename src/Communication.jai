@@ -71,6 +71,7 @@ Command :: struct {
 	}
 	Quit :: struct {
 		player_id: int;
+		from_standin_id: int = -1;
 	}
 	New_Terrain :: struct {
 		ascii: [] u8;
@@ -90,6 +91,7 @@ Command :: struct {
 	Sync_Score :: struct {
 		player_id: int;
 		score: Score;
+		is_start := false;
 	}
 	Request_Score :: struct {
 		player_ids: [8] int;
@@ -134,6 +136,7 @@ Command :: struct {
 		player_id: int;
 		model_id: int;
 		play_world_id: int;
+		standin_id: int = -1;
 	}
 	End_Level :: struct {
 		winner_id: int;
@@ -176,6 +179,11 @@ Command :: struct {
 		tombstones: [] Sync_Tombstone;
 		presents: [] Sync_Present;
 		safe_zones: [] Sync_Safe_Zone;
+		standins: [] Sync_Stand_In;
+	}
+	Sync_Stand_In :: struct {
+		standin_id: int;
+		retired: bool;
 	}
 	Sync_Tombstone :: struct {
 		player_id: int;
@@ -220,7 +228,34 @@ Command :: struct {
 			Next_Level;
 			Reset_Level;
 			Reset_Progression;
+			Kick;
 		}
+		player_id: int;
+	}
+
+	Buy_Ask :: struct {
+		present_id: int;
+		player_id: int;
+		item_kind: Present.Kind;
+	}
+
+	Buy_Response :: struct {
+		present_id: int;
+		player_id: int;
+		item_kind: Present.Kind;
+		success: bool;
+
+		Why :: enum {
+			Not_Enough_Points;
+			Already_Have_Item;
+			Too_Far;
+		}
+
+		why: Why;
+	}
+
+	Ask_Respawn :: struct {
+		player_id: int;
 	}
 
 	payload: Sum_Type(
@@ -228,7 +263,8 @@ Command :: struct {
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
 		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot, Klaxon,
 		Give_Control, Sync_Score, Request_Score, Sync_Tombstone, Retire, Sync_Present,
-		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook, Cheat_Action
+		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook, Cheat_Action, Buy_Ask, Buy_Response,
+		Sync_Stand_In, Ask_Respawn
 	);
 	sent_timestamp: float64;
 }
@@ -283,9 +319,12 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Respawn; #through;
 		case .Die; #through;
 		case .Quit; #through;
+		case .Buy_Ask; #through;
+		case .Buy_Response; #through;
 		case .Give_Control; #through;
 		case .Request_Score; #through;
 		case .Retire; #through;
+		case .Ask_Respawn; #through;
 		case .Sync_Tombstone; #through;
 		case .New_Terrain; #through;
 		case .Cheat_Action; #through;
@@ -303,6 +342,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Klaxon; #through;
 		case .Sync_Moving_Frame; #through;
 		case .NTP; #through;
+		case .Sync_Stand_In; #through;
 		case .Hooked_Player; #through;
 		case .Sync_Score; #through;
 		case .Explode; #through;
@@ -332,6 +372,8 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 				size_of(type_of(sync_scene.presents.data.*)) * sync_scene.presents.count;
 			additional_data_size +=
 				size_of(type_of(sync_scene.safe_zones.data.*)) * sync_scene.safe_zones.count;
+			additional_data_size +=
+				size_of(type_of(sync_scene.standins.data.*)) * sync_scene.standins.count;
 
 			array_reserve(buffer, dry_size + additional_data_size);
 
@@ -391,6 +433,12 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 				size_of(type_of(sync_scene.safe_zones.data.*)) * sync_scene.safe_zones.count
 			);
 			cursor += size_of(type_of(sync_scene.safe_zones.data.*)) * sync_scene.safe_zones.count;
+			memcpy(
+				buffer.data + cursor,
+				sync_scene.standins.data,
+				size_of(type_of(sync_scene.standins.data.*)) * sync_scene.standins.count
+			);
+			cursor += size_of(type_of(sync_scene.standins.data.*)) * sync_scene.standins.count;
 			buffer.count = cursor;
 	}
 }
@@ -423,9 +471,13 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Give_Control; #through;
 		case .Hooked_Player; #through;
 		case .Quit; #through;
+		case .Buy_Ask; #through;
+		case .Buy_Response; #through;
 		case .Klaxon; #through;
 		case .New_Terrain; #through;
 		case .Sync_Player; #through;
+		case .Ask_Respawn; #through;
+		case .Sync_Stand_In; #through;
 		case .Sync_Skull; #through;
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
@@ -468,6 +520,8 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 			cursor += size_of(type_of(sync_scene.presents.data.*)) * sync_scene.presents.count;
 			sync_scene.safe_zones.data = (buffer.data + cursor).(*Command.Sync_Safe_Zone);
 			cursor += size_of(type_of(sync_scene.safe_zones.data.*)) * sync_scene.safe_zones.count;
+			sync_scene.standins.data = (buffer.data + cursor).(*Command.Sync_Stand_In);
+			cursor += size_of(type_of(sync_scene.standins.data.*)) * sync_scene.standins.count;
 
 			return cmd, true;
 	}

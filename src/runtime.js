@@ -231,15 +231,6 @@ jai_imports.js_sleep_milliseconds = (ms) => {
 jai_imports.js_set_working_directory = (path_count, path_data, path_is_constant) => {
     switch (wasm_pause()) {
     case 0: (async () => {
-        const path   = copy_string_to_js(path_count, path_data, path_is_constant);
-        const handle = await opfs_find_directory(path);
-        if (handle === undefined) {
-            set_resume_error(`Could not set working directory to "${path}": directory does not exist`);
-            return -1;
-        }
-        
-        opfs_current_working_directory = handle;
-        return +1;
     })().then(wasm_resume); break;
     case +1: return true;
     case -1: {
@@ -305,10 +296,6 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
     
     jmp_buf_for_garbage = memory+JMP_BUF_SIZE;
     jmp_buf_init(jmp_buf_for_garbage);
-    
-    opfs_home_folder               = await opfs_ensure_path_exists(document.location.pathname, true);
-    opfs_current_working_directory = opfs_home_folder;
-    opfs_copied_files_folder       = await opfs_ensure_path_exists(OPFS_COPIED_FILES_PATH, true);
 }
 
 
@@ -326,20 +313,6 @@ let jmp_buf_for_pausing;
 // that we reuse every time we want to unwind a stack and
 // never return.
 let jmp_buf_for_garbage;
-
-
-// We create a "home folder" for the application so that multiple applications served by the same origin
-// do not trample eachothers files. We use document.location.pathname because it mirrors the location
-// of the wasm module relative to the server. So if you had a wasm module being served from
-// www.mycoolwebsite.com/tools/foozler the home folder would be "/tools/foozler"
-let opfs_home_folder;               // set by initialize_wasm_module()
-let opfs_current_working_directory; // initially set to opfs_home_folder
-let opfs_copied_files_folder;       // for files copied from the system (drag and drop, open file dialog, etc)
-
-// Although we have a notion of a program's home folder, we have a "global" place for
-// files generated from the client's *real* file system. This is because we already mark
-// filenames that we generate with a timestamp to disambiguate files with the same name.
-const OPFS_COPIED_FILES_PATH = "/__jai_runtime_copied_files/";
 
 
 /*
@@ -595,118 +568,6 @@ const wasm_resume = (value) => {
 let resume_error_message = "";
 const set_resume_error = (message) => { resume_error_message = message;      }
 const log_resume_error = ()        => { jai_log_error(resume_error_message); }
-
-
-
-
-
-// TODO: document OPFS and why it has to be in Runtime_Support
-
-
-const opfs_get_absolute_path = (path) => {
-    if (path.startsWith("/"))
-        return path;
-    else 
-        return opfs_current_working_directory.full_path + path;
-};
-
-// returns a opfs handle or undefined if it could not be found
-const opfs_absolute_path_to_parent_and_name = async (absolute, create_parents) => {
-    if (navigator.storage) {
-        const root    = await navigator.storage.getDirectory();
-        const folders = [];
-        const parts   = absolute.split('/').filter(part => part);
-        
-        for (let it_index = 0; it_index <= parts.length-2; it_index++) {
-            const it = parts[it_index];
-            if (it === ".") {
-                continue;
-            } else if (it === "..") {
-                folders.pop();
-                continue;
-            } else {
-                const parent = folders[folders.length-1] ?? root;
-                try {
-                    const next = await parent.getDirectoryHandle(it, { create: create_parents });
-                    folders.push(next);
-                } catch (e) {
-                    if (e.name !== "NotFoundError") throw e; // uggg
-                    return {
-                        ok: false,
-                        parent: undefined,
-                        file_name: undefined,
-                    };
-                }
-            }
-        }
-        
-        return {
-            ok: true,
-            parent: folders.pop() ?? root,
-            file_name: parts[parts.length-1],
-        }
-    }
-    else {
-        return {
-            ok: false
-        }
-    }
-    
-};
-
-// takes a path to a directory and makes sure all of the folders exist to make it a path to a valid folder
-const opfs_ensure_path_exists = async (path, is_directory) => {
-    const absolute = opfs_get_absolute_path(path);
-    const { ok, parent, file_name } = await opfs_absolute_path_to_parent_and_name(absolute, true);
-    if (!ok) {
-        return 
-        // throw new Error("unreachable");
-    }
-    
-    let handle;
-    if (is_directory) {
-        handle = await parent.getDirectoryHandle(file_name, { create: true });
-    } else {
-        handle = await parent.getFileHandle(file_name, { create: true });
-    }
-    
-    handle.full_path = absolute; // we stick in on here because it is usefulP
-    
-    return handle;
-};
-
-const opfs_find_file = async (path, create = false) => {
-    try {
-        const absolute = opfs_get_absolute_path(path);
-        const { ok, parent, file_name } = await opfs_absolute_path_to_parent_and_name(absolute, false);
-        if (!ok) return undefined;
-        
-        const handle = await parent.getFileHandle(file_name, { create: create });
-        handle.full_path = absolute; // we stick in on here because it is useful
-        
-        return handle;
-    } catch (e) {
-        if (e.name !== "NotFoundError") throw e; // we still want to crash if we get some other error
-        return undefined;
-    }
-};
-
-const opfs_find_directory = async (path, create = false) => {
-    try {
-        const absolute = opfs_get_absolute_path(path);
-        const { ok, parent, file_name } = await opfs_absolute_path_to_parent_and_name(absolute, false);
-        if (!ok) return undefined;
-        
-        const handle = await parent.getDirectoryHandle(file_name, { create: create });
-        handle.full_path = absolute; // we stick in on here because it is useful
-        
-        return handle;
-    } catch (e) {
-        if (e.name !== "NotFoundError") throw e; // we still want to crash if we get some other error
-        return undefined;
-    }
-};
-
 
 /*
 
@@ -1224,50 +1085,6 @@ const js_key_event_to_jai_keycode = (e) => {
         return 0;
     }
 };
-
-
-
-
-document.addEventListener('dragover', (event) => {
-    if (jai_exports === undefined) return;
-    event.preventDefault();
-});
-
-document.addEventListener('drop', async (event) => {
-    if (jai_exports === undefined) return;
-    event.preventDefault();
-
-    const files = event.dataTransfer.files;
-    if (files.length > 0) {
-        const base    = OPFS_COPIED_FILES_PATH + Date.now().toString() + "_";
-        const to_send = [];
-        
-        for (let index = 0; index < files.length; index++) {
-            const it     = files[index];
-            const path   = base + it.name;
-            const handle = await opfs_ensure_path_exists(path, false);
-            const writer = await handle.createWritable();
-            await writer.write(it);
-            await writer.close();
-            to_send.push(path);
-        }
-        staged_events.push([
-            send_dropped_files_to_input_module,
-            to_send,
-        ]);
-    }
-});
-
-const send_dropped_files_to_input_module = (jai_context, files) => {
-    const current_file = jai_exports.temporary_alloc(jai_context, 16n); // allocating a string makes things a bit nicer here
-    for (let it_index = 0; it_index < files.length; it_index++) {
-        const it   = files[it_index];
-        copy_string_from_js(current_file, it);
-        jai_exports.add_dropped_file(jai_context, current_file);
-    }
-    jai_exports.send_dropped_files(jai_context);
-}
-
 
 
 // keyboard

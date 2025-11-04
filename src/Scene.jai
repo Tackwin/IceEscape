@@ -14,6 +14,15 @@ GUI :: #import "GUI";
 
 #scope_export
 
+OPEN_GATE_SCORE :: 5;
+ACTIVATE_FLAG_SCORE :: 4;
+PICKUP_KEY_SCORE :: 3;
+
+Breaking_News :: struct {
+	text: string;
+	time: Apollo_Time;
+}
+
 Model_Id :: enum {
 	Racer :: 1;
 	SUV :: 2;
@@ -54,7 +63,10 @@ Sound_Trigger :: struct {
 		Checkpoint_Ok :: 5;
 		Res :: 6;
 		Coin_Launch :: 7;
+		Point_Up :: 8;
 	};
+
+	count := 1;
 }
 
 Scene :: struct {
@@ -136,6 +148,8 @@ Scene :: struct {
 	client: struct {
 		end_level: Command.End_Level;
 	}
+
+	news: [..] string; // Gives over ownership to whatever collects it.
 }
 clear :: (scene: *Scene) {
 	memset(scene.name.data, 0, scene.name.count);
@@ -162,6 +176,10 @@ clear :: (scene: *Scene) {
 	scene.safe_zones.count = 0;
 	scene.auto_revive = false;
 	table_reset(*scene.trigger_activated);
+	for scene.news {
+		free(it);
+	}
+	scene.news.count = 0;
 }
 
 make_sync :: (scene: *Scene) -> Command.Sync_Scene {
@@ -176,6 +194,7 @@ make_sync :: (scene: *Scene) -> Command.Sync_Scene {
 	sync_scene.tombstones = NewArray(scene.tombstones.count, Command.Sync_Tombstone, false,, temp);
 	sync_scene.presents = NewArray(scene.presents.count, Command.Sync_Present, false,, temp);
 	sync_scene.safe_zones = NewArray(scene.safe_zones.count, Command.Sync_Safe_Zone, false,, temp);
+	sync_scene.standins = NewArray(scene.stand_in.count, Command.Sync_Stand_In, false,, temp);
 	for * sync_scene.players {
 		it.* = make_sync(*scene.players[it_index]);
 	}
@@ -201,8 +220,18 @@ make_sync :: (scene: *Scene) -> Command.Sync_Scene {
 	for * sync_scene.safe_zones {
 		it.* = make_sync(*scene.safe_zones[it_index]);
 	}
+	for * sync_scene.standins {
+		it.* = make_sync(*scene.stand_in[it_index]);
+	}
 	sync_scene.rng = scene.server_rng;
 	return sync_scene;
+}
+
+make_sync :: (player_id: int, score: Score) -> Command.Sync_Score {
+	sync_score: Command.Sync_Score;
+	sync_score.player_id = player_id;
+	sync_score.score = score;
+	return sync_score;
 }
 
 make_sync :: (player: *Player) -> Command.Sync_Player {
@@ -215,6 +244,13 @@ make_sync :: (player: *Player) -> Command.Sync_Player {
 	sync_player.has_safe_present = player.server.has_safe_present;
 	sync_player.has_hook_present = player.server.has_hook_present;
 	return sync_player;
+}
+
+make_sync :: (standin: *Stand_In) -> Command.Sync_Stand_In {
+	sync_standin: Command.Sync_Stand_In;
+	sync_standin.standin_id = standin.id;
+	sync_standin.retired = standin.retired;
+	return sync_standin;
 }
 
 make_sync :: (skull: *Skull) -> Command.Sync_Skull {
@@ -394,10 +430,11 @@ Present :: struct {
 	id: int;
 	position: V3f;
 
-	kind: enum {
+	Kind :: enum {
 		A :: 0;
 		B :: 1;
 	};
+	kind: Kind;
 
 	server: struct {
 		refresh_cooldown: float = 10.0;
@@ -925,13 +962,22 @@ Hook :: struct {
 }
 
 Score :: struct {
-	dead   := 0;
-	score  := 0;
-	revive := 0;
-	trophy := 0;
+	stars  := 0; // 2 given for each levels, 1 for the finisher, the other one for the highest score
+
+	dead   := 0; // Count of deaths
+	score  := 0; // Final score for the level
+	revive := 0; // Count of revives
+	trophy := 0; // Count of trophies collected
+
+	points := 0; // Can be used to unlock stuff
 }
-compute_score :: (score: Score) -> int {
-	return score.revive * 2 + score.trophy * 5 - score.dead;
+apply_add_score :: (score: *Score, add: Frame_Result.Add_Score) {
+	score.stars  += add.score.stars;
+	score.dead   += add.score.dead;
+	score.score  += add.score.score;
+	score.revive += add.score.revive;
+	score.trophy += add.score.trophy;
+	score.points += add.score.points;
 }
 
 Player :: struct {
@@ -954,6 +1000,8 @@ Player :: struct {
 		speed := 3.5;
 		turning_speed := 360 * 1.1;
 		dead := false;
+		dead_time: Apollo_Time;
+		dead_cooldown := 90;
 
 		radius_hitbox_tombstone := 0.75;
 		radius_hurtbox_skull := 0.5;
@@ -970,6 +1018,8 @@ Player :: struct {
 
 		has_safe_present := false;
 		has_hook_present := 0;
+		
+		need_respawn := false;
 	};
 
 	// This is the stuff that gets optimistically updated by the client. For rendering
@@ -1005,6 +1055,14 @@ find_by_safe_zone_id :: (scene: Scene, id: int) -> *Safe_Zone {
 
 find_by_robot_id :: (scene: Scene, id: int) -> *Robot {
 	for * scene.robots {
+		if it.id == id
+			return it;
+	}
+	return null;
+}
+
+find_by_standin_id :: (scene: Scene, id: int) -> *Stand_In {
+	for * scene.stand_in {
 		if it.id == id
 			return it;
 	}
@@ -1098,6 +1156,7 @@ interpolate_to_server :: (key: *Key, dt: float32) {
 restart :: (scene: *Scene) {
 	parse_terrain(scene.terrain.text, scene);
 	for * player: scene.players {
+		player.server.score.points = 0;
 		spawn_into(player, scene);
 	}
 	scene.end_scene_countdown_started = false;
@@ -1108,7 +1167,7 @@ add_snow :: (scene: *Scene, dt: float32) {
 	// Add snow particles
 	n_snow :=
 		dt * (scene.camera_max.x - scene.camera_min.x) * (scene.camera_max.y - scene.camera_min.y);
-	n_snow *= 0.5;
+	n_snow *= 0.25;
 	while n_snow > 0.0 {
 		r := Rand.random_uniform(*scene.client_rng, 0.0, 1.0);
 		if r > n_snow
@@ -1129,7 +1188,7 @@ add_snow :: (scene: *Scene, dt: float32) {
 		texture_idx := Rand.random_uniform(*scene.client_rng, 1, 4);
 		p.texture_rec = V4f.{ texture_idx / 4.0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
 		p.velocity = normalize(p.velocity) * Rand.random_uniform(*scene.client_rng, 0.09, 0.11);
-		p.size = Rand.random_uniform(*scene.client_rng, 0.04, 0.10);
+		p.size = Rand.random_uniform(*scene.client_rng, 0.06, 0.15);
 		p.rotation_speed = Rand.random_uniform(*scene.client_rng, -2.0, 2.0);
 		p.lifetime = Rand.random_uniform(*scene.client_rng, 5.0, 10.0);
 		p.fade_out_time = Rand.random_uniform(*scene.client_rng, 0.1, 1.0);
@@ -1173,6 +1232,20 @@ input :: (
 	if controls.pressed[Platform.Key.Z] {
 		dt.y += scene.camera.speed * controls.frame_info.delta_time;
 		any_camera_move = true;
+	}
+	if controls.just_pressed[Platform.Key.R] {
+		buy_ask(scene, scene.controlled_player_id, result);
+	}
+	if controls.just_pressed[Platform.Key.V] {
+		player := find_by_player_id(scene, scene.controlled_player_id);
+		if player && player.server.dead {
+			dt := to_float64_seconds(current_time_monotonic() - player.server.dead_time).(float32);
+			if dt >= player.server.dead_cooldown.(float32) {
+				command: Command.Ask_Respawn;
+				command.player_id = player.id;
+				add(result, scene.id, command);
+			}
+		}
 	}
 
 	if controls.just_pressed[Platform.Key.W] {
@@ -1331,6 +1404,18 @@ update_client :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	for * scene.safe_zones {
 		it.client.time += dt;
 	}
+
+	for * scene.presents {
+		before := it.server.available;
+
+		it.server.available = true;
+		if it.server.depends_on_flag_id != -1 {
+			flag := find_by_flag_id(scene, it.server.depends_on_flag_id);
+			if flag && !flag.activated {
+				it.server.available = false;
+			}
+		}
+	}
 }
 
 update :: (scene: *Scene, hook: *Hook, dt: float32, result: *Frame_Result) {
@@ -1422,7 +1507,7 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	}
 
 	for * scene.flags {
-		update(scene, it, dt);
+		update(scene, it, dt, result);
 	}
 
 	for * scene.within_zones {
@@ -1464,6 +1549,13 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 
 					d := norm(p - q);
 					if d < player.server.radius_hitbox_key {
+						if result {
+							add_score: Frame_Result.Add_Score;
+							add_score.player_id = player.id;
+							add_score.score.score = PICKUP_KEY_SCORE;
+							add_score.score.points = PICKUP_KEY_SCORE;
+							array_add(*result.add_scores, add_score);
+						}
 
 						it.holder = player.id;
 						continue it;
@@ -1499,61 +1591,74 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	}
 	should_die := NewArray(scene.players.count, Should_Die,, temp);
 
-	// >RULE Presents respawn.
+	// // >RULE Presents respawn.
+	// for * scene.presents {
+	// 	if !it.server.available {
+	// 		can_countdown := false;
+	// 		if it.server.depends_on_flag_id == -1 {
+	// 			can_countdown = true;
+	// 		} else {
+	// 			flag := find_by_flag_id(scene, it.server.depends_on_flag_id);
+	// 			if flag && flag.activated {
+	// 				can_countdown = true;
+	// 			}
+	// 		}
+
+	// 		if can_countdown {
+	// 			it.server.time_since_taken += dt;
+	// 			if it.server.time_since_taken >= it.server.refresh_cooldown {
+	// 				it.server.available = true;
+	// 				it.server.time_since_taken = 0.0;
+
+	// 				array_add(*result.sync_present, make_sync(it));
+	// 			}
+	// 		}
+	// 	}
+	// }
+
+	// >RULE presents is available dependings on flags
 	for * scene.presents {
-		if !it.server.available {
-			can_countdown := false;
-			if it.server.depends_on_flag_id == -1 {
-				can_countdown = true;
-			} else {
-				flag := find_by_flag_id(scene, it.server.depends_on_flag_id);
-				if flag && flag.activated {
-					can_countdown = true;
-				}
-			}
+		before := it.server.available;
 
-			if can_countdown {
-				it.server.time_since_taken += dt;
-				if it.server.time_since_taken >= it.server.refresh_cooldown {
-					it.server.available = true;
-					it.server.time_since_taken = 0.0;
-
-					array_add(*result.sync_present, make_sync(it));
-				}
+		it.server.available = true;
+		if it.server.depends_on_flag_id != -1 {
+			flag := find_by_flag_id(scene, it.server.depends_on_flag_id);
+			if flag && !flag.activated {
+				it.server.available = false;
 			}
+		}
+
+		if before != it.server.available {
+			array_add(*result.sync_present, make_sync(it));
 		}
 	}
 
-	// >RULE Player pickup present
-	for * scene.players {
-		if it.server.dead
-			continue;
+	// // >RULE Player pickup present
+	// for * scene.players {
+	// 	if it.server.dead
+	// 		continue;
 		
-		p := it.server.position;
+	// 	p := it.server.position;
 
-		for * present: scene.presents {
-			if !present.server.available
-				continue;
+	// 	for * present: scene.presents {
+	// 		if !present.server.available
+	// 			continue;
 
-			q := present.position;
+	// 		q := present.position;
 
-			d := norm(p - q);
-			if d < 0.5 {
-				if #complete present.kind == {
-					case .A;
-						it.server.has_safe_present = true;
-					case .B;
-						it.server.has_hook_present = 3;
-				}
-				array_add(*result.sync_player, make_sync(it));
-
-				present.server.available = false;
-				present.server.time_since_taken = 0.0;
-				array_add(*result.sync_present, make_sync(present));
-				continue;
-			}
-		}
-	}
+	// 		d := norm(p - q);
+	// 		if d < 0.5 {
+	// 			if #complete present.kind == {
+	// 				case .A;
+	// 					it.server.has_safe_present = true;
+	// 				case .B;
+	// 					it.server.has_hook_present = 3;
+	// 			}
+	// 			array_add(*result.sync_player, make_sync(it));
+	// 			continue;
+	// 		}
+	// 	}
+	// }
 
 	// >RULE Player die on contact with trap
 	for * scene.traps {
@@ -1576,6 +1681,20 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	for * scene.trigger_zones {
 		tpos := it.pos;
 
+		standin: *Stand_In = null;
+		for * s: scene.stand_in {
+			if s.model_id == it.model_id {
+				standin = s;
+				break;
+			}
+		}
+
+		if !standin
+			continue;
+
+		if standin.retired
+			continue;
+
 		for * player: scene.players {
 			if player.server.dead
 				continue;
@@ -1592,7 +1711,9 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					move.player_id = player.id;
 					move.model_id = it.model_id;
 					move.play_world_id = 0;
+					move.standin_id = standin.id;
 					array_add(*result.move_to_player_world, move);
+					standin.retired = true;
 				}
 			}
 		}
@@ -1614,6 +1735,23 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 				}
 			}
 		}
+	}
+
+	// >RULE player revive when user asked for it after dying cooldown
+	for * scene.players {
+		if it.server.dead && it.server.need_respawn {
+			respawn: Command.Respawn;
+			respawn.player_id = it.id;
+			array_add(*result.respawn, respawn);
+			spawn_into(it, scene);
+
+			for * scene.tombstones {
+				if it.player_id == respawn.player_id {
+					remove it;
+				}
+			}
+		}
+		it.server.need_respawn = false;
 	}
 
 	// >RULE Coin revive dead player on tombstone collision
@@ -1642,6 +1780,8 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 						add_score: Frame_Result.Add_Score;
 						add_score.player_id = it.sender;
 						add_score.score.revive = 1;
+						add_score.score.points = 2;
+						add_score.score.score = 1;
 						array_add(*result.add_scores, add_score);
 					}
 
@@ -1686,6 +1826,8 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 						add_score: Frame_Result.Add_Score;
 						add_score.player_id = it.id;
 						add_score.score.revive = 1;
+						add_score.score.points = 3;
+						add_score.score.score = 1;
 						array_add(*result.add_scores, add_score);
 					}
 
@@ -1721,6 +1863,8 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 
 				d := norm(p - q);
 				if d < 0.5 {
+					holder := it.holder;
+
 					gate.is_closed = false;
 					gate.wait_for_key_id = -1;
 
@@ -1731,6 +1875,13 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					sync.gate_id = gate.id;
 					sync.is_closed = gate.is_closed;
 					array_add(*result.sync_gate, sync);
+
+					if result {
+						add_score: Frame_Result.Add_Score;
+						add_score.player_id = holder;
+						add_score.score.score = OPEN_GATE_SCORE;
+						array_add(*result.add_scores, add_score);
+					}
 				}
 			}
 		}
@@ -1804,6 +1955,7 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 				winner.next_scene_id = scene.next_id;
 
 				best_death := -1;
+				best_revive := -1;
 				for scene.players {
 					dt_dead := it.server.score.dead - it.server.start_score.dead;
 					dt_revive := it.server.score.revive - it.server.start_score.revive;
@@ -1811,8 +1963,8 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 						best_death = dt_dead;
 						winner.most_death_id = it.id;
 					}
-					if winner.most_revive_id < 0 || dt_revive > best_death {
-						best_death = dt_revive;
+					if winner.most_revive_id < 0 || dt_revive > best_revive {
+						best_revive = dt_revive;
 						winner.most_revive_id = it.id;
 					}
 				}
@@ -1822,20 +1974,18 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					best_score := -9999;
 					best_player_id := -1;
 					for scene.players {
-						s := compute_score(it.server.score);
-
 						already_in := false;
 						for idx: winner.best_scores_id {
 							if idx == it.id {
 								already_in = true;
-								break;;
+								break;
 							}
 						}
 						if already_in
 							continue;
 
-						if s > best_score {
-							best_score = s;
+						if it.server.score.score > best_score {
+							best_score = it.server.score.score;
 							best_player_id = it.id;
 						}
 					}
@@ -2027,6 +2177,8 @@ win_level :: (scene: *Scene, player_id: int, result: *Frame_Result) {
 		add_score: Frame_Result.Add_Score;
 		add_score.player_id = player_id;
 		add_score.score.trophy = 1;
+		add_score.score.stars = 1;
+		add_score.score.points = 10;
 		array_add(*result.add_scores, add_score);
 	}
 }
@@ -2040,6 +2192,8 @@ server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 	died.position = player.server.position;
 	array_add(*result.died, died);
 	player.server.dead = true;
+	player.server.dead_time = current_time_monotonic();
+	player.server.score.points = 0;
 	tombstone: Tombstone;
 	tombstone.player_id = died.player_id;
 	tombstone.position = died.position;
@@ -2223,7 +2377,7 @@ update :: (scene: Scene, robot: *Robot, dt: float32) {
 
 }
 
-update :: (scene: Scene, flag: *Flag, dt: float32) {
+update :: (scene: Scene, flag: *Flag, dt: float32, result: *Frame_Result) {
 	if !flag.activated {
 		p := v2(flag.position);
 
@@ -2248,6 +2402,24 @@ update :: (scene: Scene, flag: *Flag, dt: float32) {
 			sound.position = flag.position;
 			sound.kind = .Checkpoint_Ok;
 			array_add(*scene.sound_triggers, sound);
+
+			if result {
+				for scene.players {
+					if it.server.dead
+						continue;
+
+					q := v2(it.server.position);
+					d := norm(p - q);
+
+					if d < flag.radius {
+						add_score: Frame_Result.Add_Score;
+						add_score.player_id = it.id;
+						add_score.score.score = ACTIVATE_FLAG_SCORE;
+						add_score.score.points = ACTIVATE_FLAG_SCORE;
+						array_add(*result.add_scores, add_score);
+					}
+				}
+			}
 		}
 
 		if flag.last_player_count != count {
@@ -2470,6 +2642,53 @@ update :: (scene: Scene, player: *Player, dt: float32) {
 	}
 }
 
+buy_ask :: (scene: *Scene, player_id: int, result: *Process_Response) {
+	player := find_by_player_id(scene, player_id);
+	if !player
+		return;
+
+	if player.server.dead
+		return;
+
+	closest_present: *Present = null;
+	closest_d := FLOAT32_MAX;
+	for * scene.presents {
+		if !it.server.available
+			continue;
+		
+		d := norm(player.server.position - it.position);
+		if d < closest_d {
+			closest_d = d;
+			closest_present = it;
+		}
+	}
+
+	if closest_present {
+		if closest_d < player.server.radius_hitbox_key {
+			command: Command.Buy_Ask;
+			command.player_id = player.id;
+			command.present_id = closest_present.id;
+			command.item_kind = closest_present.kind;
+			add(result, scene.id, command);
+			
+			// if player.server.score.points >= closest_present.server.cost {
+			// 	player.server.score.points -= closest_present.server.cost;
+
+			// 	if closest_present.server.kind == .Safe_Zone_Present {
+			// 		player.server.has_safe_present = true;
+			// 	} else if closest_present.server.kind == .Hook_Present {
+			// 		player.server.has_hook_present += 1;
+			// 	}
+
+			// 	closest_present.server.available = false;
+
+			// 	add(result, scene.id, make_sync(player));
+			// 	add(result, scene.id, make_sync(*closest_present));
+			// }
+		}
+	}
+}
+
 can_execute_player_motion :: (scene: Scene, a: V3f, b: V3f, player: *Player) -> bool {
 	for * scene.gates {
 		if it.is_closed {
@@ -2495,6 +2714,82 @@ can_execute_player_motion :: (scene: Scene, a: V3f, b: V3f, player: *Player) -> 
 process_server_only :: (scene: *Scene, command: Command, response: *Process_Response) -> bool {
 	if !scene.is_server
 		return false;
+
+	buy_ask: *Command.Buy_Ask = isa(command.payload, Command.Buy_Ask);
+	if buy_ask {
+		player := find_by_player_id(scene, buy_ask.player_id);
+		present := find_by_present_id(scene, buy_ask.present_id);
+
+		if player && present {
+			if !player.server.dead && present.server.available {
+				if present.kind == .A && player.server.has_safe_present {
+					buy_response: Command.Buy_Response;
+					buy_response.player_id = player.id;
+					buy_response.present_id = present.id;
+					buy_response.item_kind = present.kind;
+					buy_response.success = false;
+					buy_response.why = .Already_Have_Item;
+					add_single_reply(response, player.id, buy_response);
+				}
+				else if present.kind == .B && player.server.has_hook_present > 2 {
+					buy_response: Command.Buy_Response;
+					buy_response.player_id = player.id;
+					buy_response.present_id = present.id;
+					buy_response.item_kind = present.kind;
+					buy_response.success = false;
+					buy_response.why = .Already_Have_Item;
+					add_single_reply(response, player.id, buy_response);
+				}
+				else {
+					cost := 1;
+					if present.kind == .A {
+						cost = 1;
+					} else if present.kind == .B {
+						cost = 2;
+					}
+
+					if player.server.score.points >= cost {
+						player.server.score.points -= cost;
+
+						if present.kind == .A {
+							player.server.has_safe_present = true;
+						} else if present.kind == .B {
+							player.server.has_hook_present += 1;
+						}
+
+						add_single_reply(response, player.id, make_sync(player));
+						add_single_reply(
+							response, player.id, make_sync(player.id, player.server.score)
+						);
+					} else {
+						buy_response: Command.Buy_Response;
+						buy_response.player_id = player.id;
+						buy_response.present_id = present.id;
+						buy_response.item_kind = present.kind;
+						buy_response.success = false;
+						buy_response.why = .Not_Enough_Points;
+						add_single_reply(response, player.id, buy_response);
+					}
+				}
+			}
+			return true;
+		}
+	}
+
+
+	ask_respawn: *Command.Ask_Respawn = isa(command.payload, Command.Ask_Respawn);
+	if ask_respawn {
+		player := find_by_player_id(scene, ask_respawn.player_id);
+		if player {
+			if player.server.dead {
+				dt := to_float64_seconds(current_time_monotonic() - player.server.dead_time);
+				if dt.(float32) >= player.server.dead_cooldown.(float32) {
+					player.server.need_respawn = true;
+				}
+			}
+			return true;
+		}
+	}
 
 	klaxon: *Command.Klaxon = isa(command.payload, Command.Klaxon);
 	if klaxon {
@@ -2579,7 +2874,38 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 	if sync_score {
 		for * scene.players {
 			if it.id == sync_score.player_id {
+				before := it.server.score.points;
+
 				it.server.score = sync_score.score;
+				if sync_score.is_start
+					it.server.start_score = sync_score.score;
+
+				after := sync_score.score.points;
+
+				if !sync_score.is_start && after > before && it.id == scene.controlled_player_id {
+					trigger: Sound_Trigger;
+					trigger.kind = .Point_Up;
+					trigger.count = after - before;
+					trigger.inhead = true;
+					array_add(*scene.sound_triggers, trigger);
+				}
+			}
+		}
+		return true;
+	}
+
+	buy_response: *Command.Buy_Response = isa(command.payload, Command.Buy_Response);
+	if buy_response {
+		if buy_response.player_id == scene.controlled_player_id {
+			if !buy_response.success {
+				if #complete buy_response.why == {
+					case .Already_Have_Item;
+						array_add(*scene.news, sprint("You already have this item."));
+					case .Not_Enough_Points;
+						array_add(*scene.news, sprint("Not enough points to buy item."));
+					case .Too_Far;
+						array_add(*scene.news, sprint("You are too far away."));
+				}
 			}
 		}
 		return true;
@@ -2613,6 +2939,7 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		if player
 		{
 			player.server.dead = true;
+			player.server.dead_time = current_time_monotonic();
 			player.server.has_safe_present = false;
 			player.server.has_hook_present = 0;
 			tombstone: Tombstone;
@@ -2695,6 +3022,15 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 			array_add(*scene.safe_zones, sz);
 			return true;
 		}
+	}
+
+	sync_standin: *Command.Sync_Stand_In = isa(command.payload, Command.Sync_Stand_In);
+	if sync_standin {
+		standin := find_by_standin_id(scene, sync_standin.standin_id);
+		if standin {
+			standin.retired = sync_standin.retired;
+		}
+		return true;
 	}
 
 	sync_gate: *Command.Sync_Gate = isa(command.payload, Command.Sync_Gate);
@@ -2850,6 +3186,12 @@ process :: (scene: *Scene, command: Command, response: *Process_Response) -> boo
 
 	quit: *Command.Quit = isa(command.payload, Command.Quit);
 	if quit {
+		for * scene.stand_in {
+			if it.id == quit.from_standin_id {
+				it.retired = true;
+				break;
+			}
+		}
 		remove_player_from_scene(quit.player_id, scene);
 		return true;
 	}

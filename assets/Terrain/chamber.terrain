@@ -1,0 +1,363 @@
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXIIIIIIIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXIIXXXXXXIIXXXXXXXXXXXIIXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXIIIIIIIIIIIIIXIIXIIIIXXXXIIIIXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXGGGXIIIIIIIXIIXIIIIXIIIIIIIXXXXIIIIXGGGXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXGGGIIIIIIIIXXXXIIIIIXXXIIIIXXXXIIIIIGGGXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXGGGXIIIIIIIXGGXIIIIIIIXIIIIXXXXIIIIXGGGXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXiXXXXXIIIIXGGXIIIIXIIIIIIIXXXXIIIIXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXiXXXXXXXXXXGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXIXXGGGGGGGGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXRRRIIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXiXXGGGGGGGGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXXiXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXiXXXXXXIIIIIXXXXIIIIIXXXXIIIIIXXXXIIIIIXGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXXiXXIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXXiXXIRRIIIIIIIRRIIIIIIIRRIIIIIIIRRIIIIIIXGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXXiXIIRRIXXXXXIRRIXXXXXIRRIXXXXXIRRIXXXXXIiRiIXXXXXXXXXXXXXXX
+XXXXXXXXGXGGGIIIIIXXXXXIIIIXXXXXIIIIXXXXXIIIIXXXXIiRRRiIXXXXXXXXXXXXXX
+XXXXXXXXGGGGGIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXRRRRRRRRRXXXXXXXXXXXXX
+XXXXXXXXGXGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXIiRRRiIXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXIiRiIXXXXXXXXXXXXXXX
+XXXXXXXXXXGGGXIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIXGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXGSGIIIIIXXXIIIIXXXIIIIXXXIIIIXXXIIIIXXXIIGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXGGGXIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIXGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+- name: Chamber
+
+frame
+- position: 6.0 3.0
+- size: 45.0 24.0
+
+trophy
+- position: 17 21 0
+
+present
+- position: 45.5 16.5 0
+
+present
+- position: 47.5 16.5 0
+- kind: B
+
+flag
+- position: 47.0 13.5 0
+
+
+present
+- position: 2.5 8.5 0
+- depends_on_flag_id: 1
+
+present
+- position: 2.5 10.5 0
+- kind: B
+- depends_on_flag_id: 1
+
+flag
+- position: 5 22.5 0
+
+trap
+- position: 12 6.75 0
+
+antiair
+- position: 12.75 5.5 0
+- target: 12.0 4.5 0
+- target_size: 0.0 0.0
+- cooldown: 3.0
+
+path
+- checkpoint: 14.5 4 0
+- checkpoint: 14.5 7 0
+- checkpoint: 14.5 4 0
+
+skull
+- path_id: 0
+
+trap
+- position: 19 4.25 0
+
+antiair
+- position: 19.75 5.5 0
+- target: 19.0 6.5 0
+- target_size: 0.0 0.0
+- cooldown: 3.0
+
+
+path
+- checkpoint: 21.5 7 0
+- checkpoint: 21.5 4 0
+- checkpoint: 21.5 7 0
+
+skull
+- path_id: 1
+
+trap
+- position: 26 6.75 0
+
+antiair
+- position: 26.75 5.5 0
+- target: 26.0 4.5 0
+- target_size: 0.0 0.0
+- cooldown: 3.0
+
+path
+- checkpoint: 28.5 4 0
+- checkpoint: 28.5 7 0
+- checkpoint: 28.5 4 0
+
+skull
+- path_id: 2
+
+trap
+- position: 33 4.25 0
+
+antiair
+- position: 33.75 5.5 0
+- target: 33.0 6.5 0
+- target_size: 0.0 0.0
+- cooldown: 3.0
+
+
+path
+- checkpoint: 35.5 7 0
+- checkpoint: 35.5 4 0
+- checkpoint: 35.5 7 0
+
+skull
+- path_id: 3
+
+trap
+- position: 40 6.75 0
+
+antiair
+- position: 40.75 5.5 0
+- target: 40.0 4.5 0
+- target_size: 0.0 0.0
+- cooldown: 3.0
+
+path
+- checkpoint: 42.5 4 0
+- checkpoint: 42.5 7 0
+- checkpoint: 42.5 4 0
+
+skull
+- path_id: 4
+
+trap
+- position: 46.5 9.5 0
+trap
+- position: 47.15 10.15 0
+trap
+- position: 45.85 10.15 0
+
+path
+- checkpoint: 8.0 10.5 0
+- checkpoint: 12.0 10.5 0
+- checkpoint: 10.0 13.5 0
+- checkpoint: 8.0 10.5 0
+
+skull
+- path_id: 5
+- speed: 3
+- offset: 0
+skull
+- path_id: 5
+- speed: 3
+- offset: 0.33
+skull
+- path_id: 5
+- speed: 3
+- offset: 0.66
+
+path
+- checkpoint: 26.0 10.5 0
+- checkpoint: 30.0 10.5 0
+- checkpoint: 28.0 13.5 0
+- checkpoint: 26.0 10.5 0
+
+skull
+- path_id: 6
+- speed: 3
+- offset: 0
+skull
+- path_id: 6
+- speed: 3
+- offset: 0.33
+skull
+- path_id: 6
+- speed: 3
+- offset: 0.66
+
+path
+- checkpoint: 17.0 13.5 0
+- checkpoint: 21.0 13.5 0
+- checkpoint: 19.0 10.5 0
+- checkpoint: 17.0 13.5 0
+
+skull
+- path_id: 7
+- speed: 3
+- offset: 0
+skull
+- path_id: 7
+- speed: 3
+- offset: 0.33
+skull
+- path_id: 7
+- speed: 3
+- offset: 0.66
+
+path
+- checkpoint: 35.0 13.5 0
+- checkpoint: 39.0 13.5 0
+- checkpoint: 37.0 10.5 0
+- checkpoint: 35.0 13.5 0
+
+skull
+- path_id: 8
+- speed: 3
+- offset: 0
+skull
+- path_id: 8
+- speed: 3
+- offset: 0.33
+skull
+- path_id: 8
+- speed: 3
+- offset: 0.66
+
+// trap
+// - position: 11.5 24 0
+// trap
+// - position: 12 23.5 0
+// trap
+// - position: 12.5 23 0
+// trap
+// - position: 13 22.5 0
+
+moving_frame
+- key
+-- position: 13 22.5 0
+-- theta: 0
+-- period: 2.15
+- key
+-- position: 13 22.5 0
+-- theta: 1.0
+-- period: 2
+
+shuriken
+- frame_id: 1
+- position: -2.0 0 0
+shuriken
+- frame_id: 1
+- position: -1.0 0 0
+shuriken
+- frame_id: 1
+- position: 0.0 0 0
+shuriken
+- frame_id: 1
+- position: 1.0 0 0
+shuriken
+- frame_id: 1
+- position: 2.0 0 0
+
+moving_frame
+- key
+-- position: 21 22.5 0
+-- theta: 0
+-- period: 2.15
+- key
+-- position: 21 22.5 0
+-- theta: 1.0
+-- period: 2
+
+shuriken
+- frame_id: 2
+- position: -2.0 0 0
+shuriken
+- frame_id: 2
+- position: -1.0 0 0
+shuriken
+- frame_id: 2
+- position: 0.0 0 0
+shuriken
+- frame_id: 2
+- position: 1.0 0 0
+shuriken
+- frame_id: 2
+- position: 2.0 0 0
+
+moving_frame
+- key
+-- position: 29 22.5 0
+-- theta: 0
+-- period: 2.15
+- key
+-- position: 29 22.5 0
+-- theta: 1.0
+-- period: 2
+
+shuriken
+- frame_id: 3
+- position: -2.0 0 0
+shuriken
+- frame_id: 3
+- position: -1.0 0 0
+shuriken
+- frame_id: 3
+- position: 0.0 0 0
+shuriken
+- frame_id: 3
+- position: 1.0 0 0
+shuriken
+- frame_id: 3
+- position: 2.0 0 0
+
+moving_frame
+- key
+-- position: 37 22.5 0
+-- theta: 0
+-- period: 2.15
+- key
+-- position: 37 22.5 0
+-- theta: 1.0
+-- period: 2
+
+shuriken
+- frame_id: 4
+- position: -2.0 0 0
+shuriken
+- frame_id: 4
+- position: -1.0 0 0
+shuriken
+- frame_id: 4
+- position: 0.0 0 0
+shuriken
+- frame_id: 4
+- position: 1.0 0 0
+shuriken
+- frame_id: 4
+- position: 2.0 0 0
+
+gate
+- position: 17 19 0
+- direction: 0 1 0
+- wait_for_key_id: 1
+
+key
+- position: 41.5 22.5 0

@@ -94,6 +94,7 @@ Audio :: struct {
 	exponent: float = 3.0;
 	volume := 1.0;
 	pitch := 1.0;
+	delay := 0; // ms
 
 	fade_in := 100; // ms
 

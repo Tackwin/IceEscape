@@ -337,6 +337,9 @@ play_audio :: (audio: Audio, position: V3f) -> Sound {
 		ma_sound_set_pinned_listener_index(msound, 0);
 		ma_sound_set_position(msound, position.x, position.y, position.z);
 		ma_sound_set_fade_in_milliseconds(msound, 0.0, 1.0, xx audio.fade_in);
+		ma_sound_set_start_time_in_milliseconds(
+			msound, ma_engine_get_time_in_milliseconds(*audio_engine) + xx audio.delay
+		);
 		ma_sound_start(msound);
 
 		sound.playing = true;

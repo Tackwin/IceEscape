@@ -46,12 +46,10 @@ frame
 
 present
 - position: 17.5 22.5 0.0
-- refresh_cooldown: 20
 - depends_on_flag_id: 1
 
 present
 - position: 8.5 23.5 0.0
-- refresh_cooldown: 20
 - kind: B
 
 path

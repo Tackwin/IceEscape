@@ -344,7 +344,9 @@ tick :: (state: *State) {
 		}
 
 		for frame_result.move_to_player_world {
-			move_player_to_scene(it.player_id, state.instance.playing_scene_id, it.model_id);
+			move_player_to_scene(
+				it.player_id, state.instance.playing_scene_id, it.model_id, it.standin_id
+			);
 		}
 
 		for frame_result.died {
@@ -385,21 +387,24 @@ tick :: (state: *State) {
 		}
 
 		for frame_result.add_scores {
-			user := find_user_by_player_id(it.player_id);
+			player := Scene.find_by_player_id(scene, it.player_id);
+			if player {
+				Scene.apply_add_score(*player.server.score, it);
+
+				sync_score: Command.Sync_Score;
+				sync_score.player_id = it.player_id;
+				sync_score.score = player.server.score;
+				scene_scoped_broadcast(scene.id, make_command(sync_score));
+			}
+		}
+
+		for scene.players {
+			user := find_user_by_player_id(it.id);
 			if user {
 				person := Instance.find_person_by_id(state.instance, user.person_id);
 				if person {
-					person.score.dead += it.score.dead;
-					person.score.score += it.score.score;
-					person.score.revive += it.score.revive;
-					person.score.trophy += it.score.trophy;
-
-					sync_score: Command.Sync_Score;
-					sync_score.player_id = user.player_id;
-					sync_score.score = person.score;
-					scene_scoped_broadcast(scene.id, make_command(sync_score));
+					person.score = it.server.score;
 				}
-
 			}
 		}
 	}
@@ -449,6 +454,14 @@ process :: (
 			move_playing_scene(state.pick_scene_id);
 			return true;
 		}
+		if cheat_action.kind == .Kick {
+			user := find_user_by_player_id(cheat_action.player_id);
+			if user {
+				quit_user(user);
+			}
+			return true;
+		}
+		return true;
 	}
 
 	request_score: *Command.Request_Score = isa(command.payload, Command.Request_Score);
@@ -635,6 +648,22 @@ move_playing_scene :: (scene_id: int) {
 		spawn.scene_id = scene_id;
 		spawn.model_id = it.server.model_id;
 		Scene.process(scene, make_command(spawn), null);
+
+		sync_score: Command.Sync_Score;
+		sync_score.player_id = it.id;
+		sync_score.score = it.server.score;
+		sync_score.score.points = 0;
+		sync_score.is_start = true;
+		user := find_user_by_player_id(it.id);
+		if user {
+			send(user.websocket, make_command(sync_score));
+		}
+
+		player := Scene.find_by_player_id(scene, it.id);
+		if player {
+			player.server.score = it.server.score;
+			player.server.start_score = it.server.score;
+		}
 	}
 
 	sync_scene := Scene.make_sync(scene);
@@ -656,10 +685,10 @@ move_playing_scene :: (scene_id: int) {
 	}
 }
 
-move_player_to_scene :: (player_id: int, scene_id: int, model_id: int) {
+move_player_to_scene :: (player_id: int, scene_id: int, model_id: int, standin_id: int) {
+	old_scene: *Scene.Scene = null;
 	{
 		player: *Scene.Player = null;
-		old_scene: *Scene.Scene = null;
 		for * scene: state.scenes {
 			old_scene = scene;
 			player = Scene.find_by_player_id(scene, player_id);
@@ -717,6 +746,20 @@ move_player_to_scene :: (player_id: int, scene_id: int, model_id: int) {
 		spawn.model_id = model_id;
 		send(it.websocket, make_command(spawn));
 	}
+
+	// Signal to the rest of the users in the old scene that a player left.
+	for state.users {
+		if it.scene_id != old_scene.id
+			continue;
+		
+		if it.player_id == player_id
+			continue;
+
+		quit: Command.Quit;
+		quit.player_id = player_id;
+		quit.from_standin_id = standin_id;
+		send(it.websocket, make_command(quit));
+	}
 }
 
 watcher: File_Watcher(void);
@@ -736,11 +779,14 @@ main :: () {
 
 	terrains :: string.[
 		"pick",
+		"right",
 		"intro", // OK
 		"roundabout", // OK
 		"buzz", // OK
-		"volcano", // OK
+		"chamber", // OK
+		"frogger",
 		"pounding", // OK
+		"volcano", // OK
 		"funny", // OK
 		"here_and_there", // OK
 		"tetris",

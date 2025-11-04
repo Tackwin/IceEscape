@@ -29,6 +29,8 @@ Z_OUTLINE_SLOT :: V2f.{ 4, 14 };
 C_OUTLINE_SLOT :: V2f.{ 4, 13 };
 X_OUTLINE_SLOT :: V2f.{ 5, 15 };
 E_OUTLINE_SLOT :: V2f.{ 6, 13 };
+R_OUTLINE_SLOT :: V2f.{ 7, 13 };
+V_OUTLINE_SLOT :: V2f.{ 8, 13 };
 COIN_SLOT :: V2f.{ 4, 12 };
 VOLUME_ON_SLOT :: V2f.{ 0, 11 };
 VOLUME_OFF_SLOT :: V2f.{ 1, 11 };
@@ -46,6 +48,9 @@ DEATH_SLOT :: V2f.{ 5, 11 };
 SCORE_SLOT :: V2f.{ 6, 11 };
 SAFE_ZONE_SLOT :: V2f.{ 7, 15 };
 HOOK_SLOT :: V2f.{ 8, 15 };
+HAND_OPEN_SLOT :: V2f.{ 6, 12 };
+STAR_SLOT :: V2f.{ 7, 12 };
+RESURRECT_SLOT :: V2f.{ 7, 11 };
 
 PLAYER_ICON_SLOT :: V2f.{ 0, 10 };
 AMBULANCE_SLOT :: V2f.{ 0, 10 };
@@ -101,7 +106,7 @@ IM_t :: struct {
 	Char :: struct {
 		id: int;
 		pos: V2f;
-		color: V3f = .{ 1.0, 1.0, 1.0 };
+		color: V4f = .{ 1.0, 1.0, 1.0, 1.0 };
 		z: float32 = 0;
 		height: float32 = 16;
 	}
@@ -196,14 +201,14 @@ push_button :: (center: V2f, size: float, tex_slot: V2f, z := 0.0) -> bool {
 push_quad :: (quad: IM.Quad) {
 	array_add(*IM.quads, quad);
 }
-push_quad_screen :: (pos: V2f, size: V2f, color: V3f, z := 0.0) {
+push_quad_screen :: (pos: V2f, size: V2f, color: V3f, z := 0.0, a := 1.0) {
 	quad: IM.Quad;
 	// IM.display_size
 	quad.pos.x = pos.x;
 	quad.pos.y = pos.y;
 	quad.size.x = size.x;
 	quad.size.y = size.y;
-	quad.color = .{ color.x, color.y, color.z, 1.0 };
+	quad.color = .{ color.x, color.y, color.z, a };
 	quad.z = z;
 
 	array_add(*IM.quads, quad);
@@ -256,7 +261,12 @@ Text_Align :: enum {
 	Center_Right :: 0b1110;
 }
 push_text :: (
-	text: string, pos: V2f, height := 12.0, z := 0.0, align := Text_Align.Bottom_Left
+	text: string,
+	pos: V2f,
+	height := 12.0,
+	z := 0.0,
+	align := Text_Align.Bottom_Left,
+	color := V4f.{ 1, 1, 1, 1 }
 ) -> V2f {
 	x := pos.x;
 
@@ -270,7 +280,7 @@ push_text :: (
 		char.pos.x = x;
 		char.pos.y = pos.y;
 		char.z = z;
-		char.color = .{ 1, 1, 1 };
+		char.color = color;
 		char.height = height;
 
 		sprite := MAIN_FONT.sprites[char.id];
@@ -299,6 +309,64 @@ push_text :: (
 	}
 
 	return .{ x - pos.x, max_height };
+}
+
+push_buy_prompt :: (scene: *Scene.Scene) {
+	V := Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
+	P := Scene.perspective(scene.camera);
+
+	player := Scene.find_by_player_id(scene, scene.controlled_player_id);
+	if player && !player.server.dead {
+		p := player.client.position;
+		for * present: scene.presents {
+			if present.server.available {
+				q := present.position;
+
+				needed := 1;
+				if present.kind == .B
+					needed = 2;
+
+				d := norm(p - q);
+				if d < player.server.radius_hitbox_key {
+					
+					prompt := tprint("Not enough points (%) ! Revive your friends !", needed);
+					if player.server.score.points >= needed {
+						prompt = tprint("R to buy. % points.", needed);
+					}
+
+					pos := v4(q, 1);
+					pos = V * pos;
+					pos = P * pos;
+					pos /= abs(pos.w);
+					screen_p: V2f;
+					screen_p.x = pos.x * (IM.display_size.x) / 2 + IM.display_size.x / 2;
+					screen_p.y = pos.y * (IM.display_size.y) / 2 + IM.display_size.y / 2;
+
+					push_text(prompt, screen_p, 24, z=10, align = .Center);
+				}
+			}
+		}
+	}
+}
+
+push_breaking_news :: (news: [] Scene.Breaking_News) {
+	cursor := V2f.{ IM.display_size.x / 2, IM.display_size.y - 16};
+	for news {
+		t := to_float64_seconds(current_time_monotonic() - it.time).(float);
+		t = clamp(t / 5, 0.0, 1.0);
+
+		alpha := 1.0 - t;
+		text := tprint("NEWS: %", it.text);
+		text_size := push_text(
+			text,
+			.{ cursor.x, cursor.y },
+			20,
+			z = 20,
+			align = Text_Align.Top_Center,
+			color = V4f.{ 1.0, 1.0, 1.0, alpha }
+		);
+		cursor.y -= text_size.y + 4;
+	}
 }
 
 push_fps_histogram :: (pos: V2f, size: V2f, data: [] float32, current_idx: int) {
@@ -439,6 +507,34 @@ push_ping_histogram :: (pos: V2f, size: V2f, data: [] float32, current_idx: int)
 			z = 12
 		);
 	}
+}
+
+push_point_ui :: (player: Scene.Player) {
+	cursor := V2f.{ 12, IM.display_size.y - 80 };
+
+	push_quad_texture(
+		pos = .{ cursor.x, cursor.y },
+		size = .{ 24, 24 },
+		color = .{ 1.0, 1.0, 1.0 },
+		tex_slot = STAR_SLOT,
+		z = 2
+	);
+	size := push_text(
+		tprint("%", player.server.score.points),
+		cursor + V2f.{ 32, 12 },
+		24,
+		1,
+		align = .Center
+	);
+	cursor.y -= 1;
+	cursor.x -= 1;
+
+	push_quad_screen(
+		cursor,
+		V2f.{ 32 + size.x + 2, 26 },
+		COLOR_BRIGHT_A,
+		0,
+	);
 }
 
 push_end_screen :: (scene: Scene.Scene) {
@@ -799,7 +895,7 @@ push_action_palette :: (scene: Scene.Scene, info: *Platform.Frame_Info) {
 			size = .{ 18, 18 },
 			tex_slot = tex_slot,
 			color = .{ 1.0, 1.0, 1.0 },
-			z = 4
+			z = 5
 		);
 	}
 
@@ -842,11 +938,33 @@ push_action_palette :: (scene: Scene.Scene, info: *Platform.Frame_Info) {
 					pos = .{ (0 * 42 + 3 + it * 6).(float32), (2 * 42 + 3).(float32) },
 					size = .{ 4, 4 },
 					color = .{ 1.0, 1.0, 1.0 },
-					z = 5
+					z = 6
+				);
+			}
+		}
+
+		if player.server.dead {
+			render_texture_at(3, 0, RESURRECT_SLOT, .{ 0.5, 1.0, 0.5 });
+			render_hint_at(3, 0, V_OUTLINE_SLOT);
+
+			dt := to_float64_seconds(current_time_monotonic() - player.server.dead_time);
+			t := clamp(dt / player.server.dead_cooldown, 0.0, 1.0).(float32);
+
+			if t > 0 {
+				push_quad_screen(
+					pos = .{ 3 * 42.0 + 1, 0 * 42.0 + 1 + 40 * t },
+					size = .{ 40, 40 * (1 - t) },
+					color = COLOR_SOMBER_A,
+					z = 3,
+					a = 0.5
 				);
 			}
 		}
 	}
+
+	
+	render_texture_at(3, 2, HAND_OPEN_SLOT, .{ 0.5, 1.0, 0.5 });
+	render_hint_at(3, 2, R_OUTLINE_SLOT);
 }
 
 push_settings :: (volume: *bool, info: *Platform.Frame_Info) {

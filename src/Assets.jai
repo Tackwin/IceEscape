@@ -149,6 +149,7 @@ FORMAT;
 #insert #run embed_data("TRAP_SPIKE_OBJ", "trap_spike.obj", #filepath);
 
 #insert #run embed_data("TROPHY_OBJ", "trophy.obj", #filepath);
+#insert #run embed_data("JUKEBOX_OBJ", "jukebox.obj", #filepath);
 
 #insert #run embed_data("NUMBER_0_OBJ", "number_0.obj", #filepath);
 #insert #run embed_data("NUMBER_1_OBJ", "number_1.obj", #filepath);
@@ -195,6 +196,7 @@ FORMAT;
 #insert #run embed_data("EXPLOSION_6_MP3", "Sound/explosion6.mp3", #filepath);
 #insert #run embed_data("EXPLOSION_7_MP3", "Sound/explosion7.mp3", #filepath);
 #insert #run embed_data("EXPLOSION_8_MP3", "Sound/explosion8.mp3", #filepath);
+#insert #run embed_data("POINT_UP_MP3", "Sound/point_up.mp3", #filepath);
 
 #insert #run embed_data("LOSER_MP3", "Sound/loser.mp3", #filepath);
 
@@ -455,7 +457,9 @@ load_everything :: () {
 			"DRIFT_1_MP3",
 			"CHECKPOINT_OK_MP3",
 			"RES_MP3",
-			"COIN_LAUNCH_MP3"
+			"COIN_LAUNCH_MP3",
+			"POINT_UP_MP3",
+			"JUKEBOX_OBJ",
 		];
 		#insert #run -> string {
 			sb: String_Builder;

@@ -53,32 +53,26 @@ frame
 
 present
 - position: 1.5 10.5 0.0
-- refresh_cooldown: 30
 
 present
 - position: 1.5 8.5 0.0
-- refresh_cooldown: 30
 - kind: B
 
 present
 - position: 37.5 16.5 0.0
-- refresh_cooldown: 30
 - depends_on_flag_id: 1
 
 present
 - position: 41.5 16.5 0.0
-- refresh_cooldown: 30
 - kind: B
 - depends_on_flag_id: 1
 
 present
 - position: 13.5 34.5 0.0
-- refresh_cooldown: 30
 - depends_on_flag_id: 2
 
 present
 - position: 10.5 34.5 0.0
-- refresh_cooldown: 30
 - kind: B
 - depends_on_flag_id: 2
 

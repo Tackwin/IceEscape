@@ -53,12 +53,10 @@ path
 present
 - position: 13.5 0.5 0.0
 - kind: A
-- refresh_cooldown: 30
 
 present
 - position: 13.5 14.5 0.0
 - kind: B
-- refresh_cooldown: 60
 
 skull
 - path_id: 0

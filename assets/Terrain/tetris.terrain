@@ -83,7 +83,6 @@ trap
 present
 - position: 17.5 11.5 0
 - kind: B
-- refresh_cooldown: 60
 
 trap
 - position: 14.5 21.5 0
