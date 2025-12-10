@@ -190,6 +190,9 @@ Store :: struct {
 	coin_launch_mp3: Platform.Audio;
 
 	point_up_mp3: Platform.Audio;
+
+	verdana_atlas: WRender.WTexture;
+	verdana: Platform.Font;
 }
 
 get_horn_car :: (store: Store, idx: int) -> *Platform.Audio {
@@ -446,7 +449,7 @@ get_wprop :: (store: Store, id: Assets.Prop_Id) -> *WRender.Model {
 
 init_store :: (platform: Platform.Platform, store: *Store) {
 	if Assets.RUNTIME {
-		Assets.load_everything();
+		Assets.load_everything(platform);
 	}
 
 	store.geometry_shader.code = xx Assets.GEOMETRY_WGSL;
@@ -488,92 +491,95 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.rock_large = WRender.Model.make_from_obj(Assets.ROCK_LARGE, "rock_large.obj");
 	store.tile_model = WRender.Model.make_from_obj(Assets.TILE_OBJ, "tile.obj");
 
-	prop_colormap_png := Assets.Image.make_from_memory(Assets.COLORMAPS_PNG, 4);
-	defer Assets.Image.free(*prop_colormap_png);
+	prop_colormap_png := platform.load_image(Assets.COLORMAPS_PNG);
+	defer platform.free_image(*prop_colormap_png);
 	store.colormaps = WRender.WTexture.make_from_image(prop_colormap_png, "colormaps");
 
-	terrain_tile_albedo_png := Assets.Image.make_from_memory(Assets.TERRAIN_TILE_ALBEDO_PNG, 4);
-	defer Assets.Image.free(*terrain_tile_albedo_png);
+	terrain_tile_albedo_png := platform.load_image(Assets.TERRAIN_TILE_ALBEDO_PNG);
+	defer platform.free_image(*terrain_tile_albedo_png);
 	store.terrain_tile_albedo =
 		WRender.WTexture.make_from_image(terrain_tile_albedo_png, "terrain_tile_albedo");
-	terrain_tile_normal_png := Assets.Image.make_from_memory(Assets.TERRAIN_TILE_NORMAL_PNG, 4);
-	defer Assets.Image.free(*terrain_tile_normal_png);
+	terrain_tile_normal_png := platform.load_image(Assets.TERRAIN_TILE_NORMAL_PNG);
+	defer platform.free_image(*terrain_tile_normal_png);
 	store.terrain_tile_normal =
 		WRender.WTexture.make_from_image(terrain_tile_normal_png, "terrain_tile_normal");
 		
-	particle_texture_png := Assets.Image.make_from_memory(Assets.PARTICLE_TEXTURE_PNG, 4);
+	particle_texture_png := platform.load_image(Assets.PARTICLE_TEXTURE_PNG);
 	store.particle_texture =
 		WRender.WTexture.make_from_image(particle_texture_png, "particle_texture");
-	defer Assets.Image.free(*particle_texture_png);
+	defer platform.free_image(*particle_texture_png);
 
-	ui_atlas_png := Assets.Image.make_from_memory(Assets.ui_atlas_png, 4);
-	defer Assets.Image.free(*ui_atlas_png);
+	ui_atlas_png := platform.load_image(Assets.ui_atlas_png);
+	defer platform.free_image(*ui_atlas_png);
 	store.ui_atlas = WRender.WTexture.make_from_image(ui_atlas_png, "ui_atlas");
 
-	store.font_atlas = WRender.WTexture.make_from_image(Assets.MAIN_FONT.atlas, "font_atlas");
+	verdana_atlas_png := platform.load_image(Assets.verdana_png);
+	defer platform.free_image(*verdana_atlas_png);
+	store.verdana_atlas = WRender.WTexture.make_from_image(verdana_atlas_png, "verdana_atlas");
+	store.verdana = Assets.load_font(xx Assets.verdana_csv);
 
-	store.racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_RACER_OBJ);
-	store.suv_model = WRender.Model.make_from_obj(Assets.VEHICLE_SUV_OBJ);
-	store.speedster_model = WRender.Model.make_from_obj(Assets.VEHICLE_SPEEDSTER_OBJ);
-	store.drag_racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_DRAG_RACER_OBJ);
-	store.monster_truck_model = WRender.Model.make_from_obj(Assets.VEHICLE_MONSTER_TRUCK_OBJ);
-	store.vintage_racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_VINTAGE_RACER_OBJ);
-	store.boat_row_model = WRender.Model.make_from_obj(Assets.BOAT_ROW_OBJ);
-	store.boat_sail_model = WRender.Model.make_from_obj(Assets.BOAT_SAIL_OBJ);
-	store.boat_fishing_model = WRender.Model.make_from_obj(Assets.BOAT_FISHING_OBJ);
-	store.taxi_model = WRender.Model.make_from_obj(Assets.TAXI_OBJ);
-	store.police_model = WRender.Model.make_from_obj(Assets.POLICE_OBJ);
-	store.tractor_model = WRender.Model.make_from_obj(Assets.TRACTOR_OBJ);
-	store.ambulance_model = WRender.Model.make_from_obj(Assets.AMBULANCE_OBJ);
-	store.spaceship_model = WRender.Model.make_from_obj(Assets.SPACESHIP_OBJ);
-	store.tombstone_model = WRender.Model.make_from_obj(Assets.TOMBSTONE_OBJ);
-	store.skull_model = WRender.Model.make_from_obj(Assets.SKULL_OBJ);
-	store.end_hook_model = WRender.Model.make_from_obj(Assets.END_HOOK_OBJ);
-	store.pirateship_model = WRender.Model.make_from_obj(Assets.PIRATE_SHIP_OBJ);
-	store.coin_model = WRender.Model.make_from_obj(Assets.COIN_OBJ);
-	store.key_model = WRender.Model.make_from_obj(Assets.KEY_OBJ);
-	store.mark_model = WRender.Model.make_from_obj(Assets.MARK_OBJ);
-	store.gate_model = WRender.Model.make_from_obj(Assets.GATE_OBJ);
-	store.gate_close_model = WRender.Model.make_from_obj(Assets.GATE_CLOSE_OBJ);
-	store.spirit_model = WRender.Model.make_from_obj(Assets.SPIRIT_OBJ);
-	store.shuriken_model = WRender.Model.make_from_obj(Assets.SHURIKEN_OBJ);
-	store.gate_finish_model = WRender.Model.make_from_obj(Assets.GATE_FINISH_OBJ);
-	store.gate_finish_close_model = WRender.Model.make_from_obj(Assets.GATE_FINISH_CLOSE_OBJ);
-	store.flag_model = WRender.Model.make_from_obj(Assets.FLAG_OBJ);
-	store.flag_down_model = WRender.Model.make_from_obj(Assets.FLAG_DOWN_OBJ);
-	store.trophy_model = WRender.Model.make_from_obj(Assets.TROPHY_OBJ);
-	store.drone_model = WRender.Model.make_from_obj(Assets.DRONE_OBJ);
-	store.drone_blade_model = WRender.Model.make_from_obj(Assets.DRONE_BLADE_OBJ);
-	store.trap_spike_model = WRender.Model.make_from_obj(Assets.TRAP_SPIKE_OBJ);
-	store.antiair_camion_model = WRender.Model.make_from_obj(Assets.ANTIAIR_CAMION_OBJ);
-	store.antiair_canon_model = WRender.Model.make_from_obj(Assets.ANTIAIR_CANON_OBJ);
-	store.missile_model = WRender.Model.make_from_obj(Assets.MISSILE_OBJ);
-	store.robot_a0_model = WRender.Model.make_from_obj(Assets.ROBOT_A0_OBJ);
-	store.robot_a1_model = WRender.Model.make_from_obj(Assets.ROBOT_A1_OBJ);
-	store.robot_a2_model = WRender.Model.make_from_obj(Assets.ROBOT_A2_OBJ);
-	store.robot_a3_model = WRender.Model.make_from_obj(Assets.ROBOT_A3_OBJ);
-	store.robot_a4_model = WRender.Model.make_from_obj(Assets.ROBOT_A4_OBJ);
-	store.robot_a5_model = WRender.Model.make_from_obj(Assets.ROBOT_A5_OBJ);
-	store.number_0_model = WRender.Model.make_from_obj(Assets.NUMBER_0_OBJ);
-	store.number_1_model = WRender.Model.make_from_obj(Assets.NUMBER_1_OBJ);
-	store.number_2_model = WRender.Model.make_from_obj(Assets.NUMBER_2_OBJ);
-	store.number_3_model = WRender.Model.make_from_obj(Assets.NUMBER_3_OBJ);
-	store.number_4_model = WRender.Model.make_from_obj(Assets.NUMBER_4_OBJ);
-	store.number_5_model = WRender.Model.make_from_obj(Assets.NUMBER_5_OBJ);
-	store.number_6_model = WRender.Model.make_from_obj(Assets.NUMBER_6_OBJ);
-	store.number_7_model = WRender.Model.make_from_obj(Assets.NUMBER_7_OBJ);
-	store.number_8_model = WRender.Model.make_from_obj(Assets.NUMBER_8_OBJ);
-	store.number_9_model = WRender.Model.make_from_obj(Assets.NUMBER_9_OBJ);
-	store.present_a_model = WRender.Model.make_from_obj(Assets.PRESENT_A_OBJ);
-	store.present_b_model = WRender.Model.make_from_obj(Assets.PRESENT_B_OBJ);
-	store.juukebox_model = WRender.Model.make_from_obj(Assets.JUKEBOX_OBJ);
+	store.racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_RACER_OBJ, "racer");
+	store.suv_model = WRender.Model.make_from_obj(Assets.VEHICLE_SUV_OBJ, "suv");
+	store.speedster_model = WRender.Model.make_from_obj(Assets.VEHICLE_SPEEDSTER_OBJ, "speedster");
+	store.drag_racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_DRAG_RACER_OBJ, "drag_racer");
+	store.monster_truck_model = WRender.Model.make_from_obj(Assets.VEHICLE_MONSTER_TRUCK_OBJ, "monster_truck");
+	store.vintage_racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_VINTAGE_RACER_OBJ, "vintage_racer");
+	store.boat_row_model = WRender.Model.make_from_obj(Assets.BOAT_ROW_OBJ, "boat_row");
+	store.boat_sail_model = WRender.Model.make_from_obj(Assets.BOAT_SAIL_OBJ, "boat_sail");
+	store.boat_fishing_model = WRender.Model.make_from_obj(Assets.BOAT_FISHING_OBJ, "boat_fishing");
+	store.taxi_model = WRender.Model.make_from_obj(Assets.TAXI_OBJ, "taxi");
+	store.police_model = WRender.Model.make_from_obj(Assets.POLICE_OBJ, "police");
+	store.tractor_model = WRender.Model.make_from_obj(Assets.TRACTOR_OBJ, "tractor");
+	store.ambulance_model = WRender.Model.make_from_obj(Assets.AMBULANCE_OBJ, "ambulance");
+	store.spaceship_model = WRender.Model.make_from_obj(Assets.SPACESHIP_OBJ, "spaceship");
+	store.tombstone_model = WRender.Model.make_from_obj(Assets.TOMBSTONE_OBJ, "tombstone");
+	store.skull_model = WRender.Model.make_from_obj(Assets.SKULL_OBJ, "skull");
+	store.end_hook_model = WRender.Model.make_from_obj(Assets.END_HOOK_OBJ, "end_hook");
+	store.pirateship_model = WRender.Model.make_from_obj(Assets.PIRATE_SHIP_OBJ, "pirateship");
+	store.coin_model = WRender.Model.make_from_obj(Assets.COIN_OBJ, "coin");
+	store.key_model = WRender.Model.make_from_obj(Assets.KEY_OBJ, "key");
+	store.mark_model = WRender.Model.make_from_obj(Assets.MARK_OBJ, "mark");
+	store.gate_model = WRender.Model.make_from_obj(Assets.GATE_OBJ, "gate");
+	store.gate_close_model = WRender.Model.make_from_obj(Assets.GATE_CLOSE_OBJ, "gate_close");
+	store.spirit_model = WRender.Model.make_from_obj(Assets.SPIRIT_OBJ, "spirit");
+	store.shuriken_model = WRender.Model.make_from_obj(Assets.SHURIKEN_OBJ, "shuriken");
+	store.gate_finish_model = WRender.Model.make_from_obj(Assets.GATE_FINISH_OBJ, "gate_finish");
+	store.gate_finish_close_model = WRender.Model.make_from_obj(Assets.GATE_FINISH_CLOSE_OBJ, "gate_finish_close");
+	store.flag_model = WRender.Model.make_from_obj(Assets.FLAG_OBJ, "flag");
+	store.flag_down_model = WRender.Model.make_from_obj(Assets.FLAG_DOWN_OBJ, "flag_down");
+	store.trophy_model = WRender.Model.make_from_obj(Assets.TROPHY_OBJ, "trophy");
+	store.drone_model = WRender.Model.make_from_obj(Assets.DRONE_OBJ, "drone");
+	store.drone_blade_model = WRender.Model.make_from_obj(Assets.DRONE_BLADE_OBJ, "drone_blade");
+	store.trap_spike_model = WRender.Model.make_from_obj(Assets.TRAP_SPIKE_OBJ, "trap_spike");
+	store.antiair_camion_model = WRender.Model.make_from_obj(Assets.ANTIAIR_CAMION_OBJ, "antiair_camion");
+	store.antiair_canon_model = WRender.Model.make_from_obj(Assets.ANTIAIR_CANON_OBJ, "antiair_canon");
+	store.missile_model = WRender.Model.make_from_obj(Assets.MISSILE_OBJ, "missile");
+	store.robot_a0_model = WRender.Model.make_from_obj(Assets.ROBOT_A0_OBJ, "robot_a0");
+	store.robot_a1_model = WRender.Model.make_from_obj(Assets.ROBOT_A1_OBJ, "robot_a1");
+	store.robot_a2_model = WRender.Model.make_from_obj(Assets.ROBOT_A2_OBJ, "robot_a2");
+	store.robot_a3_model = WRender.Model.make_from_obj(Assets.ROBOT_A3_OBJ, "robot_a3");
+	store.robot_a4_model = WRender.Model.make_from_obj(Assets.ROBOT_A4_OBJ, "robot_a4");
+	store.robot_a5_model = WRender.Model.make_from_obj(Assets.ROBOT_A5_OBJ, "robot_a5");
+	store.number_0_model = WRender.Model.make_from_obj(Assets.NUMBER_0_OBJ, "number_0");
+	store.number_1_model = WRender.Model.make_from_obj(Assets.NUMBER_1_OBJ, "number_1");
+	store.number_2_model = WRender.Model.make_from_obj(Assets.NUMBER_2_OBJ, "number_2");
+	store.number_3_model = WRender.Model.make_from_obj(Assets.NUMBER_3_OBJ, "number_3");
+	store.number_4_model = WRender.Model.make_from_obj(Assets.NUMBER_4_OBJ, "number_4");
+	store.number_5_model = WRender.Model.make_from_obj(Assets.NUMBER_5_OBJ, "number_5");
+	store.number_6_model = WRender.Model.make_from_obj(Assets.NUMBER_6_OBJ, "number_6");
+	store.number_7_model = WRender.Model.make_from_obj(Assets.NUMBER_7_OBJ, "number_7");
+	store.number_8_model = WRender.Model.make_from_obj(Assets.NUMBER_8_OBJ, "number_8");
+	store.number_9_model = WRender.Model.make_from_obj(Assets.NUMBER_9_OBJ, "number_9");
+	store.present_a_model = WRender.Model.make_from_obj(Assets.PRESENT_A_OBJ, "present_a");
+	store.present_b_model = WRender.Model.make_from_obj(Assets.PRESENT_B_OBJ, "present_b");
+	store.juukebox_model = WRender.Model.make_from_obj(Assets.JUKEBOX_OBJ, "juukebox");
 
-	store.unit_cylinder_model = WRender.Model.make_from_obj(Assets.UNIT_CYLINDER_OBJ);
-	store.unit_sphere_model = WRender.Model.make_from_obj(Assets.UNIT_SPHERE_OBJ);
-	store.zone_wall_model = WRender.Model.make_from_obj(Assets.ZONE_WALL_OBJ);
+	store.unit_cylinder_model = WRender.Model.make_from_obj(Assets.UNIT_CYLINDER_OBJ, "unit_cylinder");
+	store.unit_sphere_model = WRender.Model.make_from_obj(Assets.UNIT_SPHERE_OBJ, "unit_sphere");
+	store.zone_wall_model = WRender.Model.make_from_obj(Assets.ZONE_WALL_OBJ, "zone_wall");
 
-	store.indicator_outline_model = WRender.Model.make_from_obj(Assets.INDICATOR_OUTLINE_OBJ);
-	store.indicator_stroke_model = WRender.Model.make_from_obj(Assets.INDICATOR_STROKE_OBJ);
+	store.indicator_outline_model = WRender.Model.make_from_obj(Assets.INDICATOR_OUTLINE_OBJ, "indicator_outline");
+	store.indicator_stroke_model = WRender.Model.make_from_obj(Assets.INDICATOR_STROKE_OBJ, "indicator_stroke");
 	store.snowflakes_and_lights_mp3 = platform.load_audio(
 		xx Assets.SNOWFLAKES_AND_LIGHTS_MP3, true
 	);
@@ -626,231 +632,9 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.loser_mp3 = platform.load_audio(xx Assets.LOSER_MP3, true);
 
 	store.point_up_mp3 = platform.load_audio(xx Assets.POINT_UP_MP3, false);
-
-	// store.tile_atlas_png = Assets.Image.make_from_memory(Assets.tile_atlas_png, 4);
-	// store.tile_atlas = Render.Texture.make_from_image(store.tile_atlas_png);
-
-	// store.tile_cliff_albedo_png = Assets.Image.make_from_memory(Assets.tile_cliff_albedo_png, 4);
-	// store.tile_cliff_normal_png = Assets.Image.make_from_memory(Assets.tile_cliff_normal_png, 3);
-	// store.tile_cliff_height_png = Assets.Image.make_from_memory(Assets.tile_cliff_height_png, 3);
-
-	// store.tile_snow_albedo_png = Assets.Image.make_from_memory(Assets.tile_snow_albedo_png, 4);
-	// store.tile_snow_normal_png = Assets.Image.make_from_memory(Assets.tile_snow_normal_png, 3);
-	// store.tile_snow_height_png = Assets.Image.make_from_memory(Assets.tile_snow_height_png, 3);
-
-	// store.tile_grass_albedo_png = Assets.Image.make_from_memory(Assets.tile_grass_albedo_png, 4);
-	// store.tile_grass_normal_png = Assets.Image.make_from_memory(Assets.tile_grass_normal_png, 3);
-	// store.tile_grass_height_png = Assets.Image.make_from_memory(Assets.tile_grass_height_png, 3);
-
-	// store.tile_slippy_albedo_png = Assets.Image.make_from_memory(Assets.tile_slippy_albedo_png, 4);
-	// store.tile_slippy_normal_png = Assets.Image.make_from_memory(Assets.tile_slippy_normal_png, 3);
-	// store.tile_slippy_height_png = Assets.Image.make_from_memory(Assets.tile_slippy_height_png, 3);
-
-	// store.tile_cliff_albedo = Render.Texture.make_from_image(store.tile_cliff_albedo_png);
-	// store.tile_cliff_normal = Render.Texture.make_from_image(store.tile_cliff_normal_png);
-	// store.tile_cliff_height = Render.Texture.make_from_image(store.tile_cliff_height_png);
-
-	// store.tile_snow_albedo = Render.Texture.make_from_image(store.tile_snow_albedo_png);
-	// store.tile_snow_normal = Render.Texture.make_from_image(store.tile_snow_normal_png);
-	// store.tile_snow_height = Render.Texture.make_from_image(store.tile_snow_height_png);
-
-	// store.tile_grass_albedo = Render.Texture.make_from_image(store.tile_grass_albedo_png);
-	// store.tile_grass_normal = Render.Texture.make_from_image(store.tile_grass_normal_png);
-	// store.tile_grass_height = Render.Texture.make_from_image(store.tile_grass_height_png);
-
-	// store.tile_slippy_albedo = Render.Texture.make_from_image(store.tile_slippy_albedo_png);
-	// store.tile_slippy_normal = Render.Texture.make_from_image(store.tile_slippy_normal_png);
-	// store.tile_slippy_height = Render.Texture.make_from_image(store.tile_slippy_height_png);
-
-	// store.skybox_ski_png = Assets.Image.make_from_memory(Assets.SKYBOX_SKI_PNG, 4);
-	// store.skybox_ski = Render.Texture.make_from_image(store.skybox_ski_png);
-
-	// store.footstep_0_ogg = platform.load_audio(xx Assets.FOOTSTEP_SNOW_0_OGG);
-	// store.footstep_1_ogg = platform.load_audio(xx Assets.FOOTSTEP_SNOW_1_OGG);
-	// store.footstep_2_ogg = platform.load_audio(xx Assets.FOOTSTEP_SNOW_2_OGG);
-	// store.footstep_3_ogg = platform.load_audio(xx Assets.FOOTSTEP_SNOW_3_OGG);
-	// store.footstep_4_ogg = platform.load_audio(xx Assets.FOOTSTEP_SNOW_4_OGG);
-	// store.click_wav = platform.load_audio(xx Assets.CLICK_WAV);
-	// store.snowflakes_and_lights_ogg = platform.load_audio(xx Assets.SNOWFLAKES_AND_LIGHTS_OGG);
-
-	// store.particle_texture_png = Assets.Image.make_from_memory(Assets.PARTICLE_TEXTURE_PNG, 4);
-	// store.particle_texture = Render.Texture.make_from_image(store.particle_texture_png);
-
-	// store.skybox_shader = Render.Shader.make(
-	// 	xx Assets.SKYBOX_VERTEX, xx Assets.SKYBOX_FRAGMENT
-	// );
-	// store.particle_shader = Render.Shader.make(
-	// 	xx Assets.PARTICLE_VERTEX, xx Assets.PARTICLE_FRAGMENT
-	// );
-	// store.model_shader = Render.Shader.make(
-	// 	xx Assets.PLAIN_VERTEX, xx Assets.PLAIN_FRAGMENT
-	// );
-	// store.texture_shader = Render.Shader.make(
-	// 	xx Assets.PLAIN_VERTEX, xx Assets.TEXTURE_FRAGMENT
-	// );
-	// store.font_shader = Render.Shader.make(
-	// 	xx Assets.FONT_VERTEX, xx Assets.FONT_FRAGMENT
-	// );
-	// store.instance_shader = Render.Shader.make(
-	// 	xx Assets.INSTANCE_VERTEX, xx Assets.INSTANCE_FRAGMENT
-	// );
-	// store.tile_shader = Render.Shader.make(
-	// 	xx Assets.TILE_VERTEX, xx Assets.TILE_FRAGMENT
-	// );
-	// store.quad_texture_shader = Render.Shader.make(
-	// 	xx Assets.QUAD_TEXTURE_VERTEX, xx Assets.QUAD_TEXTURE_FRAGMENT
-	// );
-	// store.postpro_shader = Render.Shader.make(
-	// 	xx Assets.POSTPROCESS_VERTEX, xx Assets.POSTPROCESS_FRAGMENT
-	// );
-	// store.shadow_shader = Render.Shader.make(
-	// 	xx Assets.SHADOW_VERTEX, xx Assets.SHADOW_FRAGMENT
-	// );
-	// store.shadow_instanced_shader = Render.Shader.make(
-	// 	xx Assets.SHADOW_INSTANCED_VERTEX, xx Assets.SHADOW_INSTANCED_FRAGMENT
-	// );
-	// store.instanced_texture_shader = Render.Shader.make(
-	// 	xx Assets.INSTANCED_TEXTURE_VERTEX, xx Assets.INSTANCED_TEXTURE_FRAGMENT
-	// );
-	// store.shadow_instanced_texture_shader = Render.Shader.make(
-	// 	xx Assets.SHADOW_INSTANCED_TEXTURE_VERTEX, xx Assets.SHADOW_INSTANCED_TEXTURE_FRAGMENT
-	// );
-
-	// store.ice_texture = Render.Texture.make_from_image(Assets.ICE_TEXTURE);
-	// store.coin_texture = Render.Texture.make_from_image(Assets.COIN_TEXTURE);
-	// store.dirt_texture = Render.Texture.make_from_image(Assets.DIRT_TEXTURE);
-	// store.grass_texture = Render.Texture.make_from_image(Assets.GRASS_TEXTURE);
-	// store.slippy_ice_texture = Render.Texture.make_from_image(Assets.SLIPPY_ICE_TEXTURE);
-	// store.mark_texture = Render.Texture.make_from_image(Assets.MARK_TEXTURE);
-	// store.vehicle_colormap = Render.Texture.make_from_image(Assets.VEHICLE_COLORMAP_TEXTURE);
-	// Render.set_clamp(store.mark_texture, .T);
-
-	// // store.tile_geometry = Render.Geometry.make_square(
-	// // 	.{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
-	// // );
-	// store.z_facing_unit_square_geometry = Render.Geometry.make_square(
-	// 	.{ 0, 0, 0 }, .{ 1, 0, 0 },  .{ 1, 1, 0 },  .{ 0, 1, 0 }
-	// );
-	// store.tile_geometry = Render.Geometry.make_from_obj(Assets.TILE_OBJ);
-	// store.flag_geometry = Render.Geometry.make_from_obj(Assets.FLAG_OBJ);
-	// store.flag_down_geometry = Render.Geometry.make_from_obj(Assets.FLAG_DOWN_OBJ);
-	// store.player_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_RACER_OBJ);
-	// store.racer_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_RACER_OBJ);
-	// store.suv_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_SUV_OBJ);
-	// store.drag_racer_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_DRAG_RACER_OBJ);
-	// store.vintage_racer_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_VINTAGE_RACER_OBJ);
-	// store.monster_truck_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_MONSTER_TRUCK_OBJ);
-	// store.speedster_geometry = Render.Geometry.make_from_obj(Assets.VEHICLE_SPEEDSTER_OBJ);
-	// store.tombstone_geometry = Render.Geometry.make_from_obj(Assets.TOMBSTONE_OBJ);
-	// store.coin_geometry = Render.Geometry.make_from_obj(Assets.COIN_OBJ);
-	// store.skull_geometry = Render.Geometry.make_from_obj(Assets.SKULL_OBJ);
-	// store.key_geometry = Render.Geometry.make_from_obj(Assets.KEY_OBJ);
-	// store.mark_geometry = Render.Geometry.make_from_obj(Assets.MARK_OBJ);
-	// store.gate_geometry = Render.Geometry.make_from_obj(Assets.GATE_OBJ);
-	// store.gate_close_geometry = Render.Geometry.make_from_obj(Assets.GATE_CLOSE_OBJ);
-	// store.gate_finish_geometry = Render.Geometry.make_from_obj(Assets.GATE_FINISH_OBJ);
-	// store.gate_finish_close_geometry = Render.Geometry.make_from_obj(Assets.GATE_FINISH_CLOSE_OBJ);
-	// store.shuriken_geometry = Render.Geometry.make_from_obj(Assets.SHURIKEN_OBJ);
-	// store.spirit_geometry = Render.Geometry.make_from_obj(Assets.SPIRIT_OBJ);
-	// store.terrain_tree_snow_a = Render.Geometry.make_from_obj(Assets.TERRAIN_TREE_SNOW_A);
-	// store.terrain_tree_snow_b = Render.Geometry.make_from_obj(Assets.TERRAIN_TREE_SNOW_B);
-	// store.terrain_tree_snow_c = Render.Geometry.make_from_obj(Assets.TERRAIN_TREE_SNOW_C);
-	// store.terrain_snowman = Render.Geometry.make_from_obj(Assets.TERRAIN_SNOWMAN);
-	// store.terrain_snowman_hat = Render.Geometry.make_from_obj(Assets.TERRAIN_SNOWMAN_HAT);
-	// store.terrain_snow_flat = Render.Geometry.make_from_obj(Assets.TERRAIN_SNOW_FLAT);
-	// store.terrain_snow_flat_large = Render.Geometry.make_from_obj(Assets.TERRAIN_SNOW_FLAT_LARGE);
-	// store.terrain_snow_pile = Render.Geometry.make_from_obj(Assets.TERRAIN_SNOW_PILE);
-	// store.terrain_snowflake_a = Render.Geometry.make_from_obj(Assets.TERRAIN_SNOWFLAKE_A);
-	// store.terrain_snowflake_b = Render.Geometry.make_from_obj(Assets.TERRAIN_SNOWFLAKE_B);
-	// store.terrain_snowflake_c = Render.Geometry.make_from_obj(Assets.TERRAIN_SNOWFLAKE_C);
-	// store.rock_small = Render.Geometry.make_from_obj(Assets.ROCK_SMALL);
-	// store.rock_medium = Render.Geometry.make_from_obj(Assets.ROCK_MEDIUM);
-	// store.rock_large = Render.Geometry.make_from_obj(Assets.ROCK_LARGE);
-	// store.skybox_geometry = Render.Geometry.make_from_obj(Assets.SKYBOX_OBJ);
-	// store.indicator_outline_geometry = Render.Geometry.make_from_obj(Assets.INDICATOR_OUTLINE_OBJ);
-	// store.indicator_stroke_geometry = Render.Geometry.make_from_obj(Assets.INDICATOR_STROKE_OBJ);
-	// store.boat_row_geometry = Render.Geometry.make_from_obj(Assets.BOAT_ROW_OBJ);
-	// store.boat_fishing_geometry = Render.Geometry.make_from_obj(Assets.BOAT_FISHING_OBJ);
-	// store.taxi_geometry = Render.Geometry.make_from_obj(Assets.TAXI_OBJ);
-	// store.police_geometry = Render.Geometry.make_from_obj(Assets.POLICE_OBJ);
-	// store.ambulance_geometry = Render.Geometry.make_from_obj(Assets.AMBULANCE_OBJ);
-	// store.spaceship_geometry = Render.Geometry.make_from_obj(Assets.SPACESHIP_OBJ);
-
-	// store.number_0_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_0_OBJ);
-	// store.number_1_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_1_OBJ);
-	// store.number_2_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_2_OBJ);
-	// store.number_3_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_3_OBJ);
-	// store.number_4_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_4_OBJ);
-	// store.number_5_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_5_OBJ);
-	// store.number_6_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_6_OBJ);
-	// store.number_7_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_7_OBJ);
-	// store.number_8_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_8_OBJ);
-	// store.number_9_geometry = Render.Geometry.make_from_obj(Assets.NUMBER_9_OBJ);
-
-	// store.robot_a0_geometry = Render.Geometry.make_from_obj(Assets.ROBOT_A0_OBJ);
-	// store.robot_a1_geometry = Render.Geometry.make_from_obj(Assets.ROBOT_A1_OBJ);
-	// store.robot_a2_geometry = Render.Geometry.make_from_obj(Assets.ROBOT_A2_OBJ);
-	// store.robot_a3_geometry = Render.Geometry.make_from_obj(Assets.ROBOT_A3_OBJ);
-	// store.robot_a4_geometry = Render.Geometry.make_from_obj(Assets.ROBOT_A4_OBJ);
-	// store.robot_a5_geometry = Render.Geometry.make_from_obj(Assets.ROBOT_A5_OBJ);
-
-	// store.unit_cylinder_geometry = Render.Geometry.make_from_obj(Assets.UNIT_CYLINDER_OBJ);
-	// store.unit_sphere_geometry = Render.Geometry.make_from_obj(Assets.UNIT_SPHERE_OBJ);
 }
 
 #if Assets.RUNTIME {
 	#import "File";
 }
 
-check_change :: (store: *Store, paths: [] string) {
-	#if Assets.RUNTIME {
-
-		// handle_shader :: (change: string, name: string, shader: *Render.Shader) #expand {
-		// 	if ends_with(change, tprint("%.vert", name))
-		// 	|| ends_with(change, tprint("%.frag", name))
-		// 	{
-		// 		print("Recompiling % shader\n", name);
-
-		// 		vertex_code, ok := read_entire_file(
-		// 			tprint("%/../assets/Shader/%.vert", #filepath, name),, temp
-		// 		);
-		// 		if ok {
-		// 			fragment_code:, ok = read_entire_file(
-		// 				tprint("%/../assets/Shader/%.frag", #filepath, name),, temp
-		// 			);
-		// 			if ok {
-		// 				Render.release(shader);
-		// 				shader.* = Render.Shader.make(vertex_code, fragment_code);
-		// 			}
-		// 		}
-		// 	}
-		// }
-
-		handle_wshader :: (change: string, name: string, wshader: *WRender.WShader) #expand {
-			if ends_with(change, tprint("%.wgsl", name)) {
-				print("Recompiling % WShader\n", name);
-
-				code, ok := read_entire_file(
-					tprint("%/../assets/Shader/%.wgsl", #filepath, name),, temp
-				);
-				if ok {
-					wshader.code = code;
-					wshader.dirty = true;
-				}
-			}
-		}
-
-		for paths {
-			// handle_shader(it, "tile", *store.tile_shader);
-			// handle_shader(it, "instance", *store.instance_shader);
-			// handle_shader(it, "plain", *store.model_shader);
-			// handle_shader(it, "postpro", *store.postpro_shader);
-			// handle_shader(it, "shadow", *store.shadow_shader);
-			// handle_shader(it, "shadow_instanced", *store.shadow_instanced_shader);
-			// handle_shader(it, "instance_texture", *store.instanced_texture_shader);
-			// handle_shader(it, "shadow_instance_texture", *store.shadow_instanced_texture_shader);
-			// handle_shader(it, "skybox", *store.skybox_shader);
-			// handle_shader(it, "particles", *store.particle_shader);
-		}
-	}
-}

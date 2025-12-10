@@ -6,7 +6,6 @@
 #import "Platform";
 #import "Hash_Table";
 Store :: #import "Store";
-STB :: #import "stb_image";
 Scene :: #import "Scene";
 
 #scope_export

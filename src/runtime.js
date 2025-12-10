@@ -140,7 +140,7 @@ let web_buffer_cursor = 0;
 let audio_context = null;
 
 window.addEventListener("load", async () => {
-    websocket = new WebSocket("ws://localhost:5623/ws");
+    websocket = new WebSocket("ws://localhost:2556/ws");
     websocket.addEventListener("message", async event => {
         // Append event.data to web_buffer at web_buffer_cursor
         const blob = event.data;
@@ -173,7 +173,7 @@ window.addEventListener("wasm_exit", (e) => {
         // Because a PWA is a long running interactive application, it isn't expected you will exit unless something
         // bad happens. Reloading the page makes games like Invaders restart when you lose which seems like reasonable
         // enough behaviour for most programs written in this style.    -nzizic, 27 June 2025
-        window.location.reload();
+        // window.location.reload();
     } else {
         // Remove any existing canvases so that the user can see the error code message
         document.querySelectorAll("canvas").forEach(canvas => canvas.remove());

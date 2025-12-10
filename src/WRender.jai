@@ -8,7 +8,6 @@
 #import "Rand";
 #import "Sort";
 Store :: #import "Store";
-STB :: #import "stb_image";
 Scene :: #import "Scene";
 GUI :: #import "GUI";
 
@@ -35,6 +34,137 @@ align_up :: (value: *int, alignment: int) {
 
 #scope_export
 
+Graphics :: struct {
+	instance: WGPUInstance;
+	surface: WGPUSurface;
+	adapter: WGPUAdapter;
+	device: WGPUDevice;
+	mainQueue: WGPUQueue;
+
+	done: [16] bool;
+
+	gpu: GPU_proc;
+}
+
+graphics: *Graphics;
+
+init_graphics :: (platform: Platform, _graphics: *Graphics) {
+	graphics = _graphics;
+	graphics.instance = platform.gpu.createInstance(null);
+	if !graphics.instance {
+		print("Failed to create WGPU instance\n");
+		return;
+	}
+
+	surfaceDesc := WGPUSurfaceDescriptor.{ nextInChain = xx graphics.device };
+	graphics.surface = platform.gpu.myInstanceCreateSurface(graphics.instance, *surfaceDesc);
+
+	opts: WGPURequestAdapterOptions = .{};
+	opts.compatibleSurface = graphics.surface;
+	cb: WGPURequestAdapterCallbackInfo = .{};
+	cb.userdata1 = graphics;
+	graphics.done[0] = false;
+	cb.callback = (
+		status: WGPURequestAdapterStatus,
+		adapter: WGPUAdapter,
+		message: WGPUStringView,
+		userdata1: *void,
+		userdata2: *void
+	) #c_call {
+		_graphics := userdata1.(*Graphics);
+		if status == WGPURequestAdapterStatus.Success {
+			_graphics.adapter = adapter;
+			_graphics.done[0] = true;
+		} else {
+			ctx: #Context;
+			push_context ctx {
+				print("Failed to request WGPU adapter\n");
+			}
+		}
+	};
+	platform.gpu.instanceRequestAdapter(graphics.instance, *opts, cb);
+	while !graphics.done[0] {
+		;
+	}
+
+	limits: WGPULimits = .{};
+	if platform.gpu.adapterGetLimits(graphics.adapter, *limits) == .Success {
+		print("WGPU limits: %\n", limits);
+	}
+
+	features: WGPUSupportedFeatures;
+	defer {
+		platform.gpu.supportedFeaturesFreeMembers(features);
+	}
+	platform.gpu.adapterGetFeatures(graphics.adapter, *features);
+	for 0..features.featureCount-1 {
+		print("Support %\n", features.features[it]);
+	}
+
+	graphics.done[0] = false;
+	deviceDesc: WGPUDeviceDescriptor = .{};
+	deviceDesc.uncapturedErrorCallbackInfo.userdata1 = xx graphics;
+	deviceDesc.uncapturedErrorCallbackInfo.callback = (
+		device: *WGPUDevice,
+		errorType: WGPUErrorType,
+		message: WGPUStringView,
+		userdata1: *void,
+		userdata2: *void
+	) #c_call {
+		ctx: #Context;
+		push_context ctx {
+			str: string;
+			str.data = message.data;
+			str.count = xx message.length;
+			print("WGPU ERROR %\n", str);
+		}
+	};
+
+	{
+
+		cb: WGPURequestDeviceCallbackInfo = .{};
+		cb.mode = .WaitAnyOnly;
+		cb.userdata1 = graphics;
+		cb.callback = (
+			status: WGPURequestDeviceStatus,
+			device: WGPUDevice,
+			message: WGPUStringView,
+			userdata1: *void,
+			userdata2: *void
+		) #c_call {
+			_graphics := userdata1.(*Graphics);
+			if status == WGPURequestDeviceStatus.Success {
+				_graphics.device = device;
+				_graphics.done[0] = true;
+			} else {
+				ctx: #Context;
+				push_context ctx {
+					print("Failed to request WGPU device\n");
+				}
+			}
+		};
+		platform.gpu.adapterRequestDevice(graphics.adapter, *deviceDesc, cb);
+	}
+	while !graphics.done[0] {
+		;
+	}
+
+	platform.gpu.adapterRelease(graphics.adapter);
+
+	config: WGPUSurfaceConfiguration = .{};
+	config.device = graphics.device;
+	config.format = .BGRA8Unorm;
+	config.usage = WGPUTextureUsage_RenderAttachment;
+	config.width = 1366;
+	config.height = 768;
+	config.presentMode = .Fifo;
+	platform.gpu.surfaceConfigure(graphics.surface, *config);
+
+	graphics.mainQueue = platform.gpu.deviceGetQueue(graphics.device);
+
+	platform.gpu.queueSubmit(graphics.mainQueue, 0, null);
+}
+
 
 WShader :: struct {
 	code: string;
@@ -55,6 +185,7 @@ WTexture :: struct {
 
 	make_from_image :: (image: Image, label: string = "unknown") -> WTexture {
 		texture: WTexture;
+		print("Making image % (% %)\n", label, image.width, image.height);
 
 		desc: WGPUTextureDescriptor = .{};
 		desc.label = toWGPUStringView(tprint("Texture (%)", label));
@@ -66,7 +197,7 @@ WTexture :: struct {
 		desc.sampleCount = 1;
 		desc.dimension = ._2D;
 		desc.format = .RGBA8Unorm;
-		texture.gpu = context.gpu.deviceCreateTexture(context.graphics.device, *desc);
+		texture.gpu = graphics.gpu.deviceCreateTexture(graphics.device, *desc);
 
 		copyInfo: WGPUTexelCopyTextureInfo;
 		copyInfo.texture = texture.gpu;
@@ -77,8 +208,8 @@ WTexture :: struct {
 		copyLayout.offset = 0;
 		copyLayout.bytesPerRow = xx (image.width * image.channels);
 		copyLayout.rowsPerImage = xx image.height;
-		context.gpu.queueWriteTexture(
-			context.graphics.mainQueue,
+		graphics.gpu.queueWriteTexture(
+			graphics.mainQueue,
 			*copyInfo,
 			image.data.data,
 			xx (image.width * image.height * image.channels),
@@ -86,7 +217,7 @@ WTexture :: struct {
 			*desc.size
 		);
 
-		texture.view = context.gpu.textureCreateView(texture.gpu, null);
+		texture.view = graphics.gpu.textureCreateView(texture.gpu, null);
 
 		samplerDesc: WGPUSamplerDescriptor = .{};
 		samplerDesc.label = toWGPUStringView(tprint("Texture Sampler (%)", label));
@@ -99,7 +230,7 @@ WTexture :: struct {
 		samplerDesc.lodMinClamp = 0;
 		samplerDesc.lodMaxClamp = 32;
 		samplerDesc.maxAnisotropy = 1;
-		texture.sampler = context.gpu.deviceCreateSampler(context.graphics.device, *samplerDesc);
+		texture.sampler = graphics.gpu.deviceCreateSampler(graphics.device, *samplerDesc);
 
 		return texture;
 	}
@@ -110,6 +241,7 @@ Model :: struct {
 	prim_count: int;
 
 	make_from_obj :: (obj: [] u8, debug: string = "unknown") -> Model {
+		print("Loading OBJ model: %\n", debug);
 		model: Model;
 
 		vertices: [..] V3f;
@@ -221,11 +353,11 @@ Model :: struct {
 		desc.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst;
 		desc.size = xx (cpu_buffer.count * size_of(WFramegraph.Vertex));
 		desc.mappedAtCreation = 0;
-		model.gpu = context.gpu.deviceCreateBuffer(context.graphics.device, *desc);
+		model.gpu = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
 		model.prim_count = cpu_buffer.count;
 
-		context.gpu.queueWriteBuffer(
-			context.graphics.mainQueue,
+		graphics.gpu.queueWriteBuffer(
+			graphics.mainQueue,
 			model.gpu,
 			0,
 			cpu_buffer.data,
@@ -283,7 +415,7 @@ WFramegraph :: struct {
 		color: V4f = .{ 1, 1, 1, 1 };
 		z30sdf2: u32 = 0;
 		rotation: float = 0;
-		padding1: u32 = 0;
+		outline: float = 0;
 		padding2: u32 = 0;
 	}
 	uiInstanceBuffer: WGPUBuffer;
@@ -354,7 +486,7 @@ init_bindgroup_layout :: (framegraph: *WFramegraph) {
 		layout.entries = entries.data;
 		layout.label = toWGPUStringView("Instance Bind Group Layout");
 		framegraph.instanceBindGroupLayout =
-			context.gpu.deviceCreateBindGroupLayout(context.graphics.device, *layout);
+			graphics.gpu.deviceCreateBindGroupLayout(graphics.device, *layout);
 		framegraph.instanceBindGroup = instance_bind_group(framegraph, "Geometry", 32 * 1024);
 	}
 	{
@@ -388,7 +520,7 @@ init_bindgroup_layout :: (framegraph: *WFramegraph) {
 		layout.entries = entries.data;
 		layout.label = toWGPUStringView("Texture Bind Group Layout");
 		framegraph.textureBindGroupLayout =
-			context.gpu.deviceCreateBindGroupLayout(context.graphics.device, *layout);
+			graphics.gpu.deviceCreateBindGroupLayout(graphics.device, *layout);
 	}
 	if false {
 		layout: WGPUBindGroupLayoutDescriptor = .{};
@@ -423,7 +555,7 @@ init_bindgroup_layout :: (framegraph: *WFramegraph) {
 		layout.entries = entries.data;
 		layout.label = toWGPUStringView("UI Bind Group Layout");
 		framegraph.quadBindGroupLayout =
-			context.gpu.deviceCreateBindGroupLayout(context.graphics.device, *layout);
+			graphics.gpu.deviceCreateBindGroupLayout(graphics.device, *layout);
 	}
 }
 
@@ -435,8 +567,8 @@ init_quad_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 		wgsl.chain.next = null;
 		wgsl.chain.sType = .ShaderSourceWGSL;
 		desc.nextInChain = *wgsl.chain;
-		framegraph.quadModule = context.gpu.deviceCreateShaderModule(
-			context.graphics.device, *desc
+		framegraph.quadModule = graphics.gpu.deviceCreateShaderModule(
+			graphics.device, *desc
 		);
 	}
 	{
@@ -476,11 +608,11 @@ init_quad_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 			fragment.targetCount = targets.count;
 		desc.fragment = *fragment;
 
-		framegraph.quadPipeline = context.gpu.deviceCreateRenderPipeline(
-			context.graphics.device, *desc
+		framegraph.quadPipeline = graphics.gpu.deviceCreateRenderPipeline(
+			graphics.device, *desc
 		);
 
-		framegraph.quadBindGroupLayout = context.gpu.renderPipelineGetBindGroupLayout(
+		framegraph.quadBindGroupLayout = graphics.gpu.renderPipelineGetBindGroupLayout(
 			framegraph.quadPipeline, 0
 		);
 	}
@@ -494,8 +626,8 @@ init_present_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 		wgsl.chain.next = null;
 		wgsl.chain.sType = .ShaderSourceWGSL;
 		desc.nextInChain = *wgsl.chain;
-		framegraph.presentModule = context.gpu.deviceCreateShaderModule(
-			context.graphics.device, *desc
+		framegraph.presentModule = graphics.gpu.deviceCreateShaderModule(
+			graphics.device, *desc
 		);
 	}
 
@@ -506,8 +638,8 @@ init_present_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 		// layoutEntries[0] = framegraph.textureBindGroupLayout;
 		// layout.bindGroupLayoutCount = 1;
 		// layout.bindGroupLayouts = layoutEntries.data;
-		// framegraph.presentPipelineLayout = context.gpu.deviceCreatePipelineLayout(
-		// 	context.graphics.device, *layout
+		// framegraph.presentPipelineLayout = graphics.gpu.deviceCreatePipelineLayout(
+		// 	graphics.device, *layout
 		// );
 
 		desc: WGPURenderPipelineDescriptor = .{};
@@ -542,11 +674,11 @@ init_present_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 			fragment.targetCount = targets.count;
 		desc.fragment = *fragment;
 
-		framegraph.presentPipeline = context.gpu.deviceCreateRenderPipeline(
-			context.graphics.device, *desc
+		framegraph.presentPipeline = graphics.gpu.deviceCreateRenderPipeline(
+			graphics.device, *desc
 		);
 
-		framegraph.presentBindGroupLayout = context.gpu.renderPipelineGetBindGroupLayout(
+		framegraph.presentBindGroupLayout = graphics.gpu.renderPipelineGetBindGroupLayout(
 			framegraph.presentPipeline, 0
 		);
 	}
@@ -560,8 +692,8 @@ init_geometry_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 		wgsl.chain.next = null;
 		wgsl.chain.sType = .ShaderSourceWGSL;
 		desc.nextInChain = *wgsl.chain;
-		framegraph.geometryModule = context.gpu.deviceCreateShaderModule(
-			context.graphics.device, *desc
+		framegraph.geometryModule = graphics.gpu.deviceCreateShaderModule(
+			graphics.device, *desc
 		);
 	}
 
@@ -573,8 +705,8 @@ init_geometry_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 		layoutEntries[1] = framegraph.textureBindGroupLayout;
 		layout.bindGroupLayoutCount = 2;
 		layout.bindGroupLayouts = layoutEntries.data;
-		framegraph.geometryPipelineLayout = context.gpu.deviceCreatePipelineLayout(
-			context.graphics.device, *layout
+		framegraph.geometryPipelineLayout = graphics.gpu.deviceCreatePipelineLayout(
+			graphics.device, *layout
 		);
 
 		desc: WGPURenderPipelineDescriptor = .{};
@@ -649,8 +781,8 @@ init_geometry_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 			fragment.targetCount = targets.count;
 		desc.fragment = *fragment;
 
-		framegraph.geometryPipeline = context.gpu.deviceCreateRenderPipeline(
-			context.graphics.device, *desc
+		framegraph.geometryPipeline = graphics.gpu.deviceCreateRenderPipeline(
+			graphics.device, *desc
 		);
 	}
 }
@@ -663,8 +795,8 @@ init_geometry_shadow_pipeline :: (framegraph: *WFramegraph, store: *Store.Store)
 		wgsl.chain.next = null;
 		wgsl.chain.sType = .ShaderSourceWGSL;
 		desc.nextInChain = *wgsl.chain;
-		framegraph.geometryShadowModule = context.gpu.deviceCreateShaderModule(
-			context.graphics.device, *desc
+		framegraph.geometryShadowModule = graphics.gpu.deviceCreateShaderModule(
+			graphics.device, *desc
 		);
 	}
 
@@ -673,8 +805,8 @@ init_geometry_shadow_pipeline :: (framegraph: *WFramegraph, store: *Store.Store)
 		layout.label = toWGPUStringView("Geometry Shadow Pipeline Layout");
 		layout.bindGroupLayoutCount = 1;
 		layout.bindGroupLayouts = *framegraph.instanceBindGroupLayout;
-		framegraph.geometryShadowPipelineLayout = context.gpu.deviceCreatePipelineLayout(
-			context.graphics.device, *layout
+		framegraph.geometryShadowPipelineLayout = graphics.gpu.deviceCreatePipelineLayout(
+			graphics.device, *layout
 		);
 
 		desc: WGPURenderPipelineDescriptor = .{};
@@ -731,8 +863,8 @@ init_geometry_shadow_pipeline :: (framegraph: *WFramegraph, store: *Store.Store)
 
 		desc.fragment = null;
 
-		framegraph.geometryShadowPipeline = context.gpu.deviceCreateRenderPipeline(
-			context.graphics.device, *desc
+		framegraph.geometryShadowPipeline = graphics.gpu.deviceCreateRenderPipeline(
+			graphics.device, *desc
 		);
 
 	}
@@ -746,7 +878,7 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
 		desc.size = size_of(WFramegraph.Uniforms);
 		desc.mappedAtCreation = 0;
-		framegraph.uniformBuffer = context.gpu.deviceCreateBuffer(context.graphics.device, *desc);
+		framegraph.uniformBuffer = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
 	}
 	{
 		desc: WGPUBufferDescriptor = .{};
@@ -755,7 +887,7 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.size = size_of(WFramegraph.Present_Uniform);
 		desc.mappedAtCreation = 0;
 		framegraph.presentUniformBuffer =
-			context.gpu.deviceCreateBuffer(context.graphics.device, *desc);
+			graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
 	}
 	{
 		desc: WGPUBufferDescriptor = .{};
@@ -763,7 +895,7 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
 		desc.size = size_of(WFramegraph.UI_Uniform);
 		desc.mappedAtCreation = 0;
-		framegraph.uiUniformBuffer = context.gpu.deviceCreateBuffer(context.graphics.device, *desc);
+		framegraph.uiUniformBuffer = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
 	}
 	{
 		desc: WGPUBufferDescriptor = .{};
@@ -771,7 +903,7 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst;
 		desc.size = 64 * 1024 * size_of(WFramegraph.Instance);
 		desc.mappedAtCreation = 0;
-		framegraph.instanceBuffer = context.gpu.deviceCreateBuffer(context.graphics.device, *desc);
+		framegraph.instanceBuffer = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
 	}
 	{
 		desc: WGPUBufferDescriptor = .{};
@@ -780,7 +912,7 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.size = 64 * 1024 * size_of(WFramegraph.UI_Instance);
 		desc.mappedAtCreation = 0;
 		framegraph.uiInstanceBuffer =
-			context.gpu.deviceCreateBuffer(context.graphics.device, *desc);
+			graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
 	}
 	{
 		desc: WGPUTextureDescriptor = .{};
@@ -793,14 +925,14 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.sampleCount = 4;
 		desc.dimension = ._2D;
 		desc.format = .Depth32Float;
-		framegraph.depthTexture = context.gpu.deviceCreateTexture(context.graphics.device, *desc);
+		framegraph.depthTexture = graphics.gpu.deviceCreateTexture(graphics.device, *desc);
 
 		viewDesc: WGPUTextureViewDescriptor = .{};
 		viewDesc.label = toWGPUStringView("Depth Texture View");
 		viewDesc.format = .Depth32Float;
 		viewDesc.dimension = ._2D;
 		viewDesc.aspect = .DepthOnly;
-		framegraph.depthView = context.gpu.textureCreateView(framegraph.depthTexture, null);
+		framegraph.depthView = graphics.gpu.textureCreateView(framegraph.depthTexture, null);
 	}
 
 	{
@@ -814,14 +946,14 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.sampleCount = 4;
 		desc.dimension = ._2D;
 		desc.format = .RGBA16Float;
-		framegraph.hdrTexture.gpu = context.gpu.deviceCreateTexture(context.graphics.device, *desc);
+		framegraph.hdrTexture.gpu = graphics.gpu.deviceCreateTexture(graphics.device, *desc);
 
 		viewDesc: WGPUTextureViewDescriptor = .{};
 		viewDesc.label = toWGPUStringView("HDR Texture View");
 		viewDesc.format = .RGBA16Float;
 		viewDesc.dimension = ._2D;
 		viewDesc.aspect = .All;
-		framegraph.hdrTexture.view = context.gpu.textureCreateView(framegraph.hdrTexture.gpu, null);
+		framegraph.hdrTexture.view = graphics.gpu.textureCreateView(framegraph.hdrTexture.gpu, null);
 
 		samplerDesc: WGPUSamplerDescriptor = .{};
 		samplerDesc.label = toWGPUStringView("HDR Texture Sampler");
@@ -835,7 +967,7 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		samplerDesc.lodMaxClamp = 32;
 		samplerDesc.maxAnisotropy = 1;
 		framegraph.hdrTexture.sampler =
-			context.gpu.deviceCreateSampler(context.graphics.device, *samplerDesc);
+			graphics.gpu.deviceCreateSampler(graphics.device, *samplerDesc);
 	}
 
 	{
@@ -850,7 +982,7 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.dimension = ._2D;
 		desc.format = .Depth32Float;
 		framegraph.shadowTexture.gpu =
-			context.gpu.deviceCreateTexture(context.graphics.device, *desc);
+			graphics.gpu.deviceCreateTexture(graphics.device, *desc);
 
 		viewDesc: WGPUTextureViewDescriptor = .{};
 		viewDesc.label = toWGPUStringView("Shadow Texture View");
@@ -858,7 +990,7 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		viewDesc.dimension = ._2D;
 		viewDesc.aspect = .DepthOnly;
 		framegraph.shadowTexture.view =
-			context.gpu.textureCreateView(framegraph.shadowTexture.gpu, null);
+			graphics.gpu.textureCreateView(framegraph.shadowTexture.gpu, null);
 
 		samplerDesc: WGPUSamplerDescriptor = .{};
 		samplerDesc.label = toWGPUStringView("Shadow Texture Sampler");
@@ -873,7 +1005,7 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		samplerDesc.lodMaxClamp = 32;
 		samplerDesc.maxAnisotropy = 1;
 		framegraph.shadowTexture.sampler =
-			context.gpu.deviceCreateSampler(context.graphics.device, *samplerDesc);
+			graphics.gpu.deviceCreateSampler(graphics.device, *samplerDesc);
 	}
 
 	init_bindgroup_layout(framegraph);
@@ -921,14 +1053,14 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 }
 
 writeTo :: (buffer: WGPUBuffer, offset: int, data: *$T) {
-	context.gpu.queueWriteBuffer(
-		context.graphics.mainQueue, buffer, xx offset, data, xx size_of(T)
+	graphics.gpu.queueWriteBuffer(
+		graphics.mainQueue, buffer, xx offset, data, xx size_of(T)
 	);
 }
 
 writeTo :: (buffer: WGPUBuffer, offset: int, data: [] $T) {
-	context.gpu.queueWriteBuffer(
-		context.graphics.mainQueue, buffer, xx offset, data.data, xx (data.count * size_of(T))
+	graphics.gpu.queueWriteBuffer(
+		graphics.mainQueue, buffer, xx offset, data.data, xx (data.count * size_of(T))
 	);
 }
 
@@ -952,7 +1084,7 @@ present_bind_group :: (
 	// entries[2].sampler = hdr.sampler;
 	desc.entryCount = entries.count;
 	desc.entries = entries.data;
-	return context.gpu.deviceCreateBindGroup(context.graphics.device, *desc);
+	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
 }
 
 ui_instance_bind_group :: (
@@ -984,7 +1116,7 @@ ui_instance_bind_group :: (
 	entries[5].sampler = sdf_map.sampler;
 	desc.entryCount = entries.count;
 	desc.entries = entries.data;
-	return context.gpu.deviceCreateBindGroup(context.graphics.device, *desc);
+	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
 }
 
 
@@ -1007,7 +1139,7 @@ instance_bind_group :: (
 	entries[1].size = xx (instanced_count * size_of(WFramegraph.Instance));
 	desc.entryCount = entries.count;
 	desc.entries = entries.data;
-	return context.gpu.deviceCreateBindGroup(context.graphics.device, *desc);
+	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
 }
 
 texture_bind_group :: (
@@ -1051,7 +1183,7 @@ texture_bind_group :: (
 	entries[5].sampler = framegraph.shadowTexture.sampler;
 	desc.entryCount = entries.count;
 	desc.entries = entries.data;
-	return context.gpu.deviceCreateBindGroup(context.graphics.device, *desc);
+	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
 }
 
 append_instance_buffer :: (framegraph: *WFramegraph) -> [] WFramegraph.Instance {
@@ -1065,10 +1197,10 @@ draw :: (framegraph: *WFramegraph, pass: WGPURenderPassEncoder, model: Model, co
 	if count <= 0 {
 		return;
 	}
-	context.gpu.renderPassEncoderSetVertexBuffer(
+	graphics.gpu.renderPassEncoderSetVertexBuffer(
 		pass, 0, model.gpu, 0, xx (model.prim_count * size_of(WFramegraph.Vertex))
 	);
-	context.gpu.renderPassEncoderDraw(
+	graphics.gpu.renderPassEncoderDraw(
 		pass, xx model.prim_count, xx count, 0, xx framegraph.mainInstances.count
 	);
 	framegraph.mainInstances.count += xx count;
@@ -1126,18 +1258,84 @@ free :: (extra: *Extra) {
 	array_free(extra.quads);
 }
 
-render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
+Frame :: struct {
 	surfaceTexture: WGPUSurfaceTexture;
-	context.gpu.surfaceGetCurrentTexture(context.graphics.surface, *surfaceTexture);
-	surfaceView := context.gpu.textureCreateView(surfaceTexture.texture, null);
-	defer {
-		context.gpu.textureViewRelease(surfaceView);
-	}
-	encoder := context.gpu.deviceCreateCommandEncoder(context.graphics.device, null);
-	defer {
-		context.gpu.commandEncoderRelease(encoder);
-	}
+	surfaceView: WGPUTextureView;
 
+	hdrAttachment: WGPURenderPassColorAttachment;
+	surfaceAttachment: WGPURenderPassColorAttachment;
+	uiAttachment: WGPURenderPassColorAttachment;
+	depthAttachment: WGPURenderPassDepthStencilAttachment;
+	shadowAttachment: WGPURenderPassDepthStencilAttachment;
+
+	encoder: WGPUCommandEncoder;
+}
+
+begin_frame :: (framegraph: *WFramegraph) -> Frame
+{
+	frame: Frame;
+
+	graphics.gpu.surfaceGetCurrentTexture(graphics.surface, *frame.surfaceTexture);
+	frame.surfaceView = graphics.gpu.textureCreateView(frame.surfaceTexture.texture, null);
+
+	frame.hdrAttachment.view = framegraph.hdrTexture.view;
+	frame.hdrAttachment.depthSlice = 0;
+	frame.hdrAttachment.loadOp = .Clear;
+	frame.hdrAttachment.storeOp = .Store;
+	frame.hdrAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
+
+	frame.surfaceAttachment.view = frame.surfaceView;
+	frame.surfaceAttachment.depthSlice = 0;
+	frame.surfaceAttachment.loadOp = .Clear;
+	frame.surfaceAttachment.storeOp = .Store;
+	frame.surfaceAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
+	
+	frame.uiAttachment.view = frame.surfaceView;
+	frame.uiAttachment.depthSlice = 0;
+	frame.uiAttachment.loadOp = .Load;
+	frame.uiAttachment.storeOp = .Store;
+	frame.uiAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
+
+	frame.depthAttachment.view = framegraph.depthView;
+	frame.depthAttachment.depthLoadOp = .Clear;
+	frame.depthAttachment.depthStoreOp = .Store;
+	frame.depthAttachment.depthClearValue = 1.0;
+	frame.depthAttachment.stencilLoadOp = .Undefined;
+	frame.depthAttachment.stencilStoreOp = .Undefined;
+	frame.depthAttachment.stencilClearValue = 0;
+	
+	frame.shadowAttachment.view = framegraph.shadowTexture.view;
+	frame.shadowAttachment.depthLoadOp = .Clear;
+	frame.shadowAttachment.depthStoreOp = .Store;
+	frame.shadowAttachment.depthClearValue = 1.0;
+	frame.shadowAttachment.stencilLoadOp = .Undefined;
+	frame.shadowAttachment.stencilStoreOp = .Undefined;
+	frame.shadowAttachment.stencilClearValue = 0;
+	array_resize(*framegraph.mainInstances, 64 * 1024, false);
+	framegraph.mainInstances.count = 0;
+
+	frame.encoder = graphics.gpu.deviceCreateCommandEncoder(graphics.device, null);
+
+	return frame;
+}
+
+end_frame :: (frame: *Frame) {
+
+	bufferDesc: WGPUCommandBufferDescriptor = .{};
+	bufferDesc.label = toWGPUStringView("Main Command Buffer");
+	buffer := graphics.gpu.commandEncoderFinish(frame.encoder, *bufferDesc);
+	defer graphics.gpu.commandBufferRelease(buffer);
+
+	submit: [1] WGPUCommandBuffer = .[buffer];
+	graphics.gpu.queueSubmit(graphics.mainQueue, 1, submit.data);
+
+	graphics.gpu.commandEncoderRelease(frame.encoder);
+	graphics.gpu.textureViewRelease(frame.surfaceView);
+}
+
+render_scene :: (
+	frame: *Frame, framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store
+) {
 	framegraph.typicalUniform = .{};
 	framegraph.typicalUniform.V =
 		Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
@@ -1161,51 +1359,11 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 
 	writeTo(framegraph.uniformBuffer, 0, *framegraph.typicalUniform);
 	
-	hdrAttachment: WGPURenderPassColorAttachment = .{};
-	hdrAttachment.view = framegraph.hdrTexture.view;
-	hdrAttachment.depthSlice = 0;
-	hdrAttachment.loadOp = .Clear;
-	hdrAttachment.storeOp = .Store;
-	hdrAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
-
-	surfaceAttachment: WGPURenderPassColorAttachment = .{};
-	surfaceAttachment.view = surfaceView;
-	surfaceAttachment.depthSlice = 0;
-	surfaceAttachment.loadOp = .Clear;
-	surfaceAttachment.storeOp = .Store;
-	surfaceAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
-	
-	uiAttachment: WGPURenderPassColorAttachment = .{};
-	uiAttachment.view = surfaceView;
-	uiAttachment.depthSlice = 0;
-	uiAttachment.loadOp = .Load;
-	uiAttachment.storeOp = .Store;
-	uiAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
-
-	depthAttachment: WGPURenderPassDepthStencilAttachment = .{};
-	depthAttachment.view = framegraph.depthView;
-	depthAttachment.depthLoadOp = .Clear;
-	depthAttachment.depthStoreOp = .Store;
-	depthAttachment.depthClearValue = 1.0;
-	depthAttachment.stencilLoadOp = .Undefined;
-	depthAttachment.stencilStoreOp = .Undefined;
-	depthAttachment.stencilClearValue = 0;
-	
-	shadowAttachment: WGPURenderPassDepthStencilAttachment = .{};
-	shadowAttachment.view = framegraph.shadowTexture.view;
-	shadowAttachment.depthLoadOp = .Clear;
-	shadowAttachment.depthStoreOp = .Store;
-	shadowAttachment.depthClearValue = 1.0;
-	shadowAttachment.stencilLoadOp = .Undefined;
-	shadowAttachment.stencilStoreOp = .Undefined;
-	shadowAttachment.stencilClearValue = 0;
 	extra: Extra;
 	reserve(*extra, 16);
 	defer {
 		free(*extra);
 	}
-	array_resize(*framegraph.mainInstances, 64 * 1024, false);
-	framegraph.mainInstances.count = 0;
 	if true {
 		clear(*extra);
 
@@ -1215,36 +1373,36 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		passDesc.label = toWGPUStringView("Shadow Pass");
 		passDesc.colorAttachments = null;
 		passDesc.colorAttachmentCount = 0;
-		passDesc.depthStencilAttachment = *shadowAttachment;
-		shadowPass := context.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
-		context.gpu.renderPassEncoderSetPipeline(
+		passDesc.depthStencilAttachment = *frame.shadowAttachment;
+		shadowPass := graphics.gpu.commandEncoderBeginRenderPass(frame.encoder, *passDesc);
+		graphics.gpu.renderPassEncoderSetPipeline(
 			shadowPass, framegraph.geometryShadowPipeline
 		);
-		context.gpu.renderPassEncoderSetBindGroup(
+		graphics.gpu.renderPassEncoderSetBindGroup(
 			shadowPass, 0, framegraph.instanceBindGroup, 0, null
 		);
 
-		render_players(framegraph, encoder, shadowPass, scene, store);
-		render_keys(framegraph, encoder, shadowPass, scene, store);
-		render_skulls(framegraph, encoder, shadowPass, scene, store);
-		render_shurikens(framegraph, encoder, shadowPass, scene, store);
-		render_standin(framegraph, encoder, shadowPass, scene, store);
-		render_props(framegraph, encoder, shadowPass, scene, store);
-		render_gates(framegraph, encoder, shadowPass, scene, store);
-		render_tombstones(framegraph, encoder, shadowPass, scene, store);
-		render_coins(framegraph, encoder, shadowPass, scene, store);
-		render_trophies(framegraph, encoder, shadowPass, scene, store);
-		render_hooks(framegraph, encoder, shadowPass, scene, store, *extra);
-		render_presents(framegraph, encoder, shadowPass, scene, store);
-		render_robots(framegraph, encoder, shadowPass, scene, store, *extra);
-		render_antiairs(framegraph, encoder, shadowPass, scene, store, *extra);
-		render_flags(framegraph, encoder, shadowPass, scene, store, *extra);
-		render_traps(framegraph, encoder, shadowPass, scene, store, *extra);
-		render_extra(framegraph, encoder, shadowPass, scene, store, *extra);
+		render_players(framegraph, frame.encoder, shadowPass, scene, store);
+		render_keys(framegraph, frame.encoder, shadowPass, scene, store);
+		render_skulls(framegraph, frame.encoder, shadowPass, scene, store);
+		render_shurikens(framegraph, frame.encoder, shadowPass, scene, store);
+		render_standin(framegraph, frame.encoder, shadowPass, scene, store);
+		render_props(framegraph, frame.encoder, shadowPass, scene, store);
+		render_gates(framegraph, frame.encoder, shadowPass, scene, store);
+		render_tombstones(framegraph, frame.encoder, shadowPass, scene, store);
+		render_coins(framegraph, frame.encoder, shadowPass, scene, store);
+		render_trophies(framegraph, frame.encoder, shadowPass, scene, store);
+		render_hooks(framegraph, frame.encoder, shadowPass, scene, store, *extra);
+		render_presents(framegraph, frame.encoder, shadowPass, scene, store);
+		render_robots(framegraph, frame.encoder, shadowPass, scene, store, *extra);
+		render_antiairs(framegraph, frame.encoder, shadowPass, scene, store, *extra);
+		render_flags(framegraph, frame.encoder, shadowPass, scene, store, *extra);
+		render_traps(framegraph, frame.encoder, shadowPass, scene, store, *extra);
+		render_extra(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		//render_mark(framegraph, encoder, shadowPass, scene, store);
 
-		context.gpu.renderPassEncoderEnd(shadowPass);
-		context.gpu.renderPassEncoderRelease(shadowPass);
+		graphics.gpu.renderPassEncoderEnd(shadowPass);
+		graphics.gpu.renderPassEncoderRelease(shadowPass);
 	}
 
 	if true {
@@ -1253,67 +1411,65 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		framegraph.instanceBufferCursor = 0;
 		passDesc: WGPURenderPassDescriptor = .{};
 		passDesc.label = toWGPUStringView("Geometry Pass");
-		passDesc.colorAttachments = *hdrAttachment;
+		passDesc.colorAttachments = *frame.hdrAttachment;
 		passDesc.colorAttachmentCount = 1;
-		passDesc.depthStencilAttachment = *depthAttachment;
-		geometryPass := context.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
-		context.gpu.renderPassEncoderSetPipeline(geometryPass, framegraph.geometryPipeline);
+		passDesc.depthStencilAttachment = *frame.depthAttachment;
+		geometryPass := graphics.gpu.commandEncoderBeginRenderPass(frame.encoder, *passDesc);
+		graphics.gpu.renderPassEncoderSetPipeline(geometryPass, framegraph.geometryPipeline);
 
-		context.gpu.renderPassEncoderSetBindGroup(
+		graphics.gpu.renderPassEncoderSetBindGroup(
 			geometryPass, 0, framegraph.instanceBindGroup, 0, null
 		);
-		context.gpu.renderPassEncoderSetBindGroup(
+		graphics.gpu.renderPassEncoderSetBindGroup(
 			geometryPass, 1, framegraph.geometryBindGroup, 0, null
 		);
 
-		render_players(framegraph, encoder, geometryPass, scene, store);
-		render_keys(framegraph, encoder, geometryPass, scene, store);
-		render_skulls(framegraph, encoder, geometryPass, scene, store);
-		render_shurikens(framegraph, encoder, geometryPass, scene, store);
-		render_standin(framegraph, encoder, geometryPass, scene, store);
-		render_props(framegraph, encoder, geometryPass, scene, store);
-		render_gates(framegraph, encoder, geometryPass, scene, store);
-		render_tombstones(framegraph, encoder, geometryPass, scene, store);
-		render_coins(framegraph, encoder, geometryPass, scene, store);
-		render_robots(framegraph, encoder, geometryPass, scene, store, *extra);
-		render_trophies(framegraph, encoder, geometryPass, scene, store);
-		render_antiairs(framegraph, encoder, geometryPass, scene, store, *extra);
-		render_hooks(framegraph, encoder, geometryPass, scene, store, *extra);
-		render_flags(framegraph, encoder, geometryPass, scene, store, *extra);
-		render_presents(framegraph, encoder, geometryPass, scene, store);
-		render_traps(framegraph, encoder, geometryPass, scene, store, *extra);
-		render_explosions(framegraph, encoder, geometryPass, scene, store, *extra);
+		render_players(framegraph, frame.encoder, geometryPass, scene, store);
+		render_keys(framegraph, frame.encoder, geometryPass, scene, store);
+		render_skulls(framegraph, frame.encoder, geometryPass, scene, store);
+		render_shurikens(framegraph, frame.encoder, geometryPass, scene, store);
+		render_standin(framegraph, frame.encoder, geometryPass, scene, store);
+		render_props(framegraph, frame.encoder, geometryPass, scene, store);
+		render_gates(framegraph, frame.encoder, geometryPass, scene, store);
+		render_tombstones(framegraph, frame.encoder, geometryPass, scene, store);
+		render_coins(framegraph, frame.encoder, geometryPass, scene, store);
+		render_robots(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		render_trophies(framegraph, frame.encoder, geometryPass, scene, store);
+		render_antiairs(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		render_hooks(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		render_flags(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		render_presents(framegraph, frame.encoder, geometryPass, scene, store);
+		render_traps(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		render_explosions(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 
-		context.gpu.renderPassEncoderSetBindGroup(
+		graphics.gpu.renderPassEncoderSetBindGroup(
 			geometryPass, 1, framegraph.textureBindGroup, 0, null
 		);
 
-		render_terrain(framegraph, encoder, geometryPass, scene, store);
+		render_terrain(framegraph, frame.encoder, geometryPass, scene, store);
 		
-		context.gpu.renderPassEncoderSetBindGroup(
+		graphics.gpu.renderPassEncoderSetBindGroup(
 			geometryPass, 1, framegraph.particleBindGroup, 0, null
 		);
 
-		render_particles(framegraph, encoder, geometryPass, scene, store, *extra);
+		render_particles(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 
-		context.gpu.renderPassEncoderSetBindGroup(
+		graphics.gpu.renderPassEncoderSetBindGroup(
 			geometryPass, 1, framegraph.geometryBindGroup, 0, null
 		);
-		render_within_zones(framegraph, encoder, geometryPass, scene, store, *extra);
-		render_extra(framegraph, encoder, geometryPass, scene, store, *extra);
-		render_safezones(framegraph, encoder, geometryPass, scene, store);
-		context.gpu.renderPassEncoderSetBindGroup(
+		render_within_zones(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		render_extra(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		render_safezones(framegraph, frame.encoder, geometryPass, scene, store);
+		graphics.gpu.renderPassEncoderSetBindGroup(
 			geometryPass, 1, framegraph.particleBindGroup, 0, null
 		);
-		render_extra_quads(framegraph, encoder, geometryPass, scene, store, *extra);
-
-		context.gpu.renderPassEncoderSetBindGroup(
+		render_extra_quads(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		graphics.gpu.renderPassEncoderSetBindGroup(
 			geometryPass, 1, framegraph.geometryBindGroup, 0, null
 		);
-		render_mark(framegraph, encoder, geometryPass, scene, store);
-
-		context.gpu.renderPassEncoderEnd(geometryPass);
-		context.gpu.renderPassEncoderRelease(geometryPass);
+		render_mark(framegraph, frame.encoder, geometryPass, scene, store);
+		graphics.gpu.renderPassEncoderEnd(geometryPass);
+		graphics.gpu.renderPassEncoderRelease(geometryPass);
 	}
 
 	writeTo(framegraph.instanceBuffer, 0, framegraph.mainInstances);
@@ -1321,12 +1477,11 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 	if true {
 		passDesc: WGPURenderPassDescriptor = .{};
 		passDesc.label = toWGPUStringView("Present Pass");
-		passDesc.colorAttachments = *surfaceAttachment;
+		passDesc.colorAttachments = *frame.surfaceAttachment;
 		passDesc.colorAttachmentCount = 1;
 		passDesc.depthStencilAttachment = null;
-		presentPass := context.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
-
-		context.gpu.renderPassEncoderSetPipeline(presentPass, framegraph.presentPipeline);
+		presentPass := graphics.gpu.commandEncoderBeginRenderPass(frame.encoder, *passDesc);
+		graphics.gpu.renderPassEncoderSetPipeline(presentPass, framegraph.presentPipeline);
 		presentUniform: WFramegraph.Present_Uniform = .{};
 		presentUniform.size = V2f.{ 1366, 768 };
 		presentUniform.exposure = 1.0;
@@ -1335,156 +1490,141 @@ render :: (framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store) {
 		bindGroup := present_bind_group(
 			framegraph, "Present", *framegraph.hdrTexture, presentUniform
 		);
-		context.gpu.renderPassEncoderSetBindGroup(presentPass, 0, bindGroup, 0, null);
-		defer context.gpu.bindGroupRelease(bindGroup);
-		context.gpu.renderPassEncoderDraw(presentPass, 6, 1, 0, 0);
+		graphics.gpu.renderPassEncoderSetBindGroup(presentPass, 0, bindGroup, 0, null);
+		defer graphics.gpu.bindGroupRelease(bindGroup);
+		graphics.gpu.renderPassEncoderDraw(presentPass, 6, 1, 0, 0);
 
 		// Fullscreen textured quad
-		context.gpu.renderPassEncoderEnd(presentPass);
-		context.gpu.renderPassEncoderRelease(presentPass);
+		graphics.gpu.renderPassEncoderEnd(presentPass);
+		graphics.gpu.renderPassEncoderRelease(presentPass);
+	}
+}
+render_gui :: (
+	frame: *Frame, framegraph: *WFramegraph, gui_state: GUI.GUI_State, store: Store.Store
+) {
+	passDesc: WGPURenderPassDescriptor = .{};
+	passDesc.label = toWGPUStringView("UI Pass");
+	passDesc.colorAttachments = *frame.uiAttachment;
+	passDesc.colorAttachmentCount = 1;
+	passDesc.depthStencilAttachment = null;
+	uiPass := graphics.gpu.commandEncoderBeginRenderPass(frame.encoder, *passDesc);
+
+	graphics.gpu.renderPassEncoderSetPipeline(uiPass, framegraph.quadPipeline);
+
+	uniforms: WFramegraph.UI_Uniform = .{};
+	uniforms.window_size = V2f.{ 1366, 768 };
+	writeTo(framegraph.uiUniformBuffer, 0, *uniforms);
+
+	framegraph.uiInstances.count = 0;
+
+	for gui_state.quads {
+		if it.late
+			continue;
+		framegraph.uiInstances.count += 1;
+		instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
+		instance.* = .{};
+		instance.pos = it.pos;
+		instance.size = it.size;
+		instance.color = it.color;
+		instance.z30sdf2 = xx (it.z * 400);
+		instance.texture_rect = it.texture_rect;
 	}
 
-	if true {
-		passDesc: WGPURenderPassDescriptor = .{};
-		passDesc.label = toWGPUStringView("UI Pass");
-		passDesc.colorAttachments = *uiAttachment;
-		passDesc.colorAttachmentCount = 1;
-		passDesc.depthStencilAttachment = null;
-		uiPass := context.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
 
-		context.gpu.renderPassEncoderSetPipeline(uiPass, framegraph.quadPipeline);
+	font := *store.verdana;
+	font_atlas := *store.verdana_atlas;
+	for gui_state.chars {
+		framegraph.uiInstances.count += 1;
+		instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
+		instance.* = .{};
 
-		uniforms: WFramegraph.UI_Uniform = .{};
-		uniforms.window_size = V2f.{ 1366, 768 };
-		writeTo(framegraph.uiUniformBuffer, 0, *uniforms);
+		glyph := font.glyphs[it.id];
 
-		framegraph.uiInstances.count = 0;
-
-		for GUI.IM.quads {
-			if it.late
-				continue;
-			framegraph.uiInstances.count += 1;
-			instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
-			instance.* = .{};
-			instance.pos = it.pos;
-			instance.size = it.size;
-			instance.color = it.color;
-			instance.z30sdf2 = xx (it.z * 400);
-			instance.texture_rect = it.texture_rect;
-		}
-
-		for GUI.IM.chars {
-			framegraph.uiInstances.count += 1;
-			instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
-			instance.* = .{};
-
-			sprite := MAIN_FONT.sprites[it.id];
-
-			x := it.pos.x;
-			y := it.pos.y;
-			width := sprite.sourceWidth * it.height / MAIN_FONT.height;
-			height := sprite.sourceHeight * it.height / MAIN_FONT.height;
-			pos := V2f.{
-				xx (sprite.positionX - sprite.padding), xx (sprite.positionY - sprite.padding)
-			};
-			size := V2f.{ xx sprite.sourceWidth, xx sprite.sourceHeight };
-			pos.x /= MAIN_FONT.atlas.width;
-			pos.y /= MAIN_FONT.atlas.height;
-			pos.y = 1.0 - pos.y;
-			size.x /= MAIN_FONT.atlas.width;
-			size.y /= MAIN_FONT.atlas.height;
-			pos.y -= size.y;
-
-			instance.pos = V2f.{ x, y };
-			instance.size = V2f.{ width, height };
-			instance.texture_rect = .{ pos.x, pos.y, size.x, size.y };
-			instance.z30sdf2 = (it.z * 400).(u32) + 1;
-			instance.color = it.color;
-		}
-
-		if framegraph.uiInstances.count > 0 {
-			quick_sort(
-				framegraph.uiInstances,
-				(a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
-					az := a.z30sdf2 / 4;
-					bz := b.z30sdf2 / 4;
-					if az < bz
-						return -1;
-					if az > bz
-						return 1;
-					return 0;
-				});
-
-			bindGroup := ui_instance_bind_group(
-				framegraph,
-				"UI Instances",
-				framegraph.uiInstances.count,
-				store.ui_atlas,
-				store.font_atlas
-			);
-			context.gpu.renderPassEncoderSetBindGroup(uiPass, 0, bindGroup, 0, null);
-			defer context.gpu.bindGroupRelease(bindGroup);
-			// writeTo(framegraph.uiInstanceBuffer, 0, framegraph.uiInstances);
-			context.gpu.renderPassEncoderDraw(uiPass, 6, xx framegraph.uiInstances.count, 0, 0);
-		}
-
-		
-		before := framegraph.uiInstances.count;
-
-		for GUI.IM.quads {
-			if !it.late
-				continue;
-			framegraph.uiInstances.count += 1;
-			instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
-			instance.* = .{};
-			instance.pos = it.pos;
-			instance.size = it.size;
-			instance.color = it.color;
-			instance.z30sdf2 = xx (it.z * 400);
-			instance.texture_rect = it.texture_rect;
-		}
-		if framegraph.uiInstances.count > before {
-			view: [] WFramegraph.UI_Instance;
-			view.data = framegraph.uiInstances.data + before;
-			view.count = framegraph.uiInstances.count - before;
-			quick_sort(
-				view,
-				(a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
-					az := a.z30sdf2 / 4;
-					bz := b.z30sdf2 / 4;
-					if az < bz
-						return -1;
-					if az > bz
-						return 1;
-					return 0;
-				});
-
-			bindGroup := ui_instance_bind_group(
-				framegraph,
-				"UI late Instances",
-				framegraph.uiInstances.count,
-				store.ui_atlas,
-				store.font_atlas
-			);
-			context.gpu.renderPassEncoderSetBindGroup(uiPass, 0, bindGroup, 0, null);
-			defer context.gpu.bindGroupRelease(bindGroup);
-			context.gpu.renderPassEncoderDraw(
-				uiPass, 6, xx view.count, 0, xx before
-			);
-		}
-		writeTo(framegraph.uiInstanceBuffer, 0, framegraph.uiInstances);
-
-		context.gpu.renderPassEncoderEnd(uiPass);
-		context.gpu.renderPassEncoderRelease(uiPass);
+		instance.pos = it.pos;
+		instance.size = it.size;
+		instance.texture_rect.x = glyph.atlasx / 1024;
+		instance.texture_rect.y = glyph.atlasy / 1024;
+		instance.texture_rect.z = (glyph.atlasw - glyph.atlasx) / 1024;
+		instance.texture_rect.w = (glyph.atlash - glyph.atlasy) / 1024;
+		instance.z30sdf2 = (it.z * 400).(u32) + 1;
+		instance.color = it.color;
+		instance.outline = ifx it.outline then 1.0 else 0.0;
 	}
 
-	bufferDesc: WGPUCommandBufferDescriptor = .{};
-	bufferDesc.label = toWGPUStringView("Main Command Buffer");
-	buffer := context.gpu.commandEncoderFinish(encoder, *bufferDesc);
-	defer context.gpu.commandBufferRelease(buffer);
+	if framegraph.uiInstances.count > 0 {
+		quick_sort(
+			framegraph.uiInstances,
+			(a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
+				az := a.z30sdf2 / 4;
+				bz := b.z30sdf2 / 4;
+				if az < bz
+					return -1;
+				if az > bz
+					return 1;
+				return 0;
+			});
 
-	submit: [1] WGPUCommandBuffer = .[buffer];
-	context.gpu.queueSubmit(context.graphics.mainQueue, 1, submit.data);
+		bindGroup := ui_instance_bind_group(
+			framegraph,
+			"UI Instances",
+			framegraph.uiInstances.count,
+			store.ui_atlas,
+			font_atlas
+		);
+		graphics.gpu.renderPassEncoderSetBindGroup(uiPass, 0, bindGroup, 0, null);
+		defer graphics.gpu.bindGroupRelease(bindGroup);
+		// writeTo(framegraph.uiInstanceBuffer, 0, framegraph.uiInstances);
+		graphics.gpu.renderPassEncoderDraw(uiPass, 6, xx framegraph.uiInstances.count, 0, 0);
+	}
+
+	
+	before := framegraph.uiInstances.count;
+
+	for gui_state.quads {
+		if !it.late
+			continue;
+		framegraph.uiInstances.count += 1;
+		instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
+		instance.* = .{};
+		instance.pos = it.pos;
+		instance.size = it.size;
+		instance.color = it.color;
+		instance.z30sdf2 = xx (it.z * 400);
+		instance.texture_rect = it.texture_rect;
+	}
+	if framegraph.uiInstances.count > before {
+		view: [] WFramegraph.UI_Instance;
+		view.data = framegraph.uiInstances.data + before;
+		view.count = framegraph.uiInstances.count - before;
+		quick_sort(
+			view,
+			(a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
+				az := a.z30sdf2 / 4;
+				bz := b.z30sdf2 / 4;
+				if az < bz
+					return -1;
+				if az > bz
+					return 1;
+				return 0;
+			});
+
+		bindGroup := ui_instance_bind_group(
+			framegraph,
+			"UI late Instances",
+			framegraph.uiInstances.count,
+			store.ui_atlas,
+			store.font_atlas
+		);
+		graphics.gpu.renderPassEncoderSetBindGroup(uiPass, 0, bindGroup, 0, null);
+		defer graphics.gpu.bindGroupRelease(bindGroup);
+		graphics.gpu.renderPassEncoderDraw(
+			uiPass, 6, xx view.count, 0, xx before
+		);
+	}
+	writeTo(framegraph.uiInstanceBuffer, 0, framegraph.uiInstances);
+
+	graphics.gpu.renderPassEncoderEnd(uiPass);
+	graphics.gpu.renderPassEncoderRelease(uiPass);
 }
 
 render_mark :: (

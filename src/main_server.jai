@@ -1,19 +1,78 @@
-#import "Basic"()(MEMORY_DEBUGGER=false);
-Terrain :: #import "Terrain";
-#import "http";
-#import "String";
-#import "Math";
-#import "Communication";
-Scene :: #import "Scene";
-Instance :: #import "Instance";
-#import "Thread";
-#import "Hash_Table";
+#scope_file
+#import "Rand";
 #import "Utils";
-#import "File";
-Platform :: #import "Platform";
+#import "Basic";
+#import "Remap_Context"(false);
+#import "Thread";
+#import "Instance";
+#import "Platform";
+#import "Hash_Table";
 #import "File_Watcher";
+#import "Communication";
 
-TIMEOUT_DURATION := 1000.0;
+#scope_export
+
+User :: struct {
+	id: int = -1;
+	token: int = -1;
+	last_ping: Apollo_Time;
+	connection: Connection;
+
+	instance_id: int = -1;
+}
+
+Server :: struct {
+	rng: Rand.XORState;
+
+	users: [1024] User;
+	user_count: int;
+
+	instances: [1024] Instance;
+	instance_count: int;
+
+	user_generation := 0;
+
+	tick_period: Period(0.005);
+
+	Queue :: struct(N: int) {
+		commands  : [N] Command;
+		connection: [N] Connection;
+		count     := 0;
+	};
+
+	queue: Queue(128);
+}
+
+find_user_by_token :: (server: *Server, token: int) -> *User {
+	for * server.users {
+		if it.token == token
+			return it;
+	}
+	return null;
+}
+
+find_user_by_connection :: (server: *Server, connection: Connection) -> *User {
+	for * server.users {
+		if it.connection == connection
+			return it;
+	}
+	return null;
+}
+find_connection_by_user_id :: (server: *Server, user_id: int) -> Connection {
+	for * server.users {
+		if it.id == user_id
+			return it.connection;
+	}
+	return -1;
+}
+
+find_instance_by_id :: (server: *Server, instance_id: int) -> *Instance {
+	for * server.instances {
+		if it.id == instance_id
+			return it;
+	}
+	return null;
+}
 
 prepare_typed_message :: (_payload: $T) -> [] u8 {
 	payload := _payload;
@@ -28,161 +87,6 @@ prepare_typed_message :: (_payload: $T) -> [] u8 {
 
 	return buffer;
 }
-
-scene_scoped_broadcast :: (scene_id: int, data: $T) {
-	message := prepare_typed_message(data);
-	scene_scoped_broadcast_prepared(scene_id, message);
-}
-broadcast :: (server: Websocket_Server, data: $T) {
-	message := prepare_typed_message(data);
-	broadcast_prepared(server, message);
-}
-scene_scoped_broadcast_prepared :: (scene_id: int, payload: [] u8) {
-	for state.users {
-		if it.scene_id == scene_id {
-			websocket_send(it.websocket, .{ data = payload.data, count = payload.count }, .BINARY);
-		}
-	}
-}
-broadcast_prepared :: (server: Websocket_Server, payload: [] u8) {
-	for server.websockets {
-		websocket_send(it, .{ data = payload.data, count = payload.count }, .BINARY);
-	}
-}
-
-send :: (ws: *Websocket, data: $T) {
-	message := prepare_typed_message(data);
-	send_prepared(ws, message);
-}
-send_prepared :: (ws: *Websocket, prepared_payload: [] u8) {
-	str: string;
-	str.data = prepared_payload.data;
-	str.count = prepared_payload.count;
-
-	websocket_send(ws, str, .BINARY);
-}
-
-User :: struct {
-	token := -1;
-
-	person_id: int;
-	player_id: int;
-	scene_id: int;
-	websocket: *Websocket;
-
-	last_ping: Apollo_Time;
-}
-
-State :: struct {
-	server: *Websocket_Server = null;
-	last_sync_sent_time: Apollo_Time;
-	instance: Instance.Instance;
-
-	users: [..] User;
-
-	sync_count_player: Counter(1);
-	sync_count_skull: Counter(20);
-	sync_moving_frame: Counter(10);
-	sync_count_key: Counter(50);
-
-	player_generation := 0;
-	user_generation := 0;
-
-	socket_to_token_id: Table(*Websocket, int);
-
-	Queue :: struct(N: int) {
-		commands : [N] Command;
-		socket   : [N] *Websocket; // null is for broadcast
-		count    := 0;
-	};
-
-	queue: Queue(128);
-	queue_semaphore: Semaphore;
-
-	received: Queue(1024);
-	received_semaphore: Semaphore;
-
-	sync_period: Period(0.05);
-	tick_period: Period(0.005);
-
-	NTP_Result :: struct {
-		offset: float64 = 0;
-		ping: float64 = 0;
-		time: float64 = 0;
-	}
-
-	ntp_history: [64] NTP_Result;
-	ntp_history_cursor := 0;
-
-	scenes: [..] Scene.Scene;
-
-	pick_scene_id: int;
-	first_world_id: int;
-	second_world_id: int;
-	third_world_id: int;
-	forth_world_id: int;
-}
-state: State;
-
-find_user_by_player_id :: (player_id: int) -> *User {
-	for * user: state.users {
-		if user.player_id == player_id
-			return user;
-	}
-	return null;
-}
-
-find_by_scene_id :: (scene_id: int) -> *Scene.Scene {
-	for * state.scenes {
-		if it.id == scene_id
-			return it;
-	}
-	return null;
-}
-
-append_queue :: (cmd: $T, socket: *Websocket) {
-	wait_for(*state.queue_semaphore);
-	defer {
-		signal(*state.queue_semaphore);
-	}
-
-	if state.queue.count >= state.queue.N {
-		print("Queue overflow!\n");
-		return;
-	}
-
-	state.queue.socket[state.queue.count] = socket;
-	state.queue.commands[state.queue.count] = make_command(cmd);
-	state.queue.count += 1;
-}
-
-append_received :: (cmd: Command, socket: *Websocket) {
-	wait_for(*state.received_semaphore);
-	defer {
-		signal(*state.received_semaphore);
-	}
-
-	if state.received.count >= state.received.N {
-		print("Received queue overflow!\n");
-		return;
-	}
-
-	state.received.socket[state.received.count] = socket;
-	state.received.commands[state.received.count] = cmd;
-	state.received.count += 1;
-}
-
-append_received_sync :: (cmd: Command, socket: *Websocket) {
-	if state.received.count >= state.received.N {
-		print("Received queue overflow!\n");
-		return;
-	}
-
-	state.received.socket[state.received.count] = socket;
-	state.received.commands[state.received.count] = cmd;
-	state.received.count += 1;
-}
-
 parse_message :: (data: [] u8) -> Command, bool {
 	if data.count < 8 {
 		print("Message too short: %\n", data);
@@ -205,721 +109,299 @@ parse_message :: (data: [] u8) -> Command, bool {
 	return cmd, true;
 }
 
-sync :: (state: State) {
-	reset_temporary_storage();
-	if check(*state.sync_count_player) {
-		for * scene: state.scenes {
-			for * scene.players {
-				msg := Scene.make_sync(it);
-				scene_scoped_broadcast(scene.id, make_command(msg));
-			}
-		}
-	}
-
-	if check(*state.sync_moving_frame) {
-		for * scene: state.scenes {
-			for * scene.moving_frames {
-				msg := Scene.make_sync(it);
-				scene_scoped_broadcast(scene.id, make_command(msg));
-			}
-		}
-	}
-
-	if check(*state.sync_count_skull) {
-		for * scene: state.scenes {
-			for * scene.skulls {
-				msg := Scene.make_sync(it);
-				scene_scoped_broadcast(scene.id, make_command(msg));
-			}
-		}
-	}
-
-	if check(*state.sync_count_key) {
-		for * scene: state.scenes {
-			for * scene.keys {
-				msg: Command.Sync_Key;
-				msg.key_id = it.id;
-				msg.holder = it.holder;
-				msg.position = it.server.position;
-				scene_scoped_broadcast(scene.id, make_command(msg));
-			}
-		}
+broadcast :: (platform: *Platform, server: *Server, data: $T) {
+	message := prepare_typed_message(data);
+	for server.users {
+		platform.send_web_message(message, it.connection);
 	}
 }
 
-process_response: Scene.Process_Response;
-frame_result: Scene.Frame_Result;
-
-quit_user :: (user: *User) {
-	id := user.player_id;
-	table_remove(*state.socket_to_token_id, user.websocket);
-	for state.users {
-		if it.websocket == user.websocket {
-			remove it;
-			break;
-		}
-	}
-
-
-	for * scene: state.scenes {
-		for * player, player_idx: scene.players {
-			if player.id == id {
-				scene.players[player_idx] = scene.players[scene.players.count - 1];
-				scene.players.count -= 1;
-				break player;
-			}
-		}
-	}
-
-	for state.server.websockets {
-		if it != user.websocket {
-			quit: Command.Quit;
-			quit.player_id = id;
-			append_queue(quit, it);
-		}
-	}
+send :: (platform: *Platform, connection: Connection, data: $T) {
+	message := prepare_typed_message(data);
+	platform.send_web_message(message, connection);
 }
 
-tick :: (state: *State) {
-	reset_temporary_storage();
-
-	Scene.clear(*process_response);
-
-	// Early test
-	if state.received.count > 0 {
-		wait_for(*state.received_semaphore);
-		defer {
-			signal(*state.received_semaphore);
-		}
-
-		cursor := 0;
-		while true {
-			defer cursor += 1;
-			if cursor >= state.received.count
-				break;
-
-			cmd := state.received.commands[cursor];
-			socket := state.received.socket[cursor];
-
-			if process(state, cmd, socket, *process_response)
-				continue;
-			for * scene: state.scenes {
-				if Scene.process(scene, cmd, *process_response)
-					break scene;
-			}
-		}
-
-		state.received.count = 0; // Clear the queue after processing.
+append_queue :: (server: *Server, cmd: $T, connection: Connection) {
+	if server.queue.count >= server.queue.N {
+		print("Queue overflow!\n");
+		return;
 	}
 
-	for process_response.entries {
-		ntp: *Command.NTP = isa(it.command.payload, Command.NTP);
-		if ntp {
-			if ntp.player_id < 0 {
-				broadcast(state.server, it.command);
-			} else {
-				user := find_user_by_player_id(ntp.player_id);
-				if user {
-					send(user.websocket, it.command);
-				}
+	server.queue.connection[server.queue.count] = connection;
+	server.queue.commands[server.queue.count] = make_command(cmd);
+	server.queue.count += 1;
+}
+
+process :: (server: *Server, cmd: Command, sender: Connection) -> bool {
+	
+	connect := isa(cmd.payload, Command.Connect);
+	if connect {
+		user := find_user_by_token(server, connect.token);
+		if user {
+			reply: Command.Connect;
+			reply.token = connect.token;
+			user.connection = sender;
+			append_queue(server, reply, user.connection);
+
+			// If the user was in an instance, we send them back there
+			instance := find_instance_by_id(server, user.instance_id);
+			if instance {
+				ans_enter_instance: Command.Ans_Enter_Instance;
+				ans_enter_instance.reason = .Return;
+				append_queue(server, ans_enter_instance, user.connection);
+
+				resync_old_person(instance, user.id);
+			}
+			else {
+				user.instance_id = -1;
 			}
 		} else {
-			if it.scene_id >= 0
-				scene_scoped_broadcast(it.scene_id, it.command);
-			else {
-				user := find_user_by_player_id(it.player_id);
-				if user {
-					send(user.websocket, it.command);
-				}
-			}
+			// new user
+			user := *server.users[server.user_count];
+			user.id = server.user_generation;
+			user.token = connect.token;
+			user.connection = user.id;
+			user.instance_id = -1;
+			server.user_generation += 1;
+			server.user_count += 1;
+
+			reply: Command.Connect;
+			reply.token = user.token;
+			append_queue(server, reply, sender);
 		}
+		return true;
 	}
 
-	for * scene: state.scenes {
-		Scene.clear(*frame_result);
-		Scene.update(scene, state.tick_period.period, *frame_result);
+	ask_instance_list := isa(cmd.payload, Command.Ask_Instance_List);
+	if ask_instance_list {
+		reply: Command.Ans_Instance_List;
+		reply.instances = NewArray(
+			server.instance_count, Command.Ans_Instance_List.Instance_Info,, temp
+		);
 
-		for frame_result.end_level {
-			scene_scoped_broadcast(scene.id, make_command(it));
-		}
-
-		for frame_result.move_to_player_world {
-			move_player_to_scene(
-				it.player_id, state.instance.playing_scene_id, it.model_id, it.standin_id
+		for * reply.instances {
+			it.instance_id = server.instances[it_index].id;
+			memcpy(
+				it.name.data,
+				server.instances[it_index].name.data,
+				min(server.instances[it_index].name.count, it.name.count)
+			);
+			it.current_players = server.instances[it_index].persons.count;
+			it.max_players = 64; // Hardcoded for now
+			it.auto_revive = server.instances[it_index].scene_parameters.auto_revive;
+			level_name := get_current_level_name(server.instances[it_index]);
+			memcpy(
+				it.level_name.data,
+				level_name.data,
+				min(level_name.count, it.level_name.count)
 			);
 		}
 
-		for frame_result.died {
-			scene_scoped_broadcast(scene.id, make_command(it));
-		}
-		for frame_result.respawn {
-			scene_scoped_broadcast(scene.id, make_command(it));
-		}
-		for frame_result.sync_gate {
-			scene_scoped_broadcast(scene.id, make_command(it));
-		}
-		for frame_result.wipe_scene {
-			scene_scoped_broadcast(scene.id, make_command(it));
-		}
-		for frame_result.explode {
-			scene_scoped_broadcast(scene.id, make_command(it));
-		}
-		for frame_result.antiair_shoot {
-			scene_scoped_broadcast(scene.id, make_command(it));
-		}
-		for frame_result.sync_present {
-			scene_scoped_broadcast(scene.id, make_command(it));
-		}
-		for frame_result.sync_player {
-			scene_scoped_broadcast(scene.id, make_command(it));
-		}
-		for frame_result.sync_safe_zone {
-			scene_scoped_broadcast(scene.id, make_command(it));
-		}
-
-		if scene.end_scene_countdown_started {
-			t := current_time_monotonic();
-			dt := to_float64_seconds(t - scene.end_scene_countdown_time);
-			if dt >= scene.end_scene_countdown {
-				scene.end_scene_countdown_started = false;
-				move_playing_scene(scene.next_id);
-			}
-		}
-
-		for frame_result.add_scores {
-			player := Scene.find_by_player_id(scene, it.player_id);
-			if player {
-				Scene.apply_add_score(*player.server.score, it);
-
-				sync_score: Command.Sync_Score;
-				sync_score.player_id = it.player_id;
-				sync_score.score = player.server.score;
-				scene_scoped_broadcast(scene.id, make_command(sync_score));
-			}
-		}
-
-		for scene.players {
-			user := find_user_by_player_id(it.id);
-			if user {
-				person := Instance.find_person_by_id(state.instance, user.person_id);
-				if person {
-					person.score = it.server.score;
-				}
-			}
-		}
-	}
-
-	for * state.users {
-		if to_float64_seconds(current_time_monotonic() - it.last_ping) > TIMEOUT_DURATION {
-			quit_user(it);
-		}
-	}
-}
-
-process_complete_ntp :: (state: *State, ntp: Command.NTP) {
-	t5 := to_float64_seconds(current_time_monotonic());
-	result: State.NTP_Result;
-	result.offset = (ntp.t3 + ntp.t4) / 2 - (ntp.t2 + t5) / 2;
-	result.ping = (t5 - ntp.t2) - (ntp.t4 - ntp.t3);
-	result.time = t5;
-	state.ntp_history[state.ntp_history_cursor] = result;
-	state.ntp_history_cursor += 1;
-	state.ntp_history_cursor %= state.ntp_history.count;
-}
-
-find_user_by_socket :: (ws: *Websocket) -> *User {
-	for * user: state.users {
-		if user.websocket == ws
-			return user;
-	}
-	return null;
-}
-
-process :: (
-	state: *State, command: Command, socket: *Websocket, response: *Scene.Process_Response
-) -> bool {
-	cheat_action: *Command.Cheat_Action = isa(command.payload, Command.Cheat_Action);
-	if cheat_action {
-		if cheat_action.kind == .Next_Level {
-			for * scene: state.scenes
-				move_playing_scene(scene.next_id);
-			return true;
-		}
-		if cheat_action.kind == .Reset_Level {
-			for * scene: state.scenes
-				move_playing_scene(scene.id);
-			return true;
-		}
-		if cheat_action.kind == .Reset_Progression {
-			move_playing_scene(state.pick_scene_id);
-			return true;
-		}
-		if cheat_action.kind == .Kick {
-			user := find_user_by_player_id(cheat_action.player_id);
-			if user {
-				quit_user(user);
-			}
-			return true;
-		}
+		append_queue(server, reply, sender);
 		return true;
 	}
 
-	request_score: *Command.Request_Score = isa(command.payload, Command.Request_Score);
-	if request_score {
-		sender := find_user_by_socket(socket);
-		if sender {
-			for request_score.player_ids {
-				if it < 0
-					continue;
-				
-				user := find_user_by_player_id(it);
-				if user {
-					person := Instance.find_person_by_id(state.instance, user.person_id);
-					if person {
-						sync_score: Command.Sync_Score;
-						sync_score.player_id = user.player_id;
-						sync_score.score = person.score;
-						Scene.add_single_reply(response, sender.player_id, sync_score);
-					}
-				}
+	ask_enter_instance := isa(cmd.payload, Command.Ask_Enter_Instance);
+	if ask_enter_instance {
+		user := find_user_by_connection(server, sender);
+		instance := find_instance_by_id(server, ask_enter_instance.instance_id);
+
+		if !instance {
+			ans_enter_instance: Command.Ans_Enter_Instance;
+			ans_enter_instance.reason = .Instance_Not_Found;
+			append_queue(server, ans_enter_instance, sender);
+			return true;
+		}
+
+		if user {
+			if add_new_person(instance, user.id) {
+				user.instance_id = instance.id;
 			}
 		}
 
 		return true;
 	}
 
-	ntp: *Command.NTP = isa(command.payload, Command.NTP);
-	if ntp {
-		is_over := false;
-		send_back := false;
-		reply := ntp.*;
-		if reply.t0 == FLOAT64_MAX {
-			reply.t0 = to_float64_seconds(current_time_monotonic());
-			is_over = false;
-			send_back = true;
-		}
-		else if reply.t1 == FLOAT64_MAX {
-			reply.t1 = to_float64_seconds(current_time_monotonic());
-			reply.t2 = to_float64_seconds(current_time_monotonic());
-			is_over = false;
-			send_back = true;
-		}
-		else if reply.t2 == FLOAT64_MAX {
-			reply.t2 = to_float64_seconds(current_time_monotonic());
-			is_over = false;
-			send_back = true;
-		}
-		else if reply.t3 == FLOAT64_MAX {
-			reply.t3 = to_float64_seconds(current_time_monotonic());
-			reply.t4 = to_float64_seconds(current_time_monotonic());
-			is_over = false;
-			send_back = true;
-		} else {
-			is_over = true;
-			send_back = false;
-		}
-
-		if send_back && response
-			Scene.add(response, -1, reply);
-
-		if is_over
-			process_complete_ntp(state, reply);
-
-		return true;
-	}
-
-	connect: *Command.Connect = isa(command.payload, Command.Connect);
-	if connect {
-		state.user_generation += 1;
-
-		if connect.token < 0 {
-			// The client didn't provide a token, so we generate one for him.
-			connect.token = state.user_generation;
-		}
-
-		// Let's check the token to see if the user has an history here.
-		user: *User = null;
-		for * u: state.users {
-			if u.token == connect.token {
-				// We are going to hijack this user to point to the new connection.
-				u.websocket = socket;
-				u.last_ping = current_time_monotonic();
-				user = u;
-				break;
+	leave_instance := isa(cmd.payload, Command.Leave_Instance);
+	if leave_instance {
+		user := find_user_by_connection(server, sender);
+		if user {
+			instance := find_instance_by_id(server, user.instance_id);
+			if instance {
+				remove_person(instance, user.id);
+				user.instance_id = -1;
 			}
 		}
-
-		// If we didn't find a user with the same token, we need to create a new one.
-		if !user {
-			state.player_generation += 1;
-
-			new_user: User;
-			new_user.token = connect.token;
-			new_user.person_id = state.instance.persons.count;
-			new_user.player_id = state.player_generation;
-			new_user.scene_id = state.pick_scene_id;
-			new_user.last_ping = current_time_monotonic();
-			new_user.websocket = socket;
-			array_add(*state.users, new_user);
-			user = *state.users[state.users.count - 1];
-
-			person: Instance.Person;
-			person.person_id = new_user.person_id;
-			person.score = .{};
-			array_add(*state.instance.persons, person);
-
-			for state.users {
-				// Notify the existing player of a new player
-				if it.scene_id != user.scene_id
-					continue;
-				// Don't notify the new player about themselves
-				if it.player_id == user.player_id
-					continue;
-
-				spawn: Command.Spawn;
-				spawn.player_id = user.player_id;
-				spawn.its_you = false;
-				spawn.scene_id = it.scene_id;
-				append_queue(spawn, it.websocket);
-			}
-
-			// Also let's do a virtual message to tell the server a new guy just connected
-			spawn: Command.Spawn;
-			spawn.player_id = user.player_id;
-			spawn.its_you = false;
-			spawn.scene_id = user.scene_id;
-			append_received_sync(make_command(spawn), null);
-		}
-
-		// Then we serve the state of the scene to the new player.
-		scene := find_by_scene_id(user.scene_id);
-		if scene
-			append_queue(Scene.make_sync(scene), user.websocket);
-
-		// We also need to tell the new player about their own spawn
-		spawn: Command.Spawn;
-		spawn.player_id = user.player_id;
-		spawn.its_you = true;
-		spawn.scene_id = user.scene_id;
-		append_queue(spawn, user.websocket);
-
-		// And finally we can respond to the user with the connection token
-		connect_response: Command.Connect;
-		connect_response.token = connect.token;
-		append_queue(connect_response, user.websocket);
-
-		// bookkeep the socket to token mapping
-		table_set(*state.socket_to_token_id, socket, connect.token);
 		return true;
 	}
 
 	return false;
 }
 
-add_scene :: (text: string) -> int {
-	scene: Scene.Scene;
-	scene.id = state.scenes.count + 1;
-	scene.is_server = true;
-	scene.server_rng.s[0] = 123456789;
-	scene.server_rng.s[1] = 987654321;
-	Terrain.parse_terrain(text, *scene);
-	array_add(*state.scenes, scene);
-	return scene.id;
-}
+print_messages :: false;
 
-set_scene :: (scene: *Scene.Scene, text: string) -> int {
-	scene.is_server = true;
-	Terrain.parse_terrain(text, scene);
-	return scene.id;
-}
+server_receive_tick :: (platform: *Platform, server: *Server) {
+	messages := platform.gather_web_messages();
 
-move_playing_scene :: (scene_id: int) {
-	old_scene := find_by_scene_id(state.instance.playing_scene_id);
+	#if print_messages {
+		if messages.count > 0
+			print("Received % messages:\n", messages.count);
+	}
 
-	scene := find_by_scene_id(scene_id);
-	if !scene
-		return;
+	for msg: messages {
+		cmd, parsed := parse_message(msg.data);
+		if !parsed
+			continue;
 
-	Scene.restart(scene);
+		#if print_messages {
+			print("    %\n", cmd.payload.kind);
+		}
+		// The main thing we need to do here is route the command to the appropriate instance
+		// Or handle it if it's a global command (like login)
 
-	for old_scene.players {
-		spawn: Command.Spawn;
-		spawn.player_id = it.id;
-		spawn.scene_id = scene_id;
-		spawn.model_id = it.server.model_id;
-		Scene.process(scene, make_command(spawn), null);
+		processed := process(server, cmd, msg.sender);
+		if processed
+			continue;
 
-		sync_score: Command.Sync_Score;
-		sync_score.player_id = it.id;
-		sync_score.score = it.server.score;
-		sync_score.score.points = 0;
-		sync_score.is_start = true;
-		user := find_user_by_player_id(it.id);
+		// Route to instance
+		user := find_user_by_connection(server, msg.sender);
 		if user {
-			send(user.websocket, make_command(sync_score));
-		}
-
-		player := Scene.find_by_player_id(scene, it.id);
-		if player {
-			player.server.score = it.server.score;
-			player.server.start_score = it.server.score;
-		}
-	}
-
-	sync_scene := Scene.make_sync(scene);
-	for * state.users {
-		if it.scene_id == state.instance.playing_scene_id {
-			send(it.websocket, make_command(sync_scene));
-			control: Command.Give_Control;
-			control.player_id = it.player_id;
-			send(it.websocket, make_command(control));
-			it.scene_id = scene_id;
-		}
-	}
-	state.instance.playing_scene_id = scene_id;
-
-	old_scene.players.count = 0;
-
-	for * scene.players {
-		it.server.start_score = it.server.score;
-	}
-}
-
-move_player_to_scene :: (player_id: int, scene_id: int, model_id: int, standin_id: int) {
-	old_scene: *Scene.Scene = null;
-	{
-		player: *Scene.Player = null;
-		for * scene: state.scenes {
-			old_scene = scene;
-			player = Scene.find_by_player_id(scene, player_id);
-			if player
-				break;
-		}
-		if !player
-			return;
-
-		for * old_scene.players {
-			if it.id == player_id {
-				remove it;
-				break;
+			instance := find_instance_by_id(server, user.instance_id);
+			if instance {
+				instance.received[instance.received_count].command = cmd;
+				instance.received[instance.received_count].sender_user_id = user.id;
+				instance.received_count += 1;
 			}
 		}
 	}
+}
 
-	new_scene := find_by_scene_id(scene_id);
-	if !new_scene
+server_send_tick :: (platform: *Platform, server: *Server) {
+
+	printed := false;
+	#if print_messages {
+		if server.queue.count > 0 {
+			print("Sending % messages from server\n", server.queue.count);
+			printed = true;
+		}
+	}
+	// Purge the send queue of the server and all the instances.
+
+	// First the server queue
+	for 0..server.queue.count - 1 {
+		connection := server.queue.connection[it];
+		cmd := server.queue.commands[it];
+
+		#if print_messages {
+			print("    %\n", cmd.payload.kind);
+		}
+
+		if connection >= 0
+			send(platform, connection, cmd);
+		else
+			broadcast(platform, server, cmd);
+	}
+	server.queue.count = 0;
+
+	// Then the instances
+	for 0..server.instance_count - 1 {
+		instance := *server.instances[it];
+
+
+		#if print_messages {
+			if instance.to_send_count > 0 {
+				print("Instance % sending % messages\n", instance.id, instance.to_send_count);
+				printed = true;
+			}
+		}
+
+		for 0..instance.to_send_count - 1 {
+			command := instance.to_send[it].command;
+			target_user_id := instance.to_send[it].target_user_id;
+
+			#if print_messages {
+				print("    %\n", command.payload.kind);
+			}
+
+			if target_user_id >= 0 {
+				connection := find_connection_by_user_id(server, target_user_id);
+				if connection >= 0
+					send(platform, connection, command);
+			}
+			else
+				broadcast(platform, server, command);
+		}
+		instance.to_send_count = 0;
+	}
+
+	#if print_messages {
+		if printed
+			print("\n");
+	}
+}
+
+prefill_fixed_instances :: (server: *Server) {
+	server.instance_count = 2;
+
+	server.instances[0] = create_instance("Hades", .{}).*;
+	server.instances[0].id = 1;
+
+	server.instances[1] = create_instance("Olympus", .{ auto_revive = true }).*;
+	server.instances[1].id = 2;
+}
+
+App_User :: struct {
+	app: *App;
+	app_context: *#Context;
+	server: Server;
+	tick_error := 0.0;
+}
+
+#program_export "app_init" app_init :: (app: *App) {
+	Remap_Context();
+
+	app_user := New(App_User);
+	app.user_data = app_user;
+
+	ok := app.platform.open_server(2356);
+	if !ok {
+		print("Failed to open server on port 2356\n");
 		return;
+	}
 
-	spawn: Command.Spawn;
-	spawn.player_id = player_id;
-	spawn.scene_id = scene_id;
-	spawn.model_id = model_id;
-	Scene.process(new_scene, make_command(spawn), null);
+	app_user.server.tick_period.last = current_time_monotonic();
+	prefill_fixed_instances(*app_user.server);
+}
 
-	user := find_user_by_player_id(player_id);
-	if user {
-		scene := find_by_scene_id(user.scene_id);
-		if scene {
-			player := Scene.find_by_player_id(scene, player_id);
-			if player && model_id >= 0 {
-				player.server.model_id = model_id;
-			}
+#program_export "app_reload" app_reload :: (app: *App) {
+}
 
-			sync_scene := Scene.make_sync(new_scene);
+#program_export "app_loop" app_loop :: (app: *App) -> bool {
+	Remap_Context();
+	server_loop(app);
+	return true;
+}
+server_loop :: (app: *App) {
+	app_user := app.user_data.(*App_User);
+	reset_temporary_storage();
 
-			send(user.websocket, make_command(sync_scene));
+	to_tick, dt := check(*app_user.server.tick_period);
+	if to_tick {
+		while (dt + app_user.tick_error) > app_user.server.tick_period.period {
+			server_receive_tick(app.platform, *app_user.server);
+
+			for 0..app_user.server.instance_count-1
+				update_instance(*app_user.server.instances[it], app_user.server.tick_period.period);
+
+			server_send_tick(app.platform, *app_user.server);
+
+			dt -= app_user.server.tick_period.period;
 		}
-		user.scene_id = scene_id;
-	}
 
-	// Signal to the rest of the users in the scene that a new player popped in.
-	for state.users {
-		if it.scene_id != scene_id
-			continue;
-		
-		if it.player_id == player_id
-			continue;
-
-		spawn: Command.Spawn;
-		spawn.player_id = player_id;
-		spawn.scene_id = scene_id;
-		spawn.model_id = model_id;
-		send(it.websocket, make_command(spawn));
-	}
-
-	// Signal to the rest of the users in the old scene that a player left.
-	for state.users {
-		if it.scene_id != old_scene.id
-			continue;
-		
-		if it.player_id == player_id
-			continue;
-
-		quit: Command.Quit;
-		quit.player_id = player_id;
-		quit.from_standin_id = standin_id;
-		send(it.websocket, make_command(quit));
+		app_user.tick_error += dt;
 	}
 }
 
-watcher: File_Watcher(void);
-frame_file_change: [1024] string;
-frame_file_change_count := 0;
-
-name_to_scene_id: Table(string, int);
-
-#add_context _platform: Platform.Platform;
-main :: () {
-
-	init(*state.queue_semaphore, 1);
-	init(*state.received_semaphore, 1);
-
-	state.sync_period.last = current_time_monotonic();
-	state.tick_period.last = current_time_monotonic();
-
-	terrains :: string.[
-		"pick",
-		"right",
-		"intro", // OK
-		"roundabout", // OK
-		"buzz", // OK
-		"chamber", // OK
-		"frogger",
-		"pounding", // OK
-		"volcano", // OK
-		"funny", // OK
-		"here_and_there", // OK
-		"tetris",
-	];
-	
-	for terrains {
-		txt := sprint("%/../assets/terrain/%.terrain", #filepath, it);
-		data, ok := read_entire_file(txt);
-		id := add_scene(data);
-
-		table_add(*name_to_scene_id, it, id);
-	}
-	if state.scenes.count > 0 {
-		state.pick_scene_id = state.scenes[0].id;
-		for 0..state.scenes.count-2 {
-			state.scenes[it].next_id = state.scenes[it+1].id;
-		}
-		state.instance.playing_scene_id = state.scenes[0].next_id;
-	}
-
-
-	http_listen(port=5623);
-
-	server := websocket_listen("/ws");
-	server.onopen = (ws: *Websocket) {
-	};
-	server.onmsg = (ws: *Websocket, msg: string) {
-		ok, token := table_find_new(*state.socket_to_token_id, ws);
-		if ok for * state.users {
-			if it.token == token {
-				it.last_ping = current_time_monotonic();
-				break;
-			}
-		}
-
-		data: [] u8;
-		data.data = msg.data;
-		data.count = msg.count;
-
-		cmd, ok2 := parse_message(data);
-		if ok2 {
-			append_received(cmd, ws);
-		}
-	};
-	server.onclose = (ws: *Websocket) {
-		table_remove(*state.socket_to_token_id, ws);
-	};
-
-	state.server = server;
-
-	init(*watcher, (watcher: *File_Watcher(void), change: *File_Change, user_data: *void) {
-		frame_file_change_count %= frame_file_change.count;
-		frame_file_change[frame_file_change_count] = alloc_string(change.full_path.count);
-		memcpy(
-			frame_file_change[frame_file_change_count].data,
-			change.full_path.data,
-			change.full_path.count
-		);
-		frame_file_change_count += 1;
-	}, null);
-	add_directories(*watcher, tprint("%/../assets/", #filepath));
-
-	error := 0.0;
-	while 1 {
-		process_changes(*watcher);
-		for 0..frame_file_change_count-1 {
-			change := frame_file_change[it];
-
-			for id, name: name_to_scene_id {
-				if ends_with(change, tprint("%.terrain", name)) {
-
-					data, ok := read_entire_file(change);
-					scene := find_by_scene_id(id);
-
-					if scene && ok {
-						set_scene(scene, data);
-						sync_scene := Scene.make_sync(scene);
-
-						for user: state.users {
-							if user.scene_id == id {
-								send(user.websocket, make_command(sync_scene));
-							}
-						}
-					}
-
-				}
-			}
-		}
-
-		if check(*state.sync_period) {
-			sync(state);
-		}
-
-		to_tick, dt := check(*state.tick_period);
-		if to_tick {
-			if dt + error > (2 * state.tick_period.period) {
-				print(
-					"Long tick detected: % seconds, doing % iterations\n",
-					dt + error,
-					cast(int) ((dt + error) / state.tick_period.period)
-				);
-			}
-
-			while (dt + error) > state.tick_period.period {
-				tick(*state);
-				dt -= state.tick_period.period;
-			}
-			error += dt;
-		}
-
-		// Purge the command queue.
-		{
-			// Early test
-			if state.queue.count > 0 {
-				wait_for(*state.queue_semaphore);
-				defer {
-					signal(*state.queue_semaphore);
-				}
-
-				for 0..state.queue.count - 1 {
-					cmd := state.queue.commands[it];
-					if state.queue.socket[it]
-						send(state.queue.socket[it], cmd);
-					else
-						broadcast(state.server, cmd);
-
-				}
-
-				state.queue.count = 0; // Clear the queue after processing.
-			}
-		}
-
-		frame_file_change_count = 0;
-	}
+#program_export "app_quit" app_quit :: (app: *App) {
 }
 

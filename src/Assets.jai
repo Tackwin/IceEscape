@@ -1,53 +1,24 @@
 #import "Basic";
+#import "String";
 #import "Compiler";
-STB :: #import "stb_image";
+#import "Platform";
 
 #scope_export
 
-Image :: struct {
-	width: u32;
-	height: u32;
-	data: [] u8;
-	channels: int = 3;
-
-	make_from_memory :: (data: [] u8, channels: int) -> Image {
-		image: Image;
-		x: s32;
-		y: s32;
-		c: s32;
-		STB.stbi_set_flip_vertically_on_load(1);
-		image.data.data = STB.stbi_load_from_memory(
-			xx data.data, xx data.count, *x, *y, *c, xx channels
-		);
-		image.data.count = x * y * channels;
-		image.width = xx x;
-		image.height = xx y;
-		image.channels = xx channels;
-		return image;
-	}
-
-	free :: (image: *Image) {
-		if image.data.data {
-			STB.stbi_image_free(image.data.data);
-			image.data.data = null;
-			image.data.count = 0;
-		}
-	}
-}
-
-
 RUNTIME :: true && OS != .WASM;
-#if RUNTIME {
-	#import "File";
-}
 
 embed_data :: ($name: string, $path: string, $root: string) -> string {
 	#if RUNTIME {
 format_runtime_text :: #string FORMAT
 %: [] u8;
-%_PROC :: () {
-	file, ok := read_entire_file("%/../assets/%");
-	if ok {
+%_PROC :: (platform: Platform) {
+	full_path := "%/../assets/%";
+
+	file_size := platform.read_entire_file(full_path, .[]);
+	file := NewArray(file_size, u8,, platform.allocator);
+
+	file.count = platform.read_entire_file(full_path, file);
+	if file.count > 0 {
 		% = xx file;
 	} else {
 		print("Couldn't load %\n");
@@ -125,6 +96,7 @@ FORMAT;
 #insert #run embed_data("tile_slippy_height_png", "Tile/slippy_height.png", #filepath);
 #insert #run embed_data("tile_atlas_png", "Tile/atlas.png", #filepath);
 #insert #run embed_data("ui_atlas_png", "UI/ui_atlas.png", #filepath);
+#insert #run embed_data("ztotez_atlas_png", "ZTOtez-Regular.png", #filepath);
 
 #insert #run embed_data("VEHICLE_RACER_OBJ", "vehicle-racer.obj", #filepath);
 #insert #run embed_data("VEHICLE_SUV_OBJ", "vehicle-suv.obj", #filepath);
@@ -274,6 +246,9 @@ FORMAT;
 #insert #run embed_data("RES_MP3", "Sound/res.mp3", #filepath);
 #insert #run embed_data("COIN_LAUNCH_MP3", "Sound/coin_launch.mp3", #filepath);
 
+#insert #run embed_data("verdana_csv", "Font/verdana.csv", #filepath);
+#insert #run embed_data("verdana_png", "Font/verdana.png", #filepath);
+
 Prop_Id :: enum {
 	TERRAIN_TREE_SNOW_A :: 0;
 	TERRAIN_TREE_SNOW_B;
@@ -291,7 +266,7 @@ Prop_Id :: enum {
 	ROCK_LARGE;
 }
 
-load_everything :: () {
+load_everything :: (platform: Platform) {
 	#if !RUNTIME
 		return;
 
@@ -460,462 +435,52 @@ load_everything :: () {
 			"COIN_LAUNCH_MP3",
 			"POINT_UP_MP3",
 			"JUKEBOX_OBJ",
+			"ztotez_atlas_png",
+			"verdana_csv",
+			"verdana_png",
 		];
 		#insert #run -> string {
 			sb: String_Builder;
 			for names {
-				print_to_builder(*sb, "%_PROC();\n", it);
+				print_to_builder(*sb, "%_PROC(platform);\n", it);
 			}
 			return builder_to_string(*sb);
 		};
 	}
 }
 
+load_font :: (csv: string) -> Font {
+	lines := split(csv, "\n",, temp);
 
-vehicle_colormap_texture_help :: () -> Image {
-	a, b, c := #run, host -> [] u8, int, int {
-
-		Image :: struct {
-			width: u32;
-			height: u32;
-			data: [] u8;
-		}
-
-		decode_image :: (path: string) -> Image {
-			image: Image;
-			CT_File :: #import "File";
-			CT_STB :: #import "stb_image";
-			#import "Basic";
-
-			file, ok := CT_File.read_entire_file(path);
-			if !ok {
-				print("Failed to load vehicle_colormap.png\n");
-				return image;
-			}
-
-			x: s32;
-			y: s32;
-			c: s32;
-			CT_STB.stbi_set_flip_vertically_on_load(1);
-			image.data.data = CT_STB.stbi_load_from_memory(file.data, xx file.count, *x, *y, *c, 3);
-			image.data.count = x * y * 3;
-			image.width = xx x;
-			image.height = xx y;
-
-			if !image.data.data {
-				cstr: *u8 = CT_STB.stbi_failure_reason();
-				str: string;
-				str.data = cstr;
-				str.count = c_style_strlen(cstr);
-				print("Failed to load vehicle_colormap.png: %\n", str);
-				return image;
-			}
-
-			return image;
-		}
-		#import "Basic";
-
-		image := decode_image(tprint("%/../assets/vehicle_colormap.png", #filepath));
-		return image.data, image.width, image.height;
-	};
-	return .{ width = xx b, height = xx c, data = a };
-}
-
-VEHICLE_COLORMAP_TEXTURE :: #run vehicle_colormap_texture_help();
-
-ice_texture_help :: () -> Image {
-	a, b, c := #run, host -> [] u8, int, int {
-
-		Image :: struct {
-			width: u32;
-			height: u32;
-			data: [] u8;
-		}
-
-		decode_image :: (path: string) -> Image {
-			image: Image;
-			CT_File :: #import "File";
-			CT_STB :: #import "stb_image";
-			#import "Basic";
-
-			file, ok := CT_File.read_entire_file(path);
-			if !ok {
-				print("Failed to load ice_texture.png\n");
-				return image;
-			}
-
-			x: s32;
-			y: s32;
-			c: s32;
-			image.data.data = CT_STB.stbi_load_from_memory(file.data, xx file.count, *x, *y, *c, 3);
-			image.data.count = x * y * 3;
-			image.width = xx x;
-			image.height = xx y;
-
-			if !image.data.data {
-				cstr: *u8 = CT_STB.stbi_failure_reason();
-				str: string;
-				str.data = cstr;
-				str.count = c_style_strlen(cstr);
-				print("Failed to load ice_texture.png: %\n", str);
-				return image;
-			}
-
-			return image;
-		}
-		#import "Basic";
-
-		image := decode_image(tprint("%/../assets/ice_texture.png", #filepath));
-		return image.data, image.width, image.height;
-	};
-	return .{ width = xx b, height = xx c, data = a };
-}
-
-ICE_TEXTURE :: #run ice_texture_help();
-
-grass_texture_help :: () -> Image {
-	a, b, c := #run, host -> [] u8, int, int {
-
-		Image :: struct {
-			width: u32;
-			height: u32;
-			data: [] u8;
-		}
-
-		decode_image :: (path: string) -> Image {
-			image: Image;
-			CT_File :: #import "File";
-			CT_STB :: #import "stb_image";
-			#import "Basic";
-
-			file, ok := CT_File.read_entire_file(path);
-			if !ok {
-				print("Failed to load ice_texture.png\n");
-				return image;
-			}
-
-			x: s32;
-			y: s32;
-			c: s32;
-			image.data.data = CT_STB.stbi_load_from_memory(file.data, xx file.count, *x, *y, *c, 3);
-			image.data.count = x * y * 3;
-			image.width = xx x;
-			image.height = xx y;
-
-			if !image.data.data {
-				cstr: *u8 = CT_STB.stbi_failure_reason();
-				str: string;
-				str.data = cstr;
-				str.count = c_style_strlen(cstr);
-				print("Failed to load ice_texture.png: %\n", str);
-				return image;
-			}
-
-			return image;
-		}
-		#import "Basic";
-
-		image := decode_image(tprint("%/../assets/Elements_14-128x128.png", #filepath));
-		return image.data, image.width, image.height;
-	};
-	return .{ width = xx b, height = xx c, data = a };
-}
-
-GRASS_TEXTURE :: #run grass_texture_help();
-
-
-slippy_ice_texture_help :: () -> Image {
-	a, b, c := #run, host -> [] u8, int, int {
-
-		Image :: struct {
-			width: u32;
-			height: u32;
-			data: [] u8;
-		}
-
-		decode_image :: (path: string) -> Image {
-			image: Image;
-			CT_File :: #import "File";
-			CT_STB :: #import "stb_image";
-			#import "Basic";
-
-			file, ok := CT_File.read_entire_file(path);
-			if !ok {
-				print("Failed to load ice_texture.png\n");
-				return image;
-			}
-
-			x: s32;
-			y: s32;
-			c: s32;
-			image.data.data = CT_STB.stbi_load_from_memory(file.data, xx file.count, *x, *y, *c, 3);
-			image.data.count = x * y * 3;
-			image.width = xx x;
-			image.height = xx y;
-
-			if !image.data.data {
-				cstr: *u8 = CT_STB.stbi_failure_reason();
-				str: string;
-				str.data = cstr;
-				str.count = c_style_strlen(cstr);
-				print("Failed to load ice_texture.png: %\n", str);
-				return image;
-			}
-
-			return image;
-		}
-		#import "Basic";
-
-		image := decode_image(tprint("%/../assets/Water_01.png", #filepath));
-		return image.data, image.width, image.height;
-	};
-	return .{ width = xx b, height = xx c, data = a };
-}
-
-SLIPPY_ICE_TEXTURE :: #run slippy_ice_texture_help();
-
-
-dirt_texture_help :: () -> Image {
-	a, b, c := #run, host -> [] u8, int, int {
-
-		Image :: struct {
-			width: u32;
-			height: u32;
-			data: [] u8;
-		}
-
-		decode_image :: (path: string) -> Image {
-			image: Image;
-			CT_File :: #import "File";
-			CT_STB :: #import "stb_image";
-			#import "Basic";
-
-			file, ok := CT_File.read_entire_file(path);
-			if !ok {
-				print("Failed to load ice_texture.png\n");
-				return image;
-			}
-
-			x: s32;
-			y: s32;
-			c: s32;
-			image.data.data = CT_STB.stbi_load_from_memory(file.data, xx file.count, *x, *y, *c, 3);
-			image.data.count = x * y * 3;
-			image.width = xx x;
-			image.height = xx y;
-
-			if !image.data.data {
-				cstr: *u8 = CT_STB.stbi_failure_reason();
-				str: string;
-				str.data = cstr;
-				str.count = c_style_strlen(cstr);
-				print("Failed to load ice_texture.png: %\n", str);
-				return image;
-			}
-
-			return image;
-		}
-		#import "Basic";
-
-		image := decode_image(tprint("%/../assets/Dirt_01.png", #filepath));
-		return image.data, image.width, image.height;
-
-	};
-	return .{ width = xx b, height = xx c, data = a };
-}
-
-DIRT_TEXTURE :: #run dirt_texture_help();
-
-coin_texture_help :: () -> Image {
-	a, b, c := #run, host -> [] u8, int, int {
-
-		Image :: struct {
-			width: u32;
-			height: u32;
-			data: [] u8;
-		}
-
-		decode_image :: (path: string) -> Image {
-			image: Image;
-			CT_File :: #import "File";
-			CT_STB :: #import "stb_image";
-			#import "Basic";
-
-			file, ok := CT_File.read_entire_file(path);
-			if !ok {
-				print("Failed to load ice_texture.png\n");
-				return image;
-			}
-
-			x: s32;
-			y: s32;
-			c: s32;
-			image.data.data = CT_STB.stbi_load_from_memory(file.data, xx file.count, *x, *y, *c, 3);
-			image.data.count = x * y * 3;
-			image.width = xx x;
-			image.height = xx y;
-
-			if !image.data.data {
-				cstr: *u8 = CT_STB.stbi_failure_reason();
-				str: string;
-				str.data = cstr;
-				str.count = c_style_strlen(cstr);
-				print("Failed to load ice_texture.png: %\n", str);
-				return image;
-			}
-
-			return image;
-		}
-		#import "Basic";
-
-		image := decode_image(tprint("%/../assets/coin_texture.png", #filepath));
-		return image.data, image.width, image.height;
-	};
-	return .{ width = xx b, height = xx c, data = a };
-}
-
-COIN_TEXTURE :: #run coin_texture_help();
-
-mark_texture_help :: () -> Image {
-	a, b, c := #run, host -> [] u8, int, int {
-
-		Image :: struct {
-			width: u32;
-			height: u32;
-			data: [] u8;
-		}
-
-		decode_image :: (path: string) -> Image {
-			image: Image;
-			CT_File :: #import "File";
-			CT_STB :: #import "stb_image";
-			#import "Basic";
-
-			file, ok := CT_File.read_entire_file(path);
-			if !ok {
-				print("Failed to load ice_texture.png\n");
-				return image;
-			}
-
-			x: s32;
-			y: s32;
-			c: s32;
-			image.data.data = CT_STB.stbi_load_from_memory(file.data, xx file.count, *x, *y, *c, 4);
-			image.data.count = x * y * 4;
-			image.width = xx x;
-			image.height = xx y;
-
-			if !image.data.data {
-				cstr: *u8 = CT_STB.stbi_failure_reason();
-				str: string;
-				str.data = cstr;
-				str.count = c_style_strlen(cstr);
-				print("Failed to load ice_texture.png: %\n", str);
-				return image;
-			}
-
-			return image;
-		}
-		#import "Basic";
-
-		image := decode_image(tprint("%/../assets/mark.png", #filepath));
-		return image.data, image.width, image.height;
-	};
-	return .{ width = xx b, height = xx c, data = a, channels = 4 };
-}
-
-MARK_TEXTURE :: #run mark_texture_help();
-
-
-// Atlas sprite properties
-Font_Sprite :: struct {
-	cnameId: string;
-	ctag: string;
-	originX: int;
-	originY: int;
-	positionX: int;
-	positionY: int;
-	sourceWidth: int;
-	sourceHeight: int;
-	padding: int;
-	trimmed: bool;
-	trimRecX: int;
-	trimRecY: int;
-	trimRecWidth: int;
-	trimRecHeight: int;
-	colliderType: int;
-	colliderPosX: int;
-	colliderPosY: int;
-	colliderSizeX: int;
-	colliderSizeY: int;
-
-	// Atlas contains font data
-	charValue: int;
-	charOffsetX: int;
-	charOffsetY: int;
-	charAdvanceX: int;
-}
-
-Font :: struct {
-	atlas: Image;
-	sprites: [] Font_Sprite;
-	height: int;
-}
-
-ztotez_help :: () -> Font {
-	#load "../assets/ZTOtez_regular.jai";
-
-	a, b, c := #run, host -> [] u8, int, int {
-		Image :: struct {
-			width: u32;
-			height: u32;
-			data: [] u8;
-		}
-
-		decode_image :: (path: string) -> Image {
-			image: Image;
-			CT_File :: #import "File";
-			CT_STB :: #import "stb_image";
-			#import "Basic";
-
-			file, ok := CT_File.read_entire_file(path);
-			if !ok {
-				print("Failed to load ice_texture.png\n");
-				return image;
-			}
-
-			x: s32;
-			y: s32;
-			c: s32;
-			CT_STB.stbi_set_flip_vertically_on_load(1);
-			image.data.data = CT_STB.stbi_load_from_memory(file.data, xx file.count, *x, *y, *c, 4);
-			image.data.count = x * y * 4;
-			image.width = xx x;
-			image.height = xx y;
-
-			if !image.data.data {
-				cstr: *u8 = CT_STB.stbi_failure_reason();
-				str: string;
-				str.data = cstr;
-				str.count = c_style_strlen(cstr);
-				print("Failed to load ice_texture.png: %\n", str);
-				return image;
-			}
-
-			return image;
-		}
-		#import "Basic";
-
-		image := decode_image(tprint("%/../assets/ZTOtez-Regular.png", #filepath));
-		return image.data, image.width, image.height;
-	};
 	font: Font;
-	font.atlas = .{ width = xx b, height = xx c, data = a, channels = 4 };
-	font.sprites = rtpDescAtlas;
-	font.height = ATLAS_ATLAS_FONT_SIZE;
+
+	for lines {
+		g: Glyph;
+
+		if scan2(
+			it,
+			"%,%,%,%,%,%,%,%,%,%",
+			*g.unicode,
+			*g.advance,
+			*g.planex,
+			*g.planey,
+			*g.planew,
+			*g.planeh,
+			*g.atlasx,
+			*g.atlasy,
+			*g.atlasw,
+			*g.atlash
+		) {
+			continue;
+		}
+
+		if g.unicode >= 256 {
+			continue;
+		}
+
+		font.glyphs[g.unicode] = g;
+	}
+
 	return font;
 }
-
-
-MAIN_FONT :: #run ztotez_help();
 

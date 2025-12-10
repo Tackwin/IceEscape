@@ -93,6 +93,9 @@ skull
 - speed: 2.0
 - offset: 0.35
 
+flag
+- position: 22.5 4.5 0.0
+
 
 path
 - checkpoint: 20.5 8 0

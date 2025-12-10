@@ -57,10 +57,27 @@ Key :: enum s32 {
 	MouseRight;
 	MouseMiddle;
 	Tab;
+	Escape;
+	Shift;
+	Period;
+	Backspace;
+	Left;
+	Right;
 }
 Key_COUNT :: #run enum_values_as_s64(Key).count;
 
-Web_Message :: [] u8;
+Connection :: int;
+Connection_Broadcast: Connection : -1;
+
+Connection_Change :: struct {
+	connection: Connection;
+	entered: bool;
+}
+
+Web_Message :: struct {
+	data: [] u8;
+	sender: Connection;
+}
 
 Frame_Info :: struct {
 	key_pressed: [Key_COUNT] bool;
@@ -120,15 +137,76 @@ Listener :: struct {
 	direction: V3f;
 }
 
+Image :: struct {
+	width: u32;
+	height: u32;
+	data: [] u8;
+	channels: int = 3;
+}
+
+// Atlas sprite properties
+Font_Sprite :: struct {
+	cnameId: string;
+	ctag: string;
+	originX: int;
+	originY: int;
+	positionX: int;
+	positionY: int;
+	sourceWidth: int;
+	sourceHeight: int;
+	padding: int;
+	trimmed: bool;
+	trimRecX: int;
+	trimRecY: int;
+	trimRecWidth: int;
+	trimRecHeight: int;
+	colliderType: int;
+	colliderPosX: int;
+	colliderPosY: int;
+	colliderSizeX: int;
+	colliderSizeY: int;
+
+	// Atlas contains font data
+	charValue: int;
+	charOffsetX: int;
+	charOffsetY: int;
+	charAdvanceX: int;
+}
+
+Glyph :: struct {
+	unicode: int;
+	advance: float;
+	planex: float;
+	planey: float;
+	planew: float;
+	planeh: float;
+	atlasx: float;
+	atlasy: float;
+	atlasw: float;
+	atlash: float;
+}
+
+Font :: struct {
+	atlas_width: int;
+	atlas_height: int;
+	glyphs: [256] Glyph;
+}
+
 Platform :: struct {
-	rhi: RHI_proc;
 	gpu: GPU_proc;
+
+	open_server: #type (port: int) -> bool = null;
+	connect_server: #type (address: string, port: int, protocol: string) -> Connection, bool = null;
+	is_server_connected: #type () -> bool = null;
+
+	send_web_message   : #type (msg: [] u8, target: Connection) = null;
+	gather_web_messages: #type () -> [] Web_Message = null;
+	gather_connection_changes: #type () -> [] Connection_Change = null;
 
 	get_token:        #type () -> int        = null;
 	set_token:        #type (token: int)     = null;
 	get_frame_info:   #type (info: *Frame_Info) = null;
 	end_frame:        #type ()               = null;
-	send_web_message: #type (msg: [] u8)     = null;
 
 	set_listener_info: #type (listener: Listener) = null;
 	load_audio: #type (data: string, compressed: bool) -> Audio = null;
@@ -136,16 +214,18 @@ Platform :: struct {
 	query_sound: #type (sound_id: int) -> Sound = null;
 	set_sound: #type (sound: Sound) = null;
 	volume_audio: #type (x: float) -> float = null;
+
+	read_entire_file: #type (path: string, data: [] u8) -> int = null;
+	load_image: #type (data: [] u8) -> Image = null;
+	free_image: #type (image: *Image) = null;
+
+	allocator: Allocator;
 }
 
-#if OS == .WASM {
-	#load "wasm_platform.jai";
+App :: struct {
+	platform: *Platform;
+	allocator: Allocator;
+	user_data: *void;
 }
-#if OS == .WINDOWS {
-	#load "win32_platform.jai";
-}
-#load "gles.jai";
+
 #load "webgpu.jai";
-
-#add_context rhi: RHI_proc;
-#add_context gpu: GPU_proc;

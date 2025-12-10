@@ -69,6 +69,10 @@ Sound_Trigger :: struct {
 	count := 1;
 }
 
+Scene_Parameters :: struct {
+	auto_revive := false;
+}
+
 Scene :: struct {
 	State :: enum {
 		Normal :: 0;
@@ -76,6 +80,7 @@ Scene :: struct {
 		Wipe_Fade_Out :: 2;
 	}
 	state: State;
+	params: Scene_Parameters;
 
 	name: [64] u8;
 
@@ -175,6 +180,7 @@ clear :: (scene: *Scene) {
 	scene.presents.count = 0;
 	scene.safe_zones.count = 0;
 	scene.auto_revive = false;
+	scene.auto_revive |= scene.params.auto_revive;
 	table_reset(*scene.trigger_activated);
 	for scene.news {
 		free(it);
@@ -182,9 +188,10 @@ clear :: (scene: *Scene) {
 	scene.news.count = 0;
 }
 
-make_sync :: (scene: *Scene) -> Command.Sync_Scene {
+make_sync :: (scene: *Scene, params: Scene_Parameters) -> Command.Sync_Scene {
 	sync_scene: Command.Sync_Scene;
 	sync_scene.id = scene.id;
+	sync_scene.params = params;
 	sync_scene.terrain = scene.terrain.text;
 	sync_scene.players = NewArray(scene.players.count, Command.Sync_Player, false,, temp);
 	sync_scene.skulls = NewArray(scene.skulls.count, Command.Sync_Skull, false,, temp);
@@ -709,6 +716,15 @@ Camera :: struct {
 	speed := 25;
 }
 
+init_camera :: (scene: *Scene) {
+	scene.camera.position = .{ 0, -4, 8 };
+	scene.camera.target = .{ 0, 0, 0 };
+	scene.camera.target_target = scene.camera.target;
+	scene.camera.wanted_target_to_position = scene.camera.position - scene.camera.target;
+	scene.camera.fov = 55;
+	scene.camera.max_distance = norm(scene.camera.wanted_target_to_position);
+}
+
 perspective :: (camera: Camera) -> M4f {
 	f := 1.0 / tan(camera.fov * DEG_RAD / 2);
 	M: M4f = ---;
@@ -1153,8 +1169,11 @@ interpolate_to_server :: (key: *Key, dt: float32) {
 	key.client.position = damp(key.client.position, key.server.position, 10.0, dt);
 }
 
-restart :: (scene: *Scene) {
+restart :: (scene: *Scene, params: Scene_Parameters) {
+	print("Restarting scene\n");
 	parse_terrain(scene.terrain.text, scene);
+	scene.params = params;
+	scene.auto_revive |= params.auto_revive;
 	for * player: scene.players {
 		player.server.score.points = 0;
 		spawn_into(player, scene);
@@ -1205,10 +1224,10 @@ input :: (
 ) {
 	any_camera_move := false;
 	dt := V3f.{ 0, 0, 0 };
-	if controls.frame_info.mouse_wheel > 0 {
+	if controls.mouse_wheel > 0 {
 		scene.camera.wanted_target_to_position *= 0.9;
 	}
-	if controls.frame_info.mouse_wheel < 0 {
+	if controls.mouse_wheel < 0 {
 		scene.camera.wanted_target_to_position *= (1.0 / 0.9);
 		l := norm(scene.camera.wanted_target_to_position);
 		if l > scene.camera.max_distance {
@@ -1218,19 +1237,19 @@ input :: (
 			l * normalize(scene.camera.wanted_target_to_position);
 	}
 	if controls.pressed[Platform.Key.Q] {
-		dt.x -= scene.camera.speed * controls.frame_info.delta_time;
+		dt.x -= scene.camera.speed * controls.delta_time;
 		any_camera_move = true;
 	}
 	if controls.pressed[Platform.Key.D] {
-		dt.x += scene.camera.speed * controls.frame_info.delta_time;
+		dt.x += scene.camera.speed * controls.delta_time;
 		any_camera_move = true;
 	}
 	if controls.pressed[Platform.Key.S] {
-		dt.y -= scene.camera.speed * controls.frame_info.delta_time;
+		dt.y -= scene.camera.speed * controls.delta_time;
 		any_camera_move = true;
 	}
 	if controls.pressed[Platform.Key.Z] {
-		dt.y += scene.camera.speed * controls.frame_info.delta_time;
+		dt.y += scene.camera.speed * controls.delta_time;
 		any_camera_move = true;
 	}
 	if controls.just_pressed[Platform.Key.R] {
@@ -1267,14 +1286,14 @@ input :: (
 	}
 
 
-	if !controls.maskoff.mouse {
+	if !controls.captured_mouse {
 		if controls.just_pressed[Platform.Key.MouseLeft] {
 			V := look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
 			P := perspective(scene.camera);
 			r := unproject_ndc(
 				.{
-					controls.frame_info.mouse_position.x / controls.frame_info.window_size.x * 2 - 1,
-					controls.frame_info.mouse_position.y / controls.frame_info.window_size.y * 2 - 1
+					controls.mouse_pos.x / controls.window_size.x * 2 - 1,
+					controls.mouse_pos.y / controls.window_size.y * 2 - 1
 				},
 				V,
 				P
@@ -1362,17 +1381,18 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					clamp(alpha, 0.0, 1.0)
 				};
 
-				GUI.push_late_quad_screen(
-					.{ 0, 0 },
-					GUI.IM.display_size,
-					color,
-					-1.0
-				);
+				// GUI.push_late_quad_screen(
+				// 	.{ 0, 0 },
+				// 	app_user.gui_state.display_size,
+				// 	color,
+				// 	-1.0
+				// );
 			} else {
 				scene.state = .Wipe_Fade_Out;
-				if result
+				restart(scene, scene.params);
+				if result {
 					result.restarted = true;
-				restart(scene);
+				}
 			}
 		case .Wipe_Fade_Out;
 			t := to_float64_seconds(current_time_monotonic() - scene.fade_screen.start).(float32);
@@ -1388,12 +1408,12 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 					clamp(alpha, 0.0, 1.0)
 				};
 
-				GUI.push_late_quad_screen(
-					.{ 0, 0 },
-					GUI.IM.display_size,
-					color,
-					-1.0
-				);
+				// GUI.push_late_quad_screen(
+				// 	.{ 0, 0 },
+				// 	GUI.IM.display_size,
+				// 	color,
+				// 	-1.0
+				// );
 			}
 	}
 }
@@ -1719,8 +1739,8 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 		}
 	}
 
-	// >RULE Player auto revive on scene with auto_revive OR if the scene has ended
-	if scene.auto_revive || scene.end_scene_countdown_started {
+	// >RULE Player auto revive if the scene has ended
+	if scene.end_scene_countdown_started {
 		for * scene.players {
 			if it.server.dead {
 				respawn: Command.Respawn;
@@ -2182,28 +2202,34 @@ win_level :: (scene: *Scene, player_id: int, result: *Frame_Result) {
 		array_add(*result.add_scores, add_score);
 	}
 }
-
 server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 	player.server.has_safe_present = false;
 	player.server.has_hook_present = 0;
-
-	died: Command.Die;
-	died.player_id = player.id;
-	died.position = player.server.position;
-	array_add(*result.died, died);
-	player.server.dead = true;
-	player.server.dead_time = current_time_monotonic();
-	player.server.score.points = 0;
-	tombstone: Tombstone;
-	tombstone.player_id = died.player_id;
-	tombstone.position = died.position;
-
-	array_add(*scene.tombstones, tombstone);
 
 	keys := find_key_by_holder_id(scene, player.id);
 
 	for keys {
 		it.holder = -1;
+	}
+
+	if scene.auto_revive {
+		respawn: Command.Respawn;
+		respawn.player_id = player.id;
+		array_add(*result.respawn, respawn);
+		spawn_into(player, scene);
+	} else {
+		died: Command.Die;
+		died.player_id = player.id;
+		died.position = player.server.position;
+		array_add(*result.died, died);
+		player.server.dead = true;
+		player.server.dead_time = current_time_monotonic();
+		player.server.score.points = 0;
+		tombstone: Tombstone;
+		tombstone.player_id = died.player_id;
+		tombstone.position = died.position;
+
+		array_add(*scene.tombstones, tombstone);
 	}
 
 	any_alive := false;
@@ -2217,7 +2243,8 @@ server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 	if result {
 		if !any_alive {
 			array_add(*result.wipe_scene, .{});
-			restart(scene);
+			result.restarted = true;
+			restart(scene, scene.params);
 		}
 
 		add_score: Frame_Result.Add_Score;
@@ -2225,7 +2252,6 @@ server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 		add_score.score.dead = 1;
 		array_add(*result.add_scores, add_score);
 	}
-
 }
 
 update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
@@ -3150,6 +3176,18 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 	return false;
 }
 
+spawn_player :: (scene: *Scene, player_id: int, model_id: int) {
+	player := find_by_player_id(scene, player_id);
+	if !player {
+		new_player: Player;
+		new_player.id = player_id;
+		array_add(*scene.players, new_player);
+		player = *scene.players[scene.players.count - 1];
+	}
+	player.server.model_id = model_id;
+	spawn_into(player, scene);
+}
+
 process :: (scene: *Scene, command: Command, response: *Process_Response) -> bool {
 	if scene.is_server && process_server_only(scene, command, response)
 		return true;
@@ -3186,12 +3224,6 @@ process :: (scene: *Scene, command: Command, response: *Process_Response) -> boo
 
 	quit: *Command.Quit = isa(command.payload, Command.Quit);
 	if quit {
-		for * scene.stand_in {
-			if it.id == quit.from_standin_id {
-				it.retired = true;
-				break;
-			}
-		}
 		remove_player_from_scene(quit.player_id, scene);
 		return true;
 	}

@@ -533,9 +533,6 @@ init_platform :: () -> Platform {
 	}
 	#insert #run webgpu_meta_run();
 
-	context.rhi = platform.rhi;
-	context.gpu = platform.gpu;
-
 	return platform;
 }
 

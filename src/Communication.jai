@@ -71,7 +71,6 @@ Command :: struct {
 	}
 	Quit :: struct {
 		player_id: int;
-		from_standin_id: int = -1;
 	}
 	New_Terrain :: struct {
 		ascii: [] u8;
@@ -169,6 +168,7 @@ Command :: struct {
 	}
 	Sync_Scene :: struct {
 		id: int;
+		params: Scene_Parameters;
 		terrain: string;
 		rng: Rand.State;
 		players: [] Sync_Player; // Would usually point to a temporary buffer.
@@ -258,13 +258,51 @@ Command :: struct {
 		player_id: int;
 	}
 
+	Ask_Instance_List :: struct {
+	}
+
+	Ans_Instance_List :: struct {
+		Instance_Info :: struct {
+			instance_id: int;
+
+			name: [64] u8;
+			level_name: [64] u8;
+
+			max_players: int;
+			current_players: int;
+
+			auto_revive: bool;
+		}
+		
+		instances: [] Instance_Info;
+	}
+
+	Ask_Enter_Instance :: struct {
+		instance_id: int;
+	}
+
+	Ans_Enter_Instance :: struct {
+		reason: enum {
+			Accepted;
+			Return;
+			Instance_Not_Found;
+			Instance_Full;
+			Rejected;
+			Kicked;
+		}
+	}
+
+	Leave_Instance :: struct {
+	}
+
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
 		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot, Klaxon,
 		Give_Control, Sync_Score, Request_Score, Sync_Tombstone, Retire, Sync_Present,
 		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook, Cheat_Action, Buy_Ask, Buy_Response,
-		Sync_Stand_In, Ask_Respawn
+		Sync_Stand_In, Ask_Respawn, Ask_Instance_List, Ans_Instance_List, Ask_Enter_Instance,
+		Ans_Enter_Instance, Leave_Instance
 	);
 	sent_timestamp: float64;
 }
@@ -333,6 +371,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Sync_Skull; #through;
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
+		case .Leave_Instance; #through;
 		case .AntiAir_Shoot; #through;
 		case .Sync_Robot; #through;
 		case .Sync_Present; #through;
@@ -346,8 +385,32 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Hooked_Player; #through;
 		case .Sync_Score; #through;
 		case .Explode; #through;
+		case .Ask_Instance_List; #through;
+		case .Ans_Enter_Instance; #through;
+		case .Ask_Enter_Instance; #through;
 		case .Move_To_Play_World;
 			// Nothing
+		case .Ans_Instance_List;
+			ans_instance_list := isa(cmd.payload, Command.Ans_Instance_List);
+			if !ans_instance_list {
+				print("Weirdge\n");
+				break label;
+			}
+
+			additional_data_size := 0;
+			size := size_of(type_of(ans_instance_list.instances.data.*));
+			additional_data_size += size * ans_instance_list.instances.count;
+			array_reserve(buffer, dry_size + additional_data_size);
+
+			cursor := dry_size;
+			memcpy(
+				buffer.data + cursor,
+				ans_instance_list.instances.data,
+				size * ans_instance_list.instances.count
+			);
+			cursor += size * ans_instance_list.instances.count;
+			buffer.count = cursor;
+
 		case .Sync_Scene;
 			sync_scene := isa(cmd.payload, Command.Sync_Scene);
 			if !sync_scene {
@@ -466,6 +529,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Despawn_Coin; #through;
 		case .Cheat_Action; #through;
 		case .Respawn; #through;
+		case .Leave_Instance; #through;
 		case .Request_Score; #through;
 		case .Die; #through;
 		case .Give_Control; #through;
@@ -492,7 +556,22 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Sync_Present; #through;
 		case .Explode; #through;
 		case .Sync_Safe_Zone; #through;
+		case .Ask_Enter_Instance; #through;
+		case .Ans_Enter_Instance; #through;
+		case .Ask_Instance_List; #through;
 		case .Move_To_Play_World;
+			return cmd, true;
+		
+		case .Ans_Instance_List;
+			list := isa(cmd.payload, Command.Ans_Instance_List);
+			if !list {
+				print("Weirdge\n");
+				return cmd, false;
+			}
+
+			list.instances.data = (buffer.data + cursor).(*Command.Ans_Instance_List.Instance_Info);
+			cursor += size_of(type_of(list.instances.data.*)) * list.instances.count;
+
 			return cmd, true;
 		case .Sync_Scene;
 			sync_scene := isa(cmd.payload, Command.Sync_Scene);

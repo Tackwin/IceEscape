@@ -1,22 +1,26 @@
-// raddbg 0.9.23 project file
+// raddbg 0.9.24 project file
 
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/server_platform.jai"
+recent_file: path: "D:/a/_work/1/s/src/vctools/crt/vcstartup/src/misc/amd64/chkstk.asm"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_game.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/WRender.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_server.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Scene.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Communication.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Basic/module.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Basic/Int128.jai"
+recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Runtime_Support.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/GUI.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Terrain.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/String/module.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Basic/Simple_String.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_game.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Scene.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Pool.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Basic/Array.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Hash_Table.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Basic/float_to_string.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/http/windows.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/http/websocket.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/main_server.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/http/modules/mysocket/module.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/WRender.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Communication.jai"
-recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/Runtime_Support.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/Controls.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/IceEscape/src/win32_platform.jai"
 recent_file: path: "C:/Users/Tackwin/Documents/Code/jai/modules/File/windows.jai"
@@ -71,9 +75,28 @@ recent_file: path: "src/imgui_sdl_gl.jai"
 recent_file: path: "../jai/modules/gl/gl.jai"
 target:
 {
-  executable: "C:/Users/Tackwin/Documents/Code/IceEscape/bin/IceEscape.exe"
-  working_directory: "C:/Users/Tackwin/Documents/Code/IceEscape/bin/"
-  arguments: "-token 7"
-  environment: "RUST_BACKTRACE=full"
+  executable: "C:/Users/Tackwin/Documents/Code/IceEscape/bin/server/IceEscape_Server.exe"
+  working_directory: "C:/Users/Tackwin/Documents/Code/IceEscape/bin/server/"
   enabled: 1
+}
+target:
+{
+  executable: "C:/Users/Tackwin/Documents/Code/IceEscape/bin/Win32.exe"
+  working_directory: "C:/Users/Tackwin/Documents/Code/IceEscape/bin/"
+  enabled: 0
+}
+debug_info:
+{
+  path: "C:/Users/Tackwin/Documents/Code/IceEscape/bin/Win32.pdb"
+  timestamp: 66199369746471
+}
+debug_info:
+{
+  path: "C:/Users/Tackwin/Documents/Code/IceEscape/bin/IceEscape.pdb"
+  timestamp: 66199369745485
+}
+debug_info:
+{
+  path: "C:/Users/Tackwin/Documents/Code/IceEscape/bin/server/IceEscape_Server.pdb"
+  timestamp: 66199381013374
 }

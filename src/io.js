@@ -51,6 +51,7 @@ const Key_MouseLeft = 49;
 const Key_MouseRight = 50;
 const Key_MouseMiddle = 51;
 const Key_Tab = 52;
+const Key_Escape = 53;
 
 let key_buffer = [];
 
@@ -111,6 +112,7 @@ const mapKeyNameToKeyIndex = (e) => {
 		case "f11": return Key_F11;
 		case "f12": return Key_F12;
 		case "tab": return Key_Tab;
+		case "escape": return Key_Escape;
 		default: return -1;
 	}
 
@@ -204,3 +206,74 @@ jai_imports.jsGetDimensions = (dim_ptr) => {
 	setU32(dim_ptr, 8, canvas.width);
 	setU32(dim_ptr, 12, canvas.height);
 }
+
+let web_buffer = new Uint8Array(1024*1024*32);
+let web_buffer_cursor = 0;
+let websocket;
+jai_imports.jsConnectServer = (address_ptr, address_len, port, success_ptr) => {
+	const address = new TextDecoder().decode(
+		new Uint8Array(jai_exports.memory.buffer, Number(address_ptr), Number(address_len))
+	);
+
+	console.log(`Connecting to server at ${address}:${port}...`);
+	websocket = new WebSocket(`ws://${address}:${port}/ws`);
+    websocket.addEventListener("message", async event => {
+        // Append event.data to web_buffer at web_buffer_cursor
+        const blob = event.data;
+        const buffer = await blob.arrayBuffer();
+        const data = new Uint8Array(buffer);
+        // const data = new Uint8Array(await event.data.arrayBuffer());
+        if (web_buffer_cursor + data.length > web_buffer.length) {
+            console.error("Web buffer overflow, dropping message");
+            return;
+        }
+
+        web_buffer.set(data, web_buffer_cursor);
+        web_buffer_cursor += data.length;
+    });
+}
+
+jai_imports.jsIsServerConnected = (connected_ptr) => {
+	let connected = 0;
+	if (websocket && websocket.readyState === WebSocket.OPEN) {
+		connected = 1;
+	}
+	setU32(connected_ptr, 0, connected);
+}
+
+const copy_array_to_js = (count, data) => {
+    const u8 = new Uint8Array(jai_exports.memory.buffer)
+    const bytes = u8.subarray(Number(data), Number(data) + Number(count));
+    return bytes;
+}
+jai_imports.js_send_web_message = (data, length) => {
+    if (websocket.readyState != WebSocket.OPEN)
+        return;
+    const x = copy_array_to_js(length, data);
+    websocket.send(x);
+};
+
+jai_imports.js_get_web_message_received = (data, count, recv_ptr) => {
+    const dest = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(count));
+
+    dest.set(web_buffer);
+
+    // Interpret recv_ptr as a s64 pointer to jai_exports.memory
+    const view = new DataView(jai_exports.memory.buffer);
+    const recv_address = Number(recv_ptr);
+
+    view.setBigInt64(recv_address, BigInt(web_buffer_cursor), true);
+
+    web_buffer_cursor = 0;
+};
+
+jai_imports.js_get_token = () => {
+    if (sessionStorage.getItem("token")) {
+        return parseInt(sessionStorage.getItem("token"), 10);
+    }
+    return Math.random() * 1024 * 1024;
+}
+
+jai_imports.js_set_token = (token) => {
+    sessionStorage.setItem("token", token);
+};

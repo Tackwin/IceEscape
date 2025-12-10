@@ -31,6 +31,49 @@ V2d :: V2(float64);
 V2f :: V2(float32);
 V2i :: V2(int);
 
+AABB :: struct(T: Type) {
+	min: V2(T);
+	max: V2(T);
+}
+AABBf :: AABB(float32);
+AABBd :: AABB(float64);
+
+size :: (aabb: AABB($T)) -> V2(T) {
+	return aabb.max - aabb.min;
+}
+width :: (aabb: AABB($T)) -> T {
+	s := size(aabb);
+	return s.x;
+}
+height :: (aabb: AABB($T)) -> T {
+	s := size(aabb);
+	return s.y;
+}
+area :: (aabb: AABB($T)) -> T {
+	s := size(aabb);
+	return s.x * s.y;
+}
+shrink :: (_aabb: AABB($T), amount: T) -> AABB(T) {
+	aabb := _aabb;
+	aabb.min.x += amount;
+	aabb.min.y += amount;
+	aabb.max.x -= amount;
+	aabb.max.y -= amount;
+	return aabb;
+}
+shrink :: (_aabb: AABB($T), amount: V2(T)) -> AABB(T) {
+	aabb := _aabb;
+	aabb.min.x += amount.x;
+	aabb.min.y += amount.y;
+	aabb.max.x -= amount.x;
+	aabb.max.y -= amount.y;
+	return aabb;
+}
+in :: (aabb: AABB($T), point: V2(T)) -> bool {
+	return point.x >= aabb.min.x && point.x <= aabb.max.x &&
+		   point.y >= aabb.min.y && point.y <= aabb.max.y;
+}
+
 // Column major
 M4 :: struct(T: Type) {
 	data: [16] T;
@@ -365,6 +408,15 @@ operator * :: (M: M4($T), v4: V4(T)) -> V4(T) {
 	return v;
 }
 
+v2 :: (v: float32) -> V2(float32) {
+	return .{ v, v };
+}
+v2 :: (v: float64) -> V2(float64) {
+	return .{ v, v };
+}
+v2 :: (a: $T, b: T) -> V2(T) {
+	return .{ a, b };
+}
 v2 :: (v3: V3($T)) -> V2(T) {
 	return .{ v3.x, v3.y };
 }
@@ -375,6 +427,9 @@ v3 :: (v4: V4($T)) -> V3(T) {
 	return .{ v4.x, v4.y, v4.z };
 }
 
+v4 :: (a: $T, b: T, c: T, w := 1.0) -> V4(T) {
+	return .{ a, b, c, w };
+}
 v4 :: (v3: V3($T), w := 1.0) -> V4(T) {
 	return .{ v3.x, v3.y, v3.z, w };
 }

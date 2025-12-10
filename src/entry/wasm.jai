@@ -2,9 +2,12 @@
 // #import "Window_Creation";
 #import "WAllocator";
 // #import "Input";
+#import "Platform";
 #import "Basic";
 #import "String";
+#import "Algebra";
 #import "Hash_Table";
+STB :: #import "stb_image";
 // Sound :: #import "Sound_Player";
 // WebGL :: #import "Toolchains/Web/WebGL";
 
@@ -14,59 +17,16 @@ pressed: [Key_COUNT] bool;
 web_buffer: [] u8;
 last_frame: Apollo_Time;
 last_frame_init := false;
-map_key_to_key :: (key: int) -> int {
-	if key == {
-		case #char "A"; return xx Key.A;
-		case #char "Z"; return xx Key.Z;
-		case #char "E"; return xx Key.E;
-		case #char "R"; return xx Key.R;
-		case #char "T"; return xx Key.T;
-		case #char "Y"; return xx Key.Y;
-		case #char "U"; return xx Key.U;
-		case #char "I"; return xx Key.I;
-		case #char "O"; return xx Key.O;
-		case #char "P"; return xx Key.P;
-		case #char "Q"; return xx Key.Q;
-		case #char "S"; return xx Key.S;
-		case #char "D"; return xx Key.D;
-		case #char "F"; return xx Key.F;
-		case #char "G"; return xx Key.G;
-		case #char "H"; return xx Key.H;
-		case #char "J"; return xx Key.J;
-		case #char "K"; return xx Key.K;
-		case #char "L"; return xx Key.L;
-		case #char "M"; return xx Key.M;
-		case #char "W"; return xx Key.W;
-		case #char "X"; return xx Key.X;
-		case #char "C"; return xx Key.C;
-		case #char "V"; return xx Key.V;
-		case #char "B"; return xx Key.B;
-		case #char "N"; return xx Key.N;
-		case xx Key_Code.MOUSE_BUTTON_LEFT; return xx Key.MouseLeft;
-		case xx Key_Code.MOUSE_BUTTON_RIGHT; return xx Key.MouseRight;
-		case xx Key_Code.MOUSE_BUTTON_MIDDLE; return xx Key.MouseMiddle;
-		case xx Key_Code.SPACEBAR; return xx Key.Space;
-		case xx Key_Code.F1; return xx Key.F1;
-		case xx Key_Code.F2; return xx Key.F2;
-		case xx Key_Code.F3; return xx Key.F3;
-		case xx Key_Code.F4; return xx Key.F4;
-		case xx Key_Code.F5; return xx Key.F5;
-		case xx Key_Code.F6; return xx Key.F6;
-		case xx Key_Code.F7; return xx Key.F7;
-		case xx Key_Code.F8; return xx Key.F8;
-		case xx Key_Code.F9; return xx Key.F9;
-		case xx Key_Code.F10; return xx Key.F10;
-		case xx Key_Code.F11; return xx Key.F11;
-		case xx Key_Code.F12; return xx Key.F12;
-		case xx Key_Code.TAB; return xx Key.Tab;
-	}
-	return -1;
-}
 #scope_export
 
-send_web_message :: (msg: [] u8) {
+send_web_message :: (msg: [] u8, target: Connection) {
 	js_send_web_message :: (data: *void, count: int) #foreign;
 	js_send_web_message(msg.data, msg.count);
+}
+
+wasm_read_entire_file :: (path: string, data: [] u8) -> int {
+	print("Don't read files in wasm you fool!\n");
+	return 0;
 }
 
 wasm_get_frame_info :: (info: *Frame_Info) {
@@ -87,21 +47,6 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 
 	jsGetKeyState :: (key_map_ptr: *bool, key_map_count: s64) #foreign;
 	jsGetKeyState(pressed.data, pressed.count);
-	// update_window_events();
-// 
-	// for events_this_frame {
-	// 	if it.type == {
-	// 		case .KEYBOARD;
-	// 			mapped := map_key_to_key(xx it.key_code);
-	// 			if mapped >= 0 {
-	// 				pressed[mapped] = it.key_pressed > 0;
-	// 			}
-	// 		case .QUIT;
-	// 			info.quit = true;
-	// 		case .MOUSE_WHEEL;
-	// 			info.mouse_wheel = it.wheel_delta;
-	// 	}
-	// }
 
 	x: u32;
 	y: u32;
@@ -141,8 +86,8 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 			next_message_length := (cast(*u64)(web_buffer.data + cursor)).*;
 
 			msg: Web_Message;
-			msg.data = web_buffer.data + cursor;
-			msg.count = xx next_message_length;
+			msg.data.data = web_buffer.data + cursor;
+			msg.data.count = xx next_message_length;
 			info.message_received[info.message_received_count] = msg;
 			info.message_received_count += 1;
 
@@ -156,6 +101,7 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 // audio_counter := 0;
 
 load_audio :: (data: string, compressed: bool) -> Audio {
+	print("Loading audio in wasm is not supported yet!\n");
 	Params :: struct {
 		data: *u8;
 		count: s64;
@@ -295,6 +241,56 @@ wasm_end_frame ::  () {
 	// Sound.update();
 }
 
+wasm_load_image :: (data: [] u8) -> Image {
+	image: Image;
+	x: s32;
+	y: s32;
+	c: s32;
+	STB.stbi_set_flip_vertically_on_load(1);
+	image.data.data = STB.stbi_load_from_memory(
+		xx data.data, xx data.count, *x, *y, *c, 4
+	);
+	image.data.count = x * y * 4;
+	image.width = xx x;
+	image.height = xx y;
+	image.channels = 4;
+
+	if !image.data.data {
+		print("Failed to load image in wasm!\n");
+		cstr := STB.stbi_failure_reason();
+		str: string;
+		str.data = cstr;
+		str.count = c_style_strlen(cstr);
+		print("STB Failure reason: %\n", str);
+	}
+
+	return image;
+}
+
+wasm_free_image :: (image: *Image) {
+	STB.stbi_image_free(image.data.data);
+	image.data.data = null;
+	image.data.count = 0;
+}
+
+wasm_connect_server :: (address: string, port: int, protocol: string) -> Connection, bool {
+	jsConnectServer :: (
+		protocol: *void, protocol_count: int, addr: *void, addr_count: int, port: s32, success: *s32
+	) #foreign;
+	success: s32;
+	jsConnectServer(
+		protocol.data, xx protocol.count, address.data, xx address.count, xx port, *success
+	);
+	return 0, true;
+}
+
+wasm_is_server_connected :: () -> bool {
+	jsIsServerConnected :: (success: *s32) #foreign;
+	connected: s32;
+	jsIsServerConnected(*connected);
+	return connected != 0;
+}
+
 init_platform :: () -> Platform {
 
 	// window := create_window(1366, 768, "Ice Escape");
@@ -308,6 +304,11 @@ init_platform :: () -> Platform {
 
 	platform: Platform;
 
+	platform.connect_server = wasm_connect_server;
+	platform.is_server_connected = wasm_is_server_connected;
+	platform.read_entire_file = wasm_read_entire_file;
+	platform.load_image = wasm_load_image;
+	platform.free_image = wasm_free_image;
 	platform.get_frame_info = wasm_get_frame_info;
 	platform.end_frame = wasm_end_frame;
 	platform.send_web_message = send_web_message;
@@ -328,65 +329,6 @@ init_platform :: () -> Platform {
 		return x;
 	};
 
-	meta_run :: () -> string {
-		sb: String_Builder;
-
-		blacklist : [] string = .[
-			"glColorMaski",
-			"glClearDepth",
-			"glPolygonMode",
-			"glVertexAttrib1d",
-			"glVertexAttrib1dv",
-			"glVertexAttrib1s",
-			"glVertexAttrib1sv",
-			"glVertexAttrib2d",
-			"glVertexAttrib2dv",
-			"glVertexAttrib2s",
-			"glVertexAttrib2sv",
-			"glVertexAttrib3d",
-			"glVertexAttrib3dv",
-			"glVertexAttrib3s",
-			"glVertexAttrib3sv",
-			"glVertexAttrib4Nbv",
-			"glVertexAttrib4Niv",
-			"glVertexAttrib4Nsv",
-			"glVertexAttrib4Nuv",
-			"glVertexAttrib4Nub",
-			"glVertexAttrib4Nubv",
-			"glVertexAttrib4Nuiv",
-			"glVertexAttrib4Nusv",
-			"glVertexAttrib4bv",
-			"glVertexAttrib4d",
-			"glVertexAttrib4dv",
-			"glVertexAttrib4iv",
-			"glVertexAttrib4s",
-			"glVertexAttrib4sv",
-			"glVertexAttrib4ubv",
-			"glVertexAttrib4uiv",
-			"glVertexAttrib4usv",
-			"glGetAttribLocation",
-			"glIsEnabled",
-		];
-
-		info : *Type_Info_Struct = cast(*Type_Info_Struct) type_info(RHI_proc);
-		for info.members {
-			found := false;
-
-			for b: blacklist {
-				if compare(b, it.name) == 0 {
-					found = true;
-					break;
-				}
-			}
-
-			if !found
-				print(*sb, "platform.rhi.% = WebGL.%;\n", it.name, it.name);
-		}
-
-		return builder_to_string(*sb);
-	}
-	// #insert #run meta_run();
-	context.rhi = platform.rhi;
 
 	#insert #run -> string {
 		sb: String_Builder;
@@ -1247,3 +1189,107 @@ entries :: Entry.[
 ];
 
 
+// Main
+
+#import "main_game";
+
+main :: () {
+	context.allocator.proc(.STARTUP, 0, 0, null, null);
+
+	app: App;
+	app.allocator = context.allocator;
+	app.user_data = null;
+
+	platform := init_platform();
+	app.platform = *platform;
+
+	app_init(*app);
+
+	while (app_loop(*app)) {
+		// Main loop
+	}
+
+	app_quit(*app);
+	exit_platform(platform);
+}
+// We expose malloc to just use the default allocator with a fresh context so that our c code 
+// has a usable malloc/realloc/free it can use whenever it wants and you can't accidentaly
+// malloc something with temporary storage as that's not something you can do on other platforms (yet?)
+ptr_to_size: Table(*void, s64);
+
+#program_export "malloc"
+jai_default_alloc :: (size: s64) -> *void #c_call {
+
+    push_context,defer_pop;
+    Basic :: #import "Basic";
+    ret := Basic.alloc(size,, context.default_allocator);;
+	table_set(*ptr_to_size, ret, size);
+	return ret;
+}
+
+#program_export "realloc"
+jai_default_realloc :: (old_memory: *void, new_size: s64) -> *void #c_call {
+    push_context,defer_pop;
+    Basic :: #import "Basic";
+
+	ok, old_size := table_find_new(*ptr_to_size, old_memory);
+	if !ok
+		old_size = 0;
+
+	ret := Basic.realloc(old_memory, new_size, old_size,, context.default_allocator);
+
+	memcpy(ret, old_memory, min(old_size, new_size));
+	table_set(*ptr_to_size, ret, new_size);
+	return ret;
+}
+
+#program_export "free"
+jai_default_free :: (memory: *void) #c_call {
+    push_context,defer_pop;
+    Basic :: #import "Basic";
+    Basic.free(memory,, context.default_allocator);
+	table_remove(*ptr_to_size, memory);
+}
+
+
+// we expose these so that you can allocate memory from js if you need to
+#program_export context_alloc :: (ctx: *#Context, size: s64) -> *void #c_call {
+    push_context,defer_pop ctx;
+    Basic :: #import "Basic";
+    return Basic.alloc(size);
+}
+
+#program_export allocator_alloc :: (ctx: *#Context, allocator: *Allocator, size: s64) -> *void #c_call {
+    push_context,defer_pop ctx;
+    Basic :: #import "Basic";
+    return Basic.alloc(size,, allocator.*);
+}
+
+#program_export context_free :: (ctx: *#Context, memory: *void) #c_call {
+    push_context,defer_pop ctx;
+    Basic :: #import "Basic";
+    Basic.free(memory);
+}
+
+#program_export allocator_free :: (ctx: *#Context, allocator: *Allocator, memory: *void) #c_call {
+    push_context,defer_pop ctx;
+    Basic :: #import "Basic";
+    Basic.free(memory,, allocator.*);
+}
+
+#program_export temporary_alloc :: (ctx: *#Context, size: s64) -> *void #c_call {
+    push_context,defer_pop ctx;
+    Basic :: #import "Basic";
+    return Basic.temporary_alloc(size);
+}
+
+
+// TODO: pass everything in and have it be just jai_log and have jai_log_error be a wrapper
+#program_export context_log :: (ctx: *#Context, message_data: *u8, message_count: s64) #c_call {
+    push_context,defer_pop ctx;
+    context.logger(string.{message_count, message_data}, context.logger_data, .{
+        source_identifier = context.log_source_identifier,
+        location          = #location(), // TODO: pass in location
+        common_flags      = .ERROR,
+    });
+}

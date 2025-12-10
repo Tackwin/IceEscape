@@ -9,6 +9,8 @@
 //                                                                              //
 //////////////////////////////////////////////////////////////////////////////////
 
+#import "Platform";
+
 ATLAS_ATLAS_IMAGE_PATH   :: "ZTOtez-Regular.png";
 ATLAS_ATLAS_SPRITE_COUNT :: 95;
 ATLAS_ATLAS_FONT_SIZE    :: 55;

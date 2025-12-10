@@ -1,32 +1,17 @@
 Platform ::  #import "Platform";
+#import "Algebra";
 
-Maskoff :: struct {
-	mouse: bool = false;
-}
 State :: struct {
 	just_pressed:  [Platform.Key_COUNT] bool;
 	just_released: [Platform.Key_COUNT] bool;
 	pressed:       [Platform.Key_COUNT] bool;
-	frame_info: *Platform.Frame_Info;
-	maskoff: Maskoff;
-}
 
-update :: (state: *State, frame_info: *Platform.Frame_Info) {
-	state.frame_info = frame_info;
-	for * state.just_pressed {
-		if frame_info.key_pressed[it_index] && !state.pressed[it_index]
-			it.* = true;
-		else
-			it.* = false;
-	}
-	for * state.just_released {
-		if !frame_info.key_pressed[it_index] && state.pressed[it_index]
-			it.* = true;
-		else
-			it.* = false;
-	}
-	for * state.pressed {
-		it.* = frame_info.key_pressed[it_index];
-	}
-}
+	mouse_pos: V2f;
+	mouse_wheel: s64;
+	window_size:   V2f;
 
+	captured_keyboard := false;
+	captured_mouse := false;
+
+	delta_time := 0.0;
+}

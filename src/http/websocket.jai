@@ -87,6 +87,8 @@ Websocket_Server :: struct {
   websockets    : [..] *Websocket;
 
   delete_semaphore: Semaphore;
+
+  user_data: *void;
 }
 
 
