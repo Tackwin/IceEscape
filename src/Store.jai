@@ -491,30 +491,25 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.rock_large = WRender.Model.make_from_obj(Assets.ROCK_LARGE, "rock_large.obj");
 	store.tile_model = WRender.Model.make_from_obj(Assets.TILE_OBJ, "tile.obj");
 
-	prop_colormap_png := platform.load_image(Assets.COLORMAPS_PNG);
-	defer platform.free_image(*prop_colormap_png);
+	prop_colormap_png := Assets.load_qoi(Assets.COLORMAPS_PNG,, temp);
 	store.colormaps = WRender.WTexture.make_from_image(prop_colormap_png, "colormaps");
 
-	terrain_tile_albedo_png := platform.load_image(Assets.TERRAIN_TILE_ALBEDO_PNG);
-	defer platform.free_image(*terrain_tile_albedo_png);
+	terrain_tile_albedo_png := Assets.load_qoi(Assets.TERRAIN_TILE_ALBEDO_PNG,, temp);
 	store.terrain_tile_albedo =
 		WRender.WTexture.make_from_image(terrain_tile_albedo_png, "terrain_tile_albedo");
-	terrain_tile_normal_png := platform.load_image(Assets.TERRAIN_TILE_NORMAL_PNG);
-	defer platform.free_image(*terrain_tile_normal_png);
+
+	terrain_tile_normal_png := Assets.load_qoi(Assets.TERRAIN_TILE_NORMAL_PNG,, temp);
 	store.terrain_tile_normal =
 		WRender.WTexture.make_from_image(terrain_tile_normal_png, "terrain_tile_normal");
 		
-	particle_texture_png := platform.load_image(Assets.PARTICLE_TEXTURE_PNG);
+	particle_texture_png := Assets.load_qoi(Assets.PARTICLE_TEXTURE_PNG,, temp);
 	store.particle_texture =
 		WRender.WTexture.make_from_image(particle_texture_png, "particle_texture");
-	defer platform.free_image(*particle_texture_png);
 
-	ui_atlas_png := platform.load_image(Assets.ui_atlas_png);
-	defer platform.free_image(*ui_atlas_png);
+	ui_atlas_png := Assets.load_qoi(Assets.ui_atlas_png,, temp);
 	store.ui_atlas = WRender.WTexture.make_from_image(ui_atlas_png, "ui_atlas");
 
-	verdana_atlas_png := platform.load_image(Assets.verdana_png);
-	defer platform.free_image(*verdana_atlas_png);
+	verdana_atlas_png := Assets.load_qoi(Assets.verdana_png,, temp);
 	store.verdana_atlas = WRender.WTexture.make_from_image(verdana_atlas_png, "verdana_atlas");
 	store.verdana = Assets.load_font(xx Assets.verdana_csv);
 

@@ -156,6 +156,34 @@ Scene :: struct {
 
 	news: [..] string; // Gives over ownership to whatever collects it.
 }
+
+free :: (scene: *Scene) {
+	array_free(scene.players);
+	array_free(scene.tombstones);
+	array_free(scene.skulls);
+	array_free(scene.coins);
+	array_free(scene.keys);
+	array_free(scene.gates);
+	array_free(scene.moving_frames);
+	array_free(scene.shurikens);
+	array_free(scene.stand_in);
+	array_free(scene.trigger_zones);
+	array_free(scene.within_zones);
+	array_free(scene.flags);
+	array_free(scene.props);
+	array_free(scene.particles);
+	array_free(scene.trophies);
+	array_free(scene.robots);
+	array_free(scene.explosions);
+	array_free(scene.antiairs);
+	array_free(scene.traps);
+	array_free(scene.presents);
+	array_free(scene.safe_zones);
+	array_free(scene.hooks);
+	array_free(scene.sound_triggers);
+	array_free(scene.news);
+}
+
 clear :: (scene: *Scene) {
 	memset(scene.name.data, 0, scene.name.count);
 	scene.tombstones.count = 0;
@@ -1219,9 +1247,7 @@ add_snow :: (scene: *Scene, dt: float32) {
 	}
 }
 
-input :: (
-	scene: *Scene, controls: *Controls.State, dt: float32, result: *Process_Response
-) {
+input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 	any_camera_move := false;
 	dt := V3f.{ 0, 0, 0 };
 	if controls.mouse_wheel > 0 {
@@ -1256,15 +1282,15 @@ input :: (
 		buy_ask(scene, scene.controlled_player_id, result);
 	}
 	if controls.just_pressed[Platform.Key.V] {
-		player := find_by_player_id(scene, scene.controlled_player_id);
-		if player && player.server.dead {
-			dt := to_float64_seconds(current_time_monotonic() - player.server.dead_time).(float32);
-			if dt >= player.server.dead_cooldown.(float32) {
-				command: Command.Ask_Respawn;
-				command.player_id = player.id;
-				add(result, scene.id, command);
-			}
-		}
+		// player := find_by_player_id(scene, scene.controlled_player_id);
+		// if player && player.server.dead {
+		// 	dt := to_float64_seconds(current_time_monotonic() - player.server.dead_time).(float32);
+		// 	if dt >= player.server.dead_cooldown.(float32) {
+		// 		command: Command.Ask_Respawn;
+		// 		command.player_id = player.id;
+		// 		add(result, scene.id, command);
+		// 	}
+		// }
 	}
 
 	if controls.just_pressed[Platform.Key.W] {
@@ -1305,7 +1331,7 @@ input :: (
 				command.ground_target = v2(target);
 				command.player_id = scene.controlled_player_id;
 				add(result, scene.id, command);
-				scene.mark_clicked_time = current_time_monotonic();
+				scene.mark_clicked_time = controls.time;
 				scene.mark_clicked_pos = target;
 
 				sound: Sound_Trigger;
@@ -1366,12 +1392,12 @@ input :: (
 	}
 }
 
-update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
+update :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result) {
 	if #complete scene.state == {
 		case .Normal;
-			update_normal(scene, dt, result);
+			update_normal(scene, time, dt, result);
 		case .Wipe_Fade_In;
-			t := to_float64_seconds(current_time_monotonic() - scene.fade_screen.start).(float32);
+			t := to_float64_seconds(time - scene.fade_screen.start).(float32);
 			if t < scene.fade_screen.period {
 				alpha := ease_quad(t / scene.fade_screen.period);
 				color := V4f.{
@@ -1395,7 +1421,7 @@ update :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 				}
 			}
 		case .Wipe_Fade_Out;
-			t := to_float64_seconds(current_time_monotonic() - scene.fade_screen.start).(float32);
+			t := to_float64_seconds(time - scene.fade_screen.start).(float32);
 			if t >= 2 * scene.fade_screen.period {
 				scene.state = .Normal;
 				return;
@@ -1482,7 +1508,7 @@ update :: (scene: *Scene, hook: *Hook, dt: float32, result: *Frame_Result) {
 	}
 }
 
-update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
+update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result) {
 	if !scene.is_server
 		update_client(scene, dt, result);
 
@@ -1535,7 +1561,7 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	}
 
 	for * scene.robots {
-		update(scene, it, dt);
+		update(scene, it, time, dt);
 	}
 
 	for * scene.antiairs {
@@ -1600,10 +1626,10 @@ update_normal :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	update_particles(scene, dt);
 
 	if scene.is_server
-		update_server(scene, dt, result);
+		update_server(scene, time, dt, result);
 }
 
-update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
+update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result) {
 
 	Should_Die :: struct {
 		hard_die: bool = false;
@@ -1910,7 +1936,7 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	// >RULE Gate open on trigger
 	for *gate: scene.gates {
 		if gate.is_closed && gate.wait_for_trigger_id != -1 {
-			ok, triggered := table_find_new(*scene.trigger_activated, gate.wait_for_trigger_id);
+			ok, triggered := table_find(*scene.trigger_activated, gate.wait_for_trigger_id);
 			if triggered {
 				gate.is_closed = false;
 				gate.wait_for_trigger_id = -1;
@@ -2019,7 +2045,7 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 
 				array_add(*result.end_level, winner);
 
-				win_level(scene, player.id, result);
+				win_level(scene, player.id, time, result);
 				break it;
 			}
 		}
@@ -2097,7 +2123,7 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 		}
 
 		if it.hard_die {
-			server_die(scene, *scene.players[it_index], result);
+			server_die(scene, *scene.players[it_index], time, result);
 		} else if it.soft_die {
 			player := *scene.players[it_index];
 			in_safe_zone := false;
@@ -2110,7 +2136,7 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 				}
 			}
 			if !in_safe_zone {
-				server_die(scene, player, result);
+				server_die(scene, player, time, result);
 			}
 		}
 	}
@@ -2119,7 +2145,7 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	for * scene.safe_zones {
 		if !it.server.expire_started && it.expire <= 0 {
 			it.server.expire_started = true;
-			it.server.expire_start = current_time_monotonic();
+			it.server.expire_start = time;
 			it.server.expire_duration = 1.0;
 		}
 	}
@@ -2127,9 +2153,7 @@ update_server :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	// >RULE remove expired safe zone
 	for * scene.safe_zones {
 		if it.server.expire_started {
-			dt := to_float64_seconds(
-				current_time_monotonic() - it.server.expire_start
-			);
+			dt := to_float64_seconds(time - it.server.expire_start);
 			if dt < it.server.expire_duration
 				continue;
 
@@ -2176,9 +2200,9 @@ activate_trigger :: (scene: *Scene, trigger_id: int) {
 	table_set(*scene.trigger_activated, trigger_id, true);
 }
 
-win_level :: (scene: *Scene, player_id: int, result: *Frame_Result) {
+win_level :: (scene: *Scene, player_id: int, time: Apollo_Time, result: *Frame_Result) {
 	scene.end_scene_countdown_started = true;
-	scene.end_scene_countdown_time = current_time_monotonic();
+	scene.end_scene_countdown_time = time;
 	scene.end_scene_countdown = 6;
 
 	for * scene.players {
@@ -2202,7 +2226,8 @@ win_level :: (scene: *Scene, player_id: int, result: *Frame_Result) {
 		array_add(*result.add_scores, add_score);
 	}
 }
-server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
+
+server_die :: (scene: *Scene, player: *Player, time: Apollo_Time, result: *Frame_Result) {
 	player.server.has_safe_present = false;
 	player.server.has_hook_present = 0;
 
@@ -2223,7 +2248,7 @@ server_die :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 		died.position = player.server.position;
 		array_add(*result.died, died);
 		player.server.dead = true;
-		player.server.dead_time = current_time_monotonic();
+		player.server.dead_time = time;
 		player.server.score.points = 0;
 		tombstone: Tombstone;
 		tombstone.player_id = died.player_id;
@@ -2285,7 +2310,7 @@ update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
 }
 
 // https://rodolphe-vaillant.fr/entry/114/cyclic-coordonate-descent-inverse-kynematic-ccd-ik
-update :: (scene: Scene, robot: *Robot, dt: float32) {
+update :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
 
 	player := find_by_player_id(scene, robot.player_targeted_id);
 	if !player {
@@ -2325,7 +2350,7 @@ update :: (scene: Scene, robot: *Robot, dt: float32) {
 
 	player = find_by_player_id(scene, robot.player_targeted_id);
 	if !player {
-		t := to_float64_seconds(current_time_monotonic()).(float32);
+		t := to_float64_seconds(time).(float32);
 		robot.axes[0] += sin(t * 0.5) * 0.2 * dt;
 		robot.axes[1] += sin(t * 0.7) * 0.3 * dt;
 		robot.axes[2] += sin(t * 0.9) * 0.4 * dt;
@@ -2368,7 +2393,7 @@ update :: (scene: Scene, robot: *Robot, dt: float32) {
 
 	N :: 10;
 	for 1..1 {
-		for #v2 < 1..5 {
+		for < 1..5 {
 			E := robot_pivot(robot, 6);
 			Oi := robot_pivot(robot, it);
 			ti := normalize(T - Oi);
@@ -2737,7 +2762,9 @@ can_execute_player_motion :: (scene: Scene, a: V3f, b: V3f, player: *Player) -> 
 	return true;
 }
 
-process_server_only :: (scene: *Scene, command: Command, response: *Process_Response) -> bool {
+process_server_only :: (
+	scene: *Scene, command: Command, time: Apollo_Time, response: *Process_Response
+) -> bool {
 	if !scene.is_server
 		return false;
 
@@ -2808,7 +2835,7 @@ process_server_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		player := find_by_player_id(scene, ask_respawn.player_id);
 		if player {
 			if player.server.dead {
-				dt := to_float64_seconds(current_time_monotonic() - player.server.dead_time);
+				dt := to_float64_seconds(time - player.server.dead_time);
 				if dt.(float32) >= player.server.dead_cooldown.(float32) {
 					player.server.need_respawn = true;
 				}
@@ -2895,7 +2922,9 @@ process_server_only :: (scene: *Scene, command: Command, response: *Process_Resp
 	return false;
 }
 
-process_client_only :: (scene: *Scene, command: Command, response: *Process_Response) -> bool {
+process_client_only :: (
+	scene: *Scene, command: Command, time: Apollo_Time, response: *Process_Response
+) -> bool {
 	sync_score: *Command.Sync_Score = isa(command.payload, Command.Sync_Score);
 	if sync_score {
 		for * scene.players {
@@ -2939,7 +2968,7 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 	
 	wipe_scene: *Command.Wipe_Scene = isa(command.payload, Command.Wipe_Scene);
 	if wipe_scene {
-		scene.fade_screen.start = current_time_monotonic();
+		scene.fade_screen.start = time;
 		scene.state = .Wipe_Fade_In;
 		return true;
 	}
@@ -2965,7 +2994,7 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 		if player
 		{
 			player.server.dead = true;
-			player.server.dead_time = current_time_monotonic();
+			player.server.dead_time = time;
 			player.server.has_safe_present = false;
 			player.server.has_hook_present = 0;
 			tombstone: Tombstone;
@@ -3138,7 +3167,7 @@ process_client_only :: (scene: *Scene, command: Command, response: *Process_Resp
 
 	end_level: *Command.End_Level = isa(command.payload, Command.End_Level);
 	if end_level {
-		scene.end_scene_countdown_time = current_time_monotonic();
+		scene.end_scene_countdown_time = time;
 		scene.end_scene_countdown = end_level.next_level_scheduled_in_seconds;
 		scene.end_scene_countdown_started = true;
 		scene.next_id = end_level.next_scene_id;
@@ -3188,11 +3217,12 @@ spawn_player :: (scene: *Scene, player_id: int, model_id: int) {
 	spawn_into(player, scene);
 }
 
-process :: (scene: *Scene, command: Command, response: *Process_Response) -> bool {
-	if scene.is_server && process_server_only(scene, command, response)
+process :: (scene: *Scene, command: Command, time: Apollo_Time, response: *Process_Response) -> bool
+{
+	if scene.is_server && process_server_only(scene, command, time, response)
 		return true;
 
-	if !scene.is_server && process_client_only(scene, command, response)
+	if !scene.is_server && process_client_only(scene, command, time, response)
 		return true;
 
 	spawn: *Command.Spawn = isa(command.payload, Command.Spawn);

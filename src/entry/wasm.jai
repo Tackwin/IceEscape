@@ -7,7 +7,6 @@
 #import "String";
 #import "Algebra";
 #import "Hash_Table";
-STB :: #import "stb_image";
 // Sound :: #import "Sound_Player";
 // WebGL :: #import "Toolchains/Web/WebGL";
 
@@ -32,14 +31,19 @@ wasm_read_entire_file :: (path: string, data: [] u8) -> int {
 wasm_get_frame_info :: (info: *Frame_Info) {
 	info.* = .{};
 
+	jsGetCurrentTimeMonotonic :: (low_ptr: *u64, high_ptr: *u64) #foreign;
+	now: Apollo_Time;
+	jsGetCurrentTimeMonotonic((*now).(*u64), (*now).(*u64) + 1);
+
 	info.delta_time = 1.0 / 60.0;
 	if last_frame_init {
 		info.delta_time = xx to_float64_seconds(
-			current_time_monotonic() - last_frame
+			now - last_frame
 		);
 	}
-	last_frame = current_time_monotonic();
+	last_frame = now;
 	last_frame_init = true;
+	info.time = now;
 	info.framebuffer_size = .{ xx 1366, xx 768 };
 	info.quit = false;
 	info.window_focused = true;
@@ -75,10 +79,16 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 		it.* = pressed[it_index];
 	}
 
+	frame_buffer_count: u64 = 0;
+	js_get_web_message_received_buffer_count :: (count_ptr: *u64) #foreign;
+	js_get_web_message_received_buffer_count(*frame_buffer_count);
+
 	js_get_web_message_received :: (data: *void, count: int, recv: *void) #foreign;
 	{
+		web_buffer_count := min(web_buffer.count.(u64), frame_buffer_count);
 		recv := 0;
-		js_get_web_message_received(web_buffer.data, web_buffer.count, *recv);
+		if web_buffer_count > 0
+			js_get_web_message_received(web_buffer.data, web_buffer_count.(int), *recv);
 
 		n := 0;
 		cursor := 0;
@@ -243,34 +253,11 @@ wasm_end_frame ::  () {
 
 wasm_load_image :: (data: [] u8) -> Image {
 	image: Image;
-	x: s32;
-	y: s32;
-	c: s32;
-	STB.stbi_set_flip_vertically_on_load(1);
-	image.data.data = STB.stbi_load_from_memory(
-		xx data.data, xx data.count, *x, *y, *c, 4
-	);
-	image.data.count = x * y * 4;
-	image.width = xx x;
-	image.height = xx y;
-	image.channels = 4;
-
-	if !image.data.data {
-		print("Failed to load image in wasm!\n");
-		cstr := STB.stbi_failure_reason();
-		str: string;
-		str.data = cstr;
-		str.count = c_style_strlen(cstr);
-		print("STB Failure reason: %\n", str);
-	}
 
 	return image;
 }
 
 wasm_free_image :: (image: *Image) {
-	STB.stbi_image_free(image.data.data);
-	image.data.data = null;
-	image.data.count = 0;
 }
 
 wasm_connect_server :: (address: string, port: int, protocol: string) -> Connection, bool {
@@ -1232,7 +1219,7 @@ jai_default_realloc :: (old_memory: *void, new_size: s64) -> *void #c_call {
     push_context,defer_pop;
     Basic :: #import "Basic";
 
-	ok, old_size := table_find_new(*ptr_to_size, old_memory);
+	ok, old_size := table_find(*ptr_to_size, old_memory);
 	if !ok
 		old_size = 0;
 

@@ -7,6 +7,20 @@
 Rand :: #import "Rand";
 
 #scope_export
+string_to_array :: (in: string, out: [] u8) {
+	for 0..min(in.count, out.count)-1
+		out[it] = in[it];
+}
+array_to_string :: (in: [] u8, out: string) {
+	out.count = in.count;
+	for in if it == 0 {
+		out.count = it_index;
+		break;
+	}
+	for 0..out.count
+		out[it] = in[it];
+}
+
 Sum_Type :: struct(types: ..Type) {
 	#insert #run -> string {
 		sb: String_Builder;
@@ -272,6 +286,7 @@ Command :: struct {
 			current_players: int;
 
 			auto_revive: bool;
+			private: bool;
 		}
 		
 		instances: [] Instance_Info;
@@ -279,17 +294,34 @@ Command :: struct {
 
 	Ask_Enter_Instance :: struct {
 		instance_id: int;
+		password: [64] u8;
 	}
 
 	Ans_Enter_Instance :: struct {
 		reason: enum {
 			Accepted;
 			Return;
+			Wrong_Password;
 			Instance_Not_Found;
 			Instance_Full;
 			Rejected;
 			Kicked;
 		}
+	}
+
+	Create_Instance :: struct {
+		name: [64] u8;
+		password: [64] u8;
+		auto_revive: bool;
+		private: bool;
+	}
+	Ans_Create_Instance :: struct {
+		reason: enum {
+			Created;
+			Server_Full;
+			Rejected;
+		}
+		created_id: int;
 	}
 
 	Leave_Instance :: struct {
@@ -302,7 +334,7 @@ Command :: struct {
 		Give_Control, Sync_Score, Request_Score, Sync_Tombstone, Retire, Sync_Present,
 		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook, Cheat_Action, Buy_Ask, Buy_Response,
 		Sync_Stand_In, Ask_Respawn, Ask_Instance_List, Ans_Instance_List, Ask_Enter_Instance,
-		Ans_Enter_Instance, Leave_Instance
+		Ans_Enter_Instance, Leave_Instance, Create_Instance, Ans_Create_Instance
 	);
 	sent_timestamp: float64;
 }
@@ -310,6 +342,11 @@ Command :: struct {
 isa :: (s: Sum_Type, $T: Type) -> *T {
 	if s.All_Types[s.kind] == T
 		return cast(*T) *s.bytes;
+
+	other: Command;
+	set(*other.payload, T.{});
+	if (other.payload.kind == s.kind)
+		return (*s.bytes).(*T);
 	return null;
 }
 
@@ -372,6 +409,8 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
 		case .Leave_Instance; #through;
+		case .Create_Instance; #through;
+		case .Ans_Create_Instance; #through;
 		case .AntiAir_Shoot; #through;
 		case .Sync_Robot; #through;
 		case .Sync_Present; #through;
@@ -530,6 +569,8 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Cheat_Action; #through;
 		case .Respawn; #through;
 		case .Leave_Instance; #through;
+		case .Create_Instance; #through;
+		case .Ans_Create_Instance; #through;
 		case .Request_Score; #through;
 		case .Die; #through;
 		case .Give_Control; #through;

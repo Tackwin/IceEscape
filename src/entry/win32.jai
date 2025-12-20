@@ -9,9 +9,8 @@
 #import "String";
 #import "File";
 #import "Random";
+#import "tracy";
 STB :: #import "stb_image";
-WAllocator :: #import "WAllocator";
-GL :: #import "GL";
 #import "SDL";
 #import "Reflection";
 #import "Curl";
@@ -32,57 +31,58 @@ fake_one_way_ping := 0.0;
 
 launcher_context: #Context;
 
-map_sdl_to_key :: (key: int) -> int {
+map_sdl_to_key :: (key: SDL_Keycode) -> Key {
 	if key == {
-		case xx SDLK_a; return xx Key.A;
-		case xx SDLK_z; return xx Key.Z;
-		case xx SDLK_e; return xx Key.E;
-		case xx SDLK_r; return xx Key.R;
-		case xx SDLK_t; return xx Key.T;
-		case xx SDLK_y; return xx Key.Y;
-		case xx SDLK_u; return xx Key.U;
-		case xx SDLK_i; return xx Key.I;
-		case xx SDLK_o; return xx Key.O;
-		case xx SDLK_p; return xx Key.P;
-		case xx SDLK_q; return xx Key.Q;
-		case xx SDLK_s; return xx Key.S;
-		case xx SDLK_d; return xx Key.D;
-		case xx SDLK_f; return xx Key.F;
-		case xx SDLK_g; return xx Key.G;
-		case xx SDLK_h; return xx Key.H;
-		case xx SDLK_j; return xx Key.J;
-		case xx SDLK_k; return xx Key.K;
-		case xx SDLK_l; return xx Key.L;
-		case xx SDLK_m; return xx Key.M;
-		case xx SDLK_w; return xx Key.W;
-		case xx SDLK_x; return xx Key.X;
-		case xx SDLK_c; return xx Key.C;
-		case xx SDLK_v; return xx Key.V;
-		case xx SDLK_b; return xx Key.B;
-		case xx SDLK_n; return xx Key.N;
-		case xx SDLK_SPACE; return xx Key.Space;
-		case xx SDLK_ESCAPE; return xx Key.Escape;
-		case xx SDLK_F1; return xx Key.F1;
-		case xx SDLK_F2; return xx Key.F2;
-		case xx SDLK_F3; return xx Key.F3;
-		case xx SDLK_F4; return xx Key.F4;
-		case xx SDLK_F5; return xx Key.F5;
-		case xx SDLK_F6; return xx Key.F6;
-		case xx SDLK_F7; return xx Key.F7;
-		case xx SDLK_F8; return xx Key.F8;
-		case xx SDLK_F9; return xx Key.F9;
-		case xx SDLK_F10; return xx Key.F10;
-		case xx SDLK_F11; return xx Key.F11;
-		case xx SDLK_F12; return xx Key.F12;
-		case xx SDLK_TAB; return xx Key.Tab;
-		case xx SDLK_LSHIFT; return xx Key.Shift;
-		case xx SDLK_RSHIFT; return xx Key.Shift;
-		case xx SDLK_PERIOD; return xx Key.Period;
-		case xx SDLK_BACKSPACE; return xx Key.Backspace;
-		case xx SDLK_LEFT; return xx Key.Left;
-		case xx SDLK_RIGHT; return xx Key.Right;
+		case SDLK_a; return Key.A;
+		case SDLK_z; return Key.Z;
+		case SDLK_e; return Key.E;
+		case SDLK_r; return Key.R;
+		case SDLK_t; return Key.T;
+		case SDLK_y; return Key.Y;
+		case SDLK_u; return Key.U;
+		case SDLK_i; return Key.I;
+		case SDLK_o; return Key.O;
+		case SDLK_p; return Key.P;
+		case SDLK_q; return Key.Q;
+		case SDLK_s; return Key.S;
+		case SDLK_d; return Key.D;
+		case SDLK_f; return Key.F;
+		case SDLK_g; return Key.G;
+		case SDLK_h; return Key.H;
+		case SDLK_j; return Key.J;
+		case SDLK_k; return Key.K;
+		case SDLK_l; return Key.L;
+		case SDLK_m; return Key.M;
+		case SDLK_w; return Key.W;
+		case SDLK_x; return Key.X;
+		case SDLK_c; return Key.C;
+		case SDLK_v; return Key.V;
+		case SDLK_b; return Key.B;
+		case SDLK_n; return Key.N;
+		case SDLK_SPACE; return Key.Space;
+		case SDLK_ESCAPE; return Key.Escape;
+		case SDLK_F1; return Key.F1;
+		case SDLK_F2; return Key.F2;
+		case SDLK_F3; return Key.F3;
+		case SDLK_F4; return Key.F4;
+		case SDLK_F5; return Key.F5;
+		case SDLK_F6; return Key.F6;
+		case SDLK_F7; return Key.F7;
+		case SDLK_F8; return Key.F8;
+		case SDLK_F9; return Key.F9;
+		case SDLK_F10; return Key.F10;
+		case SDLK_F11; return Key.F11;
+		case SDLK_F12; return Key.F12;
+		case SDLK_TAB; return Key.Tab;
+		case SDLK_LSHIFT; return Key.Shift;
+		case SDLK_RSHIFT; return Key.Shift;
+		case SDLK_PERIOD; return Key.Period;
+		case SDLK_KP_PERIOD; return Key.Period;
+		case SDLK_BACKSPACE; return Key.Backspace;
+		case SDLK_LEFT; return Key.Left;
+		case SDLK_RIGHT; return Key.Right;
 	}
-	return key;
+	return xx key;
 }
 
 Message :: struct {
@@ -243,6 +243,7 @@ win32_get_frame_info :: (info: *Frame_Info) {
 	// (we already got mouse wheel, keyboard keys & characters from SDL_PollEvent())
 	mx, my: s32;
 	mouseMask := SDL_GetMouseState(*mx, *my);
+	info.time = current_time_monotonic();
 	info.mouse_position.x = xx mx;
 	info.mouse_position.y = xx (info.window_size.y - my);
 	info.window_focused =  (SDL_GetWindowFlags(sdl_window) & SDL_WINDOW_MOUSE_FOCUS) > 0;
@@ -269,13 +270,13 @@ win32_get_frame_info :: (info: *Frame_Info) {
 		//     io.AddInputCharactersUTF8(io, xx event.text.text.data);
 		// }
 		if event.type == SDL_KEYUP {
-			key := event.key.keysym.sym & (xx ~(1<<30));
+			key := event.key.keysym.sym;
 			map := map_sdl_to_key(xx key);
 			if map < pressed.count
 				pressed[map] = false;
 		}
 		if event.type == SDL_KEYDOWN {
-			key := event.key.keysym.sym & (xx ~(1<<30));
+			key := event.key.keysym.sym;
 			map := map_sdl_to_key(xx key);
 			if map < pressed.count
 				pressed[map] = true;
@@ -417,7 +418,7 @@ load_audio :: (data: string, compressed: bool) -> Audio {
 }
 play_audio :: (audio: Audio, position: V3f) -> Sound {
 	push_context,defer_pop launcher_context;
-	ok, data := table_find_new(*audio_id_to_data, audio.id);
+	ok, data := table_find(*audio_id_to_data, audio.id);
 	
 	config := ma_decoder_config_init(.unknown, 0, 0);
 	sound_counter += 1;
@@ -485,7 +486,7 @@ query_sound :: (sound_id: int) -> Sound {
 	push_context,defer_pop launcher_context;
 	sound: Sound;
 	sound.id = -1;
-	ok, win32_sound := table_find_new(*sound_id_to_sound, sound_id);
+	ok, win32_sound := table_find(*sound_id_to_sound, sound_id);
 	if ok {
 		sound.audio_id = win32_sound.audio_id;
 		sound.position = .{0,0,0};
@@ -507,7 +508,7 @@ query_sound :: (sound_id: int) -> Sound {
 }
 set_sound :: (sound: Sound) {
 	push_context,defer_pop launcher_context;
-	ok, win32_sound := table_find_new(*sound_id_to_sound, sound.id);
+	ok, win32_sound := table_find(*sound_id_to_sound, sound.id);
 	if ok && win32_sound.sound {
 		ma_sound_set_position(
 			win32_sound.sound, sound.position.x, sound.position.y, sound.position.z
@@ -914,6 +915,7 @@ main :: () {
 
 	loop := true;
 	while (loop) {
+		FrameMarkStart();
 		if dll {
 			file := Win32.CreateFileA("IceEscape.dll", Win32.FILE_GENERIC_READ);
 			defer Win32.CloseHandle(file);
@@ -935,6 +937,7 @@ main :: () {
 				loop = app_loop(*app);
 			}
 		}
+		FrameMarkEnd();
 	}
 
 	app_quit := Win32.GetProcAddress(dll, "app_quit").(#type (app: *App) -> ());

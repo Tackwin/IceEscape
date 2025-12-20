@@ -23,7 +23,11 @@ Instance :: struct {
 	id: int;
 	id_generation := 0;
 
+	private := false;
+	user_created := false;
+
 	name: [64] u8;
+	password: [64] u8;
 
 	pick_scene_id: int;
 	playing_scene_id: int;
@@ -53,10 +57,16 @@ Instance :: struct {
 
 	received: [1024] Received;
 	received_count := 0;
+
+	last_activity_time: Apollo_Time;
+	max_inactive_duration := 60.0 * 60.0; // seconds
 }
 
-free :: (instance: Instance) {
-	array_free(*instance.persons);
+free :: (instance: *Instance) {
+	array_free(instance.persons);
+	for *instance.scenes
+		Scene.free(it);
+	array_free(instance.scenes);
 }
 
 find_scene_of_player_id :: (instance: Instance, player_id: int) -> *Scene.Scene {
@@ -198,12 +208,7 @@ add_scene :: (instance: *Instance, text: string) -> int {
 	return scene.id;
 }
 
-create_instance :: (name: string, scene_params: Scene.Scene_Parameters) -> *Instance {
-	instance := New(Instance);
-	memcpy(instance.name.data, name.data.(*u8), name.count);
-	instance.name[name.count] = 0;
-	instance.scene_parameters = scene_params;
-
+init_instance :: (instance: *Instance) {
 	terrains :: string.[
 		"pick",
 		"intro", // OK
@@ -234,7 +239,7 @@ create_instance :: (name: string, scene_params: Scene.Scene_Parameters) -> *Inst
 		instance.playing_scene_id = instance.scenes[0].next_id;
 	}
 
-	return instance;
+	instance.last_activity_time = current_time_monotonic();
 }
 
 process :: (
@@ -423,13 +428,14 @@ move_playing_scene :: (instance: *Instance, scene_id: int) {
 		return;
 
 	Scene.restart(scene, scene.params);
+	current_time := current_time_monotonic();
 
 	for old_scene.players {
 		spawn: Command.Spawn;
 		spawn.player_id = it.id;
 		spawn.scene_id = scene_id;
 		spawn.model_id = it.server.model_id;
-		Scene.process(scene, make_command(spawn), null);
+		Scene.process(scene, make_command(spawn), current_time, null);
 
 		sync_score: Command.Sync_Score;
 		sync_score.player_id = it.id;
@@ -470,6 +476,7 @@ move_playing_scene :: (instance: *Instance, scene_id: int) {
 
 update_instance :: (instance: *Instance, dt: float32) {
 	Scene.clear(*instance.process_response);
+	time := current_time_monotonic();
 
 	// Early test
 	if instance.received_count > 0 {
@@ -484,7 +491,7 @@ update_instance :: (instance: *Instance, dt: float32) {
 
 			// Then the scenes get to process the command.
 			for * scene: instance.scenes {
-				if Scene.process(scene, received.command, *instance.process_response)
+				if Scene.process(scene, received.command, time, *instance.process_response)
 					break scene;
 			}
 		}
@@ -518,7 +525,7 @@ update_instance :: (instance: *Instance, dt: float32) {
 	sync(instance);
 	for * scene: instance.scenes {
 		Scene.clear(*instance.frame_result);
-		Scene.update(scene, dt, *instance.frame_result);
+		Scene.update(scene, time, dt, *instance.frame_result);
 
 		for instance.frame_result.end_level {
 			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));
@@ -726,7 +733,7 @@ move_player_to_currently_playing_world :: (
 	spawn.scene_id = to_scene_id;
 	spawn.model_id = with_model_id;
 	// Process it on the server
-	Scene.process(new_scene, make_command(spawn), null);
+	Scene.process(new_scene, make_command(spawn), current_time_monotonic(), null);
 
 	// Send a sync of the new scene to the moved player.
 	sync_scene := Scene.make_sync(new_scene, new_scene.params);

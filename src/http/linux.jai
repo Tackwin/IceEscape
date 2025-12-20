@@ -20,7 +20,7 @@ CORE_COUNT            :: #run -> int {
 // wrk --latency -t6 -c100 -d10 http://localhost
 // THREAD_POOL_COUNT :: #run get_number_of_processors()      # Req/Sec    52.76k
 // THREAD_POOL_COUNT :: #run get_number_of_processors() / 2  # Req/Sec    81.54k
-THREAD_POOL_COUNT     :: CORE_COUNT;
+THREAD_POOL_COUNT     :: 1;
 
 thread_pool           : [THREAD_POOL_COUNT] Thread;
 epoll_fd_pool         : [THREAD_POOL_COUNT] s32;

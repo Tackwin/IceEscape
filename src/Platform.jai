@@ -80,6 +80,8 @@ Web_Message :: struct {
 }
 
 Frame_Info :: struct {
+	time: Apollo_Time;
+
 	key_pressed: [Key_COUNT] bool;
 
 	mouse_position: V2f;

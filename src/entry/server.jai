@@ -40,7 +40,7 @@ win32_open_server :: (port: int) -> bool {
 }
 
 win32_send_web_message :: (msg: [] u8, target: Connection) {
-	found, ws := table_find_new(*connection_to_websocket, target);
+	found, ws := table_find(*connection_to_websocket, target);
 	if found {
 		websocket_send(ws, xx msg, .BINARY);
 	}
@@ -91,7 +91,7 @@ ws_onmsg :: (ws: *Websocket, msg: string) {
 	memcpy(data.data, msg.data, msg.count);
 
 	if message_received_count < message_received.count {
-		found, connection := table_find_new(*websocket_to_connection, ws);
+		found, connection := table_find(*websocket_to_connection, ws);
 		if !found {
 			connection = -1;
 		}

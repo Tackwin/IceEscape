@@ -38,8 +38,20 @@ AABB :: struct(T: Type) {
 AABBf :: AABB(float32);
 AABBd :: AABB(float64);
 
+pos_size :: (pos: V2($T), size: V2(T)) -> AABB(T) {
+	aabb: AABB(T);
+	aabb.min = pos;
+	aabb.max = pos + size;
+	return aabb;
+}
 size :: (aabb: AABB($T)) -> V2(T) {
 	return aabb.max - aabb.min;
+}
+move :: (_aabb: AABB($T), delta: V2(T)) -> AABB(T) {
+	aabb := _aabb;
+	aabb.min += delta;
+	aabb.max += delta;
+	return aabb;
 }
 width :: (aabb: AABB($T)) -> T {
 	s := size(aabb);

@@ -18,8 +18,7 @@ check :: (counter: *Counter) -> bool {
 	return false;
 }
 
-check :: (period: *Period) -> bool, float {
-	t := current_time_monotonic();
+check :: (period: *Period, t: Apollo_Time) -> bool, float {
 	dt := to_float64_seconds(t - period.last);
 	if dt > period.period {
 		period.last = t;

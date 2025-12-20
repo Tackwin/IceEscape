@@ -370,6 +370,7 @@ Model :: struct {
 
 WFramegraph :: struct {
 	rng: XORState;
+	current_time: Apollo_Time;
 
 	quadModule: WGPUShaderModule;
 	quadPipeline: WGPURenderPipeline;
@@ -1271,7 +1272,7 @@ Frame :: struct {
 	encoder: WGPUCommandEncoder;
 }
 
-begin_frame :: (framegraph: *WFramegraph) -> Frame
+begin_frame :: (framegraph: *WFramegraph, current_time: Apollo_Time) -> Frame
 {
 	frame: Frame;
 
@@ -1313,6 +1314,7 @@ begin_frame :: (framegraph: *WFramegraph) -> Frame
 	frame.shadowAttachment.stencilClearValue = 0;
 	array_resize(*framegraph.mainInstances, 64 * 1024, false);
 	framegraph.mainInstances.count = 0;
+	framegraph.current_time = current_time;
 
 	frame.encoder = graphics.gpu.deviceCreateCommandEncoder(graphics.device, null);
 
@@ -1488,7 +1490,7 @@ render_scene :: (
 		presentUniform.gamma = 2.2;
 		writeTo(framegraph.presentUniformBuffer, 0, *presentUniform);
 		bindGroup := present_bind_group(
-			framegraph, "Present", *framegraph.hdrTexture, presentUniform
+			framegraph, "Present", framegraph.hdrTexture, presentUniform
 		);
 		graphics.gpu.renderPassEncoderSetBindGroup(presentPass, 0, bindGroup, 0, null);
 		defer graphics.gpu.bindGroupRelease(bindGroup);
@@ -1634,7 +1636,7 @@ render_mark :: (
 	scene: Scene.Scene,
 	store: Store.Store
 ) {
-	if to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time) < 0.25 {
+	if to_float64_seconds(framegraph.current_time - scene.mark_clicked_time) < 0.25 {
 		instanced := append_instance_buffer(framegraph);
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1642,7 +1644,7 @@ render_mark :: (
 		instance.M = M4f.translate(scene.mark_clicked_pos);
 		M4f.scale(*instance.M, V3f.{ 0.5, 0.5, 0.33 });
 		t := clamp(
-			(to_float64_seconds(current_time_monotonic() - scene.mark_clicked_time) / 0.5),
+			(to_float64_seconds(framegraph.current_time - scene.mark_clicked_time) / 0.5),
 			0.0,
 			1.0
 		);

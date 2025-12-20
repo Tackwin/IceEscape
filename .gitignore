@@ -3,4 +3,10 @@
 *.rdi
 .vs/
 .build/
+.build_game_win32/
+.build_game_dll/
+.build_server_dll/
+.build_server_linux/
+.build_server_win/
 Sound__/
+zig-cache/

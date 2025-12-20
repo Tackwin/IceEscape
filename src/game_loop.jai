@@ -1,3 +1,123 @@
+process_game :: (
+	state: *State, command: Command, controls: Controls.State, response: *Scene.Process_Response
+) ->  bool {
+	ntp: *Command.NTP = isa(command.payload, Command.NTP);
+	if ntp {
+		is_over := false;
+		send_back := false;
+		reply := ntp.*;
+		if reply.t0 == FLOAT64_MAX {
+			reply.t0 = to_float64_seconds(state.current_time);
+			is_over = false;
+			send_back = true;
+		} else if reply.t1 == FLOAT64_MAX {
+			reply.t1 = to_float64_seconds(state.current_time);
+			reply.t2 = to_float64_seconds(state.current_time);
+			is_over = false;
+			send_back = true;
+		} else if reply.t2 == FLOAT64_MAX {
+			reply.t2 = to_float64_seconds(state.current_time);
+			is_over = false;
+			send_back = true;
+		} else if reply.t3 == FLOAT64_MAX {
+			reply.t3 = to_float64_seconds(state.current_time);
+			reply.t4 = to_float64_seconds(state.current_time);
+			is_over = true;
+			send_back = true;
+		} else if reply.t4 == FLOAT64_MAX {
+			reply.t4 = to_float64_seconds(state.current_time);
+			is_over = true;
+			send_back = true; // We still send back one last time to optimize the number of packets.
+		} else {
+			// Should never happen, the server's last send back was when t3 == FLOAT64_MAX
+			is_over = false;
+			send_back = false;
+		}
+
+		if send_back && response {
+			Scene.add(response, state.scene.id, reply);
+		}
+
+		if is_over
+			process_complete_ntp(state, reply);
+
+		return true;
+	}
+
+	give_control: *Command.Give_Control = isa(command.payload, Command.Give_Control);
+	if give_control {
+		state.scene.controlled_player_id = give_control.player_id;
+		return true;
+	}
+
+	sync_scene: *Command.Sync_Scene = isa(command.payload, Command.Sync_Scene);
+	if sync_scene {
+		Terrain.parse_terrain(sync_scene.terrain, *state.scene);
+		state.scene.id = sync_scene.id;
+		state.scene.end_scene_countdown_started = false;
+		state.scene.params = sync_scene.params;
+		state.scene.auto_revive |= sync_scene.params.auto_revive;
+		// Remove all players not present in the sync.
+		for * state.scene.players {
+			found := false;
+			for s: sync_scene.players {
+				if it.id == s.player_id {
+					found = true;
+					break;
+				}
+			}
+
+			if !found
+				remove it;
+		}
+
+		// Remove all presents, they are going to be synced from scratch.
+		state.scene.presents.count = 0;
+
+		// Add all new players.
+		for sync_scene.players {
+			player := Scene.find_by_player_id(state.scene, it.player_id);
+
+			if !player {
+				player: Scene.Player;
+				player.id = it.player_id;
+				array_add(*state.scene.players, player);
+			}
+
+			Scene.process(*state.scene, make_command(it), controls.time, response);
+		}
+
+		for sync_scene.robots {
+			Scene.process(*state.scene, make_command(it), controls.time, response);
+		}
+
+		for sync_scene.antiairs {
+			Scene.process(*state.scene, make_command(it), controls.time, response);
+		}
+
+		for sync_scene.tombstones {
+			Scene.process(*state.scene, make_command(it), controls.time, response);
+		}
+
+		for sync_scene.presents {
+			Scene.process(*state.scene, make_command(it), controls.time, response);
+		}
+
+		for sync_scene.safe_zones {
+			Scene.process(*state.scene, make_command(it), controls.time, response);
+		}
+
+		for sync_scene.standins {
+			Scene.process(*state.scene, make_command(it), controls.time, response);
+		}
+
+		state.scene.server_rng = sync_scene.rng;
+		return true;
+	}
+
+	return Scene.process(*state.scene, command, controls.time, response);
+}
+
 gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 	using app_user;
 
@@ -49,7 +169,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		}
 		if ret.leave_instance_clicked {
 			command: Command.Leave_Instance;
-			send_web_message(app.platform, make_command(command));
+			send_web_message(app.platform, controls.time, make_command(command));
 			state.screen_state = .Menu;
 			state.playing.escape_menu_open = false;
 		}
@@ -145,23 +265,23 @@ input_game_loop :: (app_user: *App_User) {
 				cursor += 1;
 			}
 		}
-		send_web_message(app.platform, make_command(command));
+		send_web_message(app.platform, controls.time, make_command(command));
 	}
 	if controls.pressed[Key.N] && controls.pressed[Key.P] {
 		if controls.just_pressed[Key.K] {
 			command: Command.Cheat_Action;
 			command.kind = .Next_Level;
-			send_web_message(app.platform, make_command(command));
+			send_web_message(app.platform, controls.time, make_command(command));
 		}
 		if controls.just_pressed[Key.L] {
 			command: Command.Cheat_Action;
 			command.kind = .Reset_Level;
-			send_web_message(app.platform, make_command(command));
+			send_web_message(app.platform, controls.time, make_command(command));
 		}
 		if controls.just_pressed[Key.M] {
 			command: Command.Cheat_Action;
 			command.kind = .Reset_Progression;
-			send_web_message(app.platform, make_command(command));
+			send_web_message(app.platform, controls.time, make_command(command));
 		}
 		if controls.just_pressed[Key.U] {
 			command: Command.Cheat_Action;
@@ -192,7 +312,7 @@ input_game_loop :: (app_user: *App_User) {
 					}
 				}
 				command.player_id = closest_player_id;
-				send_web_message(app.platform, make_command(command));
+				send_web_message(app.platform, controls.time, make_command(command));
 			}
 
 		}
@@ -207,25 +327,64 @@ input_game_loop :: (app_user: *App_User) {
 
 	Scene.clear(*process_response);
 	if !app_user.gui_state.handled_mouse {
-		Scene.input(*state.scene, *controls, controls.delta_time, *process_response);
+		Scene.input(*state.scene, *controls, *process_response);
 	}
 }
 
 update_game_loop :: (app_user: *App_User) {
 	using app_user;
 
-	if check(*state.ntp_period) {
+	if check(*state.ntp_period, controls.time) {
 		ntp: Command.NTP;
 		ntp.client_origin = true;
 		ntp.player_id = state.scene.controlled_player_id;
-		ntp.t0 = to_float64_seconds(current_time_monotonic());
+		ntp.t0 = to_float64_seconds(state.current_time);
 		ntp.t1 = FLOAT64_MAX;
 		ntp.t2 = FLOAT64_MAX;
 		ntp.t3 = FLOAT64_MAX;
 		Scene.add(*process_response, state.scene.id, ntp);
 	}
-	Scene.update(*state.scene, controls.delta_time, null);
-	update_news(*state.scene, *state.news);
+	Scene.update(*state.scene, controls.time, controls.delta_time, null);
+	update_news(*state.scene, controls.time, *state.news);
+}
+
+update_news :: (scene: *Scene.Scene, current_time: Apollo_Time, news: *[..] Scene.Breaking_News) {
+	cursor := 0;
+	for * news.* {
+		if to_float64_seconds(current_time - it.time) < 5.0 {
+			news.data[cursor] = it;
+			cursor += 1;
+		} else {
+			// News expired
+			free(it.text);
+		}
+	}
+
+	array_resize(news, cursor + scene.news.count);
+	for 0..scene.news.count-1 {
+		news.data[it + cursor].text = scene.news[it];
+		news.data[it + cursor].time = current_time;
+	}
+	scene.news.count = 0;
+}
+
+respond :: (platform: Platform, time: Apollo_Time, response: Scene.Process_Response) {
+	for * response.entries {
+		if isa(it.command.payload, Command.NTP)
+			send_web_message(platform, time, it.command);
+		if isa(it.command.payload, Command.Move)
+			send_web_message(platform, time, it.command);
+		if isa(it.command.payload, Command.Spawn_Coin)
+			send_web_message(platform, time, it.command);
+		if isa(it.command.payload, Command.Klaxon)
+			send_web_message(platform, time, it.command);
+		if isa(it.command.payload, Command.Active_Item)
+			send_web_message(platform, time, it.command);
+		if isa(it.command.payload, Command.Buy_Ask)
+			send_web_message(platform, time, it.command);
+		if isa(it.command.payload, Command.Ask_Respawn)
+			send_web_message(platform, time, it.command);
+	}
 }
 
 game_loop :: (app_user: *App_User) -> bool {
@@ -240,12 +399,12 @@ game_loop :: (app_user: *App_User) -> bool {
 	sounding(*state, *state.scene, store, app.platform);
 
 	// Rendering
-	frame := WRender.begin_frame(*framegraph);
+	frame := WRender.begin_frame(*framegraph, controls.time);
 	WRender.render_scene(*frame, *framegraph, state.scene, store);
 	WRender.render_gui(*frame, *framegraph, app_user.gui_state, store);
 	WRender.end_frame(*frame);
 
-	respond(app.platform, process_response);
+	respond(app.platform, controls.time, process_response);
 
 	return true;
 }

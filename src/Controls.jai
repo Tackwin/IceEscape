@@ -1,5 +1,6 @@
 Platform ::  #import "Platform";
 #import "Algebra";
+#import "Basic";
 
 State :: struct {
 	just_pressed:  [Platform.Key_COUNT] bool;
@@ -14,4 +15,5 @@ State :: struct {
 	captured_mouse := false;
 
 	delta_time := 0.0;
+	time: Apollo_Time;
 }

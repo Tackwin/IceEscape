@@ -9,6 +9,7 @@
 #import "Hash_Table";
 #import "File_Watcher";
 #import "Communication";
+Scene :: #import "Scene";
 
 #scope_export
 
@@ -24,10 +25,11 @@ User :: struct {
 Server :: struct {
 	rng: Rand.XORState;
 
-	users: [1024] User;
+	instance_generation := 1;
+	users: [512] User;
 	user_count: int;
 
-	instances: [1024] Instance;
+	instances: [512] Instance;
 	instance_count: int;
 
 	user_generation := 0;
@@ -115,6 +117,18 @@ broadcast :: (platform: *Platform, server: *Server, data: $T) {
 		platform.send_web_message(message, it.connection);
 	}
 }
+broadcast_instance :: (platform: *Platform, server: *Server, instance: Instance, data: $T) -> bool {
+	any := false;
+	message := prepare_typed_message(data);
+	for instance.persons {
+		connection := find_connection_by_user_id(server, it.user_id);
+		if connection >= 0 {
+			platform.send_web_message(message, connection);
+			any = true;
+		}
+	}
+	return any;
+}
 
 send :: (platform: *Platform, connection: Connection, data: $T) {
 	message := prepare_typed_message(data);
@@ -158,7 +172,7 @@ process :: (server: *Server, cmd: Command, sender: Connection) -> bool {
 		} else {
 			// new user
 			user := *server.users[server.user_count];
-			user.id = server.user_generation;
+			user.id = sender;
 			user.token = connect.token;
 			user.connection = user.id;
 			user.instance_id = -1;
@@ -189,6 +203,7 @@ process :: (server: *Server, cmd: Command, sender: Connection) -> bool {
 			it.current_players = server.instances[it_index].persons.count;
 			it.max_players = 64; // Hardcoded for now
 			it.auto_revive = server.instances[it_index].scene_parameters.auto_revive;
+			it.private = server.instances[it_index].private;
 			level_name := get_current_level_name(server.instances[it_index]);
 			memcpy(
 				it.level_name.data,
@@ -213,9 +228,33 @@ process :: (server: *Server, cmd: Command, sender: Connection) -> bool {
 			return true;
 		}
 
+		if instance.private {
+			match := true;
+			for instance.password {
+				if it == 0
+					break;
+				
+				if it != ask_enter_instance.password[it_index] {
+					match = false;
+					break;
+				}
+			}
+
+			if !match {
+				ans_enter_instance: Command.Ans_Enter_Instance;
+				ans_enter_instance.reason = .Wrong_Password;
+				append_queue(server, ans_enter_instance, sender);
+				return true;
+			}
+		}
+
 		if user {
 			if add_new_person(instance, user.id) {
 				user.instance_id = instance.id;
+
+				ans_enter_instance: Command.Ans_Enter_Instance;
+				ans_enter_instance.reason = .Accepted;
+				append_queue(server, ans_enter_instance, sender);
 			}
 		}
 
@@ -233,6 +272,49 @@ process :: (server: *Server, cmd: Command, sender: Connection) -> bool {
 			}
 		}
 		return true;
+	}
+
+	create_inst := isa(cmd.payload, Command.Create_Instance);
+	if create_inst {
+		user := find_user_by_connection(server, sender);
+		if user {
+			if server.instance_count >= server.instances.count {
+				ans_create_instance: Command.Ans_Create_Instance;
+				ans_create_instance.reason = .Server_Full;
+				append_queue(server, ans_create_instance, sender);
+				return true;
+			}
+
+			params: Scene.Scene_Parameters;
+			params.auto_revive = create_inst.auto_revive;
+
+			init_instance(*server.instances[server.instance_count]);
+			server.instances[server.instance_count].scene_parameters = params;
+			server.instances[server.instance_count].id = server.instance_generation;
+			memcpy(
+				server.instances[server.instance_count].name.data,
+				create_inst.name.data,
+				min(create_inst.name.count, server.instances[server.instance_count].name.count)
+			);
+			memcpy(
+				server.instances[server.instance_count].password.data,
+				create_inst.password.data,
+				min(
+					create_inst.password.count,
+					server.instances[server.instance_count].password.count
+				)
+			);
+			server.instances[server.instance_count].private = create_inst.private;
+			server.instances[server.instance_count].user_created = true;
+			server.instance_count += 1;
+			server.instance_generation += 1;
+
+			ans_create_instance: Command.Ans_Create_Instance;
+			ans_create_instance.reason = .Created;
+			ans_create_instance.created_id = server.instances[server.instance_count].id;
+			append_queue(server, ans_create_instance, sender);
+			return true;
+		}
 	}
 
 	return false;
@@ -254,7 +336,7 @@ server_receive_tick :: (platform: *Platform, server: *Server) {
 			continue;
 
 		#if print_messages {
-			print("    %\n", cmd.payload.kind);
+			print("    % from %\n", cmd.payload.kind, msg.sender);
 		}
 		// The main thing we need to do here is route the command to the appropriate instance
 		// Or handle it if it's a global command (like login)
@@ -271,6 +353,7 @@ server_receive_tick :: (platform: *Platform, server: *Server) {
 				instance.received[instance.received_count].command = cmd;
 				instance.received[instance.received_count].sender_user_id = user.id;
 				instance.received_count += 1;
+				instance.last_activity_time = current_time_monotonic();
 			}
 		}
 	}
@@ -325,11 +408,16 @@ server_send_tick :: (platform: *Platform, server: *Server) {
 
 			if target_user_id >= 0 {
 				connection := find_connection_by_user_id(server, target_user_id);
-				if connection >= 0
+				if connection >= 0 {
 					send(platform, connection, command);
+					instance.last_activity_time = current_time_monotonic();
+				}
 			}
-			else
-				broadcast(platform, server, command);
+			else {
+				any := broadcast_instance(platform, server, instance, command);
+				if any
+					instance.last_activity_time = current_time_monotonic();
+			}
 		}
 		instance.to_send_count = 0;
 	}
@@ -342,12 +430,43 @@ server_send_tick :: (platform: *Platform, server: *Server) {
 
 prefill_fixed_instances :: (server: *Server) {
 	server.instance_count = 2;
+	print("%\n", server.instance_count);
 
-	server.instances[0] = create_instance("Hades", .{}).*;
-	server.instances[0].id = 1;
+	init_instance(*server.instances[0]);
+	server.instances[0].id = server.instance_generation;
+	string_to_array("Hades", server.instances[0].name);
+	server.instance_generation += 1;
 
-	server.instances[1] = create_instance("Olympus", .{ auto_revive = true }).*;
-	server.instances[1].id = 2;
+	init_instance(*server.instances[1]);
+	server.instances[1].id = server.instance_generation;
+	string_to_array("Olympus", server.instances[1].name);
+	server.instances[1].scene_parameters.auto_revive = true;
+	server.instance_generation += 1;
+}
+
+gc_instances :: (server: *Server) {
+	cursor := 0;
+	for 0..server.instance_count - 1 {
+		instance := *server.instances[it];
+		inactive_duration := to_float64_seconds(
+			current_time_monotonic() - instance.last_activity_time
+		);
+
+		if instance.user_created && inactive_duration > instance.max_inactive_duration {
+			print(
+				"Garbage collecting instance % due to inactivity (seconds: %)\n",
+				instance.id,
+				inactive_duration
+			);
+			free(instance);
+		}
+
+		if cursor != it {
+			server.instances[cursor] = server.instances[it];
+		}
+		cursor += 1;
+	}
+	server.instance_count = cursor;
 }
 
 App_User :: struct {
@@ -385,7 +504,7 @@ server_loop :: (app: *App) {
 	app_user := app.user_data.(*App_User);
 	reset_temporary_storage();
 
-	to_tick, dt := check(*app_user.server.tick_period);
+	to_tick, dt := check(*app_user.server.tick_period, current_time_monotonic());
 	if to_tick {
 		while (dt + app_user.tick_error) > app_user.server.tick_period.period {
 			server_receive_tick(app.platform, *app_user.server);
@@ -395,6 +514,7 @@ server_loop :: (app: *App) {
 
 			server_send_tick(app.platform, *app_user.server);
 
+			gc_instances(*app_user.server);
 			dt -= app_user.server.tick_period.period;
 		}
 
