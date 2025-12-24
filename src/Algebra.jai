@@ -432,6 +432,9 @@ v2 :: (a: $T, b: T) -> V2(T) {
 v2 :: (v3: V3($T)) -> V2(T) {
 	return .{ v3.x, v3.y };
 }
+v3 :: (x: $T, y: T, z: T) -> V3(T) {
+	return .{ x, y, z };
+}
 v3 :: (v2: V2($T), z := 0.0) -> V3(T) {
 	return .{ v2.x, v2.y, z };
 }

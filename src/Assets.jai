@@ -134,6 +134,8 @@ FORMAT;
 #insert #run embed_data("NUMBER_8_OBJ", "number_8.obj", #filepath);
 #insert #run embed_data("NUMBER_9_OBJ", "number_9.obj", #filepath);
 
+#insert #run embed_data("TURN_TABLE_TURN_OBJ", "mesh/turntable_turn.obj", #filepath);
+#insert #run embed_data("TURN_TABLE_BASE_OBJ", "mesh/turntable_base.obj", #filepath);
 
 #insert #run embed_data("FLAG_OBJ", "flag.obj", #filepath);
 #insert #run embed_data("FLAG_DOWN_OBJ", "flag_down.obj", #filepath);
@@ -398,6 +400,8 @@ load_everything :: (platform: Platform) {
 			"NUMBER_7_OBJ",
 			"NUMBER_8_OBJ",
 			"NUMBER_9_OBJ",
+			"TURN_TABLE_TURN_OBJ",
+			"TURN_TABLE_BASE_OBJ",
 			"PARTICLE_TEXTURE_PNG",
 			"PARTICLE_VERTEX",
 			"PARTICLE_FRAGMENT",

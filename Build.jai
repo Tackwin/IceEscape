@@ -668,7 +668,7 @@ build_2 :: () {
 			"put",
 			"-o",
 			"./bin/LinuxServer.exe",
-			"~/bin/LinuxServer.exe"
+			"bin/LinuxServer"
 		);
 		print("Starting service.\n");
 		run_command(

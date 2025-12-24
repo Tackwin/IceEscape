@@ -1399,6 +1399,7 @@ render_scene :: (
 		render_robots(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_antiairs(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_flags(framegraph, frame.encoder, shadowPass, scene, store, *extra);
+		render_turn_tables(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_traps(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_extra(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		//render_mark(framegraph, encoder, shadowPass, scene, store);
@@ -1441,6 +1442,7 @@ render_scene :: (
 		render_hooks(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 		render_flags(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 		render_presents(framegraph, frame.encoder, geometryPass, scene, store);
+		render_turn_tables(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 		render_traps(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 		render_explosions(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 
@@ -1989,6 +1991,37 @@ render_antiairs :: (
 	}
 }
 
+render_turn_tables :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store,
+	extra: *Extra
+) {
+	instanced := append_instance_buffer(framegraph);
+	for scene.turn_tables {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0
+		draw(framegraph, pass, store.turn_table_base_model, instanced.count);
+	
+	instanced = append_instance_buffer(framegraph);
+	for scene.turn_tables {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		angle := Scene.get_pointing_angle(scene, it);
+		instance.M = M4f.translate(it.position) * to_rotation_matrix(axis_angle(v3(0.0, 0, 1), angle));
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0
+		draw(framegraph, pass, store.turn_table_turn_model, instanced.count);
+}
 
 render_traps :: (
 	framegraph: *WFramegraph,

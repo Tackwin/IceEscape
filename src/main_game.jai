@@ -36,8 +36,6 @@ send_web_message :: (platform: Platform, time: Apollo_Time, _command: Command) {
 	platform.send_web_message(buffer, 0);
 }
 
-// 				Scene.process(scene, *scene.player, Scene.make_player_command(command));
-
 parse_web_message :: (state: *State, frame_info: Frame_Info) -> [] Command {
 	commands := NewArray(frame_info.message_received_count, Command, false,, temp);
 
@@ -93,6 +91,9 @@ App_User :: struct {
 
 #program_export "app_reload" app_reload :: (_app: *App) {
 	app_user := _app.user_data.(*App_User);
+
+	scene: Scene.Scene;
+	Scene.make(*scene);
 }
 
 #program_export "app_loop" app_loop :: (_app: *App) -> bool {
@@ -149,6 +150,7 @@ App_User :: struct {
 }
 #load "menu_loop.jai";
 #load "game_loop.jai";
+#load "editor_loop.jai";
 
 #program_export "app_quit" app_quit :: (_app: *App) {
 }
@@ -160,163 +162,13 @@ launch_music :: (app_user: *App_User, platform: *Platform) {
 	platform.play_audio(app_user.store.snowflakes_and_lights_mp3, .{});
 }
 
-sounding :: (
-	state: *State, scene: *Scene.Scene, store: Store, platform: *Platform
-) {
-	return;
-	skull_seen: Table(int, bool);
-	skull_seen.allocator = temp;
-
-	shurikens_seen: Table(int, bool);
-	shurikens_seen.allocator = temp;
-
-	for * scene.skulls {
-		ok, sound := table_find(*state.skull_id_to_sound, it.id);
-		if !ok {
-			audio := get_boat_sailing(store, 0);
-			if !audio
-				continue;
-			audio.kind = .Sound;
-			audio.exponent = 2.5;
-			audio.volume = 0.04;
-			sound = platform.play_audio(audio, .{});
-			sound.volume = audio.volume;
-			sound.loop = true;
-			platform.set_sound(sound);
-			table_set(*state.skull_id_to_sound, it.id, sound);
-		}
-		sound.position = Scene.compute_skull_pos(scene, it.*);
-		platform.set_sound(sound);
-		table_set(*skull_seen, it.id, true);
-	}
-
-	for * scene.shurikens {
-		ok, sound := table_find(*state.shurikens_id_to_sound, it.id);
-		if !ok {
-			audio := get_drone_buzzing(store, 0);
-			if !audio
-				continue;
-			audio.kind = .Sound;
-			audio.exponent = 2.5;
-			audio.volume = 0.010;
-			sound = platform.play_audio(audio, .{});
-			sound.volume = audio.volume;
-			sound.loop = true;
-			platform.set_sound(sound);
-			table_set(*state.shurikens_id_to_sound, it.id, sound);
-		}
-		frame := Scene.find_by_frame_id(scene, it.frame_id);
-		if !frame
-			continue;
-		M := Scene.compute_moving_frame_server_world_matrix(scene, frame);
-		pos := M * v4(it.server.position, 1);
-		sound.position = v3(pos);
-		platform.set_sound(sound);
-		table_set(*shurikens_seen, it.id, true);
-	}
-
-	for value, key: state.skull_id_to_sound {
-		if !table_contains(*skull_seen, key) {
-			value.playing = false;
-			platform.set_sound(value);
-			table_remove(*state.skull_id_to_sound, key);
-		}
-	}
-
-	for value, key: state.shurikens_id_to_sound {
-		if !table_contains(*shurikens_seen, key) {
-			value.playing = false;
-			platform.set_sound(value);
-			table_remove(*state.shurikens_id_to_sound, key);
-		}
-	}
-
-	listener: Listener;
-	listener.position = scene.camera.position;
-	listener.direction = scene.camera.target - scene.camera.position;
-	listener.position += listener.direction * 0.65;
-	listener.direction = normalize(listener.direction);
-	platform.set_listener_info(listener);
-	for scene.sound_triggers {
-		for counter: 1..it.count {
-			audio: Audio;
-			audio.id = -1;
-			if it.kind == {
-				case .Footstep_Snow;
-					idx := RNG.random_uniform(*scene.client_rng, 0, 5);
-					audio_ptr := get_footstep_snow_sound(store, idx);
-					if audio_ptr
-						audio = audio_ptr.*;
-					audio.volume = RNG.random_uniform(*scene.client_rng, 0.2, 0.4);
-					audio.exponent = 1.0;
-				case .Footstep_Ice;
-					idx := RNG.random_uniform(*scene.client_rng, 0, 5);
-					audio_ptr := get_footstep_ice_sound(store, idx);
-					if audio_ptr
-						audio = audio_ptr.*;
-					audio.volume = RNG.random_uniform(*scene.client_rng, 0.75, 1.00);
-					audio.exponent = 1.0;
-				case .Car_Klaxon;
-					idx := RNG.random_uniform(*scene.client_rng, 0, 3);
-					audio_ptr := get_horn_car(store, idx);
-					if audio_ptr
-						audio = audio_ptr.*;
-					audio.volume = RNG.random_uniform(*scene.client_rng, 0.65, 0.75);
-					audio.exponent = 1.0;
-				case .Explosion;
-					idx := RNG.random_uniform(*scene.client_rng, 0, 9);
-					audio_ptr := get_explosion_sound(store, idx);
-					if audio_ptr
-						audio = audio_ptr.*;
-					audio.volume = RNG.random_uniform(*scene.client_rng, 1.0, 1.3);
-					audio.exponent = 2.0;
-				case .Loser;
-					audio = store.loser_mp3;
-					audio.volume = 2.0;
-					audio.exponent = 1.0;
-				case .Checkpoint_Ok;
-					audio = store.checkpoint_ok_mp3;
-					audio.volume = 2.0;
-					audio.exponent = 2.0;
-				case .Res;
-					audio = store.res_mp3;
-					audio.volume = 1.0;
-					audio.exponent = 2.0;
-				case .Coin_Launch;
-					audio = store.coin_launch_mp3;
-					audio.volume = 3.5;
-					audio.exponent = 2.5;
-				case .Point_Up;
-					audio = store.point_up_mp3;
-					audio.volume = 0.5;
-			}
-			if audio.id == -1
-				continue;
-			if it.inhead
-				audio.exponent = 0.0;
-
-			audio.pitch = RNG.random_uniform(*scene.client_rng, 0.8, 1.2);
-			audio.kind = .Sound;
-			audio.repeating = false;
-			audio.delay = counter * 50; // Stagger sounds to avoid audio clutter.
-			platform.play_audio(audio, it.position);
-		}
-	}
-
-	if state.volume_on {
-		platform.volume_audio(1.0);
-	} else {
-		platform.volume_audio(0.0);
-	}
-}
-
-
 State :: struct {
 	current_time: Apollo_Time;
 
 	coommands_received: [..] Command;
 
 	menu: Menu;
+	game: Game_Page;
 
 	Playing :: struct {
 		escape_menu_open: bool = false;
@@ -357,6 +209,7 @@ State :: struct {
 	screen_state: enum {
 		Menu :: 0;
 		Game :: 1;
+		Editor :: 2;
 	} = .Menu;
 
 	to_send: [..] Command;

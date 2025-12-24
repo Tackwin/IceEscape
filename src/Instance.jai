@@ -5,18 +5,26 @@
 
 Scene :: #import "Scene";
 Terrain :: #import "Terrain";
+#import "Xar";
 #import "Math";
 #import "File";
 #import "Basic";
-#import "Hash_Table";
 #import "Utils";
+#import "String";
+#import "Profile";
+#import "Hash_Table";
 #import "Communication";
 
 #scope_export
 Person :: struct {
 	person_id: int;
 	player_id: int;
+	profile_id: int;
 	user_id: int;
+
+	last_seen_time: Apollo_Time;
+
+	run_stats: Statistics;
 }
 
 Instance :: struct {
@@ -32,7 +40,7 @@ Instance :: struct {
 	pick_scene_id: int;
 	playing_scene_id: int;
 	persons: [..] Person;
-	scenes: [..] Scene.Scene;
+	scenes: Xar(Scene.Scene, 2, 20);
 	scene_parameters: Scene.Scene_Parameters;
 
 	sync_count_player: Counter(1);
@@ -60,13 +68,16 @@ Instance :: struct {
 
 	last_activity_time: Apollo_Time;
 	max_inactive_duration := 60.0 * 60.0; // seconds
+
+	names_to_scene_id: Table(string, int);
 }
 
 free :: (instance: *Instance) {
 	array_free(instance.persons);
 	for *instance.scenes
 		Scene.free(it);
-	array_free(instance.scenes);
+	xar_reset(*instance.scenes);
+	deinit(*instance.names_to_scene_id);
 }
 
 find_scene_of_player_id :: (instance: Instance, player_id: int) -> *Scene.Scene {
@@ -196,7 +207,8 @@ sync :: (instance: *Instance) {
 	}
 }
 add_scene :: (instance: *Instance, text: string) -> int {
-	scene: Scene.Scene;
+	scene := xar_add(*instance.scenes, .{});
+	make(scene);
 	scene.id = instance.scenes.count + 1;
 	scene.is_server = true;
 	scene.server_rng.s[0] = 123456789;
@@ -204,8 +216,23 @@ add_scene :: (instance: *Instance, text: string) -> int {
 	Terrain.parse_terrain(text, *scene);
 	scene.params = instance.scene_parameters;
 	scene.auto_revive |= scene.params.auto_revive;
-	array_add(*instance.scenes, scene);
 	return scene.id;
+}
+
+handle_file_change :: (instance: *Instance, path: string) {
+	for scene_id, name: instance.names_to_scene_id {
+		if contains(path, name) {
+			data, ok := read_entire_file(path,, temp);
+			if ok {
+				scene := find_by_scene_id(instance, scene_id);
+				if scene {
+					Terrain.parse_terrain(data, scene);
+					sync_scene := Scene.make_sync(scene, scene.params);
+					queue_scene_scoped_broadcast(instance, scene_id, make_command(sync_scene));
+				}
+			}
+		}
+	}
 }
 
 init_instance :: (instance: *Instance) {
@@ -229,7 +256,7 @@ init_instance :: (instance: *Instance) {
 		data, ok := read_entire_file(txt);
 		id := add_scene(instance, data);
 
-		// table_add(*name_to_scene_id, it, id);
+		table_add(*instance.names_to_scene_id, it, id);
 	}
 	if instance.scenes.count > 0 {
 		instance.pick_scene_id = instance.scenes[0].id;
@@ -271,6 +298,20 @@ process :: (
 		return true;
 	}
 
+	request_stats: *Command.Request_Stats = isa(command.payload, Command.Request_Stats);
+	if request_stats {
+		for request_stats.player_ids {
+			person := find_person_by_player_id(instance, it);
+			if person {
+				sync_stats: Command.Sync_Stats;
+				sync_stats.player_id = it;
+				sync_stats.death = person.run_stats.death_count;
+				sync_stats.revive = person.run_stats.revive_count;
+				sync_stats.wins = person.run_stats.win_count;
+				queue_send(instance, make_command(sync_stats), sender_user_id);
+			}
+		}
+	}
 	// request_score: *Command.Request_Score = isa(command.payload, Command.Request_Score);
 	// if request_score {
 	// 	sender := find_person_by_user_id(instance, sender_user_id);
@@ -436,22 +477,6 @@ move_playing_scene :: (instance: *Instance, scene_id: int) {
 		spawn.scene_id = scene_id;
 		spawn.model_id = it.server.model_id;
 		Scene.process(scene, make_command(spawn), current_time, null);
-
-		sync_score: Command.Sync_Score;
-		sync_score.player_id = it.id;
-		sync_score.score = it.server.score;
-		sync_score.score.points = 0;
-		sync_score.is_start = true;
-
-		user_id := player_id_to_user_id(instance, it.id);
-		if user_id >= 0
-			queue_send(instance, make_command(sync_score), user_id);
-
-		player := Scene.find_by_player_id(scene, it.id);
-		if player {
-			player.server.score = it.server.score;
-			player.server.start_score = it.server.score;
-		}
 	}
 
 	sync_scene := Scene.make_sync(scene, scene.params);
@@ -468,9 +493,15 @@ move_playing_scene :: (instance: *Instance, scene_id: int) {
 	instance.playing_scene_id = scene_id;
 
 	old_scene.players.count = 0;
+}
+gc_persons :: (instance: *Instance) {
+	now := current_time_monotonic();
+	for instance.persons {
+		dt := to_float64_seconds(now - it.last_seen_time);
 
-	for * scene.players {
-		it.server.start_score = it.server.score;
+		if dt > 60 {
+			remove_person(instance, it.user_id);
+		}
 	}
 }
 
@@ -478,25 +509,27 @@ update_instance :: (instance: *Instance, dt: float32) {
 	Scene.clear(*instance.process_response);
 	time := current_time_monotonic();
 
-	// Early test
-	if instance.received_count > 0 {
+	for 0..instance.received_count-1 {
+		received := instance.received[it];
+		sender_id := received.sender_user_id;
 
-		for 0..instance.received_count-1 {
-			received := instance.received[it];
-			sender_id := received.sender_user_id;
-
-			// We give priority to the instance to respond to any command as it sees fit.
-			if process(instance, received.command, sender_id, *instance.process_response)
-				continue;
-
-			// Then the scenes get to process the command.
-			for * scene: instance.scenes {
-				if Scene.process(scene, received.command, time, *instance.process_response)
-					break scene;
-			}
+		person : *Person;
+		person = find_person_by_user_id(instance, sender_id);
+		if person {
+			person.last_seen_time = current_time_monotonic();
 		}
-		instance.received_count = 0; // Clear the queue after processing.
+
+		// We give priority to the instance to respond to any command as it sees fit.
+		if process(instance, received.command, sender_id, *instance.process_response)
+			continue;
+
+		// Then the scenes get to process the command.
+		for * scene: instance.scenes {
+			if Scene.process(scene, received.command, time, *instance.process_response)
+				break scene;
+		}
 	}
+	instance.received_count = 0; // Clear the queue after processing.
 
 	for instance.process_response.entries {
 		ntp: *Command.NTP = isa(it.command.payload, Command.NTP);
@@ -564,6 +597,26 @@ update_instance :: (instance: *Instance, dt: float32) {
 		for instance.frame_result.sync_safe_zone {
 			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));
 		}
+		for instance.frame_result.died_player_id {
+			person := find_person_by_player_id(instance, it);
+			if person
+				person.run_stats.death_count += 1;
+		}
+		for instance.frame_result.revived_someone_player_id {
+			person := find_person_by_player_id(instance, it);
+			if person
+				person.run_stats.revive_count += 1;
+		}
+
+		should_end_level := false;
+		for instance.frame_result.win_player_id {
+			person := find_person_by_player_id(instance, it);
+			if person {
+				should_end_level = true;
+
+				person.run_stats.win_count += 1;
+			}
+		}
 
 		if scene.end_scene_countdown_started {
 			t := current_time_monotonic();
@@ -574,18 +627,9 @@ update_instance :: (instance: *Instance, dt: float32) {
 			}
 		}
 
-		for instance.frame_result.add_scores {
-			player := Scene.find_by_player_id(scene, it.player_id);
-			if player {
-				Scene.apply_add_score(*player.server.score, it);
-
-				sync_score: Command.Sync_Score;
-				sync_score.player_id = it.player_id;
-				sync_score.score = player.server.score;
-				queue_scene_scoped_broadcast(instance, scene.id, make_command(sync_score));
-			}
-		}
 	}
+
+	gc_persons(instance);
 
 	// for * state.users {
 	// 	if to_float64_seconds(current_time_monotonic() - it.last_ping) > TIMEOUT_DURATION {
@@ -634,6 +678,7 @@ add_new_person :: (
 	new_person.person_id = instance.id_generation;
 	new_person.player_id = instance.id_generation;
 	new_person.user_id = user_id;
+	new_person.last_seen_time = current_time_monotonic();
 	array_add(*instance.persons, new_person);
 
 	instance.id_generation += 1;
@@ -677,6 +722,7 @@ remove_person :: (instance: *Instance, user_id: int) {
 	if scene {
 		quit: Command.Quit;
 		quit.player_id = person.player_id;
+		Scene.process(scene, make_command(quit), current_time_monotonic(), null);
 		queue_scene_scoped_broadcast(instance, scene.id, make_command(quit));
 
 		for * scene.players {

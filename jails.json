@@ -3,7 +3,13 @@
         "src"
     ],
     "roots": [
+        "src/entry/win32.jai",
+        "src/entry/mg_server.jai",
+        "src/entry/wasm.jai",
+        "src/main_game.jai",
+        "src/main_server.jai",
         "build.jai"
     ],
-    "build_root": "build.jai"
+    "build_root": "build.jai",
+    "intermediate_path": ".build_ls"
 }

@@ -132,6 +132,9 @@ Store :: struct {
 	indicator_outline_model: WRender.Model;
 	indicator_stroke_model: WRender.Model;
 
+	turn_table_turn_model: WRender.Model;
+	turn_table_base_model: WRender.Model;
+
 	colormaps: WRender.WTexture;
 	terrain_tile_albedo: WRender.WTexture;
 	terrain_tile_normal: WRender.WTexture;
@@ -577,6 +580,13 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.indicator_stroke_model = WRender.Model.make_from_obj(Assets.INDICATOR_STROKE_OBJ, "indicator_stroke");
 	store.snowflakes_and_lights_mp3 = platform.load_audio(
 		xx Assets.SNOWFLAKES_AND_LIGHTS_MP3, true
+	);
+
+	store.turn_table_turn_model = WRender.Model.make_from_obj(
+		Assets.TURN_TABLE_TURN_OBJ, "turn_table_turn"
+	);
+	store.turn_table_base_model = WRender.Model.make_from_obj(
+		Assets.TURN_TABLE_BASE_OBJ, "turn_table_base"
 	);
 
 	store.footstep_snow_0_mp3 = platform.load_audio(xx Assets.FOOTSTEP_SNOW_0_MP3, true);

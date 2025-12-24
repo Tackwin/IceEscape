@@ -16,7 +16,6 @@ Config :: struct {
 	antiair_offset_std := 0.0;
 }
 
-
 parse_terrain :: (text: string, scene: *Scene) {
 	clear(scene);
 	rng := Rand.seed(123456789);
@@ -206,6 +205,41 @@ parse_terrain :: (text: string, scene: *Scene) {
 			antiair.server.t += Rand.random_uniform(*rng, 0.0, current_config().antiair_offset_std);
 			antiair.client.t = antiair.server.t;
 
+			cursor -= 1;
+		}
+
+		if scan2(line, "turn_table") {
+			turn_table: Turn_Table;
+			turn_table.id = scene.turn_tables.count + 1;
+			defer array_add(*scene.turn_tables, turn_table);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *turn_table.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+
+				if scan2(line, "- turning_speed: %", *turn_table.turning_speed)
+					continue;
+
+				if scan2(line, "- turning_offset: %", *turn_table.turning_offset)
+					continue;
+				
+				print("Error reading turning table, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
 			cursor -= 1;
 		}
 

@@ -166,6 +166,8 @@ GUI_State :: struct {
 		just_pressed := false;
 
 		keyboard_focused := false;
+
+		age: int = 0;
 	}
 	widgets: Table(u64, Widget);
 
@@ -303,6 +305,7 @@ gc_user_state :: (state: *GUI_State) {
 			continue;
 		}
 		value.touched = false;
+		value.age += 1;
 	}
 }
 
@@ -622,7 +625,7 @@ push_buy_prompt :: (state: *GUI_State, scene: *Scene.Scene) {
 				if d < player.server.radius_hitbox_key {
 					
 					prompt := tprint("Not enough points (%) ! Revive your friends !", needed);
-					if player.server.score.points >= needed {
+					if player.server.gold >= needed {
 						prompt = tprint("R to buy. % points.", needed);
 					}
 
@@ -831,33 +834,20 @@ push_ping_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32
 }
 
 push_point_ui :: (state: *GUI_State, player: Scene.Player) {
-	cursor := V2f.{ 12, state.controls.window_size.y - 80 };
+	cursor := V2f.{ 4, state.controls.window_size.y - 32 - 8 };
 
-	push_quad_texture(
+	score_label := atom_label(
 		state,
-		pos = .{ cursor.x, cursor.y },
-		size = .{ 24, 24 },
-		color = .{ 1.0, 1.0, 1.0 },
-		tex_slot = STAR_SLOT,
-		z = 2
-	);
-	size := push_text(
-		state,
-		tprint("%", player.server.score.points),
-		cursor + V2f.{ 32, 12 },
+		tprint("Score: %", player.server.gold),
+		cursor,
 		24,
 		1,
-		align = .Center
+		align = .Center_Left,
+		outline = true
 	);
-	cursor.y -= 1;
-	cursor.x -= 1;
 
 	push_quad_screen(
-		state,
-		cursor,
-		V2f.{ 32 + size.x + 2, 26 },
-		COLOR_BRIGHT_A,
-		0,
+		state, .{ score_label.aabb_min, score_label.aabb_max }, COLOR_SOMBER_A, 0, a = 0.45
 	);
 }
 
@@ -919,7 +909,9 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 	);
 }
 
-push_score_tab :: (state: *GUI_State, scene: Scene.Scene) {
+push_score_tab :: (
+	state: *GUI_State, scene: Scene.Scene, stats: *Table(int, $T)
+) {
 	scoreboard_center := state.controls.window_size / 2;
 	scoreboard_center.y += state.controls.window_size.y / 12;
 	scoreboard_size := V2f.{ 600, 400 };
@@ -968,6 +960,10 @@ push_score_tab :: (state: *GUI_State, scene: Scene.Scene) {
 	scoreline_size := V2f.{ scoreboard_size.x / 2, 48 };
 
 	push_scoreline :: (x: float, y: float, player: Scene.Player) #expand {
+		stat := table_find_pointer(stats, player.id);
+		if !stat
+			return;
+		
 		cursor := scoreboard_center;
 		cursor.x -= scoreboard_size.x / 2;
 		cursor.y += scoreboard_size.y / 2;
@@ -1015,13 +1011,15 @@ push_score_tab :: (state: *GUI_State, scene: Scene.Scene) {
 			tex_slot = AWARD_SLOT,
 			z = 12
 		);
-		push_text(
+		atom_label(
 			state,
-			tprint("%", player.server.score.trophy),
+			tprint("%", stat.win_count),
 			.{ cursor.x + 4 + model_size.x + 32, cursor.y + scoreline_size.y / 2 },
-			height = 18,
+			scale = 18,
 			z = 12,
-			align = Align.Center_Left
+			align = Align.Center_Left,
+			outline = true,
+			id = 0
 		);
 
 		push_quad_texture(
@@ -1035,16 +1033,18 @@ push_score_tab :: (state: *GUI_State, scene: Scene.Scene) {
 			tex_slot = REVIVE_SLOT,
 			z = 12
 		);
-		push_text(
+		atom_label(
 			state,
-			tprint("%", player.server.score.revive),
+			tprint("%", stat.revive_count),
 			.{
 				cursor.x + 4 + model_size.x + 32 + icon_size.x + 32,
 				cursor.y + scoreline_size.y / 2
 			},
-			height = 18,
+			scale = 18,
 			z = 12,
-			align = Align.Center_Left
+			align = Align.Center_Left,
+			outline = true,
+			id = 1
 		);
 
 		push_quad_texture(
@@ -1058,39 +1058,18 @@ push_score_tab :: (state: *GUI_State, scene: Scene.Scene) {
 			tex_slot = DEATH_SLOT,
 			z = 12
 		);
-		push_text(
+		atom_label(
 			state,
-			tprint("%", player.server.score.dead),
+			tprint("%", stat.death_count),
 			.{
 				cursor.x + 4 + model_size.x + 32 + icon_size.x + 32 + icon_size.x + 32,
 				cursor.y + scoreline_size.y / 2
 			},
-			height = 18,
+			scale = 18,
 			z = 12,
-			align = Align.Center_Left
-		);
-
-		push_quad_texture(
-			state,
-			pos = .{
-				cursor.x + model_size.x + 4 + 32 + icon_size.x + 4 + 32 + icon_size.x + 32 + icon_size.x + 4,
-				cursor.y + (scoreline_size.y - icon_size.y) / 2
-			},
-			size = icon_size,
-			color = .{ 1.0, 1.0, 1.0 },
-			tex_slot = SCORE_SLOT,
-			z = 12
-		);
-		push_text(
-			state,
-			tprint("%", player.server.score.score),
-			.{
-				cursor.x + 4 + model_size.x + 32 + icon_size.x + 32 + icon_size.x + 32 + icon_size.x + 32,
-				cursor.y + scoreline_size.y / 2
-			},
-			height = 18,
-			z = 12,
-			align = Align.Center_Left
+			align = Align.Center_Left,
+			outline = true,
+			id = 2
 		);
 	}
 
@@ -1318,33 +1297,15 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 	render_hint_at(3, 2, R_OUTLINE_SLOT);
 }
 
-push_settings :: (state: *GUI_State, volume: *bool) {
-	if volume.* {
-		if push_button(
-			state,
-			.{ state.controls.window_size.x - 16, state.controls.window_size.y - 16 },
-			16,
-			VOLUME_ON_SLOT,
-			1
-		)
-			volume.* = false;
-	} else {
-		if push_button(
-			state,
-			.{ state.controls.window_size.x - 16, state.controls.window_size.y - 16 },
-			16,
-			VOLUME_OFF_SLOT,
-			1
-		)
-			volume.* = true;
-	}
+Escape_Menu_Args :: struct {
+	sound_enabled := false;
 }
-
 Escape_Menu_Ret :: struct {
+	sound_checked := false;
 	resume_clicked := false;
 	leave_instance_clicked := false;
 }
-push_escape_menu :: (state: *GUI_State) -> Escape_Menu_Ret {
+push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_Ret {
 	ret: Escape_Menu_Ret;
 	push_id(state, "escape_menu");
 	defer pop_id(state);
@@ -1399,13 +1360,20 @@ push_escape_menu :: (state: *GUI_State) -> Escape_Menu_Ret {
 	cursor.x = pos.x + 14.0;
 	cursor.y += widget_width(state, "leave") + 8.0;
 
-	sound_label := atom_label(
-		state, "Sound", cursor, 16, z = 12, align = .Center_Left, color = V4f.{ 0, 0, 0, 1 }
-	);
-	cursor.x += sound_label.aabb_max.x - sound_label.aabb_min.x;
-	sound_checkbox := checkbox(state, cursor - v2(0.0, 2.0), 16, z = 12, align = .Center_Left);
+	ret.sound_checked = labeled_checkbox(
+		state,
+		"Sound",
+		cursor,
+		popup_size.x - 28,
+		16,
+		z = 12,
+		"soound_checkbox",
+		align = .Top_Left,
+		padding = 0,
+		default = args.sound_enabled
+	).checked;
+	cursor.y += 8;
 
-	cursor.y += (sound_label.aabb_max.y - sound_label.aabb_min.y) / 2 + 8;
 	popup_size.* = grow(popup_size, pos, cursor);
 
 	ret.resume_clicked = resume_button.clicked;
@@ -2343,12 +2311,16 @@ checkbox :: (
 	size: float,
 	z := 0.0,
 	id := "checkbox",
-	align := Align.Center
+	align := Align.Center,
+	default := false
 ) -> Checkbox {
 	push_id(gui, id);
 	defer pop_id(gui);
 
 	state, widget := widget(gui, 0, Checkbox);
+	if widget.age == 0 {
+		state.checked = default;
+	}
 
 	lower_left := align_pos(pos, .{ size, size }, align);
 
@@ -2383,7 +2355,8 @@ labeled_checkbox :: (
 	z := 0.0,
 	id := "labeled_checkbox",
 	align := Align.Center,
-	padding := 4.0
+	padding := 4.0,
+	default := false
 ) -> Checkbox {
 	push_id(gui, id);
 	defer pop_id(gui);
@@ -2407,7 +2380,8 @@ labeled_checkbox :: (
 		size,
 		z,
 		align = vertical(align) | Align.Right,
-		id = "checkbox"
+		id = "checkbox",
+		default = default
 	);
 
 	return checkbox_comp;

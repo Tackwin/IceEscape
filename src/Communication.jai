@@ -101,13 +101,14 @@ Command :: struct {
 	Give_Control :: struct {
 		player_id: int;
 	}
-	Sync_Score :: struct {
-		player_id: int;
-		score: Score;
-		is_start := false;
+	Request_Stats :: struct {
+		player_ids: [16] int;
 	}
-	Request_Score :: struct {
-		player_ids: [8] int;
+	Sync_Stats :: struct {
+		player_id: int;
+		death: int;
+		revive: int;
+		wins: int;
 	}
 	Sync_Skull :: struct {
 		skull_id: int;
@@ -185,6 +186,7 @@ Command :: struct {
 		params: Scene_Parameters;
 		terrain: string;
 		rng: Rand.State;
+		clock : float64;
 		players: [] Sync_Player; // Would usually point to a temporary buffer.
 		skulls: [] Sync_Skull;
 		moving_frames: [] Sync_Moving_Frame;
@@ -327,14 +329,21 @@ Command :: struct {
 	Leave_Instance :: struct {
 	}
 
+	Version_Info :: struct {
+		server_version: int;
+		build_day: int;
+		build_second: int;
+	}
+
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
 		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot, Klaxon,
-		Give_Control, Sync_Score, Request_Score, Sync_Tombstone, Retire, Sync_Present,
+		Give_Control, Request_Stats, Sync_Tombstone, Retire, Sync_Present,
 		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook, Cheat_Action, Buy_Ask, Buy_Response,
 		Sync_Stand_In, Ask_Respawn, Ask_Instance_List, Ans_Instance_List, Ask_Enter_Instance,
-		Ans_Enter_Instance, Leave_Instance, Create_Instance, Ans_Create_Instance
+		Ans_Enter_Instance, Leave_Instance, Create_Instance, Ans_Create_Instance, Version_Info,
+		Sync_Stats
 	);
 	sent_timestamp: float64;
 }
@@ -397,7 +406,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Buy_Ask; #through;
 		case .Buy_Response; #through;
 		case .Give_Control; #through;
-		case .Request_Score; #through;
+		case .Request_Stats; #through;
 		case .Retire; #through;
 		case .Ask_Respawn; #through;
 		case .Sync_Tombstone; #through;
@@ -411,6 +420,8 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Leave_Instance; #through;
 		case .Create_Instance; #through;
 		case .Ans_Create_Instance; #through;
+		case .Version_Info; #through;
+		case .Sync_Stats; #through;
 		case .AntiAir_Shoot; #through;
 		case .Sync_Robot; #through;
 		case .Sync_Present; #through;
@@ -422,7 +433,6 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .NTP; #through;
 		case .Sync_Stand_In; #through;
 		case .Hooked_Player; #through;
-		case .Sync_Score; #through;
 		case .Explode; #through;
 		case .Ask_Instance_List; #through;
 		case .Ans_Enter_Instance; #through;
@@ -561,7 +571,6 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Wipe_Scene; #through;
 		case .Move; #through;
 		case .End_Level; #through;
-		case .Sync_Score; #through;
 		case .Spawn; #through;
 		case .Connect; #through;
 		case .Spawn_Coin; #through;
@@ -571,7 +580,9 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Leave_Instance; #through;
 		case .Create_Instance; #through;
 		case .Ans_Create_Instance; #through;
-		case .Request_Score; #through;
+		case .Version_Info; #through;
+		case .Sync_Stats; #through;
+		case .Request_Stats; #through;
 		case .Die; #through;
 		case .Give_Control; #through;
 		case .Hooked_Player; #through;

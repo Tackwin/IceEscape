@@ -9,7 +9,6 @@
 #import "String";
 #import "File";
 #import "Random";
-#import "tracy";
 STB :: #import "stb_image";
 #import "SDL";
 #import "Reflection";
@@ -446,7 +445,7 @@ play_audio :: (audio: Audio, position: V3f) -> Sound {
 		}
 		ma_sound_init_from_data_source(*audio_engine, decoder.ds.pCurrent, xx flags, null, msound);
 		ma_sound_set_looping(msound, xx sound.loop);
-		ma_sound_set_volume(msound, audio.volume * master_volume);
+		ma_sound_set_volume(msound, audio.volume);
 		// ma_sound_set_pitch(msound, audio.pitch);
 		ma_sound_set_min_gain(msound, 0.0);
 		ma_sound_set_max_gain(msound, 1.0);
@@ -519,7 +518,7 @@ set_sound :: (sound: Sound) {
 			ma_sound_stop(win32_sound.sound);
 		}
 		ma_sound_set_looping(win32_sound.sound, xx sound.loop);
-		ma_sound_set_volume(win32_sound.sound, sound.volume * master_volume);
+		ma_sound_set_volume(win32_sound.sound, sound.volume);
 		// ma_sound_set_pitch(win32_sound.sound, sound.pitch);
 	}
 }
@@ -530,6 +529,7 @@ volume_audio :: (x: float) -> float {
 	if x < 0
 		return master_volume;
 	master_volume = x;
+	ma_engine_set_volume(*audio_engine, master_volume);
 	return master_volume;
 }
 
@@ -900,6 +900,8 @@ reload_dll :: () {
 		app_reload(*app);
 	}
 }
+
+#import "tracy"(ENABLED = false);
 
 main :: () {
 	dll_generation = xx random_get();

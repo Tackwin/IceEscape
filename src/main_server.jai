@@ -4,6 +4,7 @@
 #import "Basic";
 #import "Remap_Context"(false);
 #import "Thread";
+#import "Profile";
 #import "Instance";
 #import "Platform";
 #import "Hash_Table";
@@ -20,6 +21,7 @@ User :: struct {
 	connection: Connection;
 
 	instance_id: int = -1;
+	profile_id:  int = -1;
 }
 
 Server :: struct {
@@ -27,10 +29,13 @@ Server :: struct {
 
 	instance_generation := 1;
 	users: [512] User;
-	user_count: int;
+	user_count := 0;
 
 	instances: [512] Instance;
-	instance_count: int;
+	instance_count := 0;
+
+	profiles: [512] Profile;
+	profile_count := 0;
 
 	user_generation := 0;
 
@@ -43,6 +48,9 @@ Server :: struct {
 	};
 
 	queue: Queue(128);
+
+	file_watcher: File_Watcher(Server);
+	changes: [..] string;
 }
 
 find_user_by_token :: (server: *Server, token: int) -> *User {
@@ -147,7 +155,23 @@ append_queue :: (server: *Server, cmd: $T, connection: Connection) {
 }
 
 process :: (server: *Server, cmd: Command, sender: Connection) -> bool {
-	
+	version_info := isa(cmd.payload, Command.Version_Info);
+	if version_info {
+		reply: Command.Version_Info;
+		reply.server_version = 1;
+		day, sec := #run, host -> int, int {
+			#import "Basic";
+			cal := to_calendar(current_time_consensus());
+			return
+				cal.year * 10000 + cal.month_starting_at_0 * 100 + cal.day_of_month_starting_at_0,
+				cal.minute * 60 + cal.second;
+		};
+		reply.build_day = day;
+		reply.build_second = sec;
+		append_queue(server, reply, sender);
+		return true;
+	}
+
 	connect := isa(cmd.payload, Command.Connect);
 	if connect {
 		user := find_user_by_token(server, connect.token);
@@ -476,6 +500,8 @@ App_User :: struct {
 	tick_error := 0.0;
 }
 
+WATCH_CHANGE :: true;
+
 #program_export "app_init" app_init :: (app: *App) {
 	Remap_Context();
 
@@ -490,9 +516,15 @@ App_User :: struct {
 
 	app_user.server.tick_period.last = current_time_monotonic();
 	prefill_fixed_instances(*app_user.server);
+
+	#if WATCH_CHANGE {
+		init(*app_user.server.file_watcher, null, *app_user.server, events_to_watch = .MODIFIED);
+		add_directories(*app_user.server.file_watcher, "../assets/terrain");
+	}
 }
 
 #program_export "app_reload" app_reload :: (app: *App) {
+	Remap_Context();
 }
 
 #program_export "app_loop" app_loop :: (app: *App) -> bool {
@@ -503,6 +535,16 @@ App_User :: struct {
 server_loop :: (app: *App) {
 	app_user := app.user_data.(*App_User);
 	reset_temporary_storage();
+
+	#if WATCH_CHANGE {
+		changed := process_changes(*app_user.server.file_watcher);
+
+		for change: app_user.server.file_watcher.changes {
+			for 0..app_user.server.instance_count-1 {
+				handle_file_change(*app_user.server.instances[it], change.full_path);
+			}
+		}
+	}
 
 	to_tick, dt := check(*app_user.server.tick_period, current_time_monotonic());
 	if to_tick {
