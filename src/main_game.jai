@@ -84,6 +84,7 @@ App_User :: struct {
 	GUI.gui_state_init(*app_user.gui_state, *app_user.store);
 	WRender.init_framegraph(*app_user.framegraph, *app_user.store);
 
+	Scene.make(*app_user.state.scene);
 	Scene.init_camera(*app_user.state.scene);
 
 	launch_music(app_user, app.platform);
@@ -93,7 +94,7 @@ App_User :: struct {
 	app_user := _app.user_data.(*App_User);
 
 	scene: Scene.Scene;
-	Scene.make(*scene);
+	Scene.reload(*scene);
 }
 
 #program_export "app_loop" app_loop :: (_app: *App) -> bool {
@@ -169,6 +170,7 @@ State :: struct {
 
 	menu: Menu;
 	game: Game_Page;
+	editor: Editor_Page;
 
 	Playing :: struct {
 		escape_menu_open: bool = false;

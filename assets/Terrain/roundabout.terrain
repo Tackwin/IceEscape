@@ -159,7 +159,7 @@ moving_frame
 -- theta: 3
 -- period: 0
 - speed: 0.8
-- t: 0
+- offset: 0
 
 shuriken
 - frame_id: 1

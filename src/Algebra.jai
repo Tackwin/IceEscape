@@ -65,6 +65,12 @@ area :: (aabb: AABB($T)) -> T {
 	s := size(aabb);
 	return s.x * s.y;
 }
+aabb_union :: (A: AABB($T), B: AABB(T)) -> AABB(T) {
+	return .{
+		min = .{ min(A.min.x, B.min.x), min(A.min.y, B.min.y) },
+		max = .{ max(A.max.x, B.max.x), max(A.max.y, B.max.y) }
+	};
+}
 shrink :: (_aabb: AABB($T), amount: T) -> AABB(T) {
 	aabb := _aabb;
 	aabb.min.x += amount;
@@ -279,15 +285,10 @@ to_rotation_matrix :: (q: Q($T)) -> M4(T) {
 }
 
 angle_between :: (from: V3($T), to: V3(T), up: V3(T)) -> T {
-	c := cross(from, to);
-	n := normalize(c);
-	if dot(n, up) < 0
-		n = n * -1;
+	s := cross(from, to);
+	c := dot(from, to);
 
-	y := dot(n, c);
-	x := dot(from, to);
-
-	return atan2(y, x);
+	return atan2(dot(s, up), c);
 }
 
 DEG_RAD :: PI / 180;
@@ -592,6 +593,11 @@ ray_plane :: (o: V3($T), d: V3(T), n: V3(T)) -> V3(T), bool {
 
 
 damp :: (a: $T, b: T, lamda: float64, dt: float64) -> T {
+	return cast(T) (a + (b - a) * (1 - exp(-lamda * dt)));
+}
+damp_snap :: (a: $T, b: T, lamda: float64, dt: float64, snap: T = 1) -> T {
+	if abs(a - b) > snap
+		return b;
 	return cast(T) (a + (b - a) * (1 - exp(-lamda * dt)));
 }
 

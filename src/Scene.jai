@@ -5,6 +5,7 @@
 #import "Tagged_Union";
 #import "Communication";
 #import "Pool";
+#import "Xar";
 #import "Hash_Table";
 #import "Terrain";
 Platform :: #import "Platform";
@@ -73,6 +74,39 @@ Scene_Parameters :: struct {
 	auto_revive := false;
 }
 
+ISpan :: struct(T: Type) {
+	count: s64;
+	index: s64;
+}
+
+ISpan_Iterator :: struct(T: Type) {
+	span: ISpan(T);
+	array: [] T;
+}
+
+iterator :: (span: ISpan($T), array: [] T) -> ISpan_Iterator(T) {
+	return .{ span, array };
+}
+
+for_expansion :: (iterator: ISpan_Iterator, body: Code, flags: For_Flags) #expand {
+	assert(flags == xx 0);
+	end := min(iterator.span.count + iterator.span.index, iterator.array.count);
+	for index: iterator.span.index..end - 1 {
+		`it := iterator.array[index];
+		`it_index := index.(s64);
+		#insert body;
+	}
+}
+
+get :: (span: ISpan($T), array: [] T, index: s64) -> *T {
+	if index >= span.count
+		return null;
+	if span.index + index > xx array.count
+		return null;
+
+	return *array[span.index + index];
+}
+
 Scene :: struct {
 	State :: enum {
 		Normal :: 0;
@@ -84,6 +118,7 @@ Scene :: struct {
 
 	server: struct {
 		clock: float64 = 0.0;
+		clock_sync_cd := 0.0;
 	}
 	client: struct {
 		clock: float64 = 0.0;
@@ -100,13 +135,14 @@ Scene :: struct {
 	controlled_player_id := 0;
 
 	// >TODO put all allocation relating to the map in the same pool.
-	players: [..] Player; @allocate("lifetime") @clear("run")
+	players: [..] Player; @allocate("lifetime")
 	tombstones: [..] Tombstone; @allocate("lifetime") @clear("run")
 	skulls: [..] Skull; @allocate("lifetime") @clear("run")
 	coins: [..] Coin; @allocate("lifetime") @clear("run")
 	keys: [..] Key; @allocate("lifetime") @clear("run")
 	gates: [..] Gate; @allocate("lifetime") @clear("run")
 	moving_frames: [..] Moving_Frame; @allocate("lifetime") @clear("run")
+	moving_frame_keys: [..] Moving_Frame.Key; @allocate("lifetime") @clear("run")
 	shurikens: [..] Shuriken; @allocate("lifetime") @clear("run")
 	stand_in: [..] Stand_In; @allocate("lifetime") @clear("run")
 	trigger_zones: [..] Trigger_Zone; @allocate("lifetime") @clear("run")
@@ -123,10 +159,10 @@ Scene :: struct {
 	safe_zones: [..] Safe_Zone; @allocate("lifetime") @clear("run")
 	hooks: [..] Hook; @allocate("lifetime") @clear("run")
 	turn_tables: [..] Turn_Table; @allocate("lifetime") @clear("run")
-	// Gives over ownership to whatever collects it.
 	news: [..] string; @allocate("lifetime") @clear("run")
 	sound_triggers: [..] Sound_Trigger; @allocate("lifetime") @clear("run")
 	trigger_activated: Table(int, bool); @allocate("lifetime") @clear("run")
+
 	terrain: Terrain;
 
 	camera_min: V2f;
@@ -163,41 +199,155 @@ Scene :: struct {
 
 	lifetime_pool: Pool;
 	frame_pool: Pool;
-	run_pool: Pool;
+	run_pool: Pool; @clear("run")
 }
 
-make :: (scene: *Scene) {
-	#insert -> string {
-		sb: String_Builder;
-		scene_info := type_info(Scene);
+clear_string :: (info: Type_Info_Struct) -> string {
+	sb: String_Builder;
 
-		for member: scene_info.members {
-			if member.type.type == .ARRAY {
-				pool: string;
-				for note: member.notes {
-					if scan2(note, "allocate(%)", *pool) {
-						break;
-					}
-				}
-
-				if pool.count > 0 {
-					print_to_builder(
-						*sb, "scene.%.allocator.data = *scene.%_pool;\n", member.name, pool
-					);
-					print_to_builder(
-						*sb, "scene.%.allocator.proc = pool_allocator_proc;\n", member.name
-					);
-				}
+	categories: Table(string, [..] string);
+	for member: info.members {
+		clears: [..] string;
+		clears.allocator = temp;
+		for note: member.notes {
+			clear: string;
+			if scan2(note, "clear(%)", *clear) {
+				array_add(*clears, clear);
 			}
 		}
 
-		str := builder_to_string(*sb);
-		return str;
+		for clear: clears {
+			fields := table_find_pointer(*categories, clear);
+			if !fields {
+				empty: [..] string;
+				empty.allocator = temp;
+				fields = table_add(*categories, clear, empty);
+			}
+			array_add(fields, member.name);
+		}
 	}
+
+	snake_case_type := to_lower_copy(info.name,, temp);
+	for fields, clear: categories {
+		print_to_builder(*sb, "clear_%_% :: (object: *%) {\n", snake_case_type, clear, info.name);
+
+		for field: fields {
+			print_to_builder(*sb, "\treset(*object.%);\n", field);
+		}
+
+		print_to_builder(*sb, "}\n");
+	}
+
+	str := builder_to_string(*sb);
+	return str;
+}
+#insert -> string {
+	str := clear_string(type_info(Scene));
+	// print("clear string: %\n", str);
+	return str;
+}
+rellocate_string :: (value_info: Type_Info_Struct, parent_info: Type_Info_Struct) -> string {
+	sb: String_Builder;
+	snake_case_type := to_lower_copy(value_info.name,, temp);
+	print_to_builder(
+		*sb,
+		"rellocate_% :: (value_name: *%, parent_name: *%, copy_from : *% = null) {\n",
+		snake_case_type,
+		value_info.name,
+		parent_info.name,
+		value_info.name
+	);
+	for member: value_info.members {
+		if member.type.type == .ARRAY && (*member).(*Type_Info_Array).array_type == .RESIZABLE {
+			pool: string;
+			pool_parent: string;
+			for note: member.notes {
+				if scan2(note, "allocate(%)", *pool) {
+					break;
+				}
+				if scan2(note, "allocate(parent, %)", *pool_parent) {
+					break;
+				}
+			}
+
+			
+			print_to_builder(*sb, "\tif copy_from {\n");
+			print_to_builder(*sb, "\t\tvalue_name.%.data = 0;\n", member.name);
+			print_to_builder(*sb, "\t\tvalue_name.%.count = 0;\n", member.name);
+			print_to_builder(*sb, "\t\tvalue_name.%.allocated = 0;\n", member.name);
+			print_to_builder(*sb, "\t\tarray_copy(*value_name.%1, copy_from.%1);\n", member.name);
+			print_to_builder(*sb, "\t}\n");
+
+			if pool.count > 0 {
+				if pool_parent.count > 0
+					print(
+						"Warning ! %.% has a allocate AND a allocate(parent, )\n",
+						value_info.name,
+						member.name
+					);
+				print_to_builder(
+					*sb, "\tvalue_name.%.allocator.data = *value_name.%_pool;\n", member.name, pool
+				);
+				print_to_builder(
+					*sb, "\tvalue_name.%.allocator.proc = pool_allocator_proc;\n", member.name
+				);
+			}
+			else if pool_parent.count > 0 {
+				print_to_builder(
+					*sb,
+					"\tvalue_name.%.allocator.data = *parent_name.%_pool;\n",
+					member.name,
+					pool_parent
+				);
+				print_to_builder(
+					*sb, "\tvalue_name.%.allocator.proc = pool_allocator_proc;\n", member.name
+				);
+			}
+		}
+	}
+	print_to_builder(*sb, "}\n");
+
+	str := builder_to_string(*sb);
+	return str;
+}
+Void :: struct {
+}
+#insert -> string {
+	str := rellocate_string(type_info(Scene), type_info(Void));
+	return str;
+}
+make :: (scene: *Scene) {
+	reload(scene);
+}
+reload :: (scene: *Scene) {
+	scene.lifetime_pool.block_allocator = context.allocator;
+	scene.frame_pool.block_allocator = context.allocator;
+	scene.run_pool.block_allocator = context.allocator;
+	rellocate_scene(scene, null);
+}
+
+copy :: (dst: *Scene, src: Scene) {
+	aux := dst.*;
+	memcpy(dst, *src, size_of(Scene)); // For the static data.
+
+	dst.lifetime_pool = aux.lifetime_pool;
+	dst.frame_pool = aux.frame_pool;
+	dst.run_pool = aux.run_pool;
+
+	rellocate_scene(scene, null, *src);
 }
 
 reset :: (arr: *[..] $T) {
 	arr.count = 0;
+}
+reset :: (x: *Pool) {
+	release(x);
+}
+reset :: (table: *Table) {
+	table.count = 0;
+}
+reset :: (x: *bool) {
+	x.* = false;
 }
 
 free :: (scene: *Scene) {
@@ -206,39 +356,6 @@ free :: (scene: *Scene) {
 	release(*scene.run_pool);
 }
 
-clear :: (scene: *Scene) {
-	memset(scene.name.data, 0, scene.name.count);
-	scene.tombstones.count = 0;
-	scene.skulls.count = 0;
-	scene.coins.count = 0;
-	scene.keys.count = 0;
-	scene.gates.count = 0;
-	scene.moving_frames.count = 0;
-	scene.shurikens.count = 0;
-	scene.stand_in.count = 0;
-	scene.trigger_zones.count = 0;
-	scene.within_zones.count = 0;
-	scene.flags.count = 0;
-	scene.props.count = 0;
-	scene.robots.count = 0;
-	scene.particles.count = 0;
-	scene.explosions.count = 0;
-	scene.trophies.count = 0;
-	scene.antiairs.count = 0;
-	scene.traps.count = 0;
-	scene.sound_triggers.count = 0;
-	scene.presents.count = 0;
-	scene.safe_zones.count = 0;
-	scene.hooks.count = 0;
-	scene.turn_tables.count = 0;
-	scene.auto_revive = false;
-	scene.auto_revive |= scene.params.auto_revive;
-	table_reset(*scene.trigger_activated);
-	for scene.news {
-		free(it);
-	}
-	scene.news.count = 0;
-}
 
 make_sync :: (scene: *Scene, params: Scene_Parameters) -> Command.Sync_Scene {
 	sync_scene: Command.Sync_Scene;
@@ -309,7 +426,6 @@ make_sync :: (standin: *Stand_In) -> Command.Sync_Stand_In {
 make_sync :: (skull: *Skull) -> Command.Sync_Skull {
 	sync_skull: Command.Sync_Skull;
 	sync_skull.skull_id = skull.id;
-	sync_skull.t = skull.server.t;
 	sync_skull.speed = skull.server.speed;
 	sync_skull.offset = skull.server.offset;
 	return sync_skull;
@@ -336,7 +452,6 @@ make_sync :: (tombstone: *Tombstone) -> Command.Sync_Tombstone {
 make_sync :: (moving_frame: *Moving_Frame) -> Command.Sync_Moving_Frame {
 	sync_moving_frame: Command.Sync_Moving_Frame;
 	sync_moving_frame.frame_id = moving_frame.id;
-	sync_moving_frame.t = moving_frame.server.t;
 	return sync_moving_frame;
 }
 
@@ -380,26 +495,44 @@ make_sync :: (safe_zone: *Safe_Zone) -> Command.Sync_Safe_Zone {
 }
 
 Frame_Result :: struct {
-	died: [..] Command.Die;
-	respawn: [..] Command.Respawn;
-	sync_gate: [..] Command.Sync_Gate;
-	move_to_player_world: [..] Command.Move_To_Play_World;
-	wipe_scene: [..] Command.Wipe_Scene;
-	end_level: [..] Command.End_Level;
-	explode: [..] Command.Explode;
-	antiair_shoot: [..] Command.AntiAir_Shoot;
-	spawn_coin: [..] Command.Spawn_Coin;
-	move: [..] Command.Move;
-	sync_present: [..] Command.Sync_Present;
-	sync_safe_zone: [..] Command.Sync_Safe_Zone;
-	sync_player: [..] Command.Sync_Player;
+	broadcast: [..] Command; @allocate("lifetime") @clear("frame")
+	win_player_id: [..] int; @allocate("lifetime") @clear("frame")
+	died_player_id: [..] int; @allocate("lifetime") @clear("frame")
+	revived_someone_player_id: [..] int; @allocate("lifetime") @clear("frame")
 
-	restarted := false;
+	died: [..] Command.Die; @clear("frame")
+	respawn: [..] Command.Respawn; @clear("frame")
+	sync_gate: [..] Command.Sync_Gate; @clear("frame")
+	move_to_player_world: [..] Command.Move_To_Play_World; @clear("frame")
+	wipe_scene: [..] Command.Wipe_Scene; @clear("frame")
+	end_level: [..] Command.End_Level; @clear("frame")
+	explode: [..] Command.Explode; @clear("frame")
+	antiair_shoot: [..] Command.AntiAir_Shoot; @clear("frame")
+	spawn_coin: [..] Command.Spawn_Coin; @clear("frame")
+	move: [..] Command.Move; @clear("frame")
+	sync_present: [..] Command.Sync_Present; @clear("frame")
+	sync_safe_zone: [..] Command.Sync_Safe_Zone; @clear("frame")
+	sync_player: [..] Command.Sync_Player; @clear("frame")
+	restarted := false; @clear("frame")
 
-	win_player_id: [..] int;
-	died_player_id: [..] int;
-	revived_someone_player_id: [..] int;
+	lifetime_pool: Pool;
+
+	made := false;
 }
+
+#insert -> string {
+	str := clear_string(type_info(Frame_Result));
+	// print("clear string: %\n", str);
+	return str;
+}
+
+#insert -> string { return rellocate_string(type_info(Frame_Result), type_info(Void)); };
+make :: (result: *Frame_Result) {
+	set_allocators(*result.lifetime_pool);
+	rellocate_frame_result(result, null);
+	result.made = true;
+}
+
 free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.died);
 	array_free(frame_result.respawn);
@@ -415,28 +548,7 @@ free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.sync_present);
 	array_free(frame_result.sync_safe_zone);
 	array_free(frame_result.sync_player);
-	array_free(frame_result.win_player_id);
-	array_free(frame_result.died_player_id);
-	array_free(frame_result.revived_someone_player_id);
-}
-clear :: (frame_result: *Frame_Result) {
-	frame_result.died.count = 0;
-	frame_result.respawn.count = 0;
-	frame_result.sync_gate.count = 0;
-	frame_result.move_to_player_world.count = 0;
-	frame_result.wipe_scene.count = 0;
-	frame_result.end_level.count = 0;
-	frame_result.explode.count = 0;
-	frame_result.antiair_shoot.count = 0;
-	frame_result.spawn_coin.count = 0;
-	frame_result.move.count = 0;
-	frame_result.sync_present.count = 0;
-	frame_result.sync_safe_zone.count = 0;
-	frame_result.sync_player.count = 0;
-	frame_result.win_player_id.count = 0;
-	frame_result.died_player_id.count = 0;
-	frame_result.revived_someone_player_id.count = 0;
-	frame_result.restarted = false;
+	release(*frame_result.lifetime);
 }
 
 Safe_Zone :: struct {
@@ -483,8 +595,12 @@ Turn_Table :: struct {
 	turning_speed := 1.0;
 	turning_offset := 0.0;
 
-	marked_players: [..] int;
+	Mark :: struct {
+		player_id: int;
+		clock: float64;
+	}
 }
+#insert -> string { return rellocate_string(type_info(Turn_Table), type_info(Scene)); };
 
 Trap :: struct {
 	id: int;
@@ -927,16 +1043,17 @@ Moving_Frame :: struct {
 		period: float;
 	}
 
-	keys: [..] Key;
+	keys: ISpan(Key);
 
 	server: struct {
-		t: float = 0;
 		speed: float = 1.0;
+		offset: float = 0.0;
 	}
 
 	client: struct {
-		t: float = 0;
 	}
+
+	sum_period := 0.0;
 }
 
 Shuriken :: struct {
@@ -975,8 +1092,10 @@ Key :: struct {
 	id: int;
 	holder: int = -1;
 	server: struct {
+		home: V3f;
 		position: V3f;
 		radius_hitbox := 0.25;
+		last_hold_clock : float64 = 0.0;
 	}
 	client: struct {
 		position: V3f;
@@ -988,12 +1107,10 @@ Skull :: struct {
 	path_id: int;
 
 	server: struct {
-		t: float;
 		speed: float = 1.0;
 		offset: float = 0.0;
 	}
 	client: struct {
-		t: float;
 		direction: V3f = .{ 1, 0, 0 };
 	}
 }
@@ -1214,12 +1331,6 @@ interpolate_to_server :: (player: *Player, dt: float) {
 }
 
 interpolate_to_server :: (skull: *Skull) {
-	if abs(skull.client.t - skull.server.t) > 10 {
-		skull.client.t = skull.server.t;
-		return;
-	}
-
-	skull.client.t = damp(skull.client.t, skull.server.t, 10.0, 0.1);
 }
 
 interpolate_to_server :: (key: *Key, dt: float32) {
@@ -1227,6 +1338,7 @@ interpolate_to_server :: (key: *Key, dt: float32) {
 }
 
 restart :: (scene: *Scene, params: Scene_Parameters) {
+	clear_scene_run(scene);
 	parse_terrain(scene.terrain.text, scene);
 	scene.params = params;
 	scene.server.clock = 0.0;
@@ -1277,6 +1389,12 @@ add_snow :: (scene: *Scene, dt: float32) {
 	}
 }
 
+add_turn_table :: (scene: *Scene, turn_table: Turn_Table) -> *Turn_Table {
+	array_add(*scene.turn_tables, turn_table);
+	rellocate_turn_table(*scene.turn_tables[scene.turn_tables.count - 1], scene);
+	return *scene.turn_tables[scene.turn_tables.count - 1];
+}
+
 input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 	any_camera_move := false;
 	dt := V3f.{ 0, 0, 0 };
@@ -1292,23 +1410,23 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 		scene.camera.wanted_target_to_position =
 			l * normalize(scene.camera.wanted_target_to_position);
 	}
-	if controls.pressed[Platform.Key.Q] {
+	if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Left) {
 		dt.x -= scene.camera.speed * controls.delta_time;
 		any_camera_move = true;
 	}
-	if controls.pressed[Platform.Key.D] {
+	if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Right) {
 		dt.x += scene.camera.speed * controls.delta_time;
 		any_camera_move = true;
 	}
-	if controls.pressed[Platform.Key.S] {
+	if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Down) {
 		dt.y -= scene.camera.speed * controls.delta_time;
 		any_camera_move = true;
 	}
-	if controls.pressed[Platform.Key.Z] {
+	if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Up) {
 		dt.y += scene.camera.speed * controls.delta_time;
 		any_camera_move = true;
 	}
-	if controls.just_pressed[Platform.Key.R] {
+	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Buy_Ask) {
 		buy_ask(scene, scene.controlled_player_id, result);
 	}
 	if controls.just_pressed[Platform.Key.V] {
@@ -1323,7 +1441,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 		// }
 	}
 
-	if controls.just_pressed[Platform.Key.W] {
+	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Camera_Locked) {
 		scene.camera_locked = !scene.camera_locked;
 	}
 
@@ -1376,7 +1494,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 			}
 		}
 	}
-	if controls.just_pressed[Platform.Key.C] {
+	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Coin) {
 		player := find_by_player_id(scene, scene.controlled_player_id);
 		if player && !player.server.dead {
 			command: Command.Spawn_Coin;
@@ -1385,7 +1503,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 		}
 	}
 
-	if controls.just_pressed[Platform.Key.X] {
+	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Klaxon) {
 		sound: Sound_Trigger;
 		player := find_by_player_id(scene, scene.controlled_player_id);
 		if player && !player.server.dead {
@@ -1395,7 +1513,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 		}
 	}
 
-	if controls.just_pressed[Platform.Key.E] {
+	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Safe) {
 		player := find_by_player_id(scene, scene.controlled_player_id);
 		if player && !player.server.dead {
 			if player.server.has_safe_present {
@@ -1408,7 +1526,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 		}
 	}
 
-	if controls.just_pressed[Platform.Key.A] {
+	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Hook)  {
 		player := find_by_player_id(scene, scene.controlled_player_id);
 		if player && !player.server.dead {
 			if player.server.has_hook_present > 0 {
@@ -1426,7 +1544,7 @@ update :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result)
 	scene.fade_in_screen_t = 0.0;
 	scene.client.clock += dt;
 	scene.server.clock += dt;
-	scene.client.clock = damp(scene.client.clock, scene.server.clock, 10.0, dt);
+	scene.client.clock = damp_snap(scene.client.clock, scene.server.clock, 10.0, dt, 1.0);
 	if #complete scene.state == {
 		case .Normal;
 			update_normal(scene, time, dt, result);
@@ -1621,11 +1739,23 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		if it.holder >= 0 {
 			player := find_by_player_id(scene, it.holder);
 			if !player {
+				it.server.last_hold_clock = scene.server.clock;
 				it.holder = -1;
 				continue;
 			}
 
 			it.server.position = player.server.position;
+		}
+		if it.holder < 0 {
+			elapsed := scene.client.clock - it.server.last_hold_clock;
+			if elapsed > 20 {
+				dir := normalize(it.server.position - it.server.home);
+				D := norm(it.server.position - it.server.home);
+				to_travel := dt * 0.4;
+				to_travel = min(to_travel, D);
+
+				it.server.position -= dir * to_travel;
+			}
 		}
 	}
 
@@ -1636,6 +1766,14 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 }
 
 update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result) {
+	scene.server.clock_sync_cd -= dt;
+	if scene.server.clock_sync_cd < 0 {
+		scene.server.clock_sync_cd = 1.0;
+
+		cmd: Command.Sync_Clock;
+		cmd.t = scene.server.clock;
+		array_add(*result.broadcast, make_command(cmd));
+	}
 
 	Should_Die :: struct {
 		hard_die: bool = false;
@@ -2209,16 +2347,20 @@ player_has_revived_other_player :: (reviver: int, revived: int, result: *Frame_R
 		array_add(*result.revived_someone_player_id, reviver);
 }
 
+drop_keys :: (scene: *Scene, player: *Player) {
+	for * scene.keys {
+		if it.holder == player.id {
+			it.holder = -1;
+			it.server.last_hold_clock = scene.server.clock;
+		}
+	}
+}
 
 server_die :: (scene: *Scene, player: *Player, time: Apollo_Time, result: *Frame_Result) {
 	player.server.has_safe_present = false;
 	player.server.has_hook_present = 0;
 
-	keys := find_key_by_holder_id(scene, player.id);
-
-	for keys {
-		it.holder = -1;
-	}
+	drop_keys(scene, player);
 
 	if scene.auto_revive {
 		respawn: Command.Respawn;
@@ -2262,14 +2404,15 @@ server_die :: (scene: *Scene, player: *Player, time: Apollo_Time, result: *Frame
 	}
 }
 
-update :: (scene: Scene, turn_table: Turn_Table, dt: float32) {
+update :: (scene: Scene, turn_table: *Turn_Table, dt: float32) {
+	angle := get_pointing_angle(scene, turn_table);
 	p := turn_table.position;
 	for * scene.players {
 		q := it.server.position;
 
 		d := norm(p - q);
-		if d < 1 {
-			angle := get_pointing_angle(scene, turn_table);
+		if d < 0.5 {
+			// angle = 4.0;
 			direction: V3f;
 			direction.x = cos(angle);
 			direction.y = sin(angle);
@@ -2517,13 +2660,10 @@ update :: (scene: Scene, shuriken: *Shuriken, dt: float32) {
 }
 
 update :: (scene: Scene, frame: *Moving_Frame, dt: float32) {
-	frame.client.t = damp(frame.client.t, frame.server.t, 10.0, dt);
-	frame.server.t += frame.server.speed * dt;
-	sum := 0.0;
-	for 1..frame.keys.count-1 {
-		sum += frame.keys[it - 1].period;
+	frame.sum_period = 0.0;
+	for 1..frame.keys.count - 1 {
+		frame.sum_period += scene.moving_frame_keys[it + frame.keys.index - 1].period;
 	}
-	frame.server.t = fmod_cycling(frame.server.t, sum);
 }
 
 update :: (scene: Scene, camera: *Camera, dt: float32) {
@@ -2574,9 +2714,6 @@ update :: (scene: Scene, skull: *Skull, dt: float32) {
 	if !scene.is_server
 		interpolate_to_server(skull);
 
-	skull.server.t += skull.server.speed * dt;
-	if scene.is_server
-		skull.client.t = skull.server.t;
 	if skull.path_id < scene.terrain.paths.count {
 		path: *Path = *scene.terrain.paths[skull.path_id];
 		if path.checkpoints_count > 0 {
@@ -2908,6 +3045,11 @@ process_server_only :: (
 process_client_only :: (
 	scene: *Scene, command: Command, time: Apollo_Time, response: *Process_Response
 ) -> bool {
+	clock_sync: *Command.Sync_Clock = isa(command.payload, Command.Sync_Clock);
+	if clock_sync {
+		scene.server.clock = clock_sync.t;
+		return true;
+	}
 
 	buy_response: *Command.Buy_Response = isa(command.payload, Command.Buy_Response);
 	if buy_response {
@@ -3116,15 +3258,6 @@ process_client_only :: (
 		}
 	}
 
-	sync_moving_frame: *Command.Sync_Moving_Frame = isa(command.payload, Command.Sync_Moving_Frame);
-	if sync_moving_frame {
-		frame := find_by_frame_id(scene, sync_moving_frame.frame_id);
-		if frame {
-			frame.server.t = sync_moving_frame.t;
-			return true;
-		}
-	}
-
 	end_level: *Command.End_Level = isa(command.payload, Command.End_Level);
 	if end_level {
 		scene.end_scene_countdown_time = time;
@@ -3287,7 +3420,6 @@ process :: (scene: Scene, skull: *Skull, command: Command, response: *Process_Re
 	if sync {
 
 		if skull.id == sync.skull_id {
-			skull.server.t = sync.t;
 			skull.server.offset = sync.offset;
 			skull.server.speed = sync.speed;
 			return true;
@@ -3420,7 +3552,9 @@ touch_a_tile :: (scene: Scene, spot: V3f, radius: float, kind: Tile.Kind) -> boo
 			tile := terrain.tiles[tile_index];
 			tile_position := tile_center(scene, .{ x, y });
 
-			d := dist_aabb(spot, tile_position, tile_position + V3f.{ 1.0, 1.0, 0 });
+			d := dist_aabb(
+				spot, tile_position - V3f.{ 0.5, 0.5, 0 }, tile_position + V3f.{ 0.5, 0.5, 0 }
+			);
 			if d < radius && tile.kind == kind {
 				return true;
 			}
@@ -3445,7 +3579,9 @@ compute_skull_matrix :: (scene: Scene, skull: Skull) -> M4f {
 		total_t += d;
 	}
 
-	t := fmod_cycling(skull.client.t + skull.server.offset * total_t, total_t);
+	t := fmod_cycling(
+		scene.server.clock * skull.server.speed + skull.server.offset * total_t, total_t
+	);
 
 	for 1..path.checkpoints_count - 1 {
 		a := path.checkpoints[it - 1];
@@ -3480,7 +3616,9 @@ compute_skull_dir :: (scene: Scene, skull: Skull) -> V3f {
 		total_t += d;
 	}
 
-	t := fmod_cycling(skull.client.t + skull.server.offset * total_t, total_t);
+	t := fmod_cycling(
+		scene.server.clock * skull.server.speed + skull.server.offset * total_t, total_t
+	);
 
 	for 1..path.checkpoints_count - 1 {
 		a := path.checkpoints[it - 1];
@@ -3511,7 +3649,9 @@ compute_skull_pos :: (scene: Scene, skull: Skull) -> V3f {
 		total_t += d;
 	}
 
-	t := fmod_cycling(skull.client.t + skull.server.offset * total_t, total_t);
+	t := fmod_cycling(
+		scene.server.clock * skull.server.speed + skull.server.offset * total_t, total_t
+	);
 
 	for 1..path.checkpoints_count - 1 {
 		a := path.checkpoints[it - 1];
@@ -3530,29 +3670,27 @@ compute_moving_frame_server_world_matrix :: (scene: Scene, frame: Moving_Frame) 
 	if frame.keys.count == 0 {
 		return M4f.identity();
 	}
-	if frame.keys.count <= 1 {
-		return M4f.translate(frame.keys[0].pos) * to_rotation_matrix(
-			axis_angle(V3f.{ 0, 0, 1 }, frame.keys[0].theta)
-		);
+	if frame.sum_period == 0 || frame.keys.count <= 1 {
+		key := get(frame.keys, scene.moving_frame_keys, 0);
+		return M4f.translate(key.pos) * to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, key.theta));
 	}
 
-	t_left := frame.server.t;
-
+	t_left := fmod_cycling(scene.client.clock + frame.server.offset, frame.sum_period).(float32);
 	before_idx := 0;
-	for i: 0..frame.keys.count - 1 {
-		if t_left < frame.keys[i].period {
-			before_idx = i;
+	for iterator(frame.keys, scene.moving_frame_keys) {
+		if t_left < it.period {
+			before_idx = it_index;
 			break;
 		}
-		t_left -= frame.keys[i].period;
+		t_left -= it.period;
 	}
 
-	if (before_idx + 1) >= frame.keys.count {
-		before_idx = frame.keys.count - 2;
+	if (before_idx + 1) >= xx frame.keys.count {
+		before_idx = frame.keys.count.(s64) - 2;
 	}
 
-	curr := frame.keys[before_idx + 0];
-	next := frame.keys[before_idx + 1];
+	curr := get(frame.keys, scene.moving_frame_keys, before_idx + 0);
+	next := get(frame.keys, scene.moving_frame_keys, before_idx + 1);
 
 	t := t_left / curr.period;
 

@@ -76,6 +76,7 @@ process_game :: (
 
 	sync_scene: *Command.Sync_Scene = isa(command.payload, Command.Sync_Scene);
 	if sync_scene {
+		Scene.clear_scene_run(*state.scene);
 		Terrain.parse_terrain(sync_scene.terrain, *state.scene);
 		state.scene.id = sync_scene.id;
 		state.scene.end_scene_countdown_started = false;

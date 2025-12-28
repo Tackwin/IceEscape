@@ -3,6 +3,11 @@
 
 #scope_export
 
+Layout :: enum s32 {
+	AZERTY :: 0;
+	QWERTY :: 1;
+}
+
 Key :: enum s32 {
 	A :: 0;
 	B;
@@ -81,6 +86,8 @@ Web_Message :: struct {
 
 Frame_Info :: struct {
 	time: Apollo_Time;
+
+	layout: Layout;
 
 	key_pressed: [Key_COUNT] bool;
 

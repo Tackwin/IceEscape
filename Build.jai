@@ -549,7 +549,7 @@ build_wasm_2 :: () {
 	opts.emit_debug_info                     = .DWARF;
 	opts.backtrace_on_crash                  = .OFF; // Runtime_Support_Crash_Handler doesn’t support WASM (yet?)
 	opts.output_path                         = "web/";
-	opts.output_executable_name              = "IceEscape_raw";
+	opts.output_executable_name              = "IceEscape";
 	opts.llvm_options.target_system_features = "+bulk-memory"; // "This options is needed so that "memcpy" and "memset" are mapped to "memory.copy" and "memory.fill" instructions in WASM.
 	opts.llvm_options.enable_split_modules   = false;
 	opts.llvm_options.function_sections      = true; // To get around "LLVM ERROR: section already has a defining function: .text"
@@ -589,7 +589,7 @@ build_wasm_2 :: () {
 		"-O2",
 		"-g",
 		"--asyncify",
-		"./web/IceEscape_raw.wasm",
+		"./web/IceEscape.wasm",
 		"-o",
 		"./web/IceEscape.wasm"
 	];
@@ -655,6 +655,8 @@ build_2 :: () {
 	}
 	if linux
 		build_server_platform_2(.LINUX);
+	if wasm
+		build_wasm_2();
 	if publish {
 		print("Stopping service\n");
 		res, stdout, stderr := run_command(
@@ -670,6 +672,22 @@ build_2 :: () {
 			"./bin/LinuxServer.exe",
 			"bin/LinuxServer"
 		);
+		run_command(
+			"sftpc",
+			"-profile=tools/ssh.tlp",
+			"put",
+			"-o",
+			"./web/*",
+			"www/tackwin"
+		);
+		run_command(
+			"sftpc",
+			"-profile=tools/ssh.tlp",
+			"put",
+			"-o",
+			"./assets/terrain/*.terrain",
+			"assets/terrain"
+		);
 		print("Starting service.\n");
 		run_command(
 			"sexec",
@@ -677,8 +695,6 @@ build_2 :: () {
 			"-cmd=sudo systemctl start linuxserver.service"
 		);
 	}
-	if wasm
-		build_wasm_2();
 }
 
 #run build_2();

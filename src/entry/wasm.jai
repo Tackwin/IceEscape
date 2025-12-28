@@ -1,16 +1,10 @@
 #scope_file
-// #import "Window_Creation";
-#import "WAllocator";
-// #import "Input";
 #import "Platform";
 #import "Basic";
 #import "String";
 #import "Algebra";
 #import "Hash_Table";
-// Sound :: #import "Sound_Player";
-// WebGL :: #import "Toolchains/Web/WebGL";
 
-// window: Window_Type;
 pressed: [Key_COUNT] bool;
 
 web_buffer: [] u8;

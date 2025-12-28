@@ -72,6 +72,12 @@ Instance :: struct {
 	names_to_scene_id: Table(string, int);
 }
 
+reload :: (instance: *Instance) {
+	for *instance.scenes {
+		Scene.reload(it);
+	}
+}
+
 free :: (instance: *Instance) {
 	array_free(instance.persons);
 	for *instance.scenes
@@ -176,24 +182,6 @@ sync :: (instance: *Instance) {
 		}
 	}
 
-	if check(*instance.sync_moving_frame) {
-		for * scene: instance.scenes {
-			for * scene.moving_frames {
-				msg := Scene.make_sync(it);
-				queue_scene_scoped_broadcast(instance, scene.id, make_command(msg));
-			}
-		}
-	}
-
-	if check(*instance.sync_count_skull) {
-		for * scene: instance.scenes {
-			for * scene.skulls {
-				msg := Scene.make_sync(it);
-				queue_scene_scoped_broadcast(instance, scene.id, make_command(msg));
-			}
-		}
-	}
-
 	if check(*instance.sync_count_key) {
 		for * scene: instance.scenes {
 			for * scene.keys {
@@ -208,12 +196,13 @@ sync :: (instance: *Instance) {
 }
 add_scene :: (instance: *Instance, text: string) -> int {
 	scene := xar_add(*instance.scenes, .{});
-	make(scene);
+	Scene.make(scene);
 	scene.id = instance.scenes.count + 1;
 	scene.is_server = true;
 	scene.server_rng.s[0] = 123456789;
 	scene.server_rng.s[1] = 987654321;
-	Terrain.parse_terrain(text, *scene);
+	Scene.clear_scene_run(scene);
+	Terrain.parse_terrain(text, scene);
 	scene.params = instance.scene_parameters;
 	scene.auto_revive |= scene.params.auto_revive;
 	return scene.id;
@@ -226,6 +215,7 @@ handle_file_change :: (instance: *Instance, path: string) {
 			if ok {
 				scene := find_by_scene_id(instance, scene_id);
 				if scene {
+					Scene.clear_scene_run(scene);
 					Terrain.parse_terrain(data, scene);
 					sync_scene := Scene.make_sync(scene, scene.params);
 					queue_scene_scoped_broadcast(instance, scene_id, make_command(sync_scene));
@@ -238,8 +228,9 @@ handle_file_change :: (instance: *Instance, path: string) {
 init_instance :: (instance: *Instance) {
 	terrains :: string.[
 		"pick",
-		"intro", // OK
 		"right",
+		"turn", // OK
+		"intro", // OK
 		"roundabout", // OK
 		"chamber", // OK
 		"buzz", // OK
@@ -556,9 +547,16 @@ update_instance :: (instance: *Instance, dt: float32) {
 	}
 
 	sync(instance);
+	if !instance.frame_result.made
+		Scene.make(*instance.frame_result);
+
 	for * scene: instance.scenes {
-		Scene.clear(*instance.frame_result);
+		Scene.clear_frame_result_frame(*instance.frame_result);
 		Scene.update(scene, time, dt, *instance.frame_result);
+
+		for instance.frame_result.broadcast {
+			queue_scene_scoped_broadcast(instance, scene.id, it);
+		}
 
 		for instance.frame_result.end_level {
 			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));

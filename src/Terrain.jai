@@ -17,7 +17,6 @@ Config :: struct {
 }
 
 parse_terrain :: (text: string, scene: *Scene) {
-	clear(scene);
 	rng := Rand.seed(123456789);
 
 	ascii_tiles: string;
@@ -209,9 +208,8 @@ parse_terrain :: (text: string, scene: *Scene) {
 		}
 
 		if scan2(line, "turn_table") {
-			turn_table: Turn_Table;
-			turn_table.id = scene.turn_tables.count + 1;
-			defer array_add(*scene.turn_tables, turn_table);
+			turn_table := add_turn_table(scene, .{});
+			turn_table.id = scene.turn_tables.count;
 
 			cursor += 1;
 			while cursor < lines.count {
@@ -439,7 +437,12 @@ parse_terrain :: (text: string, scene: *Scene) {
 		if scan2(line, "moving_frame") {
 			frame: Moving_Frame;
 			frame.id = scene.moving_frames.count + 1;
-			defer array_add(*scene.moving_frames, frame);
+			frame.keys.index = scene.moving_frame_keys.count;
+			frame.keys.count = 0;
+			defer {
+				frame.keys.count = scene.moving_frame_keys.count - frame.keys.index;
+				array_add(*scene.moving_frames, frame);
+			}
 
 			cursor += 1;
 			while cursor < lines.count {
@@ -457,7 +460,7 @@ parse_terrain :: (text: string, scene: *Scene) {
 
 				if scan2(line, "- key") {
 					key: Moving_Frame.Key;
-					defer array_add(*frame.keys, key);
+					defer array_add(*scene.moving_frame_keys, key);
 
 					cursor += 1;
 					while cursor < lines.count {
@@ -495,14 +498,13 @@ parse_terrain :: (text: string, scene: *Scene) {
 				if scan2(line, "- speed: %", *frame.server.speed)
 					continue;
 
-				if scan2(line, "- t: %", *frame.server.t)
+				if scan2(line, "- offset: %", *frame.server.offset)
 					continue;
 
 				print("Error reading moving frame, unrecognized line: % (L%)\n", line, cursor);
 				cursor -= 1;
 			}
 
-			frame.client.t = frame.server.t;
 			cursor -= 1;
 		}
 
@@ -533,6 +535,7 @@ parse_terrain :: (text: string, scene: *Scene) {
 				cursor -= 1;
 			}
 
+			key.server.home = key.server.position;
 			cursor -= 1;
 		}
 
@@ -561,16 +564,12 @@ parse_terrain :: (text: string, scene: *Scene) {
 				if scan2(line, "- speed: %", *skull.server.speed)
 					continue;
 
-				if scan2(line, "- t: %", *skull.server.t)
-					continue;
-
 				if scan2(line, "- offset: %", *skull.server.offset)
 					continue;
 
 				print("Error reading skull, unrecognized line: % (L%)\n", line, cursor);
 				cursor -= 1;
 			}
-			skull.client.t = skull.server.t;
 
 			cursor -= 1;
 		}

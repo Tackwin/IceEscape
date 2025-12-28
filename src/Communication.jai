@@ -112,7 +112,6 @@ Command :: struct {
 	}
 	Sync_Skull :: struct {
 		skull_id: int;
-		t: float;
 		offset: float;
 		speed: float;
 	}
@@ -135,7 +134,6 @@ Command :: struct {
 	}
 	Sync_Moving_Frame :: struct {
 		frame_id: int;
-		t: float;
 	}
 	NTP :: struct {
 		client_origin := false;
@@ -161,6 +159,9 @@ Command :: struct {
 		most_revive_id: int = -1;
 
 		best_scores_id: [5] int = .[-1, -1, -1, -1, -1];
+	}
+	Sync_Clock :: struct {
+		t: float64;
 	}
 	Sync_Robot :: struct {
 		robot_id: int;
@@ -343,7 +344,7 @@ Command :: struct {
 		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook, Cheat_Action, Buy_Ask, Buy_Response,
 		Sync_Stand_In, Ask_Respawn, Ask_Instance_List, Ans_Instance_List, Ask_Enter_Instance,
 		Ans_Enter_Instance, Leave_Instance, Create_Instance, Ans_Create_Instance, Version_Info,
-		Sync_Stats
+		Sync_Stats, Sync_Clock
 	);
 	sent_timestamp: float64;
 }
@@ -422,6 +423,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Ans_Create_Instance; #through;
 		case .Version_Info; #through;
 		case .Sync_Stats; #through;
+		case .Sync_Clock; #through;
 		case .AntiAir_Shoot; #through;
 		case .Sync_Robot; #through;
 		case .Sync_Present; #through;
@@ -582,6 +584,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Ans_Create_Instance; #through;
 		case .Version_Info; #through;
 		case .Sync_Stats; #through;
+		case .Sync_Clock; #through;
 		case .Request_Stats; #through;
 		case .Die; #through;
 		case .Give_Control; #through;

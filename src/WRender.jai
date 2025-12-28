@@ -2016,7 +2016,8 @@ render_turn_tables :: (
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
 		angle := Scene.get_pointing_angle(scene, it);
-		instance.M = M4f.translate(it.position) * to_rotation_matrix(axis_angle(v3(0.0, 0, 1), angle));
+		instance.M = M4f.translate(it.position);
+		instance.M *= to_rotation_matrix(axis_angle(v3(0.0, 0, 1), angle));
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0

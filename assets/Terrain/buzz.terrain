@@ -123,7 +123,7 @@ moving_frame
 -- position: 29 7 0
 -- theta: 0.5
 -- period: 3
-- t: 1.0
+- offset: 1.0
 
 
 shuriken
@@ -197,7 +197,7 @@ moving_frame
 -- theta: 3.0
 -- period: 3
 - speed: 0.8
-- t: 0
+- offset: 0
 
 moving_frame
 - key
@@ -229,7 +229,7 @@ moving_frame
 -- theta: 3.0
 -- period: 3
 - speed: 0.8
-- t: 9.0
+- offset: 9.0
 
 moving_frame
 - key
@@ -261,7 +261,7 @@ moving_frame
 -- theta: 3.0
 -- period: 3
 - speed: 0.8
-- t: 4.5
+- offset: 4.5
 
 
 shuriken

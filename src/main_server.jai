@@ -454,17 +454,16 @@ server_send_tick :: (platform: *Platform, server: *Server) {
 
 prefill_fixed_instances :: (server: *Server) {
 	server.instance_count = 2;
-	print("%\n", server.instance_count);
 
-	init_instance(*server.instances[0]);
 	server.instances[0].id = server.instance_generation;
 	string_to_array("Hades", server.instances[0].name);
+	init_instance(*server.instances[0]);
 	server.instance_generation += 1;
 
-	init_instance(*server.instances[1]);
 	server.instances[1].id = server.instance_generation;
-	string_to_array("Olympus", server.instances[1].name);
 	server.instances[1].scene_parameters.auto_revive = true;
+	string_to_array("Olympus", server.instances[1].name);
+	init_instance(*server.instances[1]);
 	server.instance_generation += 1;
 }
 
@@ -525,6 +524,12 @@ WATCH_CHANGE :: true;
 
 #program_export "app_reload" app_reload :: (app: *App) {
 	Remap_Context();
+
+	app_user := app.user_data.(*App_User);
+	for 0..app_user.server.instance_count - 1 {
+		instance := *app_user.server.instances[it];
+		reload(instance);
+	}
 }
 
 #program_export "app_loop" app_loop :: (app: *App) -> bool {

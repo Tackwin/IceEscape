@@ -75,6 +75,39 @@ TRACTOR_SLOT :: V2f.{ 12, 10 };
 
 Key :: Platform.Key;
 
+action_to_icon :: (action: Action_Key, layout: Platform.Layout) -> V2f {
+	return key_to_icon(action_to_platform(action, layout));
+}
+
+key_to_icon :: (key: Platform.Key) -> V2f {
+	if key == {
+		case .W;
+			return W_OUTLINE_SLOT;
+		case .A;
+			return A_OUTLINE_SLOT;
+		case .Q;
+			return Q_OUTLINE_SLOT;
+		case .S;
+			return S_OUTLINE_SLOT;
+		case .D;
+			return D_OUTLINE_SLOT;
+		case .Z;
+			return Z_OUTLINE_SLOT;
+		case .C;
+			return C_OUTLINE_SLOT;
+		case .X;
+			return X_OUTLINE_SLOT;
+		case .E;
+			return E_OUTLINE_SLOT;
+		case .R;
+			return R_OUTLINE_SLOT;
+		case .V;
+			return V_OUTLINE_SLOT;
+	}
+	return V_OUTLINE_SLOT;
+}
+
+
 model_id_to_slot :: (id: Scene.Model_Id) -> V2f {
 	if id == {
 		case .Racer; return RACER_SLOT;
@@ -174,6 +207,71 @@ GUI_State :: struct {
 	id_stack: [..] u64;
 }
 
+Action_Key :: enum {
+	Square00 :: 0;
+	Square10;
+	Square20;
+	Square30;
+	Square01;
+	Square11;
+	Square21;
+	Square31;
+	Square02;
+	Square12;
+	Square22;
+	Square32;
+	Square03;
+	Square13;
+	Square23;
+	Square33;
+	Escape;
+	Click0;
+	Click1;
+	Tab;
+
+	Move_Left :: Square01;
+	Move_Right :: Square21;
+	Move_Up :: Square12;
+	Move_Down :: Square11;
+	Buy_Ask :: Square32;
+	Camera_Locked :: Square00;
+	Coin :: Square20;
+	Klaxon :: Square10;
+	Safe :: Square21;
+	Hook :: Square02;
+}
+
+action_to_platform :: (action: Action_Key, layout: Platform.Layout) -> Platform.Key {
+	azerty :: Platform.Key.[
+		.W, .X, .C, .V,
+		.Q, .S, .D, .F,
+		.A, .Z, .E, .R,
+		._0, ._1, ._2, ._3,
+		.Escape,
+		.MouseLeft,
+		.MouseRight,
+		.Tab
+	];
+	qwerty :: Platform.Key.[
+		.Z, .X, .C, .V,
+		.A, .S, .D, .F,
+		.Q, .W, .E, .R,
+		._0, ._1, ._2, ._3,
+		.Escape,
+		.MouseLeft,
+		.MouseRight,
+		.Tab
+	];
+
+	if layout == {
+		case .AZERTY;
+			return azerty[xx action];
+		case .QWERTY;
+			return qwerty[xx action];
+	}
+	return .Q;
+}
+
 combine_id :: (a: u64, b: u64) -> u64 {
 	return a ^ (b + 0x9e3779b97f4a7c15 + (a << 12) + (a >> 4));
 }
@@ -228,6 +326,25 @@ widget_aabb ::(state: *GUI_State, id: $Id) -> AABBf
 	return AABBf.{};
 }
 
+widgets_aabb :: (state: *GUI_State, ids: [] $Id) -> AABBf
+#modify {
+	if Id == u64 || Id == s64 || Id == string {
+		return true;
+	}
+	return false;
+}
+{
+	if ids.count == 0 {
+		return .{};
+	}
+
+	aabb := widget_aabb(state, ids[0]);
+	for 1..ids.count - 1 {
+		aabb = aabb_union(aabb, widget_aabb(state, ids[it]));
+	}
+	return aabb;
+}
+
 widget_width :: (state: *GUI_State, id: $Id) -> float
 #modify {
 	if Id == u64 || Id == s64 || Id == string {
@@ -238,6 +355,18 @@ widget_width :: (state: *GUI_State, id: $Id) -> float
 {
 	aabb := widget_aabb(state, id);
 	return aabb.max.x - aabb.min.x;
+}
+
+widget_height :: (state: *GUI_State, id: $Id) -> float
+#modify {
+	if Id == u64 || Id == s64 || Id == string {
+		return true;
+	}
+	return false;
+}
+{
+	aabb := widget_aabb(state, id);
+	return aabb.max.y - aabb.min.y;
 }
 
 widget :: (state: *GUI_State, raw_id: $Id, $T: Type, default: T = .{}) -> *T, *GUI_State.Widget
@@ -339,6 +468,7 @@ begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Con
 	state.controls.captured_mouse = false;
 	state.controls.delta_time = info.delta_time;
 	state.controls.time = info.time;
+	state.controls.layout = info.layout;
 
 	state.chars.count = 0;
 	state.quads.count = 0;
@@ -1189,22 +1319,22 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 			z = 2
 		);
 	}
-	render_square_at(0, 0, xx Platform.Key.W);
-	render_square_at(1, 0, xx Platform.Key.X);
-	render_square_at(2, 0, xx Platform.Key.C);
-	render_square_at(3, 0, xx Platform.Key.V);
-	render_square_at(0, 1, xx Platform.Key.Q);
-	render_square_at(1, 1, xx Platform.Key.S);
-	render_square_at(2, 1, xx Platform.Key.D);
-	render_square_at(3, 1, xx Platform.Key.F);
-	render_square_at(0, 2, xx Platform.Key.A);
-	render_square_at(1, 2, xx Platform.Key.Z);
-	render_square_at(2, 2, xx Platform.Key.E);
-	render_square_at(3, 2, xx Platform.Key.R);
-	render_square_at(0, 3, xx Platform.Key._1);
-	render_square_at(1, 3, xx Platform.Key._2);
-	render_square_at(2, 3, xx Platform.Key._3);
-	render_square_at(3, 3, xx Platform.Key._4);
+	render_square_at(0, 0, xx action_to_platform(Action_Key.Square00, state.controls.layout));
+	render_square_at(1, 0, xx action_to_platform(Action_Key.Square10, state.controls.layout));
+	render_square_at(2, 0, xx action_to_platform(Action_Key.Square20, state.controls.layout));
+	render_square_at(3, 0, xx action_to_platform(Action_Key.Square30, state.controls.layout));
+	render_square_at(0, 1, xx action_to_platform(Action_Key.Square01, state.controls.layout));
+	render_square_at(1, 1, xx action_to_platform(Action_Key.Square11, state.controls.layout));
+	render_square_at(2, 1, xx action_to_platform(Action_Key.Square21, state.controls.layout));
+	render_square_at(3, 1, xx action_to_platform(Action_Key.Square31, state.controls.layout));
+	render_square_at(0, 2, xx action_to_platform(Action_Key.Square02, state.controls.layout));
+	render_square_at(1, 2, xx action_to_platform(Action_Key.Square12, state.controls.layout));
+	render_square_at(2, 2, xx action_to_platform(Action_Key.Square22, state.controls.layout));
+	render_square_at(3, 2, xx action_to_platform(Action_Key.Square32, state.controls.layout));
+	render_square_at(0, 3, xx action_to_platform(Action_Key.Square03, state.controls.layout));
+	render_square_at(1, 3, xx action_to_platform(Action_Key.Square13, state.controls.layout));
+	render_square_at(2, 3, xx action_to_platform(Action_Key.Square23, state.controls.layout));
+	render_square_at(3, 3, xx action_to_platform(Action_Key.Square33, state.controls.layout));
 
 	render_texture_at :: (x: int, y: int, tex_slot: V2f, color := V3f.{ 1.0, 1.0, 1.0 }) #expand {
 		push_quad_texture(
@@ -1228,38 +1358,38 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 	}
 
 	render_texture_at(0, 1, LEFT_SLOT);
-	render_hint_at(0, 1, Q_OUTLINE_SLOT);
+	render_hint_at(0, 1, action_to_icon(Action_Key.Square01, state.controls.layout));
 
 	render_texture_at(1, 1, DOWN_SLOT);
-	render_hint_at(1, 1, S_OUTLINE_SLOT);
+	render_hint_at(1, 1, action_to_icon(Action_Key.Square11, state.controls.layout));
 
 	render_texture_at(2, 1, RIGHT_SLOT);
-	render_hint_at(2, 1, D_OUTLINE_SLOT);
+	render_hint_at(2, 1, action_to_icon(Action_Key.Square21, state.controls.layout));
 
 	render_texture_at(1, 2, UP_SLOT);
-	render_hint_at(1, 2, Z_OUTLINE_SLOT);
+	render_hint_at(1, 2, action_to_icon(Action_Key.Square12, state.controls.layout));
 	
 	render_texture_at(2, 0, COIN_SLOT);
-	render_hint_at(2, 0, C_OUTLINE_SLOT);
+	render_hint_at(2, 0, action_to_icon(Action_Key.Square20, state.controls.layout));
 
 	render_texture_at(1, 0, KLAXON_SLOT);
-	render_hint_at(1, 0, X_OUTLINE_SLOT);
+	render_hint_at(1, 0, action_to_icon(Action_Key.Square10, state.controls.layout));
 
 	if scene.camera_locked
 		render_texture_at(0, 0, UNLOCKED_SLOT);
 	else
 		render_texture_at(0, 0, LOCKED_SLOT);
-	render_hint_at(0, 0, W_OUTLINE_SLOT);
+	render_hint_at(0, 0, action_to_icon(Action_Key.Square00, state.controls.layout));
 
 	player := Scene.find_by_player_id(scene, scene.controlled_player_id);
 	if player {
 		if player.server.has_safe_present {
 			render_texture_at(2, 2, SAFE_ZONE_SLOT, .{ 0.5, 1.0, 0.5 });
-			render_hint_at(2, 2, E_OUTLINE_SLOT);
+			render_hint_at(2, 2, action_to_icon(Action_Key.Square22, state.controls.layout));
 		}
 		if player.server.has_hook_present {
 			render_texture_at(0, 2, HOOK_SLOT, .{ 0.5, 1.0, 0.5 });
-			render_hint_at(0, 2, A_OUTLINE_SLOT);
+			render_hint_at(0, 2, action_to_icon(Action_Key.Square02, state.controls.layout));
 
 			for 0..player.server.has_hook_present-1 {
 				push_quad_screen(
@@ -1274,7 +1404,7 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 
 		if player.server.dead {
 			render_texture_at(3, 0, RESURRECT_SLOT, .{ 0.5, 1.0, 0.5 });
-			render_hint_at(3, 0, V_OUTLINE_SLOT);
+			render_hint_at(3, 0, action_to_icon(Action_Key.Square30, state.controls.layout));
 
 			dt := to_float64_seconds(state.controls.time - player.server.dead_time);
 			t := clamp(dt / player.server.dead_cooldown, 0.0, 1.0).(float32);
@@ -1294,7 +1424,7 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 
 	
 	render_texture_at(3, 2, HAND_OPEN_SLOT, .{ 0.5, 1.0, 0.5 });
-	render_hint_at(3, 2, R_OUTLINE_SLOT);
+	render_hint_at(3, 2, action_to_icon(Action_Key.Square32, state.controls.layout));
 }
 
 Escape_Menu_Args :: struct {
@@ -1303,6 +1433,7 @@ Escape_Menu_Args :: struct {
 Escape_Menu_Ret :: struct {
 	sound_checked := false;
 	resume_clicked := false;
+	editor_clicked := false;
 	leave_instance_clicked := false;
 }
 push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_Ret {
@@ -1358,8 +1489,10 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 	popup_size.* = grow(popup_size, pos, cursor);
 
 	cursor.x = pos.x + 14.0;
-	cursor.y += widget_width(state, "leave") + 8.0;
+	cursor.y += 64.0;
 
+	ret.editor_clicked = text_button(state, "Edit", cursor, z = 12, "edit_button", .Bottom_Left);
+	cursor.y += widget_height(state, "edit_button") + 8;
 	ret.sound_checked = labeled_checkbox(
 		state,
 		"Sound",
@@ -1368,11 +1501,12 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 		16,
 		z = 12,
 		"soound_checkbox",
-		align = .Top_Left,
+		align = .Bottom_Left,
 		padding = 0,
 		default = args.sound_enabled
 	).checked;
-	cursor.y += 8;
+	h := widget_height(state, "sound_checkbox");
+	cursor.y += h + 24;
 
 	popup_size.* = grow(popup_size, pos, cursor);
 
@@ -1520,6 +1654,7 @@ push_main_menu :: (
 		.{ state.controls.window_size.x - 16, state.controls.window_size.y - 64 - 16 },
 		.{ 512 + 128, state.controls.window_size.y - 64 - 16 - 16 - 32 },
 		rows,
+		id = "table",
 		align = Align.Top_Right
 	);
 
@@ -1749,6 +1884,8 @@ atom_label :: (
 	id : u64 = 0,
 	generate_offsets := false
 ) -> Atom_Label {
+	_, w := widget(gui, id, struct {});
+
 	push_id(gui, id);
 	defer pop_id(gui);
 
@@ -1833,6 +1970,7 @@ atom_label :: (
 
 	ret.aabb_min = aabb_min;
 	ret.aabb_max = aabb_max;
+	w.aabb = .{ ret.aabb_min, ret.aabb_max };
 	return ret;
 }
 
@@ -2068,6 +2206,7 @@ atom_table :: (
 	pos: V2f,
 	size: V2f,
 	rows: [] $T,
+	id := "table",
 	row_height := 26,
 	z := 0.0,
 	align := Align.Bottom_Left
@@ -2077,7 +2216,7 @@ atom_table :: (
 	State :: struct {
 		selected_row_index: int;
 	}
-	state := widget(gui, 0, State);
+	state := widget(gui, id, State);
 
 	lower_left := align_pos(pos, size, align);
 	ret.aabb_min = lower_left;
@@ -2314,10 +2453,11 @@ checkbox :: (
 	align := Align.Center,
 	default := false
 ) -> Checkbox {
+	state, widget := widget(gui, id, Checkbox);
+
 	push_id(gui, id);
 	defer pop_id(gui);
 
-	state, widget := widget(gui, 0, Checkbox);
 	if widget.age == 0 {
 		state.checked = default;
 	}
@@ -2358,6 +2498,8 @@ labeled_checkbox :: (
 	padding := 4.0,
 	default := false
 ) -> Checkbox {
+	_, w := widget(gui, id, struct {});
+
 	push_id(gui, id);
 	defer pop_id(gui);
 
@@ -2384,6 +2526,7 @@ labeled_checkbox :: (
 		default = default
 	);
 
+	w.aabb = widgets_aabb(gui, string.[ "label", "checkbox" ]);
 	return checkbox_comp;
 }
 labeled_input_text :: (

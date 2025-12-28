@@ -63,17 +63,15 @@ path
 skull
 - path_id: 0
 - speed: 5.0
-- t: 0
 
 skull
 - path_id: 1
 - speed: 5.0
-- t: 0.5
+- offset: 0.5
 
 skull
 - path_id: 3
 - speed: 10
-- t: 0.0
 
 skull
 - path_id: 3

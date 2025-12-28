@@ -247,6 +247,18 @@ win32_get_frame_info :: (info: *Frame_Info) {
 	info.mouse_position.y = xx (info.window_size.y - my);
 	info.window_focused =  (SDL_GetWindowFlags(sdl_window) & SDL_WINDOW_MOUSE_FOCUS) > 0;
 
+
+	GetKeyboardLayout :: (n: Win32.DWORD) -> Win32.HANDLE #foreign user32;
+	LANG_ENGLISH :: 0x09;
+	LANG_FRENCH  :: 0x0C;
+	layout := GetKeyboardLayout(0);
+	if (layout & 0xFF).(int) == {
+		case LANG_ENGLISH;
+			info.layout = .QWERTY;
+		case LANG_FRENCH;
+			info.layout = .AZERTY;
+	}
+
 	event: SDL_Event;
 	while SDL_PollEvent(*event) {
 		if event.type == SDL_MOUSEWHEEL {
@@ -949,3 +961,4 @@ main :: () {
 }
 
 wgpu_native :: #library "../lib/wgpu_native";
+user32      :: #library,system "user32";
