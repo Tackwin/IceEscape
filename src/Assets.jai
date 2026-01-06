@@ -119,6 +119,8 @@ FORMAT;
 #insert #run embed_data("DRONE_OBJ", "drone.obj", #filepath);
 #insert #run embed_data("DRONE_BLADE_OBJ", "drone_blade.obj", #filepath);
 #insert #run embed_data("TRAP_SPIKE_OBJ", "trap_spike.obj", #filepath);
+#insert #run embed_data("PRESSBUTTON_UNPRESSED_OBJ", "Mesh/PressButton_Unpressed.obj", #filepath);
+#insert #run embed_data("PRESSBUTTON_PRESSED_OBJ", "Mesh/PressButton_Pressed.obj", #filepath);
 
 #insert #run embed_data("TROPHY_OBJ", "trophy.obj", #filepath);
 #insert #run embed_data("JUKEBOX_OBJ", "jukebox.obj", #filepath);
@@ -142,6 +144,7 @@ FORMAT;
 
 #insert #run embed_data("CLICK_WAV", "click.wav", #filepath);
 
+#insert #run embed_data("NOTE_WAV", "Sound/Note.wav", #filepath);
 #insert #run embed_data("FOOTSTEP_SNOW_0_MP3", "Sound/footstep_snow_000.mp3", #filepath);
 #insert #run embed_data("FOOTSTEP_SNOW_1_MP3", "Sound/footstep_snow_001.mp3", #filepath);
 #insert #run embed_data("FOOTSTEP_SNOW_2_MP3", "Sound/footstep_snow_002.mp3", #filepath);
@@ -306,6 +309,7 @@ load_everything :: (platform: Platform) {
 			"FLAG_OBJ",
 			"FLAG_DOWN_OBJ",
 			"CLICK_WAV",
+			"NOTE_WAV",
 			"FOOTSTEP_SNOW_0_MP3",
 			"FOOTSTEP_SNOW_1_MP3",
 			"FOOTSTEP_SNOW_2_MP3",
@@ -388,6 +392,8 @@ load_everything :: (platform: Platform) {
 			"MISSILE_OBJ",
 			"DRONE_OBJ",
 			"TRAP_SPIKE_OBJ",
+			"PRESSBUTTON_UNPRESSED_OBJ",
+			"PRESSBUTTON_PRESSED_OBJ",
 			"DRONE_BLADE_OBJ",
 			"TROPHY_OBJ",
 			"NUMBER_0_OBJ",

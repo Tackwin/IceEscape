@@ -616,7 +616,17 @@ build_c_lib :: () {
 		"-shared",
 		"./src/c/wsserver.c",
 		"-o",
-		"./bin/wsserver.dll"
+		"./src/c/wsserver.dll"
+	);
+	run_command(
+		"clang",
+		"-Oz",
+		"--target=wasm64",
+		"-nostdlib",
+		"-c",
+		"-o",
+		"./src/c/walloc.o",
+		"./src/c/walloc.c"
 	);
 }
 

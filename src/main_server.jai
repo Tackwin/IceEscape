@@ -345,6 +345,7 @@ process :: (server: *Server, cmd: Command, sender: Connection) -> bool {
 }
 
 print_messages :: false;
+print_messages_send :: false;
 
 server_receive_tick :: (platform: *Platform, server: *Server) {
 	messages := platform.gather_web_messages();
@@ -386,7 +387,7 @@ server_receive_tick :: (platform: *Platform, server: *Server) {
 server_send_tick :: (platform: *Platform, server: *Server) {
 
 	printed := false;
-	#if print_messages {
+	#if print_messages && print_messages_send {
 		if server.queue.count > 0 {
 			print("Sending % messages from server\n", server.queue.count);
 			printed = true;
@@ -399,7 +400,7 @@ server_send_tick :: (platform: *Platform, server: *Server) {
 		connection := server.queue.connection[it];
 		cmd := server.queue.commands[it];
 
-		#if print_messages {
+		#if print_messages && print_messages_send {
 			print("    %\n", cmd.payload.kind);
 		}
 
@@ -415,7 +416,7 @@ server_send_tick :: (platform: *Platform, server: *Server) {
 		instance := *server.instances[it];
 
 
-		#if print_messages {
+		#if print_messages && print_messages_send {
 			if instance.to_send_count > 0 {
 				print("Instance % sending % messages\n", instance.id, instance.to_send_count);
 				printed = true;
@@ -426,7 +427,7 @@ server_send_tick :: (platform: *Platform, server: *Server) {
 			command := instance.to_send[it].command;
 			target_user_id := instance.to_send[it].target_user_id;
 
-			#if print_messages {
+			#if print_messages && print_messages_send {
 				print("    %\n", command.payload.kind);
 			}
 
@@ -446,7 +447,7 @@ server_send_tick :: (platform: *Platform, server: *Server) {
 		instance.to_send_count = 0;
 	}
 
-	#if print_messages {
+	#if print_messages && print_messages_send {
 		if printed
 			print("\n");
 	}

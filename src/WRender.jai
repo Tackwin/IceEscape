@@ -183,21 +183,56 @@ WTexture :: struct {
 	width: int;
 	height: int;
 
-	make_from_image :: (image: Image, label: string = "unknown") -> WTexture {
+	make_from_image :: (
+		image: Image, label: string = "unknown", tiles_count := V2i.{ 1, 1 }
+	) -> WTexture {
 		texture: WTexture;
 		print("Making image % (% %)\n", label, image.width, image.height);
 
 		desc: WGPUTextureDescriptor = .{};
 		desc.label = toWGPUStringView(tprint("Texture (%)", label));
 		desc.usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst;
-		desc.size.width = xx image.width;
-		desc.size.height = xx image.height;
-		desc.size.depthOrArrayLayers = 1;
+		desc.size.width = xx (image.width / tiles_count.x);
+		desc.size.height = xx (image.height / tiles_count.y);
+		desc.size.depthOrArrayLayers = xx (tiles_count.x * tiles_count.y);
 		desc.mipLevelCount = 1;
 		desc.sampleCount = 1;
 		desc.dimension = ._2D;
 		desc.format = .RGBA8Unorm;
 		texture.gpu = graphics.gpu.deviceCreateTexture(graphics.device, *desc);
+
+		arrayBuffer := image.data.data;
+		if tiles_count.x * tiles_count.y > 1 {
+			c := image.channels;
+			tilesSize := V2i.{
+				image.width / tiles_count.x,
+				image.height / tiles_count.y
+			};
+			arrayBuffer = xx talloc(image.data.count);
+
+			for y: 0..tiles_count.y - 1 {
+				for x: 0..tiles_count.x - 1 {
+					byte_offset :=
+						y * (image.width * tilesSize.y) + x * tilesSize.x;
+
+					for r: 0..image.height / tiles_count.y - 1 {
+						dstBufferX := 0;
+						dstBufferY := (y * tiles_count.x + x) * tilesSize.y + r;
+						dstBufferOffset := dstBufferX + dstBufferY * tilesSize.x;
+
+						srcBufferX := x * tilesSize.x;
+						srcBufferY := y * tilesSize.y + r;
+						srcBufferOffset := srcBufferX + srcBufferY * image.width;
+
+						memcpy(
+							arrayBuffer + dstBufferOffset * image.channels,
+							image.data.data + srcBufferOffset * image.channels,
+							tilesSize.x * image.channels
+						);
+					}
+				}
+			}
+		}
 
 		copyInfo: WGPUTexelCopyTextureInfo;
 		copyInfo.texture = texture.gpu;
@@ -206,18 +241,27 @@ WTexture :: struct {
 		copyInfo.aspect = .All;
 		copyLayout: WGPUTexelCopyBufferLayout;
 		copyLayout.offset = 0;
-		copyLayout.bytesPerRow = xx (image.width * image.channels);
-		copyLayout.rowsPerImage = xx image.height;
+		copyLayout.bytesPerRow = xx (image.width / tiles_count.x * image.channels);
+		copyLayout.rowsPerImage = xx (image.height / tiles_count.y);
 		graphics.gpu.queueWriteTexture(
 			graphics.mainQueue,
 			*copyInfo,
-			image.data.data,
+			arrayBuffer,
 			xx (image.width * image.height * image.channels),
 			*copyLayout,
 			*desc.size
 		);
 
-		texture.view = graphics.gpu.textureCreateView(texture.gpu, null);
+		viewDesc: WGPUTextureViewDescriptor;
+		viewDesc.label = toWGPUStringView(tprint("Texture View (%)", label));
+		viewDesc.format = desc.format;
+		viewDesc.dimension = ._2DArray;
+		viewDesc.mipLevelCount = 1;
+		viewDesc.baseArrayLayer = 0;
+		viewDesc.arrayLayerCount = xx (tiles_count.x * tiles_count.y);
+		viewDesc.aspect = .All;
+		viewDesc.usage = WGPUTextureUsage_TextureBinding;
+		texture.view = graphics.gpu.textureCreateView(texture.gpu, *viewDesc);
 
 		samplerDesc: WGPUSamplerDescriptor = .{};
 		samplerDesc.label = toWGPUStringView(tprint("Texture Sampler (%)", label));
@@ -450,10 +494,11 @@ WFramegraph :: struct {
 
 	Instance :: struct {
 		UV_REPEAT :: 1;
+		UV_NO_TILE :: 2;
 
 		M: M4f;
 		texture_rect: V4f = .{ 0, 0, 1, 1 }; // x, y, width, height
-		useAlbedoNormalMap: u32 = 1;
+		albedo16normal16indices: u32 = 0xFFFF0000; // no normal, albedo 0
 		useShadowMap: u32 = 1;
 		fadeout_z: float32 = 1000.0;
 		flags: u32 = 0;
@@ -496,12 +541,12 @@ init_bindgroup_layout :: (framegraph: *WFramegraph) {
 			entries[0].binding = 0;
 			entries[0].visibility = WGPUShaderStage_Fragment;
 			entries[0].texture.sampleType = .Float;
-			entries[0].texture.viewDimension = ._2D;
+			entries[0].texture.viewDimension = ._2DArray;
 			entries[0].texture.multisampled = 0;
 			entries[1].binding = 1;
 			entries[1].visibility = WGPUShaderStage_Fragment;
 			entries[1].texture.sampleType = .Float;
-			entries[1].texture.viewDimension = ._2D;
+			entries[1].texture.viewDimension = ._2DArray;
 			entries[1].texture.multisampled = 0;
 			entries[2].binding = 2;
 			entries[2].visibility = WGPUShaderStage_Fragment;
@@ -1400,6 +1445,8 @@ render_scene :: (
 		render_antiairs(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_flags(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_turn_tables(framegraph, frame.encoder, shadowPass, scene, store, *extra);
+		render_pressbuttons(framegraph, frame.encoder, shadowPass, scene, store, *extra);
+		render_jukeboxes(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_traps(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_extra(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		//render_mark(framegraph, encoder, shadowPass, scene, store);
@@ -1443,8 +1490,31 @@ render_scene :: (
 		render_flags(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 		render_presents(framegraph, frame.encoder, geometryPass, scene, store);
 		render_turn_tables(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		render_pressbuttons(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		render_jukeboxes(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 		render_traps(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 		render_explosions(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+
+		if true {
+			for 0..10 {
+				t := it / 11.0 * 2 * 3.1415926;
+				factor := cos(t);
+				factor = (1 - factor) / 2.0;
+				factor = factor * factor * factor;
+				factor = exp(-factor) + 0.7;
+				dt := v3(cos(t), sin(t), 0) * factor * 1.5;
+				add_debug_sphere(*extra, scene.camera.locked_drag_anchor_last_drag_pos + dt, scale = 0.05);
+			}
+			add_debug_sphere(*extra, scene.camera.target, scale = 0.05);
+			add_debug_sphere(*extra, scene.camera.target_target, scale = 0.1);
+			add_debug_sphere(*extra, scene.camera.locked_drag_anchor, scale = 0.2);
+			add_debug_sphere(
+				*extra,
+				scene.camera.locked_drag_anchor_last_drag_pos,
+				color = V4f.{ 1, 0, 0, 1 },
+				scale = 0.3
+			);
+		}
 
 		graphics.gpu.renderPassEncoderSetBindGroup(
 			geometryPass, 1, framegraph.textureBindGroup, 0, null
@@ -1629,6 +1699,20 @@ render_gui :: (
 
 	graphics.gpu.renderPassEncoderEnd(uiPass);
 	graphics.gpu.renderPassEncoderRelease(uiPass);
+}
+
+add_debug_sphere :: (
+	extra: *Extra,
+	pos: V3f,
+	color := V4f.{ 1, 1, 1, 1 },
+	scale := 1.0
+) {
+	cylinder: Extra.Cylinder;
+	cylinder.M = M4f.translate(pos);
+	M4f.scale(*cylinder.M, v3(scale, scale, scale));
+	cylinder.color = v3(color);
+	array_add(*extra.cylinders, cylinder);
+
 }
 
 render_mark :: (
@@ -2022,6 +2106,89 @@ render_turn_tables :: (
 	}
 	if instanced.count > 0
 		draw(framegraph, pass, store.turn_table_turn_model, instanced.count);
+}
+render_pressbuttons :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store,
+	extra: *Extra
+) {
+	instanced := append_instance_buffer(framegraph);
+	for scene.pressbuttons {
+		if it.activated
+			continue;
+
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+		{
+			needed := ceil(scene.players.count / 1.5).(int);
+			left := needed - it.last_player_count;
+			added_numbers := 0;
+			while left > 0 {
+				M := M4f.translate(it.position + V3f.{ added_numbers * 0.5, 0, 0.25 });
+				if it.count_changed_juice_t > 0 {
+					M = M * scale_matrix(
+						1.0 + ease_up_and_back(1.0 - it.count_changed_juice_t) * 0.5
+					);
+				}
+
+				number: Extra.Number;
+				number.M = M;
+				number.number = xx (left % 10);
+				array_add(*extra.numbers, number);
+				left /= 10;
+				added_numbers += 1;
+			}
+		}
+	}
+	if instanced.count > 0
+		draw(framegraph, pass, store.pressbutton_unpressed, instanced.count);
+	
+	instanced = append_instance_buffer(framegraph);
+	for scene.pressbuttons {
+		if !it.activated
+			continue;
+
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0
+		draw(framegraph, pass, store.pressbutton_pressed, instanced.count);
+}
+
+render_jukeboxes :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store,
+	extra: *Extra
+) {
+	instanced := append_instance_buffer(framegraph);
+	for scene.jukeboxes {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		M := M4f.translate(it.position);
+		M *= to_rotation_matrix(
+			axis_angle(v3(0.0, 0, 1), (0.5 * 2 * 3.1415926).(float32))
+		);
+		instance.M = M;
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count == 0
+		return;
+
+	draw(framegraph, pass, store.jukebox_model, instanced.count);
 }
 
 render_traps :: (
@@ -2663,14 +2830,13 @@ render_players :: (
 	}
 }
 
-set_use_normal_map :: (instance: *WFramegraph.Instance, use: bool) {
-	if use {
-		instance.useAlbedoNormalMap |= 2;
-	} else {
-		x := instance.useAlbedoNormalMap.(s64);
-		x &= ~2;
-		instance.useAlbedoNormalMap = x.(u32);
-	}
+set_albedo_map_idx :: (instance: *WFramegraph.Instance, idx: int) {
+	instance.albedo16normal16indices &= 0xFFFF0000;
+	instance.albedo16normal16indices |= (idx & 0xFFFF).(u32);
+}
+set_normal_map_idx :: (instance: *WFramegraph.Instance, idx: int) {
+	instance.albedo16normal16indices &= 0x0000FFFF;
+	instance.albedo16normal16indices |= (idx << 16).(u32);
 }
 
 render_terrain :: (
@@ -2692,8 +2858,12 @@ render_terrain :: (
 		instance.* = .{};
 		pos := Scene.tile_bottom_left(scene, V2i.{ x, y });
 		instance.M = M4f.translate(pos) * scale_matrix(v3(terrain.tile_size, 1.0));
-		instance.texture_rect = Store.get_tile_rect(it.kind);
-		set_use_normal_map(instance, true);
+		set_normal_map_idx(instance, Store.get_tile_idx(it.kind));
+		set_albedo_map_idx(instance, Store.get_tile_idx(it.kind));
+		instance.texture_rect.x = xx x;
+		instance.texture_rect.y = xx y;
+		if it.kind != .Grass
+			instance.flags = instance.UV_NO_TILE;
 	}
 	if instanced.count == 0 {
 		return;

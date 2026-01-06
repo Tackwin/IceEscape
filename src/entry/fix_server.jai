@@ -44,6 +44,7 @@ win32_gather_web_messages :: () -> [] Web_Message {
 		it.sender = xx (*receive_buffer[cursor]).(*u64).*;
 		it.data.count = xx (*receive_buffer[cursor + 8]).(*u64).*;
 		it.data.data  = receive_buffer.data + cursor + 16;
+		cursor = (it.data.count.(u64) + (it.data.data.(u64) - receive_buffer.data.(u64))).(s64);
 	}
 
 	return msgs;

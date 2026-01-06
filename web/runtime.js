@@ -958,10 +958,9 @@ jai_imports.wasm_write_string = (s_count, s_data, to_standard_error) => {
 		data_view = new DataView(jai_exports.memory.buffer);
 	}
 
-	const text_decoder = new TextDecoder();
-	const u8 = new Uint8Array(data_view);
-	const bytes = u8.subarray(Number(s_data), Number(s_data) + Number(s_count));
-	const string = text_decoder.decode(bytes);
+	const string = new TextDecoder().decode(
+		new Uint8Array(jai_exports.memory.buffer, Number(s_data), Number(s_count))
+	);
 	write_to_console_log(string, to_standard_error);
 };
 
@@ -1108,6 +1107,8 @@ let sound_id_to_state = {};
 const SOUND_PLAYING = 1;
 const SOUND_STOPPED = 2;
 
+let master_gain = null;
+
 const blobToAudioBuffer = async (blob) => {
 	const buffer = await blob.arrayBuffer();
 	return await audio_context.decodeAudioData(buffer);
@@ -1158,8 +1159,13 @@ jai_imports.js_play_audio = (params_ptr) => {
 	const source = audio_context.createBufferSource();
 	source.buffer = buffer;
 	source.loop = loop;
-	// source.playbackRate.value = pitch;
+	source.playbackRate.value = Math.pow(2, pitch / 12);
 	
+	if (master_gain === null) {
+		master_gain = audio_context.createGain();
+		master_gain.connect(audio_context.destination);
+	}
+
 	const gainNode = audio_context.createGain();
 	gainNode.gain.setValueAtTime(0, audio_context.currentTime);
 
@@ -1180,11 +1186,11 @@ jai_imports.js_play_audio = (params_ptr) => {
 		
 		source.connect(gainNode);
 		gainNode.connect(panner);
-		panner.connect(audio_context.destination);
+		panner.connect(master_gain);
 	} else {
 		// no spatialization
 		source.connect(gainNode);
-		gainNode.connect(audio_context.destination);
+		gainNode.connect(master_gain);
 	}
 	
 	source.start(delay / 1000);
@@ -1205,6 +1211,16 @@ jai_imports.js_play_audio = (params_ptr) => {
 	};
 
 	setU64(sound_id_ptr, 0, sound_id);
+}
+
+jai_imports.js_volume_audio = (params_ptr) => {
+	const volume = getF32(params_ptr, 0);
+
+	if (master_gain === null) {
+		master_gain = audio_context.createGain();
+		master_gain.connect(audio_context.destination);
+	}
+	master_gain.gain.value = volume;
 }
 
 jai_imports.js_query_sound = (params_ptr) => {
@@ -3215,14 +3231,14 @@ const convertTextureViewDimensionToJs = (dimension) => {
 const getTexureViewDescriptor = (ptr) => {
 	const nextInChain_ptr = getU64(ptr, 0);
 	const label = getString(ptr + 8n);
-	const format = getU32(ptr, 16);
-	const dimension = getU32(ptr, 20);
-	const baseMipLevel = getU32(ptr, 24);
-	const mipLevelCount = getU32(ptr, 28);
-	const baseArrayLayer = getU32(ptr, 32);
-	const arrayLayerCount = getU32(ptr, 36);
-	const aspect = getU32(ptr, 40);
-	const usage = getU64(ptr, 48);
+	const format = getU32(ptr, 24);
+	const dimension = getU32(ptr, 28);
+	const baseMipLevel = getU32(ptr, 32);
+	const mipLevelCount = getU32(ptr, 36);
+	const baseArrayLayer = getU32(ptr, 40);
+	const arrayLayerCount = getU32(ptr, 44);
+	const aspect = getU32(ptr, 48);
+	const usage = getU64(ptr, 56);
 
 	let jsFormat = undefined;
 	if (format != 0) {
@@ -3248,7 +3264,7 @@ const getTexureViewDescriptor = (ptr) => {
 		format: jsFormat,
 		label: label,
 		mipLevelCount: mipLevelCount,
-		usage: usage
+		usage: Number(usage)
 	};
 }
 

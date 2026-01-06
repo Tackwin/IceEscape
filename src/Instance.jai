@@ -228,17 +228,22 @@ handle_file_change :: (instance: *Instance, path: string) {
 init_instance :: (instance: *Instance) {
 	terrains :: string.[
 		"pick",
-		"right",
-		"turn", // OK
-		"intro", // OK
-		"roundabout", // OK
-		"chamber", // OK
-		"buzz", // OK
+		"big_robot", // OK
+		"big_turn", // OK
+		"big_intro", // OK
+		"big_ship", // OK
+		"roundandround", // OK
 		"pounding", // OK
+		"turn",
+		"intro", // OK
+		"buzz", // OK
+		"chamber", // OK
+		"roundabout", // OK
+		"right",
 		"funny", // OK
-		"frogger",
-		"volcano", // OK
 		"here_and_there", // OK
+		"volcano", // OK
+		"frogger",
 		"tetris",
 	];
 	

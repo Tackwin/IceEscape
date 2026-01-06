@@ -98,6 +98,8 @@ Store :: struct {
 	drone_blade_model: WRender.Model;
 	trap_spike_model: WRender.Model;
 	end_hook_model: WRender.Model;
+	pressbutton_pressed: WRender.Model;
+	pressbutton_unpressed: WRender.Model;
 
 	antiair_camion_model: WRender.Model;
 	antiair_canon_model: WRender.Model;
@@ -124,7 +126,7 @@ Store :: struct {
 	number_8_model: WRender.Model;
 	number_9_model: WRender.Model;
 
-	juukebox_model: WRender.Model;
+	jukebox_model: WRender.Model;
 
 	unit_cylinder_model: WRender.Model;
 	unit_sphere_model: WRender.Model;
@@ -173,6 +175,8 @@ Store :: struct {
 	boat_sailing_2_wav: Platform.Audio;
 
 	drone_buzzing_0_wav: Platform.Audio;
+
+	note_wav: Platform.Audio;
 
 	explosion_0_mp3: Platform.Audio;
 	explosion_1_mp3: Platform.Audio;
@@ -385,6 +389,22 @@ get_tile_rect :: (id: Scene.Tile.Kind) -> V4f {
 	rect.w -= 1.0 / 512.0;
 	return rect;
 }
+get_tile_idx :: (id: Scene.Tile.Kind) -> int {
+	if #complete id == {
+		case .None;
+			return 0;
+		case .Ice;
+			return 13;
+		case .Slippy_Ice;
+			return 8;
+		case .Grass;
+			return 12;
+		case .Dirt;
+			return 5;
+		case .Funny_Ice;
+			return 9;
+	}
+}
 
 get_footstep_snow_sound :: (store: Store, index: int) -> *Platform.Audio {
 	if index == 0 {
@@ -499,11 +519,11 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 
 	terrain_tile_albedo_png := Assets.load_qoi(Assets.TERRAIN_TILE_ALBEDO_PNG,, temp);
 	store.terrain_tile_albedo =
-		WRender.WTexture.make_from_image(terrain_tile_albedo_png, "terrain_tile_albedo");
+		WRender.WTexture.make_from_image(terrain_tile_albedo_png, "terrain_tile_albedo", .{ 4, 4 });
 
 	terrain_tile_normal_png := Assets.load_qoi(Assets.TERRAIN_TILE_NORMAL_PNG,, temp);
 	store.terrain_tile_normal =
-		WRender.WTexture.make_from_image(terrain_tile_normal_png, "terrain_tile_normal");
+		WRender.WTexture.make_from_image(terrain_tile_normal_png, "terrain_tile_normal", .{ 4, 4 });
 		
 	particle_texture_png := Assets.load_qoi(Assets.PARTICLE_TEXTURE_PNG,, temp);
 	store.particle_texture =
@@ -533,6 +553,8 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.tombstone_model = WRender.Model.make_from_obj(Assets.TOMBSTONE_OBJ, "tombstone");
 	store.skull_model = WRender.Model.make_from_obj(Assets.SKULL_OBJ, "skull");
 	store.end_hook_model = WRender.Model.make_from_obj(Assets.END_HOOK_OBJ, "end_hook");
+	store.pressbutton_pressed = WRender.Model.make_from_obj(Assets.PRESSBUTTON_PRESSED_OBJ, "pressbutton_pressed");
+	store.pressbutton_unpressed = WRender.Model.make_from_obj(Assets.PRESSBUTTON_UNPRESSED_OBJ, "pressbutton_unpressed");
 	store.pirateship_model = WRender.Model.make_from_obj(Assets.PIRATE_SHIP_OBJ, "pirateship");
 	store.coin_model = WRender.Model.make_from_obj(Assets.COIN_OBJ, "coin");
 	store.key_model = WRender.Model.make_from_obj(Assets.KEY_OBJ, "key");
@@ -570,7 +592,7 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.number_9_model = WRender.Model.make_from_obj(Assets.NUMBER_9_OBJ, "number_9");
 	store.present_a_model = WRender.Model.make_from_obj(Assets.PRESENT_A_OBJ, "present_a");
 	store.present_b_model = WRender.Model.make_from_obj(Assets.PRESENT_B_OBJ, "present_b");
-	store.juukebox_model = WRender.Model.make_from_obj(Assets.JUKEBOX_OBJ, "juukebox");
+	store.jukebox_model = WRender.Model.make_from_obj(Assets.JUKEBOX_OBJ, "juukebox");
 
 	store.unit_cylinder_model = WRender.Model.make_from_obj(Assets.UNIT_CYLINDER_OBJ, "unit_cylinder");
 	store.unit_sphere_model = WRender.Model.make_from_obj(Assets.UNIT_SPHERE_OBJ, "unit_sphere");
@@ -616,6 +638,8 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.boat_sailing_2_wav = platform.load_audio(xx Assets.BOAT_SAILING_2_WAV, false);
 
 	store.drone_buzzing_0_wav = platform.load_audio(xx Assets.DRONE_BUZZING_0_WAV, true);
+
+	store.note_wav = platform.load_audio(xx Assets.NOTE_WAV, true);
 
 	store.explosion_0_mp3 = platform.load_audio(xx Assets.EXPLOSION_0_MP3, false);
 	store.explosion_1_mp3 = platform.load_audio(xx Assets.EXPLOSION_1_MP3, false);

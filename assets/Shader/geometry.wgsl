@@ -16,7 +16,7 @@ struct UniformData {
 struct InstanceData {
 	M: mat4x4<f32>,
 	texture_rect: vec4f, // x, y, width, height
-	useAlbedoNormalMap: u32,
+	albedo16normal16indices: u32,
 	useShadowMap: u32,
 	fadeout_z: f32,
 	flags: u32,
@@ -35,8 +35,8 @@ struct VertexOutput {
 @group(0) @binding(0) var<uniform> uniforms: UniformData;
 @group(0) @binding(1) var<storage, read> instanceData: array<InstanceData>;
 
-@group(1) @binding(0) var albedoMap: texture_2d<f32>;
-@group(1) @binding(1) var normalMap: texture_2d<f32>;
+@group(1) @binding(0) var albedoMap: texture_2d_array<f32>;
+@group(1) @binding(1) var normalMap: texture_2d_array<f32>;
 @group(1) @binding(2) var shadowMap: texture_depth_2d;
 @group(1) @binding(3) var albedoSampler: sampler;
 @group(1) @binding(4) var normalSampler: sampler;
@@ -126,6 +126,87 @@ fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
 	return intensity;
 }
 
+
+fn hash4(p: vec2f) -> vec4f {
+	return fract(sin(vec4f(1.0 + dot(p,vec2f(37.0,17.0)),
+						   2.0 + dot(p,vec2f(11.0,47.0)),
+						   3.0 + dot(p,vec2f(41.0,29.0)),
+						   4.0 + dot(p,vec2f(23.0,31.0))
+			)
+		) * 103.0
+	);
+}
+fn textureNoTile(
+	t: texture_2d_array<f32>,
+	samp: sampler,
+	idx: u32,
+	uv: vec2f
+) -> vec4f
+{
+	let iuv = floor(uv);
+	let fuv = fract(uv);
+
+	// generate per-tile transform
+	var ofa = hash4(iuv + vec2f(0,0));
+	var ofb = hash4(iuv + vec2f(1,0));
+	var ofc = hash4(iuv + vec2f(0,1));
+	var ofd = hash4(iuv + vec2f(1,1));
+	
+	let ddx = dpdx( uv );
+	let ddy = dpdy( uv );
+
+	// transform per-tile uvs
+	ofa.z = sign( ofa.z-0.5 );
+	ofa.w = sign( ofa.w-0.5 );
+
+	ofb.z = sign( ofb.z-0.5 );
+	ofb.w = sign( ofb.w-0.5 );
+
+	ofc.z = sign( ofc.z-0.5 );
+	ofc.w = sign( ofc.w-0.5 );
+
+	ofd.z = sign( ofd.z-0.5 );
+	ofd.w = sign( ofd.w-0.5 );
+	
+	// uv's, and derivatives (for correct mipmapping)
+	let uva = uv*ofa.zw + ofa.xy;
+	let ddxa = ddx*ofa.zw;
+	let ddya = ddy*ofa.zw;
+
+	let uvb = uv*ofb.zw + ofb.xy;
+	let ddxb = ddx*ofb.zw;
+	let ddyb = ddy*ofb.zw;
+
+	let uvc = uv*ofc.zw + ofc.xy;
+	let ddxc = ddx*ofc.zw;
+	let ddyc = ddy*ofc.zw;
+
+	let uvd = uv*ofd.zw + ofd.xy;
+	let ddxd = ddx*ofd.zw;
+	let ddyd = ddy*ofd.zw;
+
+	// fetch and blend
+	let b = smoothstep(vec2f(0.25, 0.25), vec2f(0.75, 0.75), fuv);
+	
+	return mix(mix(textureSampleGrad(t, samp, uva, idx, ddxa, ddya),
+	               textureSampleGrad(t, samp, uvb, idx, ddxb, ddyb), b.x),
+	           mix(textureSampleGrad(t, samp, uvc, idx, ddxc, ddyc),
+	               textureSampleGrad(t, samp, uvd, idx, ddxd, ddyd), b.x), b.y);
+}
+
+fn flaggedSample(
+	map: texture_2d_array<f32>, samp: sampler, uv: vec2f, idx: u32, flags: u32
+) -> vec4f {
+	let UV_NO_TILE = u32(2);
+
+	if (flags & UV_NO_TILE) > 0 {
+		return textureNoTile(map, samp, idx, uv);
+	} else {
+		return textureSample(map, samp, uv, idx);
+	}
+	return vec4f();
+}
+
 @fragment fn fs(
 	@location(0) worldPos: vec3f,
 	@location(1) worldNor: vec3f,
@@ -133,8 +214,11 @@ fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
 	@interpolate(flat) @location(3) instanceIndex: u32
 ) -> @location(0) vec4f {
 	var true_uv = uv;
+	let albedoIdx = instanceData[instanceIndex].albedo16normal16indices & 0xFFFF;
+	let normalIdx = instanceData[instanceIndex].albedo16normal16indices >> 16;
+	let flags = instanceData[instanceIndex].flags;
 
-	if ((instanceData[instanceIndex].flags & 1) != 0) {
+	if ((flags & 1) != 0) {
 		// UV_REPEAT
 		var wrapped_uv = vec2f(
 			true_uv.x - floor(true_uv.x),
@@ -150,8 +234,8 @@ fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
 	// return vec4f(shadowUV, shadowCoord.z / shadowCoord.w, 1.0);
 
 	var color: vec4f = vec4f(1.0, 0.0, 1.0, 1.0);
-	if ((instanceData[instanceIndex].useAlbedoNormalMap & 1u) != 0u) {
-		color = textureSample(albedoMap, albedoSampler, true_uv);
+	if (albedoIdx < textureNumLayers(albedoMap)) {
+		color = flaggedSample(albedoMap, albedoSampler, true_uv, albedoIdx, flags);
 	}
 
 	var alpha = color.w;
@@ -168,8 +252,8 @@ fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
 	}
 
 	var normal: vec3f = normalize(worldNor);
-	if ((instanceData[instanceIndex].useAlbedoNormalMap & 2u) != 0u) {
-		normal = textureSample(normalMap, normalSampler, true_uv).xyz * 2.0 - 1.0;
+	if (normalIdx < textureNumLayers(albedoMap)) {
+		normal = flaggedSample(normalMap, normalSampler, true_uv, normalIdx, flags).rgb * 2.0 - vec3f(1.0);
 		normal = normalize(normal);
 	}
 

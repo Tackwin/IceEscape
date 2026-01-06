@@ -20,11 +20,16 @@
 + Added funny ice
 + Added sail boat
 + Remove taken models
-- Implement volume control on web
++ Implement volume control on web
 + Remove score on wipe
-- Way to remove player from the server
++ Way to remove player from the server
 + Change points UI
 - Change endscreen
 + Revive after 60 seconds
 + Fix bug that score reset on next level
 + Don't play sound when the player scoring isn't the controlling player
+- Add lights
+- Add button press
+- Add trails
+- Add camera rail
+- Make the ships dive and resurface at the end of open paths

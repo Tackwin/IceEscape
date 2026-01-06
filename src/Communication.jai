@@ -65,6 +65,7 @@ Command :: struct {
 		sender: int;
 		position: V3f;
 		direction: V3f;
+		birthtime: float32;
 	}
 	Klaxon :: struct {
 		player_id: int;
@@ -159,6 +160,8 @@ Command :: struct {
 		most_revive_id: int = -1;
 
 		best_scores_id: [5] int = .[-1, -1, -1, -1, -1];
+
+		time := 0.0;
 	}
 	Sync_Clock :: struct {
 		t: float64;
@@ -336,6 +339,13 @@ Command :: struct {
 		build_second: int;
 	}
 
+	Note_Played :: struct {
+		pitch: int;
+		jukebox_id: int;
+
+		from_coin_id: int;
+	}
+
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
@@ -344,7 +354,7 @@ Command :: struct {
 		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook, Cheat_Action, Buy_Ask, Buy_Response,
 		Sync_Stand_In, Ask_Respawn, Ask_Instance_List, Ans_Instance_List, Ask_Enter_Instance,
 		Ans_Enter_Instance, Leave_Instance, Create_Instance, Ans_Create_Instance, Version_Info,
-		Sync_Stats, Sync_Clock
+		Sync_Stats, Sync_Clock, Note_Played
 	);
 	sent_timestamp: float64;
 }
@@ -432,6 +442,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Sync_AntiAir; #through;
 		case .Klaxon; #through;
 		case .Sync_Moving_Frame; #through;
+		case .Note_Played; #through;
 		case .NTP; #through;
 		case .Sync_Stand_In; #through;
 		case .Hooked_Player; #through;
@@ -601,6 +612,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
 		case .Sync_Hook; #through;
+		case .Note_Played; #through;
 		case .Sync_Tombstone; #through;
 		case .Retire; #through;
 		case .AntiAir_Shoot; #through;

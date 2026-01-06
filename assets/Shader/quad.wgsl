@@ -24,9 +24,9 @@ struct VertexOutput {
 
 @group(0) @binding(0) var<uniform> uniforms: UniformData;
 @group(0) @binding(1) var<storage, read> instanceData: array<InstanceData>;
-@group(0) @binding(2) var albedoMap: texture_2d<f32>;
+@group(0) @binding(2) var albedoMap: texture_2d_array<f32>;
 @group(0) @binding(3) var albedoSampler: sampler;
-@group(0) @binding(4) var sdfMap: texture_2d<f32>;
+@group(0) @binding(4) var sdfMap: texture_2d_array<f32>;
 @group(0) @binding(5) var sdfSampler: sampler;
 
 @vertex fn vs(
@@ -78,7 +78,7 @@ fn screenPxRange(uv: vec2f, scale: f32) -> f32 {
 	var color = instance.color;
 	if (instance.texture_rect.z > 0.0 && instance.texture_rect.w > 0.0) {
 		if ((instance.z30sdf2 % 4) > 0) {
-			var msd = textureSample(sdfMap, sdfSampler, uv).rgb;
+			var msd = textureSample(sdfMap, sdfSampler, uv, 0).rgb;
 			var sd = median(msd.r, msd.g, msd.b);
 			var width = screenPxRange(uv, 1.0);
 
@@ -115,7 +115,7 @@ fn screenPxRange(uv: vec2f, scale: f32) -> f32 {
 
 		}
 		else {
-			color = textureSample(albedoMap, albedoSampler, uv);
+			color = textureSample(albedoMap, albedoSampler, uv, 0);
 		}
 	}
 

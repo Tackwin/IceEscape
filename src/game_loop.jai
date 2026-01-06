@@ -74,6 +74,29 @@ process_game :: (
 		return true;
 	}
 
+	note_played: *Command.Note_Played = isa(command.payload, Command.Note_Played);
+	if note_played {
+		jukebox := Scene.find_by_jukebox_id(state.scene, note_played.jukebox_id);
+		if jukebox {
+			pitches :: float.[ 67, 66, 63, 57, 56, 64, 68, 72 ];
+
+			trigger: Scene.Sound_Trigger;
+			trigger.kind = .Note;
+			trigger.pitch = xx (pitches[note_played.pitch % pitches.count] - 56);
+			trigger.position = jukebox.position;
+			array_add(*state.scene.sound_triggers, trigger);
+		}
+
+		for * state.scene.coins {
+			if it.id == note_played.from_coin_id {
+				remove it;
+				break;
+			}
+		}
+
+		return true;
+	}
+
 	sync_scene: *Command.Sync_Scene = isa(command.payload, Command.Sync_Scene);
 	if sync_scene {
 		Scene.clear_scene_run(*state.scene);
@@ -178,6 +201,33 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		if player {
 			GUI.push_point_ui(*app_user.gui_state, player);
 		}
+	}
+	{
+		time := state.scene.client.clock;
+		minutes := floor(time / 60);
+		seconds := fmod_cycling(time, 60);
+		milliseconds := frac(time) * 1000;
+		label := GUI.atom_label(
+			*app_user.gui_state,
+			tprint(
+				"%:%s %ms",
+				formatInt(minutes.(int), minimum_digits = 3, padding = #char "_"),
+				formatInt(seconds.(int), minimum_digits = 2, padding = #char "_"),
+				formatInt(milliseconds.(int), minimum_digits = 3, padding = #char "_")
+			),
+			app_user.gui_state.controls.window_size,
+			scale=18,
+			z=1,
+			align = .Top_Right,
+			outline = true
+		);
+		GUI.push_quad_screen(
+			*app_user.gui_state,
+			.{ label.aabb_min, label.aabb_max },
+			GUI.COLOR_SOMBER_A,
+			0,
+			a = 0.45
+		);
 	}
 
 	if state.scene.end_scene_countdown_started {
@@ -531,6 +581,7 @@ sounding :: (
 		for counter: 1..it.count {
 			audio: Audio;
 			audio.id = -1;
+			audio.pitch = RNG.random_uniform(*scene.client_rng, 0.8, 1.2);
 			if it.kind == {
 				case .Footstep_Snow;
 					idx := RNG.random_uniform(*scene.client_rng, 0, 5);
@@ -579,13 +630,16 @@ sounding :: (
 				case .Point_Up;
 					audio = store.point_up_mp3;
 					audio.volume = 0.5;
+				case .Note;
+					audio = store.note_wav;
+					audio.pitch = it.pitch;
+					audio.exponent = 1.0;
 			}
 			if audio.id == -1
 				continue;
 			if it.inhead
 				audio.exponent = 0.0;
 
-			audio.pitch = RNG.random_uniform(*scene.client_rng, 0.8, 1.2);
 			audio.kind = .Sound;
 			audio.repeating = false;
 			audio.delay = counter * 50; // Stagger sounds to avoid audio clutter.

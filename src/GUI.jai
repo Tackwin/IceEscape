@@ -982,60 +982,150 @@ push_point_ui :: (state: *GUI_State, player: Scene.Player) {
 }
 
 push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
-	dt := to_float64_seconds(state.controls.time - scene.end_scene_countdown_time);
-	dt = scene.end_scene_countdown - dt;
-	text := tprint("you have % seconds left to go through the gate !", ceil(dt).(s64));
-	display_player_icon :: (player_id: int, p: V2f) #expand {
+	display_player_icon :: (
+		player_id: int, p: V2f, z := 10.0, size := 24
+	) #expand {
 		player := Scene.find_by_player_id(scene, player_id);
 		if !player
 			return;
 		push_quad_screen(
 			state,
-			pos = .{ p.x - 24 - 1, p.y - 24 - 1 },
-			size = .{ 48 + 2, 48 + 2 },
+			pos = .{ p.x - size, p.y - size },
+			size = .{ size * 2, size * 2 },
 			color = COLOR_HIGHLIGHT_A,
-			z = 0
+			z = z + 0.1
 		);
 		push_quad_screen(
 			state,
-			pos = .{ p.x - 24, p.y - 24 },
-			size = .{ 48, 48 },
+			pos = .{ p.x - size - 1, p.y - size - 1 },
+			size = .{ 2 * size, 2 * size },
 			color = COLOR_BRIGHT_A,
-			z = 1
+			z = z + 0.2
 		);
 		push_quad_texture(
 			state,
-			pos = .{ p.x - 24, p.y - 24 },
-			size = .{ 48, 48 },
+			pos = .{ p.x - size - 1, p.y - size - 1 },
+			size = .{ 2 * size - 2, 2 * size - 2 },
 			color = .{ 1.0, 1.0, 1.0 },
 			tex_slot = model_id_to_slot(xx player.server.model_id),
-			z = 2
+			z = z + 0.3
 		);
 	}
+	center := v2(state.controls.window_size.x / 2, 3 * state.controls.window_size.y / 4);
+	size   := v2(1024.0 - 128, 258.0);
 
-	cursor := V2f.{
-		state.controls.window_size.x / 2, state.controls.window_size.y * 0.75
-	};
-	cursor.y -= push_text(state, "Level cleared !", cursor, 48, align = .Center).y;
-	cursor.y -= 8;
-	push_text(state, text, cursor, 48, -0.5, align = .Center);
+	window_aabb := pos_size(center - size / 2.0, size);
+	push_quad_screen(state, window_aabb, v3(GRAY_20), z = 10.0);
+	push_quad_screen(state, shrink(window_aabb, 1), v3(GRAY_80), z = 10.1);
 
-	push_text(state, "Top 5 players on this level", V2f.{ 280, 374 }, 24);
-	for scene.client.end_level.best_scores_id {
-		display_player_icon(it, V2f.{ 280 + 32 + 64.0 * it_index, 374 - 48 });
-	}
-
-	push_text(state, "Finisher", V2f.{ 762, 374 - 00 }, 24);
-	display_player_icon(scene.client.end_level.winner_id, V2f.{ 762 + 196 + 12, 374 + 12 });
-
-	push_text(state, "Most deaths", V2f.{ 762, 374 - 64}, 24);
-	display_player_icon(
-		scene.client.end_level.most_death_id, V2f.{ 762 + 196 + 12, 374 - 64 + 12 }
+	atom_label(
+		state,
+		"Level cleared",
+		v2(center.x, top(window_aabb) - 8),
+		z = 11.0,
+		align=.Top_Center,
+		scale=24,
+		color = GRAY_00
+	);
+	dt := to_float64_seconds(state.controls.time - scene.end_scene_countdown_time);
+	dt = scene.end_scene_countdown - dt;
+	text := tprint("% seconds before next level !", ceil(dt).(s64));
+	atom_label(
+		state,
+		text,
+		v2(center.x, top(window_aabb) - 32 - 8),
+		z = 11.0,
+		align=.Top_Center,
+		scale=16,
+		color = GRAY_20
 	);
 
-	push_text(state, "Most resurrections", V2f.{ 762, 374 - 128 }, 24);
+	push_quad_screen(
+		state,
+		pos_size(window_aabb.min.x, window_aabb.max.y - 64, width(window_aabb), 1),
+		v3(GRAY_20),
+		z = 10.2
+	);
+	atom_label(
+		state,
+		"Winner:",
+		v2(center.x - 8, top(window_aabb) - 64 - 32),
+		z = 11.0,
+		align=.Center_Right,
+		scale=24,
+		color = GRAY_00
+	);
 	display_player_icon(
-		scene.client.end_level.most_revive_id, V2f.{ 762 + 196 + 12, 374 - 128 + 12 }
+		scene.client.end_level.winner_id, .{ center.x + 8 + 24, top(window_aabb) - 64 - 32 }, z = 10
+	);
+	push_quad_screen(
+		state,
+		pos_size(window_aabb.min.x, window_aabb.max.y - 64 - 64, width(window_aabb), 1),
+		v3(GRAY_20),
+		z = 10.2
+	);
+	atom_label(
+		state,
+		"Most deaths",
+		v2(window_aabb.min.x + width(window_aabb) / 4, top(window_aabb) - 64 - 64 - 16),
+		z = 11.0,
+		align=.Center,
+		scale=16,
+		color = GRAY_00
+	);
+	push_quad_screen(
+		state,
+		pos_size(center.x, window_aabb.max.y - 64 - 64 - 64 - 32, 1, 64 + 32),
+		v3(GRAY_20),
+		z = 10.2
+	);
+	atom_label(
+		state,
+		"Most revives",
+		v2(window_aabb.min.x + 3 * width(window_aabb) / 4, top(window_aabb) - 64 - 64 - 16),
+		z = 11.0,
+		align=.Center,
+		scale=16,
+		color = GRAY_00
+	);
+	push_quad_screen(
+		state,
+		pos_size(window_aabb.min.x, window_aabb.max.y - 64 - 64 - 64 - 32, width(window_aabb), 1),
+		v3(GRAY_20),
+		z = 10.2
+	);
+	time := scene.client.end_level.time;
+	minutes := floor(time / 60);
+	seconds := fmod_cycling(time, 60);
+	milliseconds := frac(time) * 1000;
+	atom_label(
+		state,
+		tprint(
+			"Time: %:%s %ms",
+			formatInt(minutes.(int), minimum_digits = 3, padding = #char "_"),
+			formatInt(seconds.(int), minimum_digits = 2, padding = #char "_"),
+			formatInt(milliseconds.(int), minimum_digits = 3, padding = #char "_")
+		),
+		v2(window_aabb.min.x + 1 * width(window_aabb) / 4, top(window_aabb) - 64 - 64 - 64 - 32 - 16),
+		z = 11.0,
+		align=.Center,
+		scale=16,
+		color = GRAY_00
+	);
+	atom_label(
+		state,
+		"WR xx:xx s xx ms",
+		v2(window_aabb.min.x + 3 * width(window_aabb) / 4, top(window_aabb) - 64 - 64 - 64 - 32 - 16),
+		z = 11.0,
+		align=.Center,
+		scale=16,
+		color = GRAY_00
+	);
+	push_quad_screen(
+		state,
+		pos_size(window_aabb.min.x, window_aabb.max.y - 64 - 64 - 64 - 32 - 32 - 2, width(window_aabb), 1),
+		v3(GRAY_20),
+		z = 10.2
 	);
 }
 
@@ -2577,3 +2667,4 @@ labeled_input_text :: (
 
 	return input_comp;
 }
+

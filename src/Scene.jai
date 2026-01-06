@@ -65,9 +65,11 @@ Sound_Trigger :: struct {
 		Res :: 6;
 		Coin_Launch :: 7;
 		Point_Up :: 8;
+		Note :: 9;
 	};
 
 	count := 1;
+	pitch := 0.0;
 }
 
 Scene_Parameters :: struct {
@@ -93,7 +95,7 @@ for_expansion :: (iterator: ISpan_Iterator, body: Code, flags: For_Flags) #expan
 	end := min(iterator.span.count + iterator.span.index, iterator.array.count);
 	for index: iterator.span.index..end - 1 {
 		`it := iterator.array[index];
-		`it_index := index.(s64);
+		`it_index := index.(s64) - iterator.span.index;
 		#insert body;
 	}
 }
@@ -159,8 +161,11 @@ Scene :: struct {
 	safe_zones: [..] Safe_Zone; @allocate("lifetime") @clear("run")
 	hooks: [..] Hook; @allocate("lifetime") @clear("run")
 	turn_tables: [..] Turn_Table; @allocate("lifetime") @clear("run")
+	pressbuttons: [..] PressButton; @allocate("lifetime") @clear("run")
 	news: [..] string; @allocate("lifetime") @clear("run")
 	sound_triggers: [..] Sound_Trigger; @allocate("lifetime") @clear("run")
+	jukeboxes: [..] Jukebox; @allocate("lifetime") @clear("run")
+	gate_indices: [..] int; @allocate("lifetime") @clear("run")
 	trigger_activated: Table(int, bool); @allocate("lifetime") @clear("run")
 
 	terrain: Terrain;
@@ -195,7 +200,7 @@ Scene :: struct {
 	server_rng: Rand.State;
 
 	auto_revive := false;
-	camera_locked := false;
+	camera_locked := true;
 
 	lifetime_pool: Pool;
 	frame_pool: Pool;
@@ -588,6 +593,22 @@ AntiAir :: struct {
 	}
 }
 
+PressButton :: struct {
+	id: int;
+
+	position: V3f;
+	
+	count_changed_juice_t := 0.0;
+	activated_juice_t := 0.0;
+
+	index := 0;
+	activated := false;
+
+	n_present := 0;
+
+	last_player_count := 0;
+}
+
 Turn_Table :: struct {
 	id: int;
 
@@ -624,6 +645,13 @@ Present :: struct {
 		available := false;
 		depends_on_flag_id := -1;
 	};
+}
+
+Jukebox :: struct {
+	id: int;
+	last_coin_clock := 0.0;
+	position: V3f;
+	coin_count := 0;
 }
 
 Prop :: struct {
@@ -676,6 +704,8 @@ Robot :: struct {
 	effectshoot_time := 0.5;
 	shooting_cd := 5.0;
 	shooting_time := 0.0;
+	shooting_offset := 0.0;
+	explosion_radius := 0.4;
 
 	predict := 0.0;
 
@@ -876,6 +906,11 @@ Camera :: struct {
 	target:   V3f;
 	target_target: V3f;
 	wanted_target_to_position: V3f;
+
+	locked_drag_anchor: V3f;
+	locked_drag_anchor_last_drag_pos: V3f;
+	locked_drag_anchor_last_delta: V3f;
+	locked_drag_anchor_leash: float = 1.0;
 
 	max_distance := 0.0;
 
@@ -1081,6 +1116,7 @@ Coin :: struct {
 		direction: V3f;
 		speed := 5.0;
 		radius_hitbox := 0.25;
+		birthtime: float64;
 	};
 	client: struct {
 		position: V3f;
@@ -1130,6 +1166,9 @@ Gate :: struct {
 	position: V3f;
 	direction: V3f;
 	is_closed := true;
+
+	pressbutton_ids: ISpan(int);
+
 	wait_for_key_id := -1;
 	wait_for_trigger_id := -1;
 	is_end := false;
@@ -1269,6 +1308,20 @@ find_by_frame_id :: (scene: Scene, id: int) -> *Moving_Frame {
 
 find_by_player_id :: (scene: Scene, id: int) -> *Player {
 	for * scene.players {
+		if it.id == id
+			return it;
+	}
+	return null;
+}
+find_by_jukebox_id :: (scene: Scene, id: int) -> *Jukebox {
+	for * scene.jukeboxes {
+		if it.id == id
+			return it;
+	}
+	return null;
+}
+find_by_pressbutton_id :: (scene: Scene, id: int) -> *PressButton {
+	for * scene.pressbuttons {
 		if it.id == id
 			return it;
 	}
@@ -1453,11 +1506,12 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 	scene.camera.target_target += dt;
 	if scene.camera.locked {
 		scene.camera.target += dt;
+		scene.camera.locked_drag_anchor -= dt / 2;
 	}
 
-	if !any_camera_move {
-		scene.camera.target_target = scene.camera.target;
-	}
+	// if !any_camera_move {
+	// 	scene.camera.target_target = scene.camera.target;
+	// }
 
 
 	if !controls.captured_mouse {
@@ -1668,8 +1722,17 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		update(scene, it, dt);
 	}
 
-	for * scene.coins {
-		update(scene, it, dt);
+	{
+		coin_cursor := 0;
+		for * scene.coins {
+			if scene.server.clock > it.server.birthtime + 5 {
+				continue;
+			}
+			update(scene, it, dt);
+			scene.coins[coin_cursor] = it;
+			coin_cursor += 1;
+		}
+		scene.coins.count = coin_cursor;
 	}
 
 	for * scene.moving_frames {
@@ -1681,6 +1744,10 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	}
 
 	for * scene.flags {
+		update(scene, it, dt, result);
+	}
+
+	for * scene.pressbuttons {
 		update(scene, it, dt, result);
 	}
 
@@ -1976,6 +2043,28 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		}
 	}
 
+	// >RULE Coin trigger a note on jukebox collision
+	for * scene.coins {
+		pos := it.server.position;
+
+		for * jukebox: scene.jukeboxes {
+			dt := norm(jukebox.position - pos);
+			if dt < 0.5 {
+				cmd: Command.Note_Played;
+				cmd.pitch = jukebox.coin_count;
+				cmd.jukebox_id = jukebox.id;
+				cmd.from_coin_id = it.id;
+
+				array_add(*result.broadcast, make_command(cmd));
+
+				jukebox.coin_count += 1;
+				jukebox.last_coin_clock = xx scene.server.clock;
+				remove it;
+				continue;
+			}
+		}
+	}
+
 	// >RULE Player die when not under any tile or under a dirt tile
 	for * player, player_idx: scene.players {
 		if !player.server.dead {
@@ -2070,6 +2159,27 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		}
 	}
 
+	// >RULE Gate open on pressbutton pressed
+	for *gate: scene.gates {
+		if gate.is_closed && gate.pressbutton_ids.count > 0 {
+			any_unpressed := false;
+			for iterator(gate.pressbutton_ids, scene.gate_indices) {
+				pressbutton := find_by_pressbutton_id(scene, it);
+				if pressbutton
+					any_unpressed |= !pressbutton.activated;
+			}
+			
+			if !any_unpressed {
+				gate.is_closed = false;
+				gate.wait_for_trigger_id = -1;
+				sync: Command.Sync_Gate;
+				sync.gate_id = gate.id;
+				sync.is_closed = gate.is_closed;
+				array_add(*result.sync_gate, sync);
+			}
+		}
+	}
+
 	// >RULE Player die on contact with an explosion
 	for *expl: scene.explosions {
 		p := expl.position;
@@ -2135,7 +2245,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			if hit {
 				explosion.position = target;
 				explosion.lifetime = 0.75;
-				explosion.max_size = 1.5;
+				explosion.max_size = robot.explosion_radius * 2;
 
 				array_add(*scene.explosions, explosion);
 				
@@ -2305,6 +2415,7 @@ win_level :: (scene: *Scene, player_id: int, time: Apollo_Time, result: *Frame_R
 		winner.winner_id = player_id;
 		winner.next_level_scheduled_in_seconds = 6;
 		winner.next_scene_id = scene.next_id;
+		winner.time = scene.server.clock.(float32);
 
 		best_death := -1;
 		best_revive := -1;
@@ -2503,7 +2614,7 @@ update :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
 		robot.axes[3] += sin(t * 1.1) * 0.5 * dt;
 		robot.axes[4] += sin(t * 1.3) * 0.6 * dt;
 		robot.player_targeted_id = -1;
-		robot.shooting_time = 0;
+		robot.shooting_time = robot.shooting_offset;
 		return;
 	}
 	robot.shooting_time += dt;
@@ -2538,7 +2649,7 @@ update :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
 	T := target;
 
 	N :: 10;
-	for 1..1 {
+	for 1..N {
 		for < 1..5 {
 			E := robot_pivot(robot, 6);
 			Oi := robot_pivot(robot, it);
@@ -2570,6 +2681,41 @@ update :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
 			robot.axes[it - 1] = clamp(robot.axes[it - 1], -1.5, +1.5);
 		}
 
+	}
+
+}
+
+update :: (scene: Scene, button: *PressButton, dt: float32, result: *Frame_Result) {
+	if !button.activated {
+		p := v2(button.position);
+
+		count := 0;
+		for scene.players {
+			if it.server.dead
+				continue;
+
+			q := v2(it.server.position);
+			if p.x - 0.5 <= q.x && q.x <= p.x + 0.5
+			if p.y - 0.5 <= q.y && q.y <= p.y + 0.5 {
+				count += 1;
+			}
+		}
+
+		if (count * 1.5).(s64) >= scene.players.count && scene.players.count > 0 {
+			button.activated = true;
+			button.activated_juice_t = 1.0;
+			
+			sound: Sound_Trigger;
+			sound.position = button.position;
+			sound.kind = .Checkpoint_Ok;
+			array_add(*scene.sound_triggers, sound);
+
+		}
+
+		if button.last_player_count != count {
+			button.count_changed_juice_t = 1.0;
+		}
+		button.last_player_count = count;
 	}
 
 }
@@ -2669,19 +2815,66 @@ update :: (scene: Scene, frame: *Moving_Frame, dt: float32) {
 update :: (scene: Scene, camera: *Camera, dt: float32) {
 	player_locked := find_by_player_id(scene, camera.locked_to);
 	if player_locked && camera.locked {
-		center := camera.target;
-		low := camera.target - V3f.{ 0.5, 0.25, 0.0 };
-		high := camera.target + V3f.{ 0.5, 0.5, 0.0 };
+		// If the camera is locked, The player drags an anchor behind him.
+		// The anchor is on a leash, the delta between the anchor's position and the last position
+		// happened to move the anchor is goign to be the direction we are looking.
 
-		within_aabb := closest_aabb(player_locked.client.position, low, high);
-		dt := player_locked.client.position - within_aabb;
-		camera.target_target += dt;
+		R := 1.5;
+		p := player_locked.client.position;
+		pivot := camera.locked_drag_anchor;
+		dist_anchor_player := norm(p - pivot);
+		dist_last_anchor_player := norm(p - camera.locked_drag_anchor_last_drag_pos);
+
+		factor := dot(camera.locked_drag_anchor_last_delta, player_locked.client.direction);
+		factor = (1 - factor) / 2.0;
+		factor = factor * factor * factor;
+		factor = exp(-factor) + 0.7;
+
+		if dist_anchor_player > R {
+			camera.locked_drag_anchor_last_drag_pos =
+				damp(camera.locked_drag_anchor_last_drag_pos, player_locked.client.position, 5.0, dt);
+			camera.locked_drag_anchor_last_delta = normalize(
+				camera.locked_drag_anchor_last_drag_pos - pivot
+			);
+			camera.locked_drag_anchor = p - normalize(p - pivot) * R;
+		} else if false && dist_last_anchor_player > R * factor {
+			camera.locked_drag_anchor_last_drag_pos =
+				damp(camera.locked_drag_anchor_last_drag_pos, player_locked.client.position, 5.0, dt);
+			camera.locked_drag_anchor_last_delta = normalize(
+				camera.locked_drag_anchor_last_drag_pos - pivot
+			);
+			camera.locked_drag_anchor = p - normalize(p - camera.locked_drag_anchor_last_drag_pos) * R * factor;
+		} else
+		{
+			delta := normalize(pivot - p);
+			dist := norm(pivot - p);
+			if dist > 1.0 {
+				dist = damp(dist, 1.0, 1.0, dt);
+				camera.locked_drag_anchor = dist * delta + p;
+				// camera.locked_drag_anchor = damp(camera.locked_drag_anchor, p, 1.0, dt);
+			}
+		}
+
+		look_at_direction := camera.locked_drag_anchor_last_delta;
+		if norm(look_at_direction) < 0.99 {
+			look_at_direction = v3(1.0, 0.0, 0.0);
+		}
+		look_at_direction = normalize(pow(look_at_direction, 3));
+
+		center := player_locked.client.position;
+		low := center - V3f.{ 2.5, 2.5, 0.0 };
+		high := center + V3f.{ 2.5, 2.5, 0.0 };
+
+		locked_target_target := center + look_at_direction * 1.0;
+		// within_aabb := closest_aabb(locked_target_target, low, high);
+		// camera.target_target += player_locked.client.direction * player_locked.server.speed * dt;
+		camera.target_target = damp(camera.target_target, locked_target_target, 10.0, dt);
+		// dt := player_locked.client.position - within_aabb;
+		// camera.target_target = within_aabb;
 	}
 
-	camera.target = damp(camera.target, camera.target_target, 20.0, dt);
-	target_to_position := camera.position - camera.target;
-	target_to_position += (camera.wanted_target_to_position - target_to_position) * 1.0;
-	camera.position = camera.target + target_to_position;
+	camera.target = damp(camera.target, camera.target_target, 50.0, dt);
+	camera.position = camera.target + camera.wanted_target_to_position;
 
 	restricted_target: V3f = camera.target;
 	restricted_target.x = clamp(camera.target.x, scene.camera_min.x, scene.camera_max.x);
@@ -2982,6 +3175,7 @@ process_server_only :: (
 			coin.sender = player.id;
 			coin.server.position = player.server.position;
 			coin.server.direction = V3f.{ 0, 0, 0 };
+			coin.server.birthtime = scene.server.clock;
 			if player.server.slipping
 				coin.server.direction = player.server.direction;
 			array_add(*scene.coins, coin);
@@ -2991,6 +3185,7 @@ process_server_only :: (
 			cmd.sender = coin.sender;
 			cmd.position = coin.server.position;
 			cmd.direction = coin.server.direction;
+			cmd.birthtime = coin.server.birthtime.(float32);
 			add(response, scene.id, cmd);
 
 			scene.coin_generation += 1;
@@ -3082,6 +3277,7 @@ process_client_only :: (
 		coin.server.position = spawn_coin.position;
 		coin.server.direction = spawn_coin.direction;
 		coin.client.position = spawn_coin.position;
+		coin.server.birthtime = spawn_coin.birthtime;
 		array_add(*scene.coins, coin);
 
 		trigger: Sound_Trigger;

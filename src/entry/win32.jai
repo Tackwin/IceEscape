@@ -8,6 +8,7 @@
 #import "Algebra";
 #import "String";
 #import "File";
+#import "Math";
 #import "Random";
 STB :: #import "stb_image";
 #import "SDL";
@@ -374,6 +375,7 @@ win32_get_frame_info :: (info: *Frame_Info) {
 	frame_file_change_count = 0;
 }
 
+frame_counter := 0;
 win32_end_frame :: () {
 	push_context,defer_pop launcher_context;
 	// SDL_GL_SwapWindow(sdl_window);
@@ -381,9 +383,9 @@ win32_end_frame :: () {
 	cursor := 0;
 	if curl_connected for * messages_pending {
 		dt := to_float64_seconds(current_time_monotonic() - it.sent_time);
-		if dt * 1000 >= fake_one_way_ping {
+		if true || dt * 1000 >= fake_one_way_ping {
 			sent: u64 = 0;
-			code := curl_ws_send(curl, it.data.data, xx it.data.count, *sent, 0, CURLWS_TEXT);
+			code := curl_ws_send(curl, it.data.data, xx it.data.count, *sent, 0, CURLWS_BINARY);
 			if code {
 				str: string;
 				str.data = curl_errbuf.data;
@@ -398,7 +400,7 @@ win32_end_frame :: () {
 			cursor += 1;
 		}
 	}
-
+frame_counter += 1;
 	messages_pending.count = cursor;
 	process_changes(*watcher);
 }
@@ -458,7 +460,7 @@ play_audio :: (audio: Audio, position: V3f) -> Sound {
 		ma_sound_init_from_data_source(*audio_engine, decoder.ds.pCurrent, xx flags, null, msound);
 		ma_sound_set_looping(msound, xx sound.loop);
 		ma_sound_set_volume(msound, audio.volume);
-		// ma_sound_set_pitch(msound, audio.pitch);
+		ma_sound_set_pitch(msound, pow(2, audio.pitch / 12.0));
 		ma_sound_set_min_gain(msound, 0.0);
 		ma_sound_set_max_gain(msound, 1.0);
 		ma_sound_set_min_distance(msound, 1.0);

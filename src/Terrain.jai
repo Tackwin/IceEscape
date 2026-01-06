@@ -232,6 +232,12 @@ parse_terrain :: (text: string, scene: *Scene) {
 				if scan2(line, "- turning_speed: %", *turn_table.turning_speed)
 					continue;
 
+				period: float = 0.0;
+				if scan2(line, "- turning_period: %", *period) {
+					turn_table.turning_speed = 1.0 / period;
+					continue;
+				}
+
 				if scan2(line, "- turning_offset: %", *turn_table.turning_offset)
 					continue;
 				
@@ -314,6 +320,18 @@ parse_terrain :: (text: string, scene: *Scene) {
 					*robot.end_target_aabb.y
 				)
 					continue;
+
+				size_aabb := v2(0.0);
+				if scan2(
+					line,
+					"- size_target_aabb: % %",
+					*size_aabb.x,
+					*size_aabb.y
+				) {
+					robot.end_target_aabb.x = robot.start_target_aabb.x + size_aabb.x;
+					robot.end_target_aabb.y = robot.start_target_aabb.y + size_aabb.y;
+					continue;
+				}
 				if scan2(line, "- charging_time: %", *robot.charging_time)
 					continue;
 
@@ -327,6 +345,9 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				if scan2(line, "- shooting_time: %", *robot.shooting_time)
+					continue;
+
+				if scan2(line, "- shooting_offset: %", *robot.shooting_offset)
 					continue;
 
 				print("Error reading robot, unrecognized line: % (L%)\n", line, cursor);
@@ -574,10 +595,74 @@ parse_terrain :: (text: string, scene: *Scene) {
 			cursor -= 1;
 		}
 
+		if scan2(line, "jukebox") {
+			jukebox: Jukebox;
+			jukebox.id = scene.jukeboxes.count + 1;
+			defer array_add(*scene.jukeboxes, jukebox);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *jukebox.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+
+				print("Error reading jukebox, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
+
+		if scan2(line, "pressbutton") {
+			pressbutton: PressButton;
+			pressbutton.id = scene.pressbuttons.count + 1;
+			defer array_add(*scene.pressbuttons, pressbutton);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *pressbutton.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+
+				print("Error reading pressbutton, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
+
 		if scan2(line, "gate") {
 			gate: Gate;
 			gate.id = scene.gates.count + 1;
-			defer array_add(*scene.gates, gate);
+			gate.pressbutton_ids.index = scene.gate_indices.count;
+			defer {
+				gate.pressbutton_ids.count = scene.gate_indices.count - gate.pressbutton_ids.index;
+				array_add(*scene.gates, gate);
+			}
 
 			cursor += 1;
 			while cursor < lines.count {
@@ -606,6 +691,12 @@ parse_terrain :: (text: string, scene: *Scene) {
 
 				if scan2(line, "- wait_for_key_id: %", *gate.wait_for_key_id)
 					continue;
+
+				id: int;
+				if scan2(line, "- wait_for_pressbutton_id: %", *id) {
+					array_add(*scene.gate_indices, id);
+					continue;
+				}
 
 				if scan2(line, "- wait_for_trigger_id: %", *gate.wait_for_trigger_id)
 					continue;

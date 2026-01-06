@@ -44,8 +44,30 @@ pos_size :: (pos: V2($T), size: V2(T)) -> AABB(T) {
 	aabb.max = pos + size;
 	return aabb;
 }
+pos_size :: (px: $T, py: T, size: V2(T)) -> AABB(T) {
+	aabb: AABB(T);
+	aabb.min.x = px;
+	aabb.min.y = py;
+	aabb.max = aabb.min + size;
+	return aabb;
+}
+pos_size :: (px: $T, py: T, sx: T, sy: T) -> AABB(T) {
+	aabb: AABB(T);
+	aabb.min.x = px;
+	aabb.min.y = py;
+	aabb.max.x = aabb.min.x + sx;
+	aabb.max.y = aabb.min.y + sy;
+	return aabb;
+}
 size :: (aabb: AABB($T)) -> V2(T) {
 	return aabb.max - aabb.min;
+}
+pow :: (v: V3f, p: float) -> V3f {
+	return .{
+		pow(v.x, p),
+		pow(v.y, p),
+		pow(v.z, p)
+	};
 }
 move :: (_aabb: AABB($T), delta: V2(T)) -> AABB(T) {
 	aabb := _aabb;
@@ -60,6 +82,21 @@ width :: (aabb: AABB($T)) -> T {
 height :: (aabb: AABB($T)) -> T {
 	s := size(aabb);
 	return s.y;
+}
+top :: (aabb: AABB($T)) -> T {
+	return aabb.max.y;
+}
+uv :: (aabb: AABB($T), uv: V2(T)) -> T {
+	return v2(
+		(aabb.max - aabb.min).x * uv.x + aabb.min.x,
+		(aabb.max - aabb.min).y * uv.y + aabb.min.y
+	);
+}
+uv :: (aabb: AABB($T), uvx: T, uvy: T) -> T {
+	return v2(
+		(aabb.max - aabb.min).x * uvx + aabb.min.x,
+		(aabb.max - aabb.min).y * uvy + aabb.min.y
+	);
 }
 area :: (aabb: AABB($T)) -> T {
 	s := size(aabb);

@@ -141,6 +141,8 @@ App_User :: struct {
 			quit = menu_loop(_app);
 		case .Game;
 			quit = game_loop(app_user);
+		case .Editor;
+			quit = editor_loop(app_user);
 	}
 
 

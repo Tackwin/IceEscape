@@ -301,13 +301,17 @@ init_platform :: () -> Platform {
 	platform.set_sound = set_sound;
 	platform.set_listener_info = set_listener_info;
 	platform.volume_audio = (x: float) -> float {
+		X := x;
+		js_volume_audio :: (volume: *float) #foreign;
 		// Clamp the volume between 0.0 and 1.0
-		if x < 0.0 {
-			x = 0.0;
-		} else if x > 1.0 {
-			x = 1.0;
+		if X < 0.0 {
+			X = 0.0;
+		} else if X > 1.0 {
+			X = 1.0;
 		}
-		return x;
+
+		js_volume_audio(*X);
+		return X;
 	};
 
 
