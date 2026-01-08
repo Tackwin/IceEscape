@@ -469,6 +469,8 @@ respond :: (platform: Platform, time: Apollo_Time, response: Scene.Process_Respo
 			send_web_message(platform, time, it.command);
 		if isa(it.command.payload, Command.Klaxon)
 			send_web_message(platform, time, it.command);
+		if isa(it.command.payload, Command.Drop)
+			send_web_message(platform, time, it.command);
 		if isa(it.command.payload, Command.Active_Item)
 			send_web_message(platform, time, it.command);
 		if isa(it.command.payload, Command.Buy_Ask)

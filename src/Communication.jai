@@ -70,6 +70,9 @@ Command :: struct {
 	Klaxon :: struct {
 		player_id: int;
 	}
+	Drop :: struct {
+		player_id: int;
+	}
 	Despawn_Coin :: struct {
 		id: int;
 	}
@@ -165,6 +168,18 @@ Command :: struct {
 	}
 	Sync_Clock :: struct {
 		t: float64;
+	}
+	Sync_Bomb_Spawner :: struct {
+		bomb_spawner_id: int;
+		bomb_spawned_id: int;
+	}
+	Sync_Bomb :: struct {
+		bomb_id: int;
+		bomb_spawner_id: int;
+		holder_id: int;
+
+		position: V3f;
+		time: float;
 	}
 	Sync_Robot :: struct {
 		robot_id: int;
@@ -349,12 +364,12 @@ Command :: struct {
 	payload: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
-		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot, Klaxon,
+		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot, Klaxon, Drop,
 		Give_Control, Request_Stats, Sync_Tombstone, Retire, Sync_Present,
 		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook, Cheat_Action, Buy_Ask, Buy_Response,
 		Sync_Stand_In, Ask_Respawn, Ask_Instance_List, Ans_Instance_List, Ask_Enter_Instance,
 		Ans_Enter_Instance, Leave_Instance, Create_Instance, Ans_Create_Instance, Version_Info,
-		Sync_Stats, Sync_Clock, Note_Played
+		Sync_Stats, Sync_Clock, Note_Played, Sync_Bomb_Spawner, Sync_Bomb
 	);
 	sent_timestamp: float64;
 }
@@ -441,8 +456,11 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Active_Item; #through;
 		case .Sync_AntiAir; #through;
 		case .Klaxon; #through;
+		case .Drop; #through;
 		case .Sync_Moving_Frame; #through;
 		case .Note_Played; #through;
+		case .Sync_Bomb; #through;
+		case .Sync_Bomb_Spawner; #through;
 		case .NTP; #through;
 		case .Sync_Stand_In; #through;
 		case .Hooked_Player; #through;
@@ -604,6 +622,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Buy_Ask; #through;
 		case .Buy_Response; #through;
 		case .Klaxon; #through;
+		case .Drop; #through;
 		case .New_Terrain; #through;
 		case .Sync_Player; #through;
 		case .Ask_Respawn; #through;
@@ -613,6 +632,8 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Sync_Gate; #through;
 		case .Sync_Hook; #through;
 		case .Note_Played; #through;
+		case .Sync_Bomb; #through;
+		case .Sync_Bomb_Spawner; #through;
 		case .Sync_Tombstone; #through;
 		case .Retire; #through;
 		case .AntiAir_Shoot; #through;

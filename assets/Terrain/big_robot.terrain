@@ -100,9 +100,18 @@ robot
 
 pressbutton
 - position: 39.5 6.5 0
+pressbutton
+- position: 40.5 6.5 0
+- radio
+
+bomb_spawner
+- position: 39.5 5.5 0
 
 gate
 - position: 39.5 8 0
 - direction: 0 -1 0
 - wait_for_pressbutton_id: 1
 - wait_for_pressbutton_id: 2
+
+block_rock
+- position: 40.5 3.5 0

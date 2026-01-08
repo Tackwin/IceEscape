@@ -277,6 +277,36 @@ parse_terrain :: (text: string, scene: *Scene) {
 			cursor -= 1;
 		}
 
+		if scan2(line, "block_rock") {
+			block_rock: Block_Rock;
+			block_rock.id = scene.block_rocks.count + 1;
+			defer array_add(*scene.block_rocks, block_rock);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *block_rock.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+
+				print("Error reading block_rock, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
+
 		if scan2(line, "robot") {
 			robot: Robot;
 			robot.id = scene.robots.count + 1;
@@ -647,6 +677,47 @@ parse_terrain :: (text: string, scene: *Scene) {
 				pos := *pressbutton.position;
 				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
 					continue;
+
+				if compare(line, "- radio") == 0 {
+					pressbutton.is_radio = true;
+					continue;
+				}
+
+				print("Error reading pressbutton, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
+
+		if scan2(line, "bomb_spawner") {
+			bomb_spawner: Bomb_Spawner;
+			bomb_spawner.id = scene.bomb_spawners.count + 1;
+			defer array_add(*scene.bomb_spawners, bomb_spawner);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *bomb_spawner.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+
+				if scan2(line, "- explosion_time: %", *bomb_spawner.explosion_time)
+					continue;
+				if scan2(line, "- explosion_radius: %", *bomb_spawner.explosion_radius)
+					continue;
+
 
 				print("Error reading pressbutton, unrecognized line: % (L%)\n", line, cursor);
 				cursor -= 1;

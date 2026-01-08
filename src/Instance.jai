@@ -47,6 +47,7 @@ Instance :: struct {
 	sync_count_skull: Counter(20);
 	sync_moving_frame: Counter(10);
 	sync_count_key: Counter(50);
+	sync_count_bomb: Counter(50);
 
 	process_response: Scene.Process_Response;
 	frame_result: Scene.Frame_Result;
@@ -189,6 +190,19 @@ sync :: (instance: *Instance) {
 				msg.key_id = it.id;
 				msg.holder = it.holder;
 				msg.position = it.server.position;
+				queue_scene_scoped_broadcast(instance, scene.id, make_command(msg));
+			}
+		}
+	}
+
+	if check(*instance.sync_count_bomb) {
+		for * scene: instance.scenes {
+			for * scene.bombs {
+				msg := Scene.make_sync(it);
+				queue_scene_scoped_broadcast(instance, scene.id, make_command(msg));
+			}
+			for * scene.bomb_spawners {
+				msg := Scene.make_sync(it);
 				queue_scene_scoped_broadcast(instance, scene.id, make_command(msg));
 			}
 		}

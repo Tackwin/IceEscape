@@ -60,6 +60,8 @@ Store :: struct {
 	terrain_snowflake_a: WRender.Model;
 	terrain_snowflake_b: WRender.Model;
 	terrain_snowflake_c: WRender.Model;
+	block_rock: WRender.Model;
+	no_block_rock: WRender.Model;
 	rock_small: WRender.Model;
 	rock_medium: WRender.Model;
 	rock_large: WRender.Model;
@@ -84,6 +86,8 @@ Store :: struct {
 	pirateship_model: WRender.Model;
 	coin_model: WRender.Model;
 	key_model: WRender.Model;
+	bomb_model: WRender.Model;
+	crate_model: WRender.Model;
 	mark_model: WRender.Model;
 	gate_model: WRender.Model;
 	gate_close_model: WRender.Model;
@@ -100,6 +104,8 @@ Store :: struct {
 	end_hook_model: WRender.Model;
 	pressbutton_pressed: WRender.Model;
 	pressbutton_unpressed: WRender.Model;
+	pressbutton_pressed_radio: WRender.Model;
+	pressbutton_unpressed_radio: WRender.Model;
 
 	antiair_camion_model: WRender.Model;
 	antiair_canon_model: WRender.Model;
@@ -509,6 +515,8 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 		WRender.Model.make_from_obj(Assets.TERRAIN_SNOWFLAKE_B, "terrain_snowflake_b.obj");
 	store.terrain_snowflake_c =
 		WRender.Model.make_from_obj(Assets.TERRAIN_SNOWFLAKE_C, "terrain_snowflake_c.obj");
+	store.block_rock = WRender.Model.make_from_obj(Assets.BLOCK_ROCK_OBJ, "block_rock");
+	store.no_block_rock = WRender.Model.make_from_obj(Assets.NO_BLOCK_ROCK_OBJ, "no_block_rock");
 	store.rock_small = WRender.Model.make_from_obj(Assets.ROCK_SMALL, "rock_small.obj");
 	store.rock_medium = WRender.Model.make_from_obj(Assets.ROCK_MEDIUM, "rock_medium.obj");
 	store.rock_large = WRender.Model.make_from_obj(Assets.ROCK_LARGE, "rock_large.obj");
@@ -555,9 +563,13 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.end_hook_model = WRender.Model.make_from_obj(Assets.END_HOOK_OBJ, "end_hook");
 	store.pressbutton_pressed = WRender.Model.make_from_obj(Assets.PRESSBUTTON_PRESSED_OBJ, "pressbutton_pressed");
 	store.pressbutton_unpressed = WRender.Model.make_from_obj(Assets.PRESSBUTTON_UNPRESSED_OBJ, "pressbutton_unpressed");
+	store.pressbutton_pressed_radio = WRender.Model.make_from_obj(Assets.PRESSBUTTON_PRESSED_RADIO_OBJ, "pressbutton_pressed_radio");
+	store.pressbutton_unpressed_radio = WRender.Model.make_from_obj(Assets.PRESSBUTTON_UNPRESSED_RADIO_OBJ, "pressbutton_unpressed_radio");
 	store.pirateship_model = WRender.Model.make_from_obj(Assets.PIRATE_SHIP_OBJ, "pirateship");
 	store.coin_model = WRender.Model.make_from_obj(Assets.COIN_OBJ, "coin");
 	store.key_model = WRender.Model.make_from_obj(Assets.KEY_OBJ, "key");
+	store.bomb_model = WRender.Model.make_from_obj(Assets.BOMB_OBJ, "bomb");
+	store.crate_model = WRender.Model.make_from_obj(Assets.CRATE_OBJ, "crate");
 	store.mark_model = WRender.Model.make_from_obj(Assets.MARK_OBJ, "mark");
 	store.gate_model = WRender.Model.make_from_obj(Assets.GATE_OBJ, "gate");
 	store.gate_close_model = WRender.Model.make_from_obj(Assets.GATE_CLOSE_OBJ, "gate_close");

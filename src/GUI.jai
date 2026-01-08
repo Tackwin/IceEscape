@@ -26,6 +26,7 @@ SPACE_SLOT :: V2f.{ 0, 13 };
 W_SLOT :: V2f.{ 1, 13 };
 DOWN_SLOT :: V2f.{ 2, 13 };
 LEFT_SLOT :: V2f.{ 3, 13 };
+DROP_SLOT :: V2f.{ 9, 14 };
 W_OUTLINE_SLOT :: V2f.{ 0, 12 };
 A_OUTLINE_SLOT :: V2f.{ 1, 12 };
 Q_OUTLINE_SLOT :: V2f.{ 2, 12 };
@@ -37,6 +38,7 @@ X_OUTLINE_SLOT :: V2f.{ 5, 15 };
 E_OUTLINE_SLOT :: V2f.{ 6, 13 };
 R_OUTLINE_SLOT :: V2f.{ 7, 13 };
 V_OUTLINE_SLOT :: V2f.{ 8, 13 };
+F_OUTLINE_SLOT :: V2f.{ 9, 13 };
 COIN_SLOT :: V2f.{ 4, 12 };
 VOLUME_ON_SLOT :: V2f.{ 0, 11 };
 VOLUME_OFF_SLOT :: V2f.{ 1, 11 };
@@ -103,6 +105,8 @@ key_to_icon :: (key: Platform.Key) -> V2f {
 			return R_OUTLINE_SLOT;
 		case .V;
 			return V_OUTLINE_SLOT;
+		case .F;
+			return F_OUTLINE_SLOT;
 	}
 	return V_OUTLINE_SLOT;
 }
@@ -237,6 +241,7 @@ Action_Key :: enum {
 	Camera_Locked :: Square00;
 	Coin :: Square20;
 	Klaxon :: Square10;
+	Drop :: Square31;
 	Safe :: Square21;
 	Hook :: Square02;
 }
@@ -754,9 +759,11 @@ push_buy_prompt :: (state: *GUI_State, scene: *Scene.Scene) {
 				d := norm(p - q);
 				if d < player.server.radius_hitbox_key {
 					
-					prompt := tprint("Not enough points (%) ! Revive your friends !", needed);
-					if player.server.gold >= needed {
-						prompt = tprint("R to buy. % points.", needed);
+					prompt := tprint(
+						"Not enough souls (%) ! Revive your friends to collect more souls!", needed
+					);
+					if player.server.souls >= needed {
+						prompt = tprint("R to buy. % souls.", needed);
 					}
 
 					pos := v4(q, 1);
@@ -771,7 +778,7 @@ push_buy_prompt :: (state: *GUI_State, scene: *Scene.Scene) {
 						pos.y * (state.controls.window_size.y) / 2 +
 						state.controls.window_size.y / 2;
 
-					push_text(state, prompt, screen_p, 24, z=10, align = .Center);
+					atom_label(state, prompt, screen_p, 24, z=10, align = .Center, outline = true);
 				}
 			}
 		}
@@ -786,16 +793,12 @@ push_breaking_news :: (state: *GUI_State, news: [] Scene.Breaking_News) {
 
 		alpha := 1.0 - t;
 		text := tprint("NEWS: %", it.text);
-		text_size := push_text(
-			state,
-			text,
-			.{ cursor.x, cursor.y },
-			20,
-			z = 20,
-			align = Align.Top_Center,
+		label := atom_label(
+			state, text, .{ cursor.x, cursor.y }, 20, z=20, align = .Top_Center, outline = true,
 			color = V4f.{ 1.0, 1.0, 1.0, alpha }
 		);
-		cursor.y -= text_size.y + 4;
+
+		cursor.y -= label.aabb_max.y - label.aabb_min.y + 4;
 	}
 }
 
@@ -968,7 +971,7 @@ push_point_ui :: (state: *GUI_State, player: Scene.Player) {
 
 	score_label := atom_label(
 		state,
-		tprint("Score: %", player.server.gold),
+		tprint("Score: %", player.server.souls),
 		cursor,
 		24,
 		1,
@@ -1464,6 +1467,7 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 
 	render_texture_at(1, 0, KLAXON_SLOT);
 	render_hint_at(1, 0, action_to_icon(Action_Key.Square10, state.controls.layout));
+	
 
 	if scene.camera_locked
 		render_texture_at(0, 0, UNLOCKED_SLOT);
@@ -1473,6 +1477,10 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 
 	player := Scene.find_by_player_id(scene, scene.controlled_player_id);
 	if player {
+		if Scene.find_bomb_by_holder_id(scene, player.id) {
+			render_texture_at(3, 1, DROP_SLOT);
+			render_hint_at(3, 1, action_to_icon(Action_Key.Square31, state.controls.layout));
+		}
 		if player.server.has_safe_present {
 			render_texture_at(2, 2, SAFE_ZONE_SLOT, .{ 0.5, 1.0, 0.5 });
 			render_hint_at(2, 2, action_to_icon(Action_Key.Square22, state.controls.layout));

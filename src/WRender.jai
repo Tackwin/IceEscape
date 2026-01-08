@@ -1444,7 +1444,9 @@ render_scene :: (
 		render_robots(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_antiairs(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_flags(framegraph, frame.encoder, shadowPass, scene, store, *extra);
+		render_block_rocks(framegraph, frame.encoder, shadowPass, scene, store);
 		render_turn_tables(framegraph, frame.encoder, shadowPass, scene, store, *extra);
+		render_bombs(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_pressbuttons(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_jukeboxes(framegraph, frame.encoder, shadowPass, scene, store, *extra);
 		render_traps(framegraph, frame.encoder, shadowPass, scene, store, *extra);
@@ -1492,6 +1494,8 @@ render_scene :: (
 		render_turn_tables(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 		render_pressbuttons(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 		render_jukeboxes(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		render_block_rocks(framegraph, frame.encoder, geometryPass, scene, store);
+		render_bombs(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 		render_traps(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 		render_explosions(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 
@@ -2107,7 +2111,76 @@ render_turn_tables :: (
 	if instanced.count > 0
 		draw(framegraph, pass, store.turn_table_turn_model, instanced.count);
 }
+
+render_bombs :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store,
+	extra: *Extra
+) {
+	instanced := append_instance_buffer(framegraph);
+	for scene.bombs {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+
+		s := 0.0;
+		if it.client.time > it.server.explosion_time / 2 {
+			t := it.client.time - it.server.explosion_time / 2;
+			s = sin(t * t);
+			if t > 3
+				s = sin(t * 2 * 3);
+		}
+		s *= s;
+		scale := s * 0.5 + 1;
+
+		off := v3(0.0, 0.0, 0.0);
+		if it.holder >= 0
+			off.z += 0.5;
+		instance.M = M4f.identity();
+		instance.M *= M4f.translate(it.client.position + off);
+		M4f.scale(*instance.M, v3(scale, scale, scale));
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	for scene.bomb_spawners {
+		if it.spawned_id != -1
+			continue;
+
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0
+		draw(framegraph, pass, store.bomb_model, instanced.count);
+
+	instanced = append_instance_buffer(framegraph);
+	for scene.bomb_spawners {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0
+		draw(framegraph, pass, store.crate_model, instanced.count);
+}
+
 render_pressbuttons :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store,
+	extra: *Extra
+) {
+	render_pressbuttons_check(framegraph, encoder, pass, scene, store, extra);
+	render_pressbuttons_radio(framegraph, encoder, pass, scene, store, extra);
+}
+render_pressbuttons_check :: (
 	framegraph: *WFramegraph,
 	encoder: WGPUCommandEncoder,
 	pass: WGPURenderPassEncoder,
@@ -2118,6 +2191,8 @@ render_pressbuttons :: (
 	instanced := append_instance_buffer(framegraph);
 	for scene.pressbuttons {
 		if it.activated
+			continue;
+		if it.is_radio
 			continue;
 
 		instanced.count += 1;
@@ -2154,6 +2229,8 @@ render_pressbuttons :: (
 	for scene.pressbuttons {
 		if !it.activated
 			continue;
+		if it.is_radio
+			continue;
 
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2163,6 +2240,48 @@ render_pressbuttons :: (
 	}
 	if instanced.count > 0
 		draw(framegraph, pass, store.pressbutton_pressed, instanced.count);
+}
+
+render_pressbuttons_radio :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store,
+	extra: *Extra
+) {
+	instanced := append_instance_buffer(framegraph);
+	for scene.pressbuttons {
+		if it.activated
+			continue;
+		if !it.is_radio
+			continue;
+
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0
+		draw(framegraph, pass, store.pressbutton_unpressed_radio, instanced.count);
+	
+	instanced = append_instance_buffer(framegraph);
+	for scene.pressbuttons {
+		if !it.activated
+			continue;
+		if !it.is_radio
+			continue;
+
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0
+		draw(framegraph, pass, store.pressbutton_pressed_radio, instanced.count);
 }
 
 render_jukeboxes :: (
@@ -2390,6 +2509,42 @@ render_flags :: (
 	}
 }
 
+render_block_rocks :: (
+	framegraph: *WFramegraph,
+	encoder: WGPUCommandEncoder,
+	pass: WGPURenderPassEncoder,
+	scene: Scene.Scene,
+	store: Store.Store
+) {
+	instanced := append_instance_buffer(framegraph);
+	for scene.block_rocks {
+		if it.exploded
+			continue;
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count == 0
+		return;
+
+	draw(framegraph, pass, store.block_rock, instanced.count);
+	instanced = append_instance_buffer(framegraph);
+	for scene.block_rocks {
+		if !it.exploded
+			continue;
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count == 0
+		return;
+
+	draw(framegraph, pass, store.no_block_rock, instanced.count);
+}
 render_tombstones :: (
 	framegraph: *WFramegraph,
 	encoder: WGPUCommandEncoder,

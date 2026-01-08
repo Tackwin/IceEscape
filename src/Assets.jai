@@ -121,6 +121,10 @@ FORMAT;
 #insert #run embed_data("TRAP_SPIKE_OBJ", "trap_spike.obj", #filepath);
 #insert #run embed_data("PRESSBUTTON_UNPRESSED_OBJ", "Mesh/PressButton_Unpressed.obj", #filepath);
 #insert #run embed_data("PRESSBUTTON_PRESSED_OBJ", "Mesh/PressButton_Pressed.obj", #filepath);
+#insert #run embed_data("PRESSBUTTON_UNPRESSED_RADIO_OBJ", "Mesh/PressButton_Unpressed_radio.obj", #filepath);
+#insert #run embed_data("PRESSBUTTON_PRESSED_RADIO_OBJ", "Mesh/PressButton_Pressed_radio.obj", #filepath);
+#insert #run embed_data("BOMB_OBJ", "Mesh/Bomb.obj", #filepath);
+#insert #run embed_data("CRATE_OBJ", "Mesh/Crate.obj", #filepath);
 
 #insert #run embed_data("TROPHY_OBJ", "trophy.obj", #filepath);
 #insert #run embed_data("JUKEBOX_OBJ", "jukebox.obj", #filepath);
@@ -203,6 +207,8 @@ FORMAT;
 #insert #run embed_data("TERRAIN_SNOWFLAKE_A", "Terrain/snowflake_a.obj", #filepath);
 #insert #run embed_data("TERRAIN_SNOWFLAKE_B", "Terrain/snowflake_b.obj", #filepath);
 #insert #run embed_data("TERRAIN_SNOWFLAKE_C", "Terrain/snowflake_c.obj", #filepath);
+#insert #run embed_data("BLOCK_ROCK_OBJ", "Mesh/Block_Rock.obj", #filepath);
+#insert #run embed_data("NO_BLOCK_ROCK_OBJ", "Mesh/No_Block_Rock.obj", #filepath);
 #insert #run embed_data("ROCK_SMALL", "Terrain/rock_small.obj", #filepath);
 #insert #run embed_data("ROCK_MEDIUM", "Terrain/rock_medium.obj", #filepath);
 #insert #run embed_data("ROCK_LARGE", "Terrain/rock_large.obj", #filepath);
@@ -370,6 +376,8 @@ load_everything :: (platform: Platform) {
 			"TERRAIN_SNOWFLAKE_B",
 			"TERRAIN_SNOWFLAKE_C",
 			"PROP_COLORMAP",
+			"BLOCK_ROCK_OBJ",
+			"NO_BLOCK_ROCK_OBJ",
 			"ROCK_SMALL",
 			"ROCK_LARGE",
 			"ROCK_MEDIUM",
@@ -394,6 +402,10 @@ load_everything :: (platform: Platform) {
 			"TRAP_SPIKE_OBJ",
 			"PRESSBUTTON_UNPRESSED_OBJ",
 			"PRESSBUTTON_PRESSED_OBJ",
+			"PRESSBUTTON_UNPRESSED_RADIO_OBJ",
+			"PRESSBUTTON_PRESSED_RADIO_OBJ",
+			"BOMB_OBJ",
+			"CRATE_OBJ",
 			"DRONE_BLADE_OBJ",
 			"TROPHY_OBJ",
 			"NUMBER_0_OBJ",

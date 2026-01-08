@@ -151,6 +151,8 @@ Scene :: struct {
 	within_zones: [..] Within_Zone; @allocate("lifetime") @clear("run")
 	flags: [..] Flag; @allocate("lifetime") @clear("run")
 	props: [..] Prop; @allocate("lifetime") @clear("run")
+	bombs: [..] Bomb; @allocate("lifetime") @clear("run");
+	bomb_spawners: [..] Bomb_Spawner; @allocate("lifetime") @clear("run");
 	particles: [..] Particle; @allocate("lifetime") @clear("run")
 	trophies: [..] Trophy; @allocate("lifetime") @clear("run")
 	robots: [..] Robot; @allocate("lifetime") @clear("run")
@@ -162,6 +164,7 @@ Scene :: struct {
 	hooks: [..] Hook; @allocate("lifetime") @clear("run")
 	turn_tables: [..] Turn_Table; @allocate("lifetime") @clear("run")
 	pressbuttons: [..] PressButton; @allocate("lifetime") @clear("run")
+	block_rocks: [..] Block_Rock; @allocate("lifetime") @clear("run")
 	news: [..] string; @allocate("lifetime") @clear("run")
 	sound_triggers: [..] Sound_Trigger; @allocate("lifetime") @clear("run")
 	jukeboxes: [..] Jukebox; @allocate("lifetime") @clear("run")
@@ -428,6 +431,23 @@ make_sync :: (standin: *Stand_In) -> Command.Sync_Stand_In {
 	return sync_standin;
 }
 
+make_sync :: (bomb: *Bomb) -> Command.Sync_Bomb {
+	sync: Command.Sync_Bomb;
+	sync.bomb_id = bomb.id;
+	sync.bomb_spawner_id = bomb.spawner_id;
+	sync.holder_id = bomb.holder;
+	sync.position = bomb.server.position;
+	sync.time = bomb.server.time;
+	return sync;
+}
+
+make_sync :: (spawner: *Bomb_Spawner) -> Command.Sync_Bomb_Spawner {
+	sync: Command.Sync_Bomb_Spawner;
+	sync.bomb_spawner_id = spawner.id;
+	sync.bomb_spawned_id = spawner.spawned_id;
+	return sync;
+}
+
 make_sync :: (skull: *Skull) -> Command.Sync_Skull {
 	sync_skull: Command.Sync_Skull;
 	sync_skull.skull_id = skull.id;
@@ -593,8 +613,52 @@ AntiAir :: struct {
 	}
 }
 
+Bomb_Spawner :: struct {
+	id: int;
+
+	position: V3f;
+
+	spawned_id := -1;
+	explosion_time := 10.0;
+	explosion_radius := 0.5;
+}
+
+Bomb :: struct {
+	id: int;
+
+	spawner_id: int = -1;
+	holder: int = -1;
+	last_holder: int = -1;
+
+	server: struct {
+		position: V3f;
+		radius_hitbox := 0.25;
+		time := 0.0;
+		lifetime := 0.0;
+
+		dropped_clock := 0.0;
+
+		explosion_time := 10.0;
+		explosion_radius := 0.5;
+	}
+
+	client: struct {
+		position: V3f;
+		time := 0.0;
+		lifetime := 0.0;
+	}
+}
+
+Block_Rock :: struct {
+	id: int;
+	exploded := false;
+	position: V3f;
+}
+
 PressButton :: struct {
 	id: int;
+
+	is_radio := false;
 
 	position: V3f;
 	
@@ -1225,7 +1289,7 @@ Player :: struct {
 
 		model_id := 0;
 
-		gold := 0;
+		souls := 0;
 		death_count := 0;
 		revive_count := 0;
 
@@ -1306,12 +1370,12 @@ find_by_frame_id :: (scene: Scene, id: int) -> *Moving_Frame {
 	return null;
 }
 
-find_by_player_id :: (scene: Scene, id: int) -> *Player {
+find_by_player_id :: (scene: Scene, id: int) -> *Player, int {
 	for * scene.players {
 		if it.id == id
-			return it;
+			return it, it_index;
 	}
-	return null;
+	return null, -1;
 }
 find_by_jukebox_id :: (scene: Scene, id: int) -> *Jukebox {
 	for * scene.jukeboxes {
@@ -1360,6 +1424,30 @@ find_by_key_id :: (scene: Scene, id: int) -> *Key {
 
 	return null;
 }
+find_bomb_by_holder_id :: (scene: Scene, id: int) -> *Bomb {
+	for * scene.bombs {
+		if it.holder == id
+			return it;
+	}
+
+	return null;
+}
+find_by_bomb_id :: (scene: Scene, id: int) -> *Bomb {
+	for * scene.bombs {
+		if it.id == id
+			return it;
+	}
+
+	return null;
+}
+find_by_bomb_spawner_id :: (scene: Scene, id: int) -> *Bomb_Spawner {
+	for * scene.bomb_spawners {
+		if it.id == id
+			return it;
+	}
+
+	return null;
+}
 find_by_turn_table_id :: (scene: Scene, id: int) -> *Turn_Table {
 	for * scene.turn_tables {
 		if it.id == id
@@ -1389,6 +1477,10 @@ interpolate_to_server :: (skull: *Skull) {
 interpolate_to_server :: (key: *Key, dt: float32) {
 	key.client.position = damp(key.client.position, key.server.position, 10.0, dt);
 }
+interpolate_to_server :: (bomb: *Bomb, dt: float32) {
+	bomb.client.time = damp(bomb.client.time, bomb.server.time, 10.0, dt);
+	bomb.client.position = damp(bomb.client.position, bomb.server.position, 10.0, dt);
+}
 
 restart :: (scene: *Scene, params: Scene_Parameters) {
 	clear_scene_run(scene);
@@ -1398,7 +1490,7 @@ restart :: (scene: *Scene, params: Scene_Parameters) {
 	scene.client.clock = 0.0;
 	scene.auto_revive |= params.auto_revive;
 	for * player: scene.players {
-		player.server.gold = 0;
+		player.server.souls = 0;
 		spawn_into(player, scene);
 	}
 	scene.end_scene_countdown_started = false;
@@ -1558,10 +1650,17 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 	}
 
 	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Klaxon) {
-		sound: Sound_Trigger;
 		player := find_by_player_id(scene, scene.controlled_player_id);
 		if player && !player.server.dead {
 			command: Command.Klaxon;
+			command.player_id = player.id;
+			add(result, scene.id, command);
+		}
+	}
+	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Drop) {
+		player := find_by_player_id(scene, scene.controlled_player_id);
+		if player && !player.server.dead {
+			command: Command.Drop;
 			command.player_id = player.id;
 			add(result, scene.id, command);
 		}
@@ -1776,11 +1875,35 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		}
 	}
 
+	for * scene.bombs {
+		if find_by_player_id(scene, it.holder) {
+			it.server.time += dt;
+			it.client.time += dt;
+		}
+		it.server.lifetime += dt;
+		it.client.lifetime += dt;
+	}
+
 	for * scene.turn_tables {
 		update(scene, it, dt);
 	}
 
 	update_explosions(scene, dt);
+
+	for * scene.block_rocks {
+		if it.exploded
+			continue;
+
+		p := it.position;
+		for * explosion: scene.explosions {
+			q := explosion.position;
+
+			d := norm(p - q);
+			if d < explosion.max_size / 2 + 0.3 {
+				it.exploded = true;
+			}
+		}
+	}
 
 	for * scene.keys {
 		interpolate_to_server(it, dt);
@@ -1830,6 +1953,19 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 
 	if scene.is_server
 		update_server(scene, time, dt, result);
+
+	for * scene.bombs {
+		if it.server.time > it.server.explosion_time {
+			remove it;
+			break;
+		}
+		player := find_by_player_id(scene, it.holder);
+		if player
+			it.server.position = player.server.position;
+
+		interpolate_to_server(it, dt);
+	}
+
 }
 
 update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result) {
@@ -1931,6 +2067,99 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 					continue;
 				}
 			}
+		}
+	}
+
+	// >RULE Player picks up bomb laying on the ground
+	for * player: scene.players {
+		p := player.server.position;
+
+		for * bomb: scene.bombs {
+			if bomb.holder != -1
+				continue;
+
+			q := bomb.server.position;
+
+			d := norm(p - q);
+			if d < 0.25 {
+				can_pickup := true;
+				if bomb.last_holder != player.id {
+					bomb.server.time = 0;
+					bomb.client.time = 0;
+				} else {
+					if bomb.server.dropped_clock + 2.0 >= scene.server.clock {
+						can_pickup = false;
+					}
+				}
+				if can_pickup {
+					bomb.holder = player.id;
+					bomb.last_holder = bomb.holder;
+					bomb.server.position = player.server.position;
+					bomb.client.position = player.client.position;
+				}
+			}
+		}
+	}
+
+	// >RULE Bombs spawner always has a bomb ready or in play
+	for * spawner: scene.bomb_spawners {
+		bomb := find_by_bomb_id(scene, spawner.spawned_id);
+		if !bomb
+			spawner.spawned_id = -1;
+	}
+
+	// >RULE Player picks up bomb available form spawner
+	for * player: scene.players {
+		p := player.server.position;
+		// If the player already has a bomb we do nothing.
+		if find_bomb_by_holder_id(scene, player.id)
+			continue;
+
+		for * spawner: scene.bomb_spawners {
+			if spawner.spawned_id >= 0
+				continue;
+			
+			q := spawner.position;
+
+			d := norm(p - q);
+			if d < 0.5 {
+				bomb: Bomb;
+				bomb.id = scene.bombs.count + 1;
+				bomb.spawner_id = spawner.id;
+				bomb.holder = player.id;
+				bomb.server.time = 0;
+				bomb.client.time = 0;
+				bomb.server.position = player.server.position;
+				bomb.client.position = player.client.position;
+				array_add(*scene.bombs, bomb);
+				spawner.spawned_id = bomb.id;
+			}
+		}
+	}
+
+	// >RULE bombs explode on time, killing their holder
+	for * bomb: scene.bombs {
+		if bomb.server.time > bomb.server.explosion_time {
+
+			player, player_idx := find_by_player_id(scene, bomb.holder);
+			if player {
+				should_die[player_idx].soft_die = true;
+
+				explosion: Explosion;
+				explosion.position = player.server.position;
+				explosion.lifetime = 0.75;
+				explosion.max_size = bomb.server.explosion_radius * 2;
+
+				array_add(*scene.explosions, explosion);
+
+				cmd: Command.Explode;
+				cmd.id = scene.explosions.count;
+				cmd.lifetime = explosion.lifetime;
+				cmd.max_size = explosion.max_size;
+				cmd.position = explosion.position;
+				array_add(*result.explode, cmd);
+			}
+			remove bomb;
 		}
 	}
 
@@ -2466,12 +2695,22 @@ drop_keys :: (scene: *Scene, player: *Player) {
 		}
 	}
 }
+drop_bombs :: (scene: *Scene, player: *Player) {
+	for * scene.bombs {
+		if it.holder == player.id {
+			it.holder = -1;
+			it.last_holder = player.id;
+			it.server.dropped_clock = xx scene.server.clock;
+		}
+	}
+}
 
 server_die :: (scene: *Scene, player: *Player, time: Apollo_Time, result: *Frame_Result) {
 	player.server.has_safe_present = false;
 	player.server.has_hook_present = 0;
 
 	drop_keys(scene, player);
+	drop_bombs(scene, player);
 
 	if scene.auto_revive {
 		respawn: Command.Respawn;
@@ -2485,7 +2724,7 @@ server_die :: (scene: *Scene, player: *Player, time: Apollo_Time, result: *Frame
 		array_add(*result.died, died);
 		player.server.dead = true;
 		player.server.dead_time = time;
-		player.server.gold = 0;
+		player.server.souls = 0;
 
 		if result {
 			array_add(*result.died_player_id, player.id);
@@ -3075,6 +3314,15 @@ can_execute_player_motion :: (scene: Scene, a: V3f, b: V3f, player: *Player) -> 
 			}
 		}
 	}
+	for * scene.block_rocks {
+		if it.exploded
+			continue;
+		d := norm(b - it.position);
+
+		if d < 0.6 {
+			return false;
+		}
+	}
 	return true;
 }
 
@@ -3117,8 +3365,8 @@ process_server_only :: (
 						cost = 2;
 					}
 
-					if player.server.gold >= cost {
-						player.server.gold -= cost;
+					if player.server.souls >= cost {
+						player.server.souls -= cost;
 
 						if present.kind == .A {
 							player.server.has_safe_present = true;
@@ -3162,6 +3410,17 @@ process_server_only :: (
 		player := find_by_player_id(scene, klaxon.player_id);
 		if player {
 			add(response, scene.id, klaxon.*);
+			return true;
+		}
+	}
+
+	drop: *Command.Drop = isa(command.payload, Command.Drop);
+	if drop {
+		bomb := find_bomb_by_holder_id(scene, drop.player_id);
+		if bomb {
+			bomb.holder = -1;
+			bomb.server.dropped_clock = xx scene.server.clock;
+			add(response, scene.id, drop.*);
 			return true;
 		}
 	}
@@ -3442,6 +3701,37 @@ process_client_only :: (
 		}
 	}
 
+	sync_bomb: *Command.Sync_Bomb = isa(command.payload, Command.Sync_Bomb);
+	if sync_bomb {
+		bomb := find_by_bomb_id(scene, sync_bomb.bomb_id);
+		if bomb {
+			bomb.server.position = sync_bomb.position;
+			bomb.server.time = sync_bomb.time;
+			bomb.holder = sync_bomb.holder_id;
+			return true;
+		} else {
+			new_bomb: Bomb;
+			new_bomb.id = sync_bomb.bomb_id;
+			new_bomb.spawner_id = sync_bomb.bomb_spawner_id;
+			new_bomb.holder = sync_bomb.holder_id;
+			new_bomb.server.position = sync_bomb.position;
+			new_bomb.client.position = sync_bomb.position;
+			new_bomb.server.time = sync_bomb.time;
+			new_bomb.client.time = sync_bomb.time;
+			array_add(*scene.bombs, new_bomb);
+			return true;
+		}
+	}
+
+	sync_bomb_spawner: *Command.Sync_Bomb_Spawner = isa(command.payload, Command.Sync_Bomb_Spawner);
+	if sync_bomb_spawner {
+		spawner := find_by_bomb_spawner_id(scene, sync_bomb_spawner.bomb_spawner_id);
+		if spawner {
+			spawner.spawned_id = sync_bomb_spawner.bomb_spawned_id;
+			return true;
+		}
+	}
+
 	anitiar_shoot: *Command.AntiAir_Shoot = isa(command.payload, Command.AntiAir_Shoot);
 	if anitiar_shoot {
 		antiair := find_by_antiair_id(scene, anitiar_shoot.antiair_id);
@@ -3491,6 +3781,14 @@ process_client_only :: (
 		return true;
 	}
 
+	drop: *Command.Drop = isa(command.payload, Command.Drop);
+	if drop {
+		bomb := find_bomb_by_holder_id(scene, drop.player_id);
+		if bomb {
+			bomb.holder = -1;
+			return true;
+		}
+	}
 	return false;
 }
 
