@@ -1,6 +1,9 @@
 *.pdb
 *.exe
 *.rdi
+*.dll
+*.exp
+*.mtl
 .vs/
 .build/
 .build_game_win32/

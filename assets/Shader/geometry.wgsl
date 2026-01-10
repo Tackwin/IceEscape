@@ -22,6 +22,7 @@ struct InstanceData {
 	flags: u32,
 	uv_offset: vec2f,
 	color: vec4f,
+	color_overlay: vec4f,
 };
 
 struct VertexOutput {

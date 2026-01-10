@@ -242,22 +242,22 @@ handle_file_change :: (instance: *Instance, path: string) {
 init_instance :: (instance: *Instance) {
 	terrains :: string.[
 		"pick",
-		"big_robot", // OK
 		"big_turn", // OK
-		"big_intro", // OK
-		"big_ship", // OK
-		"roundandround", // OK
+		"big_bomb", // OK
 		"pounding", // OK
+		"big_round", // OK
+		"chamber", // OK
+		"buzz", // OK
+		"roundabout", // OK
+		"funny", // OK
+		"right",
+		"frogger",
+		"here_and_there",
+		"volcano",
 		"turn",
 		"intro", // OK
-		"buzz", // OK
-		"chamber", // OK
-		"roundabout", // OK
-		"right",
-		"funny", // OK
-		"here_and_there", // OK
-		"volcano", // OK
-		"frogger",
+		"big_intro", // OK
+		"big_ship", // OK
 		"tetris",
 	];
 	
@@ -298,13 +298,13 @@ process :: (
 			move_playing_scene(instance, instance.pick_scene_id);
 			return true;
 		}
-		// if cheat_action.kind == .Kick {
-		// 	user := find_user_by_player_id(cheat_action.player_id);
-		// 	if user {
-		// 		quit_user(user);
-		// 	}
-		// 	return true;
-		// }
+		if cheat_action.kind == .Kick {
+			person := find_person_by_player_id(instance, cheat_action.player_id);
+			if person {
+				remove_person(instance, person.user_id);
+			}
+			return true;
+		}
 		return true;
 	}
 
@@ -322,6 +322,7 @@ process :: (
 			}
 		}
 	}
+
 	// request_score: *Command.Request_Score = isa(command.payload, Command.Request_Score);
 	// if request_score {
 	// 	sender := find_person_by_user_id(instance, sender_user_id);
@@ -334,7 +335,7 @@ process :: (
 	// 			if person {
 	// 				sync_score: Command.Sync_Score;
 	// 				sync_score.player_id = it;
-	// 				sync_score.score = person.score;
+	// 				sync_score.score = person.server.souls;
 	// 				Scene.add_single_reply(response, sender.player_id, sync_score);
 	// 			}
 	// 		}
@@ -616,13 +617,34 @@ update_instance :: (instance: *Instance, dt: float32) {
 		}
 		for instance.frame_result.died_player_id {
 			person := find_person_by_player_id(instance, it);
-			if person
+			if person {
 				person.run_stats.death_count += 1;
+
+				player := Scene.find_by_player_id(scene, it);
+				if player {
+					sync_score: Command.Sync_Score;
+					sync_score.player_id = it;
+					sync_score.souls = player.server.souls;
+
+					queue_send(instance, make_command(sync_score), person.user_id);
+				}
+			}
 		}
 		for instance.frame_result.revived_someone_player_id {
 			person := find_person_by_player_id(instance, it);
-			if person
+			if person {
 				person.run_stats.revive_count += 1;
+
+				player := Scene.find_by_player_id(scene, it);
+				if player {
+					sync_score: Command.Sync_Score;
+					sync_score.player_id = it;
+					sync_score.souls = player.server.souls;
+
+					queue_send(instance, make_command(sync_score), person.user_id);
+				}
+			}
+
 		}
 
 		should_end_level := false;

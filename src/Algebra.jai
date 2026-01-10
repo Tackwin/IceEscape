@@ -269,7 +269,7 @@ axis_angle :: (axis: V3($T), angle: T) -> Q(T) {
 	};
 }
 to_axis_angle :: (q: Q($T)) -> V3(T), T {
-	angle := 2 * acos(q.w);
+	angle := 2 * acos(clamp(q.w, -1.0, 1.0));
 	s := sqrt(1 - clamp(q.w * q.w, 0, 1));
 	if s < 0.001
 		return V3(T).{ q.x, q.y, q.z }, angle;

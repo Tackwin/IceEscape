@@ -243,8 +243,12 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 	if state.playing.escape_menu_open {
 		escape_args: GUI.Escape_Menu_Args;
 		escape_args.sound_enabled = state.volume_on;
+		escape_args.keyboard_layout = state.keyboard_layout;
 		ret := GUI.push_escape_menu(*app_user.gui_state, escape_args);
 		state.volume_on = ret.sound_checked;
+		if ret.layout_changed {
+			state.keyboard_layout = ret.keyboard_layout;
+		}
 		if ret.resume_clicked {
 			state.playing.escape_menu_open = false;
 		}

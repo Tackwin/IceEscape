@@ -242,7 +242,7 @@ Action_Key :: enum {
 	Coin :: Square20;
 	Klaxon :: Square10;
 	Drop :: Square31;
-	Safe :: Square21;
+	Safe :: Square22;
 	Hook :: Square02;
 }
 
@@ -416,7 +416,7 @@ widget_sized :: (
 	z := 0.0,
 	physical : GUI_State.Widget.Physical = .Solid,
 	default: T = .{}
-) -> *T
+) -> *T, *GUI_State.Widget
 #modify {
 	if Id == u64 || Id == s64 || Id == string {
 		return true;
@@ -448,7 +448,7 @@ gc_user_state :: (state: *GUI_State) {
 // That means that at the beggining of the frame, we copy the previous frame info into the control
 // state, WITH the captured flags filled out from the state of the gui at the last frame.
 // BUT the gui will take the current frame info.
-begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Controls.State) {
+begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Controls.State, layout_override: Platform.Layout = .AZERTY) {
 	// Copy controls from previous frame to out_controls
 	out_controls.* = state.controls;
 
@@ -473,7 +473,8 @@ begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Con
 	state.controls.captured_mouse = false;
 	state.controls.delta_time = info.delta_time;
 	state.controls.time = info.time;
-	state.controls.layout = info.layout;
+	// Use the user's preferred layout override instead of the auto-detected one
+	state.controls.layout = layout_override;
 
 	state.chars.count = 0;
 	state.quads.count = 0;
@@ -967,11 +968,11 @@ push_ping_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32
 }
 
 push_point_ui :: (state: *GUI_State, player: Scene.Player) {
-	cursor := V2f.{ 4, state.controls.window_size.y - 32 - 8 };
+	cursor := V2f.{ 4, state.controls.window_size.y - 32 - 12 };
 
 	score_label := atom_label(
 		state,
-		tprint("Score: %", player.server.souls),
+		tprint("Souls: %", player.server.souls),
 		cursor,
 		24,
 		1,
@@ -1527,12 +1528,15 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 
 Escape_Menu_Args :: struct {
 	sound_enabled := false;
+	keyboard_layout: Platform.Layout = .AZERTY;
 }
 Escape_Menu_Ret :: struct {
 	sound_checked := false;
 	resume_clicked := false;
 	editor_clicked := false;
 	leave_instance_clicked := false;
+	keyboard_layout: Platform.Layout;
+	layout_changed := false;
 }
 push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_Ret {
 	ret: Escape_Menu_Ret;
@@ -1604,7 +1608,27 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 		default = args.sound_enabled
 	).checked;
 	h := widget_height(state, "sound_checkbox");
-	cursor.y += h + 24;
+	cursor.y += h + 8;
+
+	// Keyboard layout dropdown
+	layout_options :: string.[ "AZERTY", "QWERTY" ];
+	current_layout_index := cast(int) args.keyboard_layout;
+	layout_dropdown := labeled_dropdown(
+		state,
+		"Keyboard",
+		layout_options,
+		cursor,
+		popup_size.x - 28,
+		24,
+		z = 12,
+		"keyboard_dropdown",
+		align = .Bottom_Left,
+		padding = 0,
+		default_index = current_layout_index
+	);
+	ret.keyboard_layout = cast(Platform.Layout) layout_dropdown.selected_index;
+	ret.layout_changed = layout_dropdown.changed;
+	cursor.y += widget_height(state, "keyboard_dropdown") + 24;
 
 	popup_size.* = grow(popup_size, pos, cursor);
 
@@ -2627,6 +2651,209 @@ labeled_checkbox :: (
 	w.aabb = widgets_aabb(gui, string.[ "label", "checkbox" ]);
 	return checkbox_comp;
 }
+
+Dropdown :: struct {
+	selected_index: int;
+	changed := false;
+}
+
+dropdown :: (
+	gui: *GUI_State,
+	options: [] string,
+	pos: V2f,
+	width: float,
+	height: float,
+	z := 0.0,
+	id := "dropdown",
+	align := Align.Bottom_Left,
+	default_index := 0
+) -> Dropdown {
+
+	Dropdown_Widget :: struct {
+		selected_index := 0;
+		is_open := false;
+	}
+
+	state, widget := widget(gui, id, Dropdown_Widget, .{
+		selected_index = default_index,
+		is_open = false
+	});
+
+	push_id(gui, id);
+	defer pop_id(gui);
+
+	ret: Dropdown;
+	ret.selected_index = state.selected_index;
+	ret.changed = false;
+
+	// Ensure selected index is valid
+	if state.selected_index < 0 || state.selected_index >= options.count {
+		state.selected_index = 0;
+	}
+
+	lower_left := align_pos(pos, .{ width, height }, align);
+	header_aabb := AABBf.{ lower_left, lower_left + v2(width, height) };
+
+	// Draw dropdown header (the selected item display)
+	push_quad_screen(gui, header_aabb, v3(0.0, 0.0, 0.0), z);
+	push_quad_screen(gui, shrink(header_aabb, v2(1.0, 1.0)), v3(1.0, 1.0, 1.0), z + 0.1);
+
+	// Display selected option
+	if options.count > 0 && state.selected_index >= 0 && state.selected_index < options.count {
+		atom_label(
+			gui,
+			options[state.selected_index],
+			lower_left + v2(4.0, height / 2),
+			height * 0.6,
+			z + 0.2,
+			align = .Center_Left,
+			color = v4(0.0, 0.0, 0.0, 1.0),
+			id = xx string_id("selected_label")
+		);
+	}
+
+	// Draw arrow indicator
+	arrow_x := lower_left.x + width - height / 2;
+	arrow_y := lower_left.y + height / 2;
+	arrow_size := height * 0.3;
+	if state.is_open {
+		// Up arrow (triangle)
+		atom_label(
+			gui, "^", .{ arrow_x, arrow_y }, height * 0.5, z + 0.2,
+			align = .Center, color = v4(0.0, 0.0, 0.0, 1.0), id = xx string_id("arrow")
+		);
+	} else {
+		// Down arrow (v)
+		atom_label(
+			gui, "v", .{ arrow_x, arrow_y }, height * 0.5, z + 0.2,
+			align = .Center, color = v4(0.0, 0.0, 0.0, 1.0), id = xx string_id("arrow")
+		);
+	}
+
+	// Create header widget for interaction
+	_, header_widget := widget_sized(
+		gui, "header", struct {}, header_aabb, z + 0.3, .Mouse
+	);
+
+	// Toggle dropdown on click
+	if header_widget.just_pressed {
+		state.is_open = !state.is_open;
+	}
+
+	// Draw dropdown list if open
+	if state.is_open {
+		gui.controls.captured_mouse = true;
+
+		list_y := lower_left.y + height;
+		for options {
+			option_aabb := AABBf.{
+				.{ lower_left.x, list_y },
+				.{ lower_left.x + width, list_y + height }
+			};
+
+			is_selected := it_index == state.selected_index;
+			bg_color := v3(1.0, 1.0, 1.0);
+			text_color := v4(0.0, 0.0, 0.0, 1.0);
+
+			// Create widget for this option
+			option_id := sprint("option_%", it_index);
+			_, option_widget := widget_sized(
+				gui, option_id, struct {}, option_aabb, z + 1.0, .Mouse
+			);
+
+			// Highlight on hover
+			if option_widget.hovered {
+				bg_color = v3(0.8, 0.8, 0.8);
+			}
+
+			// Highlight if selected
+			if is_selected {
+				bg_color = v3(0.9, 0.9, 0.9);
+			}
+
+			// Draw option background
+			push_quad_screen(gui, option_aabb, v3(0.0, 0.0, 0.0), z + 0.9);
+			push_quad_screen(gui, shrink(option_aabb, v2(1.0, 1.0)), bg_color, z + 1.0);
+
+			// Draw option text
+			atom_label(
+				gui,
+				it,
+				.{ lower_left.x + 4.0, list_y + height / 2 },
+				height * 0.6,
+				z + 1.1,
+				align = .Center_Left,
+				color = text_color,
+				id = xx string_id(option_id)
+			);
+
+			// Handle option click
+			if option_widget.just_pressed {
+				if state.selected_index != it_index {
+					state.selected_index = it_index;
+					ret.changed = true;
+				}
+				state.is_open = false;
+			}
+
+			list_y += height;
+		}
+	}
+
+	widget.aabb = header_aabb;
+	ret.selected_index = state.selected_index;
+
+	return ret;
+}
+
+labeled_dropdown :: (
+	gui: *GUI_State,
+	label: string,
+	options: [] string,
+	pos: V2f,
+	width: float,
+	height: float,
+	z := 0.0,
+	id := "labeled_dropdown",
+	align := Align.Bottom_Left,
+	padding := 4.0,
+	default_index := 0
+) -> Dropdown {
+	_, w := widget(gui, id, struct {});
+
+	push_id(gui, id);
+	defer pop_id(gui);
+
+	lower_left := align_pos(pos, .{ width, height }, horizontal(align));
+
+	label_comp := atom_label(
+		gui,
+		label,
+		lower_left + v2(padding, height),
+		height * 0.6,
+		z,
+		align = .Center_Left,
+		color = v4(0.0, 0, 0, 1),
+		id = xx string_id("label")
+	);
+
+	dropdown_width := min(width - widget_width(gui, "label") - padding * 3, 64 + 32);
+	dropdown_comp := dropdown(
+		gui,
+		options,
+		lower_left + v2(width - padding, height / 2),
+		dropdown_width,
+		height,
+		z,
+		align = vertical(align) | Align.Right,
+		id = "dropdown",
+		default_index = default_index
+	);
+
+	w.aabb = widgets_aabb(gui, string.[ "label", "dropdown" ]);
+	return dropdown_comp;
+}
+
 labeled_input_text :: (
 	gui: *GUI_State,
 	label: string,

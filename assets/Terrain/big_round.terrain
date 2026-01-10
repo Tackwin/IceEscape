@@ -38,7 +38,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-- name: Roundandround
+- name: Big Round
 
 frame
 - position: 6.0 4.0
@@ -441,3 +441,36 @@ shuriken
 shuriken
 - frame_id: 12
 - position: 4 0 0
+
+
+
+moving_frame
+- key
+-- position: 42 6.5 0
+-- theta: 1.4
+-- period: 4.5
+- key
+-- position: 42 6.5 0
+-- theta: 0.6
+-- period: 4.5
+- key
+-- position: 42 6.5 0
+-- theta: 1.4
+-- period: 1.5
+-t: 0.0
+
+shuriken
+- frame_id: 13
+- position: 0.5 0 0
+shuriken
+- frame_id: 13
+- position: 1.5 0 0
+shuriken
+- frame_id: 13
+- position: 2.5 0 0
+shuriken
+- frame_id: 13
+- position: 4.5 0 0
+
+flag
+- position: 24 10 0

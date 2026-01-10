@@ -111,7 +111,7 @@ App_User :: struct {
 	if app_user.allocated_frame_info.quit
 		return false;
 
-	GUI.begin_frame(*app_user.gui_state, app_user.allocated_frame_info, *app_user.controls);
+	GUI.begin_frame(*app_user.gui_state, app_user.allocated_frame_info, *app_user.controls, app_user.state.keyboard_layout);
 
 	commands := parse_web_message(*app_user.state, app_user.allocated_frame_info);
 	for command: commands {
@@ -204,6 +204,7 @@ State :: struct {
 	filter_command_debug: [#run enum_highest_value(Command.payload.Kind) + 1] bool;
 
 	volume_on := true;
+	keyboard_layout: Layout = .AZERTY;
 
 	skull_id_to_sound: Table(int, Sound);
 	shurikens_id_to_sound: Table(int, Sound);

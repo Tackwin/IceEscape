@@ -506,6 +506,7 @@ WFramegraph :: struct {
 		padding0: u32 = 0;
 		padding1: u32 = 0;
 		color: V4f = .{ 1, 1, 1, 1 };
+		overlay_color: V4f = .{ 1, 1, 1, 1 };
 	};
 	mainInstances: [..] Instance;
 	
@@ -1499,7 +1500,7 @@ render_scene :: (
 		render_traps(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 		render_explosions(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 
-		if true {
+		if false {
 			for 0..10 {
 				t := it / 11.0 * 2 * 3.1415926;
 				factor := cos(t);
@@ -1530,7 +1531,7 @@ render_scene :: (
 			geometryPass, 1, framegraph.particleBindGroup, 0, null
 		);
 
-		render_particles(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		// render_particles(framegraph, frame.encoder, geometryPass, scene, store, *extra);
 
 		graphics.gpu.renderPassEncoderSetBindGroup(
 			geometryPass, 1, framegraph.geometryBindGroup, 0, null
@@ -2136,6 +2137,15 @@ render_bombs :: (
 		s *= s;
 		scale := s * 0.5 + 1;
 
+		color := v4(1.0, 1.0, 1.0, 1.0);
+		if it.client.time + 2 > it.server.explosion_time {
+			color.y = (it.server.explosion_time - it.client.time) / min(2.0, it.server.explosion_time);
+			color.y = sqrt(color.y);
+			color.y = sqrt(color.y);
+			color.z = color.y;
+		}
+		instance.color = color;
+
 		off := v3(0.0, 0.0, 0.0);
 		if it.holder >= 0
 			off.z += 0.5;
@@ -2526,10 +2536,9 @@ render_block_rocks :: (
 		instance.M = M4f.translate(it.position);
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
-	if instanced.count == 0
-		return;
+	if instanced.count > 0
+		draw(framegraph, pass, store.block_rock, instanced.count);
 
-	draw(framegraph, pass, store.block_rock, instanced.count);
 	instanced = append_instance_buffer(framegraph);
 	for scene.block_rocks {
 		if !it.exploded
@@ -2540,10 +2549,8 @@ render_block_rocks :: (
 		instance.M = M4f.translate(it.position);
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
-	if instanced.count == 0
-		return;
-
-	draw(framegraph, pass, store.no_block_rock, instanced.count);
+	if instanced.count > 0
+		draw(framegraph, pass, store.no_block_rock, instanced.count);
 }
 render_tombstones :: (
 	framegraph: *WFramegraph,

@@ -436,6 +436,7 @@ make_sync :: (bomb: *Bomb) -> Command.Sync_Bomb {
 	sync.bomb_id = bomb.id;
 	sync.bomb_spawner_id = bomb.spawner_id;
 	sync.holder_id = bomb.holder;
+	sync.last_holder_id = bomb.last_holder;
 	sync.position = bomb.server.position;
 	sync.time = bomb.server.time;
 	return sync;
@@ -1876,12 +1877,8 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	}
 
 	for * scene.bombs {
-		if find_by_player_id(scene, it.holder) {
-			it.server.time += dt;
-			it.client.time += dt;
-		}
-		it.server.lifetime += dt;
-		it.client.lifetime += dt;
+		it.server.time += dt;
+		it.client.time += dt;
 	}
 
 	for * scene.turn_tables {
@@ -1899,7 +1896,7 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			q := explosion.position;
 
 			d := norm(p - q);
-			if d < explosion.max_size / 2 + 0.3 {
+			if d < explosion.max_size / 2 + 0.5 {
 				it.exploded = true;
 			}
 		}
@@ -2087,7 +2084,8 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 					bomb.server.time = 0;
 					bomb.client.time = 0;
 				} else {
-					if bomb.server.dropped_clock + 2.0 >= scene.server.clock {
+					treshold := bomb.server.dropped_clock + bomb.server.explosion_time * 0.75;
+					if treshold >= scene.server.clock {
 						can_pickup = false;
 					}
 				}
@@ -2127,6 +2125,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				bomb.id = scene.bombs.count + 1;
 				bomb.spawner_id = spawner.id;
 				bomb.holder = player.id;
+				bomb.last_holder = player.id;
 				bomb.server.time = 0;
 				bomb.client.time = 0;
 				bomb.server.position = player.server.position;
@@ -2144,21 +2143,20 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			player, player_idx := find_by_player_id(scene, bomb.holder);
 			if player {
 				should_die[player_idx].soft_die = true;
-
-				explosion: Explosion;
-				explosion.position = player.server.position;
-				explosion.lifetime = 0.75;
-				explosion.max_size = bomb.server.explosion_radius * 2;
-
-				array_add(*scene.explosions, explosion);
-
-				cmd: Command.Explode;
-				cmd.id = scene.explosions.count;
-				cmd.lifetime = explosion.lifetime;
-				cmd.max_size = explosion.max_size;
-				cmd.position = explosion.position;
-				array_add(*result.explode, cmd);
 			}
+
+			explosion: Explosion;
+			explosion.position = bomb.server.position;
+			explosion.lifetime = 0.75;
+			explosion.max_size = bomb.server.explosion_radius * 2;
+			array_add(*scene.explosions, explosion);
+
+			cmd: Command.Explode;
+			cmd.id = scene.explosions.count;
+			cmd.lifetime = explosion.lifetime;
+			cmd.max_size = explosion.max_size;
+			cmd.position = explosion.position;
+			array_add(*result.explode, cmd);
 			remove bomb;
 		}
 	}
@@ -2250,7 +2248,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				dt := norm(pos - tombstone.position);
 
 				if dt < (it.server.radius_hitbox + 0.25) {
-					player_has_revived_other_player(it.sender, tombstone.player_id, result);
+					player_has_revived_other_player(scene, it.sender, tombstone.player_id, result);
 
 					respawn: Command.Respawn;
 					respawn.player_id = tombstone.player_id;
@@ -2323,7 +2321,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 						spawn_into(player_to_respawn, scene);
 					}
 
-					player_has_revived_other_player(it.id, tomb.player_id, result);
+					player_has_revived_other_player(scene, it.id, tomb.player_id, result);
 					remove tomb;
 					continue;
 				}
@@ -2682,9 +2680,17 @@ win_level :: (scene: *Scene, player_id: int, time: Apollo_Time, result: *Frame_R
 		array_add(*result.win_player_id, player_id);
 }
 
-player_has_revived_other_player :: (reviver: int, revived: int, result: *Frame_Result) {
+player_has_revived_other_player :: (
+	scene: *Scene, reviver: int, revived: int, result: *Frame_Result
+) {
+	player := find_by_player_id(scene, reviver);
+	if player {
+		player.server.souls += 1;
+	}
+
 	if result
 		array_add(*result.revived_someone_player_id, reviver);
+	
 }
 
 drop_keys :: (scene: *Scene, player: *Player) {
@@ -2695,13 +2701,17 @@ drop_keys :: (scene: *Scene, player: *Player) {
 		}
 	}
 }
+
+drop_bomb :: (scene: *Scene, bomb: *Bomb) {
+	bomb.holder = -1;
+	bomb.server.time = 0;
+	bomb.client.time = 0;
+	bomb.server.dropped_clock = xx scene.server.clock;
+}
 drop_bombs :: (scene: *Scene, player: *Player) {
 	for * scene.bombs {
-		if it.holder == player.id {
-			it.holder = -1;
-			it.last_holder = player.id;
-			it.server.dropped_clock = xx scene.server.clock;
-		}
+		if it.holder == player.id
+			drop_bomb(scene, it);
 	}
 }
 
@@ -2879,11 +2889,7 @@ update :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
 	target += player.server.direction * player.server.speed * robot.predict;
 
 	og_target := target;
-
 	target.z = 2.0;
-
-	target.x = clamp(target.x, robot.position.x - 2.0, robot.position.x + 2.0);
-	target.y = clamp(target.y, robot.position.y - 2.0, robot.position.y + 2.0);
 	
 	T := target;
 
@@ -2893,7 +2899,7 @@ update :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
 			E := robot_pivot(robot, 6);
 			Oi := robot_pivot(robot, it);
 			ti := normalize(T - Oi);
-			if it > 3 {
+			if it > 1 {
 				ti = normalize(og_target - Oi);
 			}
 			ei := normalize(E - Oi);
@@ -3110,6 +3116,7 @@ update :: (scene: Scene, camera: *Camera, dt: float32) {
 		camera.target_target = damp(camera.target_target, locked_target_target, 10.0, dt);
 		// dt := player_locked.client.position - within_aabb;
 		// camera.target_target = within_aabb;
+		camera.target_target = player_locked.client.position;
 	}
 
 	camera.target = damp(camera.target, camera.target_target, 50.0, dt);
@@ -3374,6 +3381,11 @@ process_server_only :: (
 							player.server.has_hook_present += 1;
 						}
 
+						sync_score: Command.Sync_Score;
+						sync_score.player_id = player.id;
+						sync_score.souls = player.server.souls;
+						add_single_reply(response, player.id, sync_score);
+
 						add_single_reply(response, player.id, make_sync(player));
 					} else {
 						buy_response: Command.Buy_Response;
@@ -3418,8 +3430,7 @@ process_server_only :: (
 	if drop {
 		bomb := find_bomb_by_holder_id(scene, drop.player_id);
 		if bomb {
-			bomb.holder = -1;
-			bomb.server.dropped_clock = xx scene.server.clock;
+			drop_bomb(scene, bomb);
 			add(response, scene.id, drop.*);
 			return true;
 		}
@@ -3513,7 +3524,7 @@ process_client_only :: (
 					case .Already_Have_Item;
 						array_add(*scene.news, sprint("You already have this item."));
 					case .Not_Enough_Points;
-						array_add(*scene.news, sprint("Not enough points to buy item."));
+						array_add(*scene.news, sprint("Not enough souls to buy item."));
 					case .Too_Far;
 						array_add(*scene.news, sprint("You are too far away."));
 				}
@@ -3636,6 +3647,15 @@ process_client_only :: (
 		}
 	}
 
+	sync_score: *Command.Sync_Score = isa(command.payload, Command.Sync_Score);
+	if sync_score {
+		player := find_by_player_id(scene, sync_score.player_id);
+		if player {
+			player.server.souls = sync_score.souls;
+		}
+		return true;
+	}
+
 	sync_standin: *Command.Sync_Stand_In = isa(command.payload, Command.Sync_Stand_In);
 	if sync_standin {
 		standin := find_by_standin_id(scene, sync_standin.standin_id);
@@ -3708,12 +3728,14 @@ process_client_only :: (
 			bomb.server.position = sync_bomb.position;
 			bomb.server.time = sync_bomb.time;
 			bomb.holder = sync_bomb.holder_id;
+			bomb.last_holder = sync_bomb.last_holder_id;
 			return true;
 		} else {
 			new_bomb: Bomb;
 			new_bomb.id = sync_bomb.bomb_id;
 			new_bomb.spawner_id = sync_bomb.bomb_spawner_id;
 			new_bomb.holder = sync_bomb.holder_id;
+			new_bomb.last_holder = sync_bomb.last_holder_id;
 			new_bomb.server.position = sync_bomb.position;
 			new_bomb.client.position = sync_bomb.position;
 			new_bomb.server.time = sync_bomb.time;
@@ -3785,7 +3807,7 @@ process_client_only :: (
 	if drop {
 		bomb := find_bomb_by_holder_id(scene, drop.player_id);
 		if bomb {
-			bomb.holder = -1;
+			drop_bomb(scene, bomb);
 			return true;
 		}
 	}

@@ -177,6 +177,7 @@ Command :: struct {
 		bomb_id: int;
 		bomb_spawner_id: int;
 		holder_id: int;
+		last_holder_id: int;
 
 		position: V3f;
 		time: float;
@@ -199,6 +200,10 @@ Command :: struct {
 	AntiAir_Shoot :: struct {
 		antiair_id: int;
 		next_target: V2f;
+	}
+	Sync_Score :: struct {
+		player_id: int;
+		souls: int;
 	}
 	Sync_Scene :: struct {
 		id: int;
@@ -369,7 +374,7 @@ Command :: struct {
 		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook, Cheat_Action, Buy_Ask, Buy_Response,
 		Sync_Stand_In, Ask_Respawn, Ask_Instance_List, Ans_Instance_List, Ask_Enter_Instance,
 		Ans_Enter_Instance, Leave_Instance, Create_Instance, Ans_Create_Instance, Version_Info,
-		Sync_Stats, Sync_Clock, Note_Played, Sync_Bomb_Spawner, Sync_Bomb
+		Sync_Stats, Sync_Clock, Note_Played, Sync_Bomb_Spawner, Sync_Bomb, Sync_Score
 	);
 	sent_timestamp: float64;
 }
@@ -441,6 +446,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Sync_Player; #through;
 		case .Sync_Safe_Zone; #through;
 		case .Sync_Skull; #through;
+		case .Sync_Score; #through;
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
 		case .Leave_Instance; #through;
@@ -604,6 +610,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .End_Level; #through;
 		case .Spawn; #through;
 		case .Connect; #through;
+		case .Sync_Score; #through;
 		case .Spawn_Coin; #through;
 		case .Despawn_Coin; #through;
 		case .Cheat_Action; #through;

@@ -1005,7 +1005,7 @@ parse_terrain :: (text: string, scene: *Scene) {
 
 				for id: 0..16 {
 					r := Rand.random_uniform(*rng);
-					if r < get_probability(xx id) {
+					if r < get_probability(xx id) / 3 {
 						prop: Prop;
 						prop.id = xx id;
 

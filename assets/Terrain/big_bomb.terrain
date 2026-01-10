@@ -1,0 +1,482 @@
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXIIIIIIIXXXXXXXXXXXXIIIIIIIXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXIIIIIIIXXXXXXXXXXXXIIIIIIIXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXGGGIIIIIIIIIIIiiiiiiiiIIIIIIIIIIIGGGXGGGXXXXXXXXXXXX
+XXXXXXXXXXXXGGGIIIIIXIIIIIiiiiiiiiIIIIIXIIIIIGGGGGGGXXXXXXXXXXXX
+XXXXXXXXXXXXGGGIIIIIIIIIIIiiiiiiiiIIIIIIIIIIIGGGXGGGXXXXXXXXXXXX
+XXXXXXXXXXXXXGXXXIIIIIIIXXXXXXXXXXXXIIIIIIIXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXGXXXIIIIIIIXXXXXXXXXXXXIIIIIIIXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXGGGIIIXXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXGGGIIIXXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXGGGIIIXXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXIIIXXIIIXXIIIXXIIIXXIIIXXIIIXXGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXGXXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXGXXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXIIIIIIIIXXIIIIIIIIXXIIIIIIIIXXXGXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXGGGXIIIIIIIIIIIIIIIIIIIIIIIIIIIIXGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXGSGIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXGGGXIIIIIIIIIIIIIIIIIIIIIIIIIIIIXGGGXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+- name: Big Bomb
+
+frame
+- position: 7.0 3.0
+- size: 37.0 20.0
+
+jukebox
+- position: 5.5 9 0
+
+robot
+- position: 14 1 0
+- start_target_aabb: 8.5 3
+- size_target_aabb: 15 3
+- shooting_cd: 1.5
+- max_rotation_speed: 2.0
+- predict: 1.0
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+robot
+- position: 20 1 0
+- start_target_aabb: 11.5 3
+- size_target_aabb: 17 3
+- shooting_cd: 1.5
+- max_rotation_speed: 2.0
+- predict: 1.0
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+
+robot
+- position: 26 1 0
+- start_target_aabb: 17.5 3
+- size_target_aabb: 17 3
+- shooting_cd: 1.5
+- max_rotation_speed: 2.0
+- predict: 1.0
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+robot
+- position: 32 1 0
+- start_target_aabb: 23.5 3
+- size_target_aabb: 14 3
+- shooting_cd: 1.5
+- max_rotation_speed: 2.0
+- predict: 1.0
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+
+bomb_spawner
+- position: 5.5 5.5 0
+
+
+block_rock
+- position: 39.5 7 0
+block_rock
+- position: 6.5 15 0
+
+flag
+- position: 5.5 18.5 0
+
+path
+- checkpoint: 35 13.5 0
+- checkpoint: 13 13.51 0
+path
+- checkpoint: 35 12.0 0
+- checkpoint: 13 12.01 0
+path
+- checkpoint: 35 10.5 0
+- checkpoint: 13 10.51 0
+path
+- checkpoint: 35 9.0 0
+- checkpoint: 13 9.01 0
+path
+- checkpoint: 35 7.5 0
+- checkpoint: 13 7.51 0
+
+skull
+- path_id: 0
+- speed: 1.5
+skull
+- path_id: 1
+- speed: 1.5
+skull
+- path_id: 2
+- speed: 1.5
+skull
+- path_id: 3
+- speed: 1.5
+skull
+- path_id: 4
+- speed: 1.5
+
+skull
+- path_id: 0
+- speed: 1.5
+- offset: 0.5
+skull
+- path_id: 1
+- speed: 1.5
+- offset: 0.5
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.5
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.5
+skull
+- path_id: 4
+- speed: 1.5
+- offset: 0.5
+
+robot
+- position: 12 11 0
+- start_target_aabb: 8.25 7.25
+- size_target_aabb: 7.5 6.5
+- shooting_cd: 1.25
+- max_rotation_speed: 2.0
+- predict: 0.5
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+robot
+- position: 17 10 0
+- start_target_aabb: 13.25 7.25
+- size_target_aabb: 7.5 6.5
+- shooting_cd: 1.5
+- max_rotation_speed: 2.0
+- predict: 0.5
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+robot
+- position: 22 11 0
+- start_target_aabb: 18.25 7.25
+- size_target_aabb: 7.5 6.5
+- shooting_cd: 1.5
+- max_rotation_speed: 2.0
+- predict: 0.5
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+robot
+- position: 27 10 0
+- start_target_aabb: 23.25 7.25
+- size_target_aabb: 7.5 6.5
+- shooting_cd: 1.5
+- max_rotation_speed: 2.0
+- predict: 0.5
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+robot
+- position: 32 11 0
+- start_target_aabb: 28.25 7.25
+- size_target_aabb: 7.5 6.5
+- shooting_cd: 1.5
+- max_rotation_speed: 2.0
+- predict: 0.5
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+
+bomb_spawner
+- position: 5.5 17.5 0
+
+path
+- checkpoint: 10 15 0
+- checkpoint: 17 15 0
+- checkpoint: 17 22 0
+- checkpoint: 10 22.01 0
+- checkpoint: 10 15 0
+
+skull
+- path_id: 5
+- speed: 1.5
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.04
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.08
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.12
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.16
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.20
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.24
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.28
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.32
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.36
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.40
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.44
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.48
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.52
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.56
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.60
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.64
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.68
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.72
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.76
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.80
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.84
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.88
+skull
+- path_id: 5
+- speed: 1.5
+- offset: 0.92
+
+
+path
+- checkpoint: 29 15 0
+- checkpoint: 36 15 0
+- checkpoint: 36 22 0
+- checkpoint: 29 22.01 0
+- checkpoint: 29 15 0
+
+skull
+- path_id: 6
+- speed: 1.5
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.04
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.08
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.12
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.16
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.20
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.24
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.32
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.36
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.40
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.44
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.48
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.52
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.56
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.60
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.64
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.68
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.72
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.76
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.80
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.84
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.88
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.92
+skull
+- path_id: 6
+- speed: 1.5
+- offset: 0.96
+
+robot
+- position: 13.5 18.5 0
+- start_target_aabb: 10 15
+- size_target_aabb: 7 7
+- shooting_cd: 1.5
+- max_rotation_speed: 2.0
+- predict: 0.5
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+robot
+- position: 13.5 18.5 0
+- start_target_aabb: 10 15
+- size_target_aabb: 7 7
+- shooting_cd: 1.4
+- max_rotation_speed: 2.0
+- predict: 0.5
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+robot
+- position: 32.5 18.5 0
+- start_target_aabb: 29 15
+- size_target_aabb: 7 7
+- shooting_cd: 1.5
+- max_rotation_speed: 2.0
+- predict: 0.5
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+robot
+- position: 32.5 18.5 0
+- start_target_aabb: 29 15
+- size_target_aabb: 7 7
+- shooting_cd: 1.4
+- max_rotation_speed: 2.0
+- predict: 0.5
+- max_rotation_speed: 0.5
+- charging_time: 0.2
+- shooting_time: 0.3
+- effectshoot_time: 0.2
+
+trophy
+- position: 43.5 18.5 0
+
+block_rock
+- position: 41.5 18.5 0
