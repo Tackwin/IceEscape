@@ -202,6 +202,9 @@ Font :: struct {
 }
 
 Platform :: struct {
+	extern_ref :: s32;
+	wait: #type (promise: extern_ref) = null;
+
 	gpu: GPU_proc;
 
 	open_server: #type (port: int) -> bool = null;
@@ -218,7 +221,7 @@ Platform :: struct {
 	end_frame:        #type ()               = null;
 
 	set_listener_info: #type (listener: Listener) = null;
-	load_audio: #type (data: string, compressed: bool) -> Audio = null;
+	load_audio: #type (data: string, compressed: bool, out: *Audio) -> extern_ref = null;
 	play_audio: #type (audio: Audio, position: V3f) -> Sound = null;
 	query_sound: #type (sound_id: int) -> Sound = null;
 	set_sound: #type (sound: Sound) = null;
@@ -227,6 +230,10 @@ Platform :: struct {
 	read_entire_file: #type (path: string, data: [] u8) -> int = null;
 	load_image: #type (data: [] u8) -> Image = null;
 	free_image: #type (image: *Image) = null;
+
+	Thread_F :: #type (data: *void);
+	spawn: #type (func: Thread_F, data: *void) -> int = null;
+	join: #type (thread_id: int) = null;
 
 	allocator: Allocator;
 }

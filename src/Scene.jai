@@ -146,6 +146,9 @@ Scene :: struct {
 	moving_frames: [..] Moving_Frame; @allocate("lifetime") @clear("run")
 	moving_frame_keys: [..] Moving_Frame.Key; @allocate("lifetime") @clear("run")
 	shurikens: [..] Shuriken; @allocate("lifetime") @clear("run")
+	camera_rails: [..] Camera_Rail; @allocate("lifetime") @clear("run")
+	camera_rail_waypoints: [..] V3f; @allocate("lifetime") @clear("run")
+	camera_pois: [..] Camera_POI; @allocate("lifetime") @clear("run")
 	stand_in: [..] Stand_In; @allocate("lifetime") @clear("run")
 	trigger_zones: [..] Trigger_Zone; @allocate("lifetime") @clear("run")
 	within_zones: [..] Within_Zone; @allocate("lifetime") @clear("run")
@@ -979,6 +982,17 @@ Camera :: struct {
 
 	max_distance := 0.0;
 
+	// Camera rail tracking
+	rail_position: V3f;  // Current position on the rail
+	rail_target_position: V3f;  // Target position on the rail
+	current_rail_id := -1;
+	rail_progress := 0.0;  // Progress along current rail segment [0, 1]
+	current_segment := 0;  // Which segment of the rail we're on
+
+	// POI tracking
+	current_poi_id := -1;
+	poi_zoom_factor := 1.0;
+	poi_target_zoom_factor := 1.0;
 
 	locked_to := -1;
 	locked := false;
@@ -1219,6 +1233,17 @@ Skull :: struct {
 Path :: struct {
 	checkpoints: [32] V3f;
 	checkpoints_count := 0;
+}
+
+Camera_Rail :: struct {
+	id: int;
+	waypoints: ISpan(V3f);
+}
+
+Camera_POI :: struct {
+	id: int;
+	position: V3f;
+	zoom_out_factor := 1.0;
 }
 
 Tombstone :: struct {
@@ -3057,66 +3082,151 @@ update :: (scene: Scene, frame: *Moving_Frame, dt: float32) {
 	}
 }
 
+find_closest_point_on_rail :: (scene: Scene, rail: Camera_Rail, position: V3f) -> V3f, int, float {
+	// Find the closest point on the rail to the given position
+	// Returns: closest point, segment index, progress [0, 1] along that segment
+
+	waypoints := iterator(rail.waypoints, scene.camera_rail_waypoints);
+
+	closest_point: V3f;
+	closest_distance := FLOAT32_MAX;
+	best_segment := 0;
+	best_progress := 0.0;
+
+	prev_waypoint: V3f;
+	first := true;
+	segment_idx := 0;
+
+	for waypoint: waypoints {
+		if !first {
+			// Project position onto line segment between prev_waypoint and waypoint
+			segment_dir := waypoint - prev_waypoint;
+			segment_length := norm(segment_dir);
+
+			if segment_length > 0.001 {
+				segment_dir_norm := segment_dir / segment_length;
+				to_pos := position - prev_waypoint;
+				projection := dot(to_pos, segment_dir_norm);
+
+				// Clamp to segment
+				t := clamp(projection / segment_length, 0.0, 1.0);
+				point_on_segment := prev_waypoint + segment_dir * t;
+
+				dist := norm(position - point_on_segment);
+				if dist < closest_distance {
+					closest_distance = dist;
+					closest_point = point_on_segment;
+					best_segment = segment_idx;
+					best_progress = t;
+				}
+			}
+
+			segment_idx += 1;
+		}
+		first = false;
+		prev_waypoint = waypoint;
+	}
+
+	return closest_point, best_segment, best_progress;
+}
+
+find_closest_poi :: (scene: Scene, position: V3f, max_distance: float = 3.0) -> *Camera_POI, float {
+	// Find the closest POI within max_distance
+	closest_poi: *Camera_POI = null;
+	closest_distance := max_distance;
+
+	for * scene.camera_pois {
+		dist := norm(position - it.position);
+		if dist < closest_distance {
+			closest_distance = dist;
+			closest_poi = it;
+		}
+	}
+
+	return closest_poi, closest_distance;
+}
+
+update_camera_locked :: (scene: Scene, camera: *Camera, player_locked: *Player, dt: float32) {
+	player_pos := player_locked.client.position;
+
+	// If we don't have a rail yet or camera position is uninitialized, find the closest rail
+	if camera.current_rail_id < 0 || camera.current_rail_id >= scene.camera_rails.count {
+		if scene.camera_rails.count > 0 {
+			camera.current_rail_id = 0;
+			rail := scene.camera_rails[0];
+			camera.rail_position, camera.current_segment, camera.rail_progress =
+				find_closest_point_on_rail(scene, rail, player_pos);
+			camera.rail_target_position = camera.rail_position;
+		} else {
+			// No rails, fall back to following player directly
+			camera.target_target = player_pos;
+			return;
+		}
+	}
+
+	// Get current rail
+	rail := scene.camera_rails[camera.current_rail_id];
+	waypoints := iterator(rail.waypoints, scene.camera_rail_waypoints);
+
+	// Find where player wants us to be on the rail
+	target_rail_point, target_segment, target_progress :=
+		find_closest_point_on_rail(scene, rail, player_pos);
+
+	// Smoothly move rail target position toward where player wants us
+	camera.rail_target_position = damp(camera.rail_target_position, target_rail_point, 8.0, dt);
+	camera.current_segment = target_segment;
+	camera.rail_progress = damp(camera.rail_progress, target_progress, 8.0, dt);
+
+	// The actual rail position follows the target with damping
+	camera.rail_position = damp(camera.rail_position, camera.rail_target_position, 10.0, dt);
+
+	// Check for nearby POIs
+	poi, poi_distance := find_closest_poi(scene, player_pos);
+
+	if poi && poi_distance < 2.0 {
+		// Player is near a POI - snap camera to it
+		if camera.current_poi_id != poi.id {
+			camera.current_poi_id = poi.id;
+		}
+
+		// Smoothly transition to POI
+		poi_influence := 1.0 - clamp(poi_distance / 2.0, 0.0, 1.0);
+		poi_influence = poi_influence * poi_influence;  // Ease in
+
+		target_with_poi := poi.position * poi_influence + camera.rail_position * (1.0 - poi_influence);
+		camera.target_target = damp(camera.target_target, target_with_poi, 12.0, dt);
+
+		// Zoom based on POI
+		camera.poi_target_zoom_factor = poi.zoom_out_factor;
+	} else {
+		// No POI nearby, follow the rail
+		camera.current_poi_id = -1;
+		camera.target_target = damp(camera.target_target, camera.rail_position, 10.0, dt);
+
+		// Return to default zoom
+		camera.poi_target_zoom_factor = 1.0;
+	}
+
+	// Smoothly adjust zoom
+	camera.poi_zoom_factor = damp(camera.poi_zoom_factor, camera.poi_target_zoom_factor, 5.0, dt);
+
+	// Apply zoom by scaling the camera offset
+	base_offset_length := norm(camera.wanted_target_to_position);
+	if base_offset_length > 0.001 {
+		base_offset_dir := normalize(camera.wanted_target_to_position);
+		camera.wanted_target_to_position = damp(
+			camera.wanted_target_to_position,
+			base_offset_dir * base_offset_length * camera.poi_zoom_factor,
+			5.0,
+			dt
+		);
+	}
+}
+
 update :: (scene: Scene, camera: *Camera, dt: float32) {
 	player_locked := find_by_player_id(scene, camera.locked_to);
 	if player_locked && camera.locked {
-		// If the camera is locked, The player drags an anchor behind him.
-		// The anchor is on a leash, the delta between the anchor's position and the last position
-		// happened to move the anchor is goign to be the direction we are looking.
-
-		R := 1.5;
-		p := player_locked.client.position;
-		pivot := camera.locked_drag_anchor;
-		dist_anchor_player := norm(p - pivot);
-		dist_last_anchor_player := norm(p - camera.locked_drag_anchor_last_drag_pos);
-
-		factor := dot(camera.locked_drag_anchor_last_delta, player_locked.client.direction);
-		factor = (1 - factor) / 2.0;
-		factor = factor * factor * factor;
-		factor = exp(-factor) + 0.7;
-
-		if dist_anchor_player > R {
-			camera.locked_drag_anchor_last_drag_pos =
-				damp(camera.locked_drag_anchor_last_drag_pos, player_locked.client.position, 5.0, dt);
-			camera.locked_drag_anchor_last_delta = normalize(
-				camera.locked_drag_anchor_last_drag_pos - pivot
-			);
-			camera.locked_drag_anchor = p - normalize(p - pivot) * R;
-		} else if false && dist_last_anchor_player > R * factor {
-			camera.locked_drag_anchor_last_drag_pos =
-				damp(camera.locked_drag_anchor_last_drag_pos, player_locked.client.position, 5.0, dt);
-			camera.locked_drag_anchor_last_delta = normalize(
-				camera.locked_drag_anchor_last_drag_pos - pivot
-			);
-			camera.locked_drag_anchor = p - normalize(p - camera.locked_drag_anchor_last_drag_pos) * R * factor;
-		} else
-		{
-			delta := normalize(pivot - p);
-			dist := norm(pivot - p);
-			if dist > 1.0 {
-				dist = damp(dist, 1.0, 1.0, dt);
-				camera.locked_drag_anchor = dist * delta + p;
-				// camera.locked_drag_anchor = damp(camera.locked_drag_anchor, p, 1.0, dt);
-			}
-		}
-
-		look_at_direction := camera.locked_drag_anchor_last_delta;
-		if norm(look_at_direction) < 0.99 {
-			look_at_direction = v3(1.0, 0.0, 0.0);
-		}
-		look_at_direction = normalize(pow(look_at_direction, 3));
-
-		center := player_locked.client.position;
-		low := center - V3f.{ 2.5, 2.5, 0.0 };
-		high := center + V3f.{ 2.5, 2.5, 0.0 };
-
-		locked_target_target := center + look_at_direction * 1.0;
-		// within_aabb := closest_aabb(locked_target_target, low, high);
-		// camera.target_target += player_locked.client.direction * player_locked.server.speed * dt;
-		camera.target_target = damp(camera.target_target, locked_target_target, 10.0, dt);
-		// dt := player_locked.client.position - within_aabb;
-		// camera.target_target = within_aabb;
-		camera.target_target = player_locked.client.position;
+		update_camera_locked(scene, camera, player_locked, dt);
 	}
 
 	camera.target = damp(camera.target, camera.target_target, 50.0, dt);

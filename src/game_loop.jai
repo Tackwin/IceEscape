@@ -323,8 +323,21 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 	}
 
 	if state.render_fps {
-		GUI.push_fps_histogram(
-			*gui_state, .{ 10, 10 }, .{ 300, 150 }, state.history_dt, state.history_cursor
+		GUI.push_ms_histogram(
+			*gui_state,
+			.{ 10, 10 },
+			.{ 300, 150 },
+			state.history_app_loop_dt,
+			state.history_cursor,
+			"Render"
+		);
+		GUI.push_ms_histogram(
+			*gui_state,
+			.{ 10, 170 },
+			.{ 300, 150 },
+			state.history_app_update_loop_dt,
+			state.history_cursor,
+			"Update"
 		);
 
 		history_ping := NewArray(state.ntp_history.count, float32, false,, temp);
@@ -332,7 +345,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 			it.* = xx state.ntp_history[it_index].ping;
 		}
 		ping_cursor := (state.ntp_history_cursor + history_ping.count - 1) % history_ping.count;
-		GUI.push_ping_histogram(*gui_state, .{ 10, 170 }, .{ 300, 150 }, history_ping, ping_cursor);
+		GUI.push_ping_histogram(*gui_state, .{ 10, 330 }, .{ 300, 150 }, history_ping, ping_cursor);
 	}
 }
 
@@ -497,9 +510,9 @@ game_loop :: (app_user: *App_User) -> bool {
 
 	// Rendering
 	frame := WRender.begin_frame(*framegraph, controls.time);
-	WRender.render_scene(*frame, *framegraph, state.scene, store);
-	WRender.render_gui(*frame, *framegraph, app_user.gui_state, store);
-	WRender.end_frame(*frame);
+	WRender.render_scene(frame, *framegraph, state.scene, store);
+	WRender.render_gui(frame, *framegraph, app_user.gui_state, store);
+	WRender.end_frame(*framegraph, frame);
 
 	respond(app.platform, controls.time, process_response);
 

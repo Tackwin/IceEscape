@@ -612,67 +612,55 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 
 	store.indicator_outline_model = WRender.Model.make_from_obj(Assets.INDICATOR_OUTLINE_OBJ, "indicator_outline");
 	store.indicator_stroke_model = WRender.Model.make_from_obj(Assets.INDICATOR_STROKE_OBJ, "indicator_stroke");
-	store.snowflakes_and_lights_mp3 = platform.load_audio(
-		xx Assets.SNOWFLAKES_AND_LIGHTS_MP3, true
-	);
+	store.turn_table_turn_model = WRender.Model.make_from_obj(Assets.TURN_TABLE_TURN_OBJ, "turn_table_turn");
+	store.turn_table_base_model = WRender.Model.make_from_obj(Assets.TURN_TABLE_BASE_OBJ, "turn_table_base");
 
-	store.turn_table_turn_model = WRender.Model.make_from_obj(
-		Assets.TURN_TABLE_TURN_OBJ, "turn_table_turn"
-	);
-	store.turn_table_base_model = WRender.Model.make_from_obj(
-		Assets.TURN_TABLE_BASE_OBJ, "turn_table_base"
-	);
+	promises: [..] Platform.Platform.extern_ref;
 
-	store.footstep_snow_0_mp3 = platform.load_audio(xx Assets.FOOTSTEP_SNOW_0_MP3, true);
-	store.footstep_snow_1_mp3 = platform.load_audio(xx Assets.FOOTSTEP_SNOW_1_MP3, true);
-	store.footstep_snow_2_mp3 = platform.load_audio(xx Assets.FOOTSTEP_SNOW_2_MP3, true);
-	store.footstep_snow_3_mp3 = platform.load_audio(xx Assets.FOOTSTEP_SNOW_3_MP3, true);
-	store.footstep_snow_4_mp3 = platform.load_audio(xx Assets.FOOTSTEP_SNOW_4_MP3, true);
+	array_add(*promises, platform.load_audio(xx Assets.SNOWFLAKES_AND_LIGHTS_MP3, true, *store.snowflakes_and_lights_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_SNOW_0_MP3, true, *store.footstep_snow_0_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_SNOW_1_MP3, true, *store.footstep_snow_1_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_SNOW_2_MP3, true, *store.footstep_snow_2_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_SNOW_3_MP3, true, *store.footstep_snow_3_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_SNOW_4_MP3, true, *store.footstep_snow_4_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_ICE_0_MP3, true, *store.footstep_ice_0_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_ICE_1_MP3, true, *store.footstep_ice_1_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_ICE_2_MP3, true, *store.footstep_ice_2_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_ICE_3_MP3, true, *store.footstep_ice_3_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_ICE_4_MP3, true, *store.footstep_ice_4_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_0_MP3, true, *store.horn_car_0_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_1_MP3, true, *store.horn_car_1_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_2_MP3, true, *store.horn_car_2_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_3_MP3, true, *store.horn_car_3_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_4_MP3, true, *store.horn_car_4_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_5_MP3, true, *store.horn_car_5_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_6_MP3, true, *store.horn_car_6_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_7_MP3, true, *store.horn_car_7_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_8_MP3, true, *store.horn_car_8_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.BOAT_SAILING_0_WAV, true, *store.boat_sailing_0_wav));
+	array_add(*promises, platform.load_audio(xx Assets.BOAT_SAILING_1_WAV, false, *store.boat_sailing_1_wav));
+	array_add(*promises, platform.load_audio(xx Assets.BOAT_SAILING_2_WAV, false, *store.boat_sailing_2_wav));
+	array_add(*promises, platform.load_audio(xx Assets.DRONE_BUZZING_0_WAV, true, *store.drone_buzzing_0_wav));
+	array_add(*promises, platform.load_audio(xx Assets.NOTE_WAV, true, *store.note_wav));
+	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_0_MP3, false, *store.explosion_0_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_1_MP3, false, *store.explosion_1_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_2_MP3, false, *store.explosion_2_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_3_MP3, false, *store.explosion_3_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_4_MP3, false, *store.explosion_4_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_5_MP3, false, *store.explosion_5_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_6_MP3, false, *store.explosion_6_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_7_MP3, false, *store.explosion_7_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_8_MP3, false, *store.explosion_8_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.DRIFT_0_MP3, true, *store.drift_0_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.DRIFT_1_MP3, true, *store.drift_1_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.CHECKPOINT_OK_MP3, false, *store.checkpoint_ok_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.RES_MP3, false, *store.res_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.COIN_LAUNCH_MP3, false, *store.coin_launch_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.LOSER_MP3, true, *store.loser_mp3));
+	array_add(*promises, platform.load_audio(xx Assets.POINT_UP_MP3, false, *store.point_up_mp3));
 
-	store.footstep_ice_0_mp3 = platform.load_audio(xx Assets.FOOTSTEP_ICE_0_MP3, true);
-	store.footstep_ice_1_mp3 = platform.load_audio(xx Assets.FOOTSTEP_ICE_1_MP3, true);
-	store.footstep_ice_2_mp3 = platform.load_audio(xx Assets.FOOTSTEP_ICE_2_MP3, true);
-	store.footstep_ice_3_mp3 = platform.load_audio(xx Assets.FOOTSTEP_ICE_3_MP3, true);
-	store.footstep_ice_4_mp3 = platform.load_audio(xx Assets.FOOTSTEP_ICE_4_MP3, true);
-
-	store.horn_car_0_mp3 = platform.load_audio(xx Assets.HORN_CAR_0_MP3, true);
-	store.horn_car_1_mp3 = platform.load_audio(xx Assets.HORN_CAR_1_MP3, true);
-	store.horn_car_2_mp3 = platform.load_audio(xx Assets.HORN_CAR_2_MP3, true);
-	store.horn_car_3_mp3 = platform.load_audio(xx Assets.HORN_CAR_3_MP3, true);
-	store.horn_car_4_mp3 = platform.load_audio(xx Assets.HORN_CAR_4_MP3, true);
-	store.horn_car_5_mp3 = platform.load_audio(xx Assets.HORN_CAR_5_MP3, true);
-	store.horn_car_6_mp3 = platform.load_audio(xx Assets.HORN_CAR_6_MP3, true);
-	store.horn_car_7_mp3 = platform.load_audio(xx Assets.HORN_CAR_7_MP3, true);
-	store.horn_car_8_mp3 = platform.load_audio(xx Assets.HORN_CAR_8_MP3, true);
-
-	store.boat_sailing_0_wav = platform.load_audio(xx Assets.BOAT_SAILING_0_WAV, true);
-	store.boat_sailing_1_wav = platform.load_audio(xx Assets.BOAT_SAILING_1_WAV, false);
-	store.boat_sailing_2_wav = platform.load_audio(xx Assets.BOAT_SAILING_2_WAV, false);
-
-	store.drone_buzzing_0_wav = platform.load_audio(xx Assets.DRONE_BUZZING_0_WAV, true);
-
-	store.note_wav = platform.load_audio(xx Assets.NOTE_WAV, true);
-
-	store.explosion_0_mp3 = platform.load_audio(xx Assets.EXPLOSION_0_MP3, false);
-	store.explosion_1_mp3 = platform.load_audio(xx Assets.EXPLOSION_1_MP3, false);
-	store.explosion_2_mp3 = platform.load_audio(xx Assets.EXPLOSION_2_MP3, false);
-	store.explosion_3_mp3 = platform.load_audio(xx Assets.EXPLOSION_3_MP3, false);
-	store.explosion_4_mp3 = platform.load_audio(xx Assets.EXPLOSION_4_MP3, false);
-	store.explosion_5_mp3 = platform.load_audio(xx Assets.EXPLOSION_5_MP3, false);
-	store.explosion_6_mp3 = platform.load_audio(xx Assets.EXPLOSION_6_MP3, false);
-	store.explosion_7_mp3 = platform.load_audio(xx Assets.EXPLOSION_7_MP3, false);
-	store.explosion_8_mp3 = platform.load_audio(xx Assets.EXPLOSION_8_MP3, false);
-
-	store.drift_0_mp3 = platform.load_audio(xx Assets.DRIFT_0_MP3, true);
-	store.drift_1_mp3 = platform.load_audio(xx Assets.DRIFT_1_MP3, true);
-
-	store.checkpoint_ok_mp3 = platform.load_audio(xx Assets.CHECKPOINT_OK_MP3, false);
-	store.res_mp3 = platform.load_audio(xx Assets.RES_MP3, false);
-	store.coin_launch_mp3 = platform.load_audio(xx Assets.COIN_LAUNCH_MP3, false);
-
-	store.loser_mp3 = platform.load_audio(xx Assets.LOSER_MP3, true);
-
-	store.point_up_mp3 = platform.load_audio(xx Assets.POINT_UP_MP3, false);
+	for promises
+		platform.wait(it);
 }
 
 #if Assets.RUNTIME {

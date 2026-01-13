@@ -25,9 +25,9 @@ wasm_read_entire_file :: (path: string, data: [] u8) -> int {
 wasm_get_frame_info :: (info: *Frame_Info) {
 	info.* = .{};
 
-	jsGetCurrentTimeMonotonic :: (low_ptr: *u64, high_ptr: *u64) #foreign;
+	js_get_current_time_monotonic :: (low_ptr: *u64, high_ptr: *u64) #foreign;
 	now: Apollo_Time;
-	jsGetCurrentTimeMonotonic((*now).(*u64), (*now).(*u64) + 1);
+	js_get_current_time_monotonic((*now).(*u64), (*now).(*u64) + 1);
 
 	info.delta_time = 1.0 / 60.0;
 	if last_frame_init {
@@ -43,24 +43,24 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	info.window_focused = true;
 	info.window_size = .{ xx 1366, xx 768 };
 
-	jsGetKeyState :: (key_map_ptr: *bool, key_map_count: s64) #foreign;
-	jsGetKeyState(pressed.data, pressed.count);
+	js_get_key_state :: (key_map_ptr: *bool, key_map_count: s64) #foreign;
+	js_get_key_state(pressed.data, pressed.count);
 
 	x: u32;
 	y: u32;
-	jsGetMousePointer :: (x_ptr: *u32, y_ptr: *u32) #foreign;
-	jsGetMousePointer(*x, *y);
+	js_get_mouse_pointer :: (x_ptr: *u32, y_ptr: *u32) #foreign;
+	js_get_mouse_pointer(*x, *y);
 	info.mouse_position.x = xx x;
 	info.mouse_position.y = xx y;
 
 	delta: float32;
-	jsGetMouseWheelDelta :: (delta_ptr: *float32) #foreign;
-	jsGetMouseWheelDelta(*delta);
+	js_get_mouse_wheel_delta :: (delta_ptr: *float32) #foreign;
+	js_get_mouse_wheel_delta(*delta);
 	info.mouse_wheel = xx delta;
 
 	dim: [4] u32;
-	jsGetDimensions :: (dim_ptr: *u32) #foreign;
-	jsGetDimensions(dim.data);
+	js_get_dimemsions :: (dim_ptr: *u32) #foreign;
+	js_get_dimemsions(dim.data);
 	wx := dim[0];
 	wy := dim[1];
 	ww := dim[2];
@@ -104,98 +104,105 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 // audio_table: Table(int, *Sound.Sound_Data);
 // audio_counter := 0;
 
-load_audio :: (data: string, compressed: bool) -> Audio {
+load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_ref {
 	print("Loading audio in wasm is not supported yet!\n");
-	Params :: struct {
-		data: *u8;
-		count: s64;
-		id: *s64;
-		compressed: u64;
-	}
-	js_load_audio :: (params: *Params) #foreign;
-	audio: Audio;
-	params: Params;
-	params.data = cast(*u8) data.data;
-	params.count = xx data.count;
-	params.compressed = xx compressed;
-	params.id = *audio.id;
-	js_load_audio(*params);
+	// Params :: struct {
+	// 	data: *u8;
+	// 	count: s64;
+	// 	id: *s64;
+	// 	compressed: u64;
+	// }
+	// js_load_audio :: (params: *Params) -> Platform.extern_ref #foreign;
+	// params: Params;
+	// params.data = cast(*u8) data.data;
+	// params.count = xx data.count;
+	// params.compressed = xx compressed;
+	// params.id = *out.id;
 
-	return audio;
+	// return js_load_audio(*params);
 }
+
+wasm_wait :: (promise: Platform.extern_ref) {
+	js_wait :: (promise: Platform.extern_ref) #foreign;
+	js_wait(promise);
+}
+
 play_audio :: (audio: Audio, position: V3f) -> Sound {
-	Params :: struct {
-		id: s64;
-		x: float32;
-		y: float32;
-		z: float32;
-		volume: float32;
-		pitch: float32;
-		repeating: u32;
-		kind: s32;
-		fade_in: s32;
-		exponent: float32;
+	return .{};
+	// Params :: struct {
+	// 	id: s64;
+	// 	x: float32;
+	// 	y: float32;
+	// 	z: float32;
+	// 	volume: float32;
+	// 	pitch: float32;
+	// 	repeating: u32;
+	// 	kind: s32;
+	// 	fade_in: s32;
+	// 	exponent: float32;
 
-		sound_id: *s64;
+	// 	sound_id: *s64;
 
-		delay: float32;
-	}
+	// 	delay: float32;
+	// }
 
-	js_play_audio :: (params: *Params) #foreign;
-	sound: Sound;
-	params: Params;
-	params.id = xx audio.id;
-	params.x = xx position.x;
-	params.y = xx position.y;
-	params.z = xx position.z;
-	params.volume = xx audio.volume;
-	params.pitch = xx audio.pitch;
-	params.repeating = xx audio.repeating;
-	params.kind = xx audio.kind;
-	params.fade_in = xx audio.fade_in;
-	params.sound_id = *sound.id;
-	params.exponent = xx audio.exponent;
-	params.delay = xx audio.delay;
-	js_play_audio(*params);
+	// js_play_audio :: (params: *Params) #foreign;
+	// sound: Sound;
+	// params: Params;
+	// params.id = xx audio.id;
+	// params.x = xx position.x;
+	// params.y = xx position.y;
+	// params.z = xx position.z;
+	// params.volume = xx audio.volume;
+	// params.pitch = xx audio.pitch;
+	// params.repeating = xx audio.repeating;
+	// params.kind = xx audio.kind;
+	// params.fade_in = xx audio.fade_in;
+	// params.sound_id = *sound.id;
+	// params.exponent = xx audio.exponent;
+	// params.delay = xx audio.delay;
+	// js_play_audio(*params);
 
-	sound.audio_id = audio.id;
-	sound.playing = true;
-	sound.position = position;
-	sound.loop = audio.repeating || audio.kind == .Music;
-	return sound;
+	// sound.audio_id = audio.id;
+	// sound.playing = true;
+	// sound.position = position;
+	// sound.loop = audio.repeating || audio.kind == .Music;
+	// return sound;
 }
 query_sound :: (sound_id: int) -> Sound {
-	Params :: struct {
-		sound_id: s64;
-		id: *s64;
-		x: *float32;
-		y: *float32;
-		z: *float32;
-		volume: *float32;
-		pitch: *float32;
-		playing: *u32;
-		looping: *u32;
-	}
-	js_query_sound :: (params: *Params) #foreign;
-	params: Params;
-	sound: Sound;
-	params.sound_id = xx sound_id;
-	params.id = *sound.id;
-	params.x = *sound.position.x;
-	params.y = *sound.position.y;
-	params.z = *sound.position.z;
-	params.volume = *sound.volume;
-	params.pitch = *sound.pitch;
-	u32_looping : u32 = 0;
-	params.looping = *u32_looping;
-	u32_playing : u32 = 0;
-	params.playing = *u32_playing;
-	js_query_sound(*params);
-	sound.playing = u32_playing != 0;
-	sound.loop = u32_looping != 0;
-	return sound;
+	return .{};
+	// Params :: struct {
+	// 	sound_id: s64;
+	// 	id: *s64;
+	// 	x: *float32;
+	// 	y: *float32;
+	// 	z: *float32;
+	// 	volume: *float32;
+	// 	pitch: *float32;
+	// 	playing: *u32;
+	// 	looping: *u32;
+	// }
+	// js_query_sound :: (params: *Params) #foreign;
+	// params: Params;
+	// sound: Sound;
+	// params.sound_id = xx sound_id;
+	// params.id = *sound.id;
+	// params.x = *sound.position.x;
+	// params.y = *sound.position.y;
+	// params.z = *sound.position.z;
+	// params.volume = *sound.volume;
+	// params.pitch = *sound.pitch;
+	// u32_looping : u32 = 0;
+	// params.looping = *u32_looping;
+	// u32_playing : u32 = 0;
+	// params.playing = *u32_playing;
+	// js_query_sound(*params);
+	// sound.playing = u32_playing != 0;
+	// sound.loop = u32_looping != 0;
+	// return sound;
 }
 set_sound :: (sound: Sound) {
+	return;
 	Params :: struct {
 		sound_id: s64;
 		x: float32;
@@ -220,6 +227,7 @@ set_sound :: (sound: Sound) {
 	// Sound.update();
 }
 set_listener_info :: (listener: Listener) {
+	return;
 	Params :: struct {
 		x: float32;
 		y: float32;
@@ -255,20 +263,20 @@ wasm_free_image :: (image: *Image) {
 }
 
 wasm_connect_server :: (address: string, port: int, protocol: string) -> Connection, bool {
-	jsConnectServer :: (
+	js_connect_server :: (
 		protocol: *void, protocol_count: int, addr: *void, addr_count: int, port: s32, success: *s32
 	) #foreign;
 	success: s32;
-	jsConnectServer(
+	js_connect_server(
 		protocol.data, xx protocol.count, address.data, xx address.count, xx port, *success
 	);
 	return 0, true;
 }
 
 wasm_is_server_connected :: () -> bool {
-	jsIsServerConnected :: (success: *s32) #foreign;
+	js_is_server_connected :: (success: *s32) #foreign;
 	connected: s32;
-	jsIsServerConnected(*connected);
+	js_is_server_connected(*connected);
 	return connected != 0;
 }
 
@@ -296,6 +304,7 @@ init_platform :: () -> Platform {
 	platform.get_token = get_token;
 	platform.set_token = set_token;
 	platform.load_audio = load_audio;
+	platform.wait = wasm_wait;
 	platform.play_audio = play_audio;
 	platform.query_sound = query_sound;
 	platform.set_sound = set_sound;
@@ -1178,25 +1187,72 @@ entries :: Entry.[
 
 #import "main_game";
 
-main :: () {
-	context.allocator.proc(.STARTUP, 0, 0, null, null);
+app: App;
+platform: Platform;
 
-	app: App;
+main_thread_wasm_context: #Context;
+main_thread_temporary_storage: Temporary_Storage;
+main_thread_temporary_storage_data: [TEMPORARY_STORAGE_SIZE] u8 #align 64;
+
+update_thread_wasm_context: #Context;
+update_thread_temporary_storage: Temporary_Storage;
+update_thread_temporary_storage_data: [TEMPORARY_STORAGE_SIZE] u8 #align 64;
+
+#program_export "wasm_get_main_context" wasm_get_context :: () -> *#Context #c_call {
+	return *main_thread_wasm_context;
+}
+#program_export "wasm_get_update_context" wasm_get_update_context :: () -> *#Context #c_call {
+	return *update_thread_wasm_context;
+}
+
+#program_export "wasm_init" wasm_init :: () #c_call {
+	main_thread_temporary_storage.data          = main_thread_temporary_storage_data.data;
+	main_thread_temporary_storage.original_data = main_thread_temporary_storage_data.data;
+	main_thread_temporary_storage.size          = main_thread_temporary_storage_data.count;
+	main_thread_temporary_storage.original_size = main_thread_temporary_storage_data.count;
+	main_thread_wasm_context.temporary_storage  = *main_thread_temporary_storage;
+
+	update_thread_temporary_storage.data          = update_thread_temporary_storage_data.data;
+	update_thread_temporary_storage.original_data = update_thread_temporary_storage_data.data;
+	update_thread_temporary_storage.size          = update_thread_temporary_storage_data.count;
+	update_thread_temporary_storage.original_size = update_thread_temporary_storage_data.count;
+	update_thread_wasm_context.temporary_storage  = *update_thread_temporary_storage;
+
+	push_context, defer_pop main_thread_wasm_context;
+	context.allocator.proc(.STARTUP, 0, 0, null, null);
 	app.allocator = context.allocator;
 	app.user_data = null;
 
-	platform := init_platform();
+	platform = init_platform();
 	app.platform = *platform;
 
 	app_init(*app);
-
-	while (app_loop(*app)) {
-		// Main loop
-	}
-
-	app_quit(*app);
-	exit_platform(platform);
 }
+
+#program_export "wasm_main_loop" wasm_main_loop :: () #c_call {
+	push_context, defer_pop main_thread_wasm_context;
+	app_loop(*app);
+}
+
+
+
+#program_export "wasm_worker_loop" wasm_worker_loop :: () #c_call {
+	jsDontOptimize :: (params: [] u8) #foreign;
+	offset_stack: [8*1024*1024] u8 = ---;
+	jsDontOptimize(offset_stack);
+	push_context, defer_pop update_thread_wasm_context;
+	app_update_loop(*app);
+}
+
+// main :: () {
+
+// 	while (app_loop(*app)) {
+// 		// Main loop
+// 	}
+
+// 	app_quit(*app);
+// 	exit_platform(platform);
+// }
 // We expose malloc to just use the default allocator with a fresh context so that our c code 
 // has a usable malloc/realloc/free it can use whenever it wants and you can't accidentaly
 // malloc something with temporary storage as that's not something you can do on other platforms (yet?)
@@ -1204,7 +1260,6 @@ ptr_to_size: Table(*void, s64);
 
 #program_export "malloc"
 jai_default_alloc :: (size: s64) -> *void #c_call {
-
     push_context,defer_pop;
     Basic :: #import "Basic";
     ret := Basic.alloc(size,, context.default_allocator);;
@@ -1239,42 +1294,16 @@ jai_default_free :: (memory: *void) #c_call {
 
 // we expose these so that you can allocate memory from js if you need to
 #program_export context_alloc :: (ctx: *#Context, size: s64) -> *void #c_call {
-    push_context,defer_pop ctx;
+	push_context, defer_pop ctx.*;
     Basic :: #import "Basic";
-    return Basic.alloc(size);
-}
-
-#program_export allocator_alloc :: (ctx: *#Context, allocator: *Allocator, size: s64) -> *void #c_call {
-    push_context,defer_pop ctx;
-    Basic :: #import "Basic";
-    return Basic.alloc(size,, allocator.*);
+    ptr := Basic.alloc(size);
+	print("allocated % bytes at %\n", size, ptr);
+	return ptr;
 }
 
 #program_export context_free :: (ctx: *#Context, memory: *void) #c_call {
-    push_context,defer_pop ctx;
+	push_context, defer_pop ctx.*;
     Basic :: #import "Basic";
     Basic.free(memory);
 }
 
-#program_export allocator_free :: (ctx: *#Context, allocator: *Allocator, memory: *void) #c_call {
-    push_context,defer_pop ctx;
-    Basic :: #import "Basic";
-    Basic.free(memory,, allocator.*);
-}
-
-#program_export temporary_alloc :: (ctx: *#Context, size: s64) -> *void #c_call {
-    push_context,defer_pop ctx;
-    Basic :: #import "Basic";
-    return Basic.temporary_alloc(size);
-}
-
-
-// TODO: pass everything in and have it be just jai_log and have jai_log_error be a wrapper
-#program_export context_log :: (ctx: *#Context, message_data: *u8, message_count: s64) #c_call {
-    push_context,defer_pop ctx;
-    context.logger(string.{message_count, message_data}, context.logger_data, .{
-        source_identifier = context.log_source_identifier,
-        location          = #location(), // TODO: pass in location
-        common_flags      = .ERROR,
-    });
-}

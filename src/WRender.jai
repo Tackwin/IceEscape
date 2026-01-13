@@ -7,6 +7,7 @@
 #import "Hash_Table";
 #import "Rand";
 #import "Sort";
+#import "Pool";
 Store :: #import "Store";
 Scene :: #import "Scene";
 GUI :: #import "GUI";
@@ -30,6 +31,17 @@ toWGPUStringView :: (str: string) -> WGPUStringView {
 
 align_up :: (value: *int, alignment: int) {
 	value.* = ((value.* + alignment - 1) / alignment) * alignment;
+}
+
+align_up :: (value: *int, alig1: int, alig2: int) {
+	gcd :: (a: int, b:int) -> int {
+		if b == 0
+			return a;
+		return gcd(b, a % b);
+	}
+	lcm := alig2 * alig1 / gcd(alig1, alig2);
+
+	align_up(value, lcm);
 }
 
 #scope_export
@@ -62,6 +74,7 @@ init_graphics :: (platform: Platform, _graphics: *Graphics) {
 	opts: WGPURequestAdapterOptions = .{};
 	opts.compatibleSurface = graphics.surface;
 	cb: WGPURequestAdapterCallbackInfo = .{};
+	cb.mode = .AllowSpontaneous;
 	cb.userdata1 = graphics;
 	graphics.done[0] = false;
 	cb.callback = (
@@ -123,7 +136,7 @@ init_graphics :: (platform: Platform, _graphics: *Graphics) {
 	{
 
 		cb: WGPURequestDeviceCallbackInfo = .{};
-		cb.mode = .WaitAnyOnly;
+		cb.mode = .AllowSpontaneous;
 		cb.userdata1 = graphics;
 		cb.callback = (
 			status: WGPURequestDeviceStatus,
@@ -412,6 +425,29 @@ Model :: struct {
 	}
 }
 
+Frame :: struct {
+	Draw :: struct {
+		instance_start := 0;
+		instance_count := 0;
+		model: *Model = null;
+		second_bind_group: *WGPUBindGroup = null;
+	}
+
+	Pass :: struct(U: Type) {
+		draws: [..] Draw;
+		uniforms: U;
+		current_bind_group: *WGPUBindGroup;
+	}
+	shadow: Pass(WFramegraph.Uniforms);
+	geometry: Pass(WFramegraph.Uniforms);
+	ui: Pass(WFramegraph.UI_Uniform);
+
+	cpu: [..] u8;
+	cpu_cursor := 0;
+
+	current_time: Apollo_Time;
+}
+
 WFramegraph :: struct {
 	rng: XORState;
 	current_time: Apollo_Time;
@@ -441,18 +477,17 @@ WFramegraph :: struct {
 
 	shadowTexture: WTexture;
 	hdrTexture: WTexture;
-
-	surfaceTexture: WGPUSurfaceTexture;
+	uiTexture: WTexture;
 
 	geometryBindGroup: WGPUBindGroup;
-	instanceBindGroup: WGPUBindGroup;
 	textureBindGroup: WGPUBindGroup;
 	particleBindGroup: WGPUBindGroup;
+
+	frame_buffer: WGPUBuffer;
 
 	UI_Uniform :: struct {
 		window_size: V2f;
 	}
-	uiUniformBuffer: WGPUBuffer;
 	UI_Instance :: struct {
 		pos: V2f;
 		size: V2f;
@@ -463,15 +498,12 @@ WFramegraph :: struct {
 		outline: float = 0;
 		padding2: u32 = 0;
 	}
-	uiInstanceBuffer: WGPUBuffer;
-	uiInstances: [..] UI_Instance;
 
 	Present_Uniform :: struct {
 		size: V2f;
 		exposure: float32 = 1.0;
 		gamma: float32 = 2.2;
 	}
-	presentUniformBuffer: WGPUBuffer;
 	Uniforms :: struct {
 		V: M4f;
 		P: M4f;
@@ -483,8 +515,6 @@ WFramegraph :: struct {
 		sun_color: V3f;
 		sun_strength: float32;
 	}
-	typicalUniform: Uniforms;
-	uniformBuffer: WGPUBuffer;
 
 	Vertex :: struct {
 		position: V3f;
@@ -508,11 +538,14 @@ WFramegraph :: struct {
 		color: V4f = .{ 1, 1, 1, 1 };
 		overlay_color: V4f = .{ 1, 1, 1, 1 };
 	};
-	mainInstances: [..] Instance;
-	
-	instanceBuffer: WGPUBuffer;
-	instances: [..] Instance;
-	instanceBufferCursor := 0;
+
+	frames: [3] Frame;
+
+	rendering_frame_idx := -1;
+	working_frame_idx := -1;
+	ready_frame_idx := -1;
+
+	frame_lock: u32 = 0;
 };
 
 init_bindgroup_layout :: (framegraph: *WFramegraph) {
@@ -534,7 +567,6 @@ init_bindgroup_layout :: (framegraph: *WFramegraph) {
 		layout.label = toWGPUStringView("Instance Bind Group Layout");
 		framegraph.instanceBindGroupLayout =
 			graphics.gpu.deviceCreateBindGroupLayout(graphics.device, *layout);
-		framegraph.instanceBindGroup = instance_bind_group(framegraph, "Geometry", 32 * 1024);
 	}
 	{
 		layout: WGPUBindGroupLayoutDescriptor = .{};
@@ -641,7 +673,7 @@ init_quad_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 			fragment.module = framegraph.quadModule;
 			fragment.entryPoint = toWGPUStringView("fs");
 				targets: [1] WGPUColorTargetState;
-				targets[0].format = .BGRA8Unorm;
+				targets[0].format = .RGBA8Unorm;
 					blend: WGPUBlendState = .{};
 					blend.color.operation = .Add;
 					blend.color.srcFactor = .SrcAlpha;
@@ -919,47 +951,20 @@ init_geometry_shadow_pipeline :: (framegraph: *WFramegraph, store: *Store.Store)
 
 init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 	framegraph.rng = seed(123456789);
+
 	{
 		desc: WGPUBufferDescriptor = .{};
-		desc.label = toWGPUStringView("Frame Uniform Buffer");
-		desc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
-		desc.size = size_of(WFramegraph.Uniforms);
+		desc.label = toWGPUStringView("Frame Buffer");
+		desc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
+		desc.size = 128 * 1024 * 1024;
 		desc.mappedAtCreation = 0;
-		framegraph.uniformBuffer = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
+		framegraph.frame_buffer = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
 	}
-	{
-		desc: WGPUBufferDescriptor = .{};
-		desc.label = toWGPUStringView("Present Uniform Buffer");
-		desc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
-		desc.size = size_of(WFramegraph.Present_Uniform);
-		desc.mappedAtCreation = 0;
-		framegraph.presentUniformBuffer =
-			graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
-	}
-	{
-		desc: WGPUBufferDescriptor = .{};
-		desc.label = toWGPUStringView("UI Uniform Buffer");
-		desc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
-		desc.size = size_of(WFramegraph.UI_Uniform);
-		desc.mappedAtCreation = 0;
-		framegraph.uiUniformBuffer = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
-	}
-	{
-		desc: WGPUBufferDescriptor = .{};
-		desc.label = toWGPUStringView("Instance Buffer");
-		desc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst;
-		desc.size = 64 * 1024 * size_of(WFramegraph.Instance);
-		desc.mappedAtCreation = 0;
-		framegraph.instanceBuffer = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
-	}
-	{
-		desc: WGPUBufferDescriptor = .{};
-		desc.label = toWGPUStringView("UI Instance Buffer");
-		desc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst;
-		desc.size = 64 * 1024 * size_of(WFramegraph.UI_Instance);
-		desc.mappedAtCreation = 0;
-		framegraph.uiInstanceBuffer =
-			graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
+	for * framegraph.frames {
+		array_resize(*it.cpu, 128 * 1024 * 1024);
+		array_reserve(*it.shadow.draws, 1024 * 1024);
+		array_reserve(*it.geometry.draws, 1024 * 1024);
+		array_reserve(*it.ui.draws, 1024 * 1024);
 	}
 	{
 		desc: WGPUTextureDescriptor = .{};
@@ -1014,6 +1019,41 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		samplerDesc.lodMaxClamp = 32;
 		samplerDesc.maxAnisotropy = 1;
 		framegraph.hdrTexture.sampler =
+			graphics.gpu.deviceCreateSampler(graphics.device, *samplerDesc);
+	}
+
+	{
+		desc: WGPUTextureDescriptor = .{};
+		desc.label = toWGPUStringView("UI Texture");
+		desc.usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TextureBinding;
+		desc.size.width = 1366;
+		desc.size.height = 768;
+		desc.size.depthOrArrayLayers = 1;
+		desc.mipLevelCount = 1;
+		desc.sampleCount = 1;
+		desc.dimension = ._2D;
+		desc.format = .RGBA8Unorm;
+		framegraph.uiTexture.gpu = graphics.gpu.deviceCreateTexture(graphics.device, *desc);
+
+		viewDesc: WGPUTextureViewDescriptor = .{};
+		viewDesc.label = toWGPUStringView("UI Texture View");
+		viewDesc.format = .RGBA8Unorm;
+		viewDesc.dimension = ._2D;
+		viewDesc.aspect = .All;
+		framegraph.uiTexture.view = graphics.gpu.textureCreateView(framegraph.uiTexture.gpu, null);
+
+		samplerDesc: WGPUSamplerDescriptor = .{};
+		samplerDesc.label = toWGPUStringView("Ui Texture Sampler");
+		samplerDesc.addressModeU = .ClampToEdge;
+		samplerDesc.addressModeV = .ClampToEdge;
+		samplerDesc.addressModeW = .ClampToEdge;
+		samplerDesc.magFilter = .Linear;
+		samplerDesc.minFilter = .Linear;
+		samplerDesc.mipmapFilter = .Linear;
+		samplerDesc.lodMinClamp = 0;
+		samplerDesc.lodMaxClamp = 32;
+		samplerDesc.maxAnisotropy = 1;
+		framegraph.uiTexture.sampler =
 			graphics.gpu.deviceCreateSampler(graphics.device, *samplerDesc);
 	}
 
@@ -1077,9 +1117,6 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		init_quad_pipeline(framegraph, store);
 	}
 
-	array_reserve(*framegraph.instances, 64 * 1024);
-	array_reserve(*framegraph.uiInstances, 1024);
-
 	framegraph.geometryBindGroup =texture_bind_group(
 		framegraph, "Typical textures", *store.colormaps, null, *framegraph.shadowTexture
 	);
@@ -1099,60 +1136,58 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 	);
 }
 
-writeTo :: (buffer: WGPUBuffer, offset: int, data: *$T) {
-	graphics.gpu.queueWriteBuffer(
-		graphics.mainQueue, buffer, xx offset, data, xx size_of(T)
-	);
-}
-
-writeTo :: (buffer: WGPUBuffer, offset: int, data: [] $T) {
-	graphics.gpu.queueWriteBuffer(
-		graphics.mainQueue, buffer, xx offset, data.data, xx (data.count * size_of(T))
-	);
-}
-
 present_bind_group :: (
 	framegraph: *WFramegraph,
+	uniforms: WFramegraph.Present_Uniform,
 	name: string,
 	hdr: WTexture,
-	uniform: WFramegraph.Present_Uniform
+	ui: WTexture
 ) -> WGPUBindGroup {
+	frame := *framegraph.frames[framegraph.rendering_frame_idx]; // not working, rendering
+	align_up(*frame.cpu_cursor, 256);
+
 	desc: WGPUBindGroupDescriptor = .{};
 	desc.label = toWGPUStringView(tprint("% Present Bind Group", name));
 	desc.layout = framegraph.presentBindGroupLayout;
-	entries: [2] WGPUBindGroupEntry;
+	entries: [3] WGPUBindGroupEntry;
 	entries[0].binding = 0;
-	entries[0].buffer = framegraph.presentUniformBuffer;
-	entries[0].offset = 0;
+	entries[0].buffer = framegraph.frame_buffer;
+	entries[0].offset = xx frame.cpu_cursor;
 	entries[0].size = size_of(WFramegraph.Present_Uniform);
 	entries[1].binding = 1;
 	entries[1].textureView = hdr.view;
-	// entries[2].binding = 2;
-	// entries[2].sampler = hdr.sampler;
+	entries[2].binding = 2;
+	entries[2].textureView = ui.view;
 	desc.entryCount = entries.count;
 	desc.entries = entries.data;
+
+	memcpy(frame.cpu.data + frame.cpu_cursor, *uniforms, size_of(type_of(uniforms)));
+	frame.cpu_cursor += size_of(type_of(uniforms));
+
 	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
 }
 
 ui_instance_bind_group :: (
 	framegraph: *WFramegraph,
-	name: string,
-	instanced_count: int,
+	uniforms: WFramegraph.UI_Uniform,
 	albedo_map: WTexture,
 	sdf_map: WTexture
 ) -> WGPUBindGroup {
+	frame := *framegraph.frames[framegraph.rendering_frame_idx];
+	align_up(*frame.cpu_cursor, 256);
+
 	desc: WGPUBindGroupDescriptor = .{};
 	desc.label = toWGPUStringView("UI Instance Bind Group");
 	desc.layout = framegraph.quadBindGroupLayout;
 	entries: [6] WGPUBindGroupEntry;
 	entries[0].binding = 0;
-	entries[0].buffer = framegraph.uiUniformBuffer;
-	entries[0].offset = 0;
+	entries[0].buffer = framegraph.frame_buffer;
+	entries[0].offset = xx frame.cpu_cursor;
 	entries[0].size = size_of(WFramegraph.UI_Uniform);
 	entries[1].binding = 1;
-	entries[1].buffer = framegraph.uiInstanceBuffer;
+	entries[1].buffer = framegraph.frame_buffer;
 	entries[1].offset = 0;
-	entries[1].size = xx (framegraph.uiInstances.count * size_of(WFramegraph.UI_Instance));
+	entries[1].size = xx frame.cpu.count;
 	entries[2].binding = 2;
 	entries[2].textureView = albedo_map.view;
 	entries[3].binding = 3;
@@ -1163,29 +1198,41 @@ ui_instance_bind_group :: (
 	entries[5].sampler = sdf_map.sampler;
 	desc.entryCount = entries.count;
 	desc.entries = entries.data;
+
+	memcpy(frame.cpu.data + frame.cpu_cursor, *uniforms, size_of(type_of(uniforms)));
+	frame.cpu_cursor += size_of(type_of(uniforms));
+
 	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
 }
 
 
 instance_bind_group :: (
 	framegraph: *WFramegraph,
-	name: string,
-	instanced_count: int
+	uniforms: WFramegraph.Uniforms,
+	name: string
 ) -> WGPUBindGroup {
+	frame := *framegraph.frames[framegraph.rendering_frame_idx];
+
+	align_up(*frame.cpu_cursor, 256);
+
 	desc: WGPUBindGroupDescriptor = .{};
 	desc.label = toWGPUStringView(tprint("% Instance Bind Group", name));
 	desc.layout = framegraph.instanceBindGroupLayout;
 	entries: [2] WGPUBindGroupEntry;
 	entries[0].binding = 0;
-	entries[0].buffer = framegraph.uniformBuffer;
-	entries[0].offset = 0;
+	entries[0].buffer = framegraph.frame_buffer;
+	entries[0].offset = xx frame.cpu_cursor;
 	entries[0].size = size_of(WFramegraph.Uniforms);
 	entries[1].binding = 1;
-	entries[1].buffer = framegraph.instanceBuffer;
-	entries[1].offset = xx framegraph.instanceBufferCursor;
-	entries[1].size = xx (instanced_count * size_of(WFramegraph.Instance));
+	entries[1].buffer = framegraph.frame_buffer;
+	entries[1].offset = 0;
+	entries[1].size = xx frame.cpu.count;
 	desc.entryCount = entries.count;
 	desc.entries = entries.data;
+	
+	memcpy(frame.cpu.data + frame.cpu_cursor, *uniforms, size_of(type_of(uniforms)));
+	frame.cpu_cursor += size_of(type_of(uniforms));
+
 	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
 }
 
@@ -1233,24 +1280,51 @@ texture_bind_group :: (
 	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
 }
 
-append_instance_buffer :: (framegraph: *WFramegraph) -> [] WFramegraph.Instance {
+append_instance_buffer :: (frame: *Frame) -> [] WFramegraph.Instance {
+	align_up(*frame.cpu_cursor, size_of(WFramegraph.Instance));
+	
 	data: [] WFramegraph.Instance;
-	data.data = framegraph.mainInstances.data + framegraph.mainInstances.count;
+	data.data = (frame.cpu.data + frame.cpu_cursor).(*WFramegraph.Instance);
 	data.count = 0;
 	return data;
 }
 
-draw :: (framegraph: *WFramegraph, pass: WGPURenderPassEncoder, model: Model, count: int) {
-	if count <= 0 {
+append_ui_instance_buffer :: (frame: *Frame) -> [] WFramegraph.UI_Instance {
+	align_up(*frame.cpu_cursor, size_of(WFramegraph.UI_Instance));
+	
+	data: [] WFramegraph.UI_Instance;
+	data.data = (frame.cpu.data + frame.cpu_cursor).(*WFramegraph.UI_Instance);
+	data.count = 0;
+	return data;
+}
+
+commit_geometry :: (
+	frame: *Frame, pass: *Frame.Pass, model: *Model, count: int
+) {
+	if count <= 0
 		return;
-	}
-	graphics.gpu.renderPassEncoderSetVertexBuffer(
-		pass, 0, model.gpu, 0, xx (model.prim_count * size_of(WFramegraph.Vertex))
-	);
-	graphics.gpu.renderPassEncoderDraw(
-		pass, xx model.prim_count, xx count, 0, xx framegraph.mainInstances.count
-	);
-	framegraph.mainInstances.count += xx count;
+
+	stride := size_of(WFramegraph.Instance);
+	draw: Frame.Draw;
+	draw.model = model;
+	draw.instance_count = count;
+	draw.instance_start = frame.cpu_cursor / stride;
+	draw.second_bind_group = pass.current_bind_group;
+	array_add(*pass.draws, draw);
+	frame.cpu_cursor += xx (count * stride);
+}
+
+commit_ui :: (frame: *Frame, pass: *Frame.Pass, count: int) {
+	if count <= 0
+		return;
+
+	stride := size_of(WFramegraph.UI_Instance);
+	draw: Frame.Draw;
+	draw.instance_count = count;
+	draw.instance_start = frame.cpu_cursor / stride;
+	draw.second_bind_group = pass.current_bind_group;
+	array_add(*pass.draws, draw);
+	frame.cpu_cursor += xx (count * stride);
 }
 
 Extra :: struct {
@@ -1305,107 +1379,281 @@ free :: (extra: *Extra) {
 	array_free(extra.quads);
 }
 
-Frame :: struct {
-	surfaceTexture: WGPUSurfaceTexture;
-	surfaceView: WGPUTextureView;
-
-	hdrAttachment: WGPURenderPassColorAttachment;
-	surfaceAttachment: WGPURenderPassColorAttachment;
-	uiAttachment: WGPURenderPassColorAttachment;
-	depthAttachment: WGPURenderPassDepthStencilAttachment;
-	shadowAttachment: WGPURenderPassDepthStencilAttachment;
-
-	encoder: WGPUCommandEncoder;
-}
-
-begin_frame :: (framegraph: *WFramegraph, current_time: Apollo_Time) -> Frame
+begin_frame :: (framegraph: *WFramegraph, current_time: Apollo_Time) -> *Frame
 {
-	frame: Frame;
+	while true {
+		if (compare_and_swap(*framegraph.frame_lock, 0, 1))
+			break;
+	}
 
-	graphics.gpu.surfaceGetCurrentTexture(graphics.surface, *frame.surfaceTexture);
-	frame.surfaceView = graphics.gpu.textureCreateView(frame.surfaceTexture.texture, null);
+	// get a frame that is not ready or working.
+	for 0..2 {
+		if it == framegraph.rendering_frame_idx
+			continue;
+		if it == framegraph.ready_frame_idx
+			continue;
+		framegraph.working_frame_idx = it;
+		break;
+	}
 
-	frame.hdrAttachment.view = framegraph.hdrTexture.view;
-	frame.hdrAttachment.depthSlice = 0;
-	frame.hdrAttachment.loadOp = .Clear;
-	frame.hdrAttachment.storeOp = .Store;
-	frame.hdrAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
-
-	frame.surfaceAttachment.view = frame.surfaceView;
-	frame.surfaceAttachment.depthSlice = 0;
-	frame.surfaceAttachment.loadOp = .Clear;
-	frame.surfaceAttachment.storeOp = .Store;
-	frame.surfaceAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
-	
-	frame.uiAttachment.view = frame.surfaceView;
-	frame.uiAttachment.depthSlice = 0;
-	frame.uiAttachment.loadOp = .Load;
-	frame.uiAttachment.storeOp = .Store;
-	frame.uiAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
-
-	frame.depthAttachment.view = framegraph.depthView;
-	frame.depthAttachment.depthLoadOp = .Clear;
-	frame.depthAttachment.depthStoreOp = .Store;
-	frame.depthAttachment.depthClearValue = 1.0;
-	frame.depthAttachment.stencilLoadOp = .Undefined;
-	frame.depthAttachment.stencilStoreOp = .Undefined;
-	frame.depthAttachment.stencilClearValue = 0;
-	
-	frame.shadowAttachment.view = framegraph.shadowTexture.view;
-	frame.shadowAttachment.depthLoadOp = .Clear;
-	frame.shadowAttachment.depthStoreOp = .Store;
-	frame.shadowAttachment.depthClearValue = 1.0;
-	frame.shadowAttachment.stencilLoadOp = .Undefined;
-	frame.shadowAttachment.stencilStoreOp = .Undefined;
-	frame.shadowAttachment.stencilClearValue = 0;
-	array_resize(*framegraph.mainInstances, 64 * 1024, false);
-	framegraph.mainInstances.count = 0;
+	compare_and_swap(*framegraph.frame_lock, 1, 0);
 	framegraph.current_time = current_time;
 
-	frame.encoder = graphics.gpu.deviceCreateCommandEncoder(graphics.device, null);
+	frame := *framegraph.frames[framegraph.working_frame_idx];
+	frame.cpu_cursor = 0;
+	frame.shadow.draws.count = 0;
+	frame.geometry.draws.count = 0;
+	frame.ui.draws.count = 0;
+	frame.current_time = current_time;
 
 	return frame;
 }
 
-end_frame :: (frame: *Frame) {
+end_frame :: (framegraph: *WFramegraph, frame: *Frame) {
+	while true {
+		if (compare_and_swap(*framegraph.frame_lock, 0, 1))
+			break;
+	}
+
+	// Put ready idx to the current working idx to signal that this frame is the most recent one.
+	framegraph.ready_frame_idx = framegraph.working_frame_idx;
+
+	compare_and_swap(*framegraph.frame_lock, 1, 0);
+
+}
+
+present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
+	while true {
+		if (compare_and_swap(*framegraph.frame_lock, 0, 1))
+			break;
+	}
+
+	// swap the ready and rendering frame idx
+	{
+		old := framegraph.ready_frame_idx;
+		framegraph.ready_frame_idx = framegraph.rendering_frame_idx;
+		framegraph.rendering_frame_idx = old;
+	}
+
+	compare_and_swap(*framegraph.frame_lock, 1, 0);
+
+	if framegraph.rendering_frame_idx < 0
+		return false;
+
+	frame := *framegraph.frames[framegraph.rendering_frame_idx];
+
+	encoder := graphics.gpu.deviceCreateCommandEncoder(graphics.device, null);
+	defer graphics.gpu.commandEncoderRelease(encoder);
+
+	surfaceTexture: WGPUSurfaceTexture;
+	graphics.gpu.surfaceGetCurrentTexture(graphics.surface, *surfaceTexture);
+	surfaceView := graphics.gpu.textureCreateView(surfaceTexture.texture, null);
+	defer graphics.gpu.textureViewRelease(surfaceView);
+
+	hdrAttachment: WGPURenderPassColorAttachment;
+	hdrAttachment.view = framegraph.hdrTexture.view;
+	hdrAttachment.depthSlice = DEPTH_SLICE_UNDEFINED;
+	hdrAttachment.loadOp = .Clear;
+	hdrAttachment.storeOp = .Store;
+	hdrAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
+	
+	uiAttachment: WGPURenderPassColorAttachment;
+	uiAttachment.view = framegraph.uiTexture.view;
+	uiAttachment.depthSlice = DEPTH_SLICE_UNDEFINED;
+	uiAttachment.loadOp = .Clear;
+	uiAttachment.storeOp = .Store;
+	uiAttachment.clearValue = .{ 0.3, 0.3, 0.3, 0.0 };
+
+	depthAttachment: WGPURenderPassDepthStencilAttachment;
+	depthAttachment.view = framegraph.depthView;
+	depthAttachment.depthLoadOp = .Clear;
+	depthAttachment.depthStoreOp = .Store;
+	depthAttachment.depthClearValue = 1.0;
+	depthAttachment.stencilLoadOp = .Undefined;
+	depthAttachment.stencilStoreOp = .Undefined;
+	depthAttachment.stencilClearValue = 0;
+	
+	shadowAttachment: WGPURenderPassDepthStencilAttachment;
+	shadowAttachment.view = framegraph.shadowTexture.view;
+	shadowAttachment.depthLoadOp = .Clear;
+	shadowAttachment.depthStoreOp = .Store;
+	shadowAttachment.depthClearValue = 1.0;
+	shadowAttachment.stencilLoadOp = .Undefined;
+	shadowAttachment.stencilStoreOp = .Undefined;
+	shadowAttachment.stencilClearValue = 0;
+
+	surfaceAttachment: WGPURenderPassColorAttachment;
+	surfaceAttachment.view = surfaceView;
+	surfaceAttachment.depthSlice = DEPTH_SLICE_UNDEFINED;
+	surfaceAttachment.loadOp = .Clear;
+	surfaceAttachment.storeOp = .Store;
+	surfaceAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
+	
+	geometry_bind_group := instance_bind_group(framegraph, frame.geometry.uniforms, "Geometry");
+	defer graphics.gpu.bindGroupRelease(geometry_bind_group);
+	ui_bind_group :=
+		ui_instance_bind_group(framegraph, frame.ui.uniforms, store.ui_atlas, store.verdana_atlas);
+	defer graphics.gpu.bindGroupRelease(ui_bind_group);
+
+	extra: Extra;
+	reserve(*extra, 16);
+	defer free(*extra);
+
+	render_depth :: true;
+	if render_depth {
+		passDesc: WGPURenderPassDescriptor = .{};
+		passDesc.label = toWGPUStringView("Shadow Pass");
+		passDesc.colorAttachments = null;
+		passDesc.colorAttachmentCount = 0;
+		passDesc.depthStencilAttachment = *shadowAttachment;
+		pass := graphics.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
+		defer graphics.gpu.renderPassEncoderRelease(pass);
+
+		graphics.gpu.renderPassEncoderSetPipeline(pass, framegraph.geometryShadowPipeline);
+		graphics.gpu.renderPassEncoderSetBindGroup(pass, 0, geometry_bind_group, 0, null);
+		
+		last_bind_group: *WGPUBindGroup = null;
+		for * frame.shadow.draws {
+			if it.second_bind_group != last_bind_group {
+				graphics.gpu.renderPassEncoderSetBindGroup(
+					pass, 1, it.second_bind_group.*, 0, null
+				);
+				last_bind_group = it.second_bind_group;
+			}
+			if !it.model
+				continue;
+
+			graphics.gpu.renderPassEncoderSetVertexBuffer(
+				pass, 0, it.model.gpu, 0, xx (it.model.prim_count * size_of(WFramegraph.Vertex))
+			);
+			graphics.gpu.renderPassEncoderDraw(
+				pass, xx it.model.prim_count, xx it.instance_count, 0, xx it.instance_start
+			);
+		}
+		graphics.gpu.renderPassEncoderEnd(pass);
+	}
+
+	render_geometry:: true;
+	if render_geometry {
+		passDesc: WGPURenderPassDescriptor = .{};
+		passDesc.label = toWGPUStringView("Geometry Pass");
+		passDesc.colorAttachments = *hdrAttachment;
+		passDesc.colorAttachmentCount = 1;
+		passDesc.depthStencilAttachment = *depthAttachment;
+		pass := graphics.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
+		defer graphics.gpu.renderPassEncoderRelease(pass);
+
+		graphics.gpu.renderPassEncoderSetPipeline(pass, framegraph.geometryPipeline);
+		graphics.gpu.renderPassEncoderSetBindGroup(pass, 0, geometry_bind_group, 0, null);
+		
+		last_bind_group: *WGPUBindGroup = null;
+		for * frame.geometry.draws {
+			if it.second_bind_group != last_bind_group {
+				graphics.gpu.renderPassEncoderSetBindGroup(
+					pass, 1, it.second_bind_group.*, 0, null
+				);
+				last_bind_group = it.second_bind_group;
+			}
+			if !it.model
+				continue;
+
+			graphics.gpu.renderPassEncoderSetVertexBuffer(
+				pass, 0, it.model.gpu, 0, xx (it.model.prim_count * size_of(WFramegraph.Vertex))
+			);
+			graphics.gpu.renderPassEncoderDraw(
+				pass, xx it.model.prim_count, xx it.instance_count, 0, xx it.instance_start
+			);
+		}
+		graphics.gpu.renderPassEncoderEnd(pass);
+	}
+	render_ui:: true;
+	if render_ui {
+		passDesc: WGPURenderPassDescriptor = .{};
+		passDesc.label = toWGPUStringView("UI Pass");
+		passDesc.colorAttachments = *uiAttachment;
+		passDesc.colorAttachmentCount = 1;
+		passDesc.depthStencilAttachment = null;
+		pass := graphics.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
+		defer graphics.gpu.renderPassEncoderRelease(pass);
+
+		graphics.gpu.renderPassEncoderSetPipeline(pass, framegraph.quadPipeline);
+		graphics.gpu.renderPassEncoderSetBindGroup(pass, 0, ui_bind_group, 0, null);
+		
+		last_bind_group: *WGPUBindGroup = null;
+		for * frame.ui.draws {
+			if it.second_bind_group != last_bind_group {
+				graphics.gpu.renderPassEncoderSetBindGroup(
+					pass, 1, it.second_bind_group.*, 0, null
+				);
+				last_bind_group = it.second_bind_group;
+			}
+			graphics.gpu.renderPassEncoderDraw(
+				pass, 6, xx it.instance_count, 0, xx it.instance_start
+			);
+		}
+		graphics.gpu.renderPassEncoderEnd(pass);
+	}
+
+	if true {
+		passDesc: WGPURenderPassDescriptor = .{};
+		passDesc.label = toWGPUStringView("Present Pass");
+		passDesc.colorAttachments = *surfaceAttachment;
+		passDesc.colorAttachmentCount = 1;
+		passDesc.depthStencilAttachment = null;
+		presentPass := graphics.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
+		graphics.gpu.renderPassEncoderSetPipeline(presentPass, framegraph.presentPipeline);
+
+		presentUniform: WFramegraph.Present_Uniform = .{};
+		presentUniform.size = V2f.{ 1366, 768 };
+		presentUniform.exposure = 1.0;
+		presentUniform.gamma = 2.2;
+		bindGroup := present_bind_group(
+			framegraph, presentUniform, "Present", framegraph.hdrTexture, framegraph.uiTexture
+		);
+		defer graphics.gpu.bindGroupRelease(bindGroup);
+
+		graphics.gpu.renderPassEncoderSetBindGroup(presentPass, 0, bindGroup, 0, null);
+		graphics.gpu.renderPassEncoderDraw(presentPass, 6, 1, 0, 0);
+
+		// Fullscreen textured quad
+		graphics.gpu.renderPassEncoderEnd(presentPass);
+		graphics.gpu.renderPassEncoderRelease(presentPass);
+	}
+	view: [] u8;
+	view.data = frame.cpu.data;
+	view.count = frame.cpu_cursor;
+	graphics.gpu.queueWriteBuffer(
+		graphics.mainQueue, framegraph.frame_buffer, 0, frame.cpu.data, xx frame.cpu_cursor
+	);
 
 	bufferDesc: WGPUCommandBufferDescriptor = .{};
-	bufferDesc.label = toWGPUStringView("Main Command Buffer");
-	buffer := graphics.gpu.commandEncoderFinish(frame.encoder, *bufferDesc);
-	defer graphics.gpu.commandBufferRelease(buffer);
+	bufferDesc.label = toWGPUStringView("Command Buffer");
+	present := graphics.gpu.commandEncoderFinish(encoder, *bufferDesc);
+	defer graphics.gpu.commandBufferRelease(present);
 
-	submit: [1] WGPUCommandBuffer = .[buffer];
-	graphics.gpu.queueSubmit(graphics.mainQueue, 1, submit.data);
+	submit: [] WGPUCommandBuffer = .[present];
+	graphics.gpu.queueSubmit(graphics.mainQueue, xx submit.count, submit.data);
 
-	graphics.gpu.commandEncoderRelease(frame.encoder);
-	graphics.gpu.textureViewRelease(frame.surfaceView);
+	return true;
 }
 
 render_scene :: (
 	frame: *Frame, framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store
 ) {
-	framegraph.typicalUniform = .{};
-	framegraph.typicalUniform.V =
+	frame.geometry.uniforms = .{};
+	frame.geometry.uniforms.V =
 		Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
-	framegraph.typicalUniform.P =
-		Scene.perspective(scene.camera);
+	frame.geometry.uniforms.P = Scene.perspective(scene.camera);
+
 	center := V3f.{ 0, 0, 0 };
 	center = v3(Scene.terrain_size(scene), 0.0) / 2.0;
-	if false && scene.players.count > 0 {
-		center.x = scene.players[0].client.position.x +
-			random_uniform(*framegraph.rng, -0.001, 0.001);
-		center.y = scene.players[0].client.position.y +
-			random_uniform(*framegraph.rng, -0.001, 0.001);
-	}
-	framegraph.typicalUniform.shadowV =
+	frame.geometry.uniforms.shadowV =
 		Scene.look_at(center + V3f.{ 100, 100, 100 }, center, V3f.{ 0, 1, 0 });
-	framegraph.typicalUniform.shadowP =
-		Scene.orthographic(-40, 40, -40, 40, 0.1, 500);
-	framegraph.typicalUniform.sun_dir = normalize(V3f.{ -1, -1, -1 });
-	framegraph.typicalUniform.sun_color = V3f.{ 1, 1, 1 };
-	framegraph.typicalUniform.sun_strength = 0.5;
-
-	writeTo(framegraph.uniformBuffer, 0, *framegraph.typicalUniform);
+	frame.geometry.uniforms.shadowP = Scene.orthographic(-40, 40, -40, 40, 0.1, 500);
+	frame.geometry.uniforms.sun_dir = normalize(V3f.{ -1, -1, -1 });
+	frame.geometry.uniforms.sun_color = V3f.{ 1, 1, 1 };
+	frame.geometry.uniforms.sun_strength = 0.5;
+	frame.shadow.uniforms = frame.geometry.uniforms;
 	
 	extra: Extra;
 	reserve(*extra, 16);
@@ -1415,90 +1663,62 @@ render_scene :: (
 	if true {
 		clear(*extra);
 
-		framegraph.instanceBufferCursor = 0;
-		framegraph.instances.count = 0;
-		passDesc: WGPURenderPassDescriptor = .{};
-		passDesc.label = toWGPUStringView("Shadow Pass");
-		passDesc.colorAttachments = null;
-		passDesc.colorAttachmentCount = 0;
-		passDesc.depthStencilAttachment = *frame.shadowAttachment;
-		shadowPass := graphics.gpu.commandEncoderBeginRenderPass(frame.encoder, *passDesc);
-		graphics.gpu.renderPassEncoderSetPipeline(
-			shadowPass, framegraph.geometryShadowPipeline
-		);
-		graphics.gpu.renderPassEncoderSetBindGroup(
-			shadowPass, 0, framegraph.instanceBindGroup, 0, null
-		);
+		frame.shadow.current_bind_group = null;
 
-		render_players(framegraph, frame.encoder, shadowPass, scene, store);
-		render_keys(framegraph, frame.encoder, shadowPass, scene, store);
-		render_skulls(framegraph, frame.encoder, shadowPass, scene, store);
-		render_shurikens(framegraph, frame.encoder, shadowPass, scene, store);
-		render_standin(framegraph, frame.encoder, shadowPass, scene, store);
-		render_props(framegraph, frame.encoder, shadowPass, scene, store);
-		render_gates(framegraph, frame.encoder, shadowPass, scene, store);
-		render_tombstones(framegraph, frame.encoder, shadowPass, scene, store);
-		render_coins(framegraph, frame.encoder, shadowPass, scene, store);
-		render_trophies(framegraph, frame.encoder, shadowPass, scene, store);
-		render_hooks(framegraph, frame.encoder, shadowPass, scene, store, *extra);
-		render_presents(framegraph, frame.encoder, shadowPass, scene, store);
-		render_robots(framegraph, frame.encoder, shadowPass, scene, store, *extra);
-		render_antiairs(framegraph, frame.encoder, shadowPass, scene, store, *extra);
-		render_flags(framegraph, frame.encoder, shadowPass, scene, store, *extra);
-		render_block_rocks(framegraph, frame.encoder, shadowPass, scene, store);
-		render_turn_tables(framegraph, frame.encoder, shadowPass, scene, store, *extra);
-		render_bombs(framegraph, frame.encoder, shadowPass, scene, store, *extra);
-		render_pressbuttons(framegraph, frame.encoder, shadowPass, scene, store, *extra);
-		render_jukeboxes(framegraph, frame.encoder, shadowPass, scene, store, *extra);
-		render_traps(framegraph, frame.encoder, shadowPass, scene, store, *extra);
-		render_extra(framegraph, frame.encoder, shadowPass, scene, store, *extra);
+		render_players(frame, *frame.shadow, scene, store, *extra);
+		render_keys(frame, *frame.shadow, scene, store, *extra);
+		render_skulls(frame, *frame.shadow, scene, store, *extra);
+		render_shurikens(frame, *frame.shadow, scene, store, *extra);
+		render_standin(frame, *frame.shadow, scene, store, *extra);
+		render_props(frame, *frame.shadow, scene, store, *extra);
+		render_gates(frame, *frame.shadow, scene, store, *extra);
+		render_tombstones(frame, *frame.shadow, scene, store, *extra);
+		render_coins(frame, *frame.shadow, scene, store, *extra);
+		render_trophies(frame, *frame.shadow, scene, store, *extra);
+		render_hooks(frame, *frame.shadow, scene, store, *extra);
+		render_presents(frame, *frame.shadow, scene, store, *extra);
+		render_robots(frame, *frame.shadow, scene, store, *extra);
+		render_antiairs(frame, *frame.shadow, scene, store, *extra);
+		render_flags(frame, *frame.shadow, scene, store, *extra);
+		render_block_rocks(frame, *frame.shadow, scene, store, *extra);
+		render_turn_tables(frame, *frame.shadow, scene, store, *extra);
+		render_bombs(frame, *frame.shadow, scene, store, *extra);
+		render_pressbuttons(frame, *frame.shadow, scene, store, *extra);
+		render_jukeboxes(frame, *frame.shadow, scene, store, *extra);
+		render_traps(frame, *frame.shadow, scene, store, *extra);
+		render_extra(frame, *frame.shadow, scene, store, *extra);
 		//render_mark(framegraph, encoder, shadowPass, scene, store);
-
-		graphics.gpu.renderPassEncoderEnd(shadowPass);
-		graphics.gpu.renderPassEncoderRelease(shadowPass);
 	}
 
 	if true {
 		clear(*extra);
 
-		framegraph.instanceBufferCursor = 0;
-		passDesc: WGPURenderPassDescriptor = .{};
-		passDesc.label = toWGPUStringView("Geometry Pass");
-		passDesc.colorAttachments = *frame.hdrAttachment;
-		passDesc.colorAttachmentCount = 1;
-		passDesc.depthStencilAttachment = *frame.depthAttachment;
-		geometryPass := graphics.gpu.commandEncoderBeginRenderPass(frame.encoder, *passDesc);
-		graphics.gpu.renderPassEncoderSetPipeline(geometryPass, framegraph.geometryPipeline);
+		frame.geometry.current_bind_group = *framegraph.textureBindGroup;
+		render_terrain(frame, *frame.geometry, scene, store, *extra);
 
-		graphics.gpu.renderPassEncoderSetBindGroup(
-			geometryPass, 0, framegraph.instanceBindGroup, 0, null
-		);
-		graphics.gpu.renderPassEncoderSetBindGroup(
-			geometryPass, 1, framegraph.geometryBindGroup, 0, null
-		);
-
-		render_players(framegraph, frame.encoder, geometryPass, scene, store);
-		render_keys(framegraph, frame.encoder, geometryPass, scene, store);
-		render_skulls(framegraph, frame.encoder, geometryPass, scene, store);
-		render_shurikens(framegraph, frame.encoder, geometryPass, scene, store);
-		render_standin(framegraph, frame.encoder, geometryPass, scene, store);
-		render_props(framegraph, frame.encoder, geometryPass, scene, store);
-		render_gates(framegraph, frame.encoder, geometryPass, scene, store);
-		render_tombstones(framegraph, frame.encoder, geometryPass, scene, store);
-		render_coins(framegraph, frame.encoder, geometryPass, scene, store);
-		render_robots(framegraph, frame.encoder, geometryPass, scene, store, *extra);
-		render_trophies(framegraph, frame.encoder, geometryPass, scene, store);
-		render_antiairs(framegraph, frame.encoder, geometryPass, scene, store, *extra);
-		render_hooks(framegraph, frame.encoder, geometryPass, scene, store, *extra);
-		render_flags(framegraph, frame.encoder, geometryPass, scene, store, *extra);
-		render_presents(framegraph, frame.encoder, geometryPass, scene, store);
-		render_turn_tables(framegraph, frame.encoder, geometryPass, scene, store, *extra);
-		render_pressbuttons(framegraph, frame.encoder, geometryPass, scene, store, *extra);
-		render_jukeboxes(framegraph, frame.encoder, geometryPass, scene, store, *extra);
-		render_block_rocks(framegraph, frame.encoder, geometryPass, scene, store);
-		render_bombs(framegraph, frame.encoder, geometryPass, scene, store, *extra);
-		render_traps(framegraph, frame.encoder, geometryPass, scene, store, *extra);
-		render_explosions(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+		frame.geometry.current_bind_group = *framegraph.geometryBindGroup;
+		render_players(frame, *frame.geometry, scene, store, *extra);
+		render_keys(frame, *frame.geometry, scene, store, *extra);
+		render_skulls(frame, *frame.geometry, scene, store, *extra);
+		render_shurikens(frame, *frame.geometry, scene, store, *extra);
+		render_standin(frame, *frame.geometry, scene, store, *extra);
+		render_props(frame, *frame.geometry, scene, store, *extra);
+		render_gates(frame, *frame.geometry, scene, store, *extra);
+		render_tombstones(frame, *frame.geometry, scene, store, *extra);
+		render_coins(frame, *frame.geometry, scene, store, *extra);
+		render_robots(frame, *frame.geometry, scene, store, *extra);
+		render_trophies(frame, *frame.geometry, scene, store, *extra);
+		render_antiairs(frame, *frame.geometry, scene, store, *extra);
+		render_hooks(frame, *frame.geometry, scene, store, *extra);
+		render_flags(frame, *frame.geometry, scene, store, *extra);
+		render_presents(frame, *frame.geometry, scene, store, *extra);
+		render_turn_tables(frame, *frame.geometry, scene, store, *extra);
+		render_pressbuttons(frame, *frame.geometry, scene, store, *extra);
+		render_jukeboxes(frame, *frame.geometry, scene, store, *extra);
+		render_block_rocks(frame, *frame.geometry, scene, store, *extra);
+		render_bombs(frame, *frame.geometry, scene, store, *extra);
+		render_traps(frame, *frame.geometry, scene, store, *extra);
+		render_explosions(frame, *frame.geometry, scene, store, *extra);
 
 		if false {
 			for 0..10 {
@@ -1521,86 +1741,72 @@ render_scene :: (
 			);
 		}
 
-		graphics.gpu.renderPassEncoderSetBindGroup(
-			geometryPass, 1, framegraph.textureBindGroup, 0, null
-		);
+		if true {
+			// Debug visualization for camera rails
+			for rail: scene.camera_rails {
+				waypoints := Scene.iterator(rail.waypoints, scene.camera_rail_waypoints);
+				prev_waypoint: V3f;
+				first := true;
+				end := min(waypoints.span.count + waypoints.span.index, waypoints.array.count);
+				for index: waypoints.span.index..end - 1 {
+					waypoint := waypoints.array[index];
+					if !first {
+						// Draw cylinder between waypoints
+						direction := waypoint - prev_waypoint;
+						length := norm(direction);
+						if length > 0.001 {
+							mid_point := (prev_waypoint + waypoint) / 2.0;
 
-		render_terrain(framegraph, frame.encoder, geometryPass, scene, store);
-		
-		graphics.gpu.renderPassEncoderSetBindGroup(
-			geometryPass, 1, framegraph.particleBindGroup, 0, null
-		);
+							cylinder: Extra.Cylinder;
+							cylinder.color = V3f.{ 0.0, 1.0, 1.0 }; // Cyan color for rails
+							cylinder.M = M4f.translate(prev_waypoint);
+							cylinder.M *= to_rotation_matrix(
+								from_unit_vectors(V3f.{ 0, 0, 1 }, normalize(direction))
+							);
+							cylinder.M *= scale_matrix(V3f.{ 0.05, 0.05, length });
+							array_add(*extra.cylinders, cylinder);
+						}
+					}
+					first = false;
+					prev_waypoint = waypoint;
+				}
+			}
 
-		// render_particles(framegraph, frame.encoder, geometryPass, scene, store, *extra);
+			// Debug visualization for camera POIs
+			for poi: scene.camera_pois {
+				cylinder: Extra.Cylinder;
+				cylinder.color = V3f.{ 1.0, 0.0, 1.0 }; // Magenta color for POIs
+				cylinder.M = M4f.translate(poi.position);
+				cylinder.M *= scale_matrix(V3f.{ 0.1, 0.1, 0.5 });
+				array_add(*extra.cylinders, cylinder);
+			}
+		}
+		render_within_zones(frame, *frame.geometry, scene, store, *extra);
+		render_extra(frame, *frame.geometry, scene, store, *extra);
+		render_safezones(frame, *frame.geometry, scene, store, *extra);
 
-		graphics.gpu.renderPassEncoderSetBindGroup(
-			geometryPass, 1, framegraph.geometryBindGroup, 0, null
-		);
-		render_within_zones(framegraph, frame.encoder, geometryPass, scene, store, *extra);
-		render_extra(framegraph, frame.encoder, geometryPass, scene, store, *extra);
-		render_safezones(framegraph, frame.encoder, geometryPass, scene, store);
-		graphics.gpu.renderPassEncoderSetBindGroup(
-			geometryPass, 1, framegraph.particleBindGroup, 0, null
-		);
-		render_extra_quads(framegraph, frame.encoder, geometryPass, scene, store, *extra);
-		graphics.gpu.renderPassEncoderSetBindGroup(
-			geometryPass, 1, framegraph.geometryBindGroup, 0, null
-		);
-		render_mark(framegraph, frame.encoder, geometryPass, scene, store);
-		graphics.gpu.renderPassEncoderEnd(geometryPass);
-		graphics.gpu.renderPassEncoderRelease(geometryPass);
-	}
+		frame.geometry.current_bind_group = *framegraph.particleBindGroup;
+		render_particles(frame, *frame.geometry, scene, store, *extra);
+		render_extra_quads(frame, *frame.geometry, scene, store, *extra);
 
-	writeTo(framegraph.instanceBuffer, 0, framegraph.mainInstances);
-
-	if true {
-		passDesc: WGPURenderPassDescriptor = .{};
-		passDesc.label = toWGPUStringView("Present Pass");
-		passDesc.colorAttachments = *frame.surfaceAttachment;
-		passDesc.colorAttachmentCount = 1;
-		passDesc.depthStencilAttachment = null;
-		presentPass := graphics.gpu.commandEncoderBeginRenderPass(frame.encoder, *passDesc);
-		graphics.gpu.renderPassEncoderSetPipeline(presentPass, framegraph.presentPipeline);
-		presentUniform: WFramegraph.Present_Uniform = .{};
-		presentUniform.size = V2f.{ 1366, 768 };
-		presentUniform.exposure = 1.0;
-		presentUniform.gamma = 2.2;
-		writeTo(framegraph.presentUniformBuffer, 0, *presentUniform);
-		bindGroup := present_bind_group(
-			framegraph, "Present", framegraph.hdrTexture, presentUniform
-		);
-		graphics.gpu.renderPassEncoderSetBindGroup(presentPass, 0, bindGroup, 0, null);
-		defer graphics.gpu.bindGroupRelease(bindGroup);
-		graphics.gpu.renderPassEncoderDraw(presentPass, 6, 1, 0, 0);
-
-		// Fullscreen textured quad
-		graphics.gpu.renderPassEncoderEnd(presentPass);
-		graphics.gpu.renderPassEncoderRelease(presentPass);
+		frame.geometry.current_bind_group = *framegraph.geometryBindGroup;
+		render_mark(frame, *frame.geometry, scene, store, *extra);
 	}
 }
 render_gui :: (
 	frame: *Frame, framegraph: *WFramegraph, gui_state: GUI.GUI_State, store: Store.Store
 ) {
-	passDesc: WGPURenderPassDescriptor = .{};
-	passDesc.label = toWGPUStringView("UI Pass");
-	passDesc.colorAttachments = *frame.uiAttachment;
-	passDesc.colorAttachmentCount = 1;
-	passDesc.depthStencilAttachment = null;
-	uiPass := graphics.gpu.commandEncoderBeginRenderPass(frame.encoder, *passDesc);
+	frame.ui.uniforms = .{};
+	frame.ui.uniforms.window_size = V2f.{ 1366, 768 };
 
-	graphics.gpu.renderPassEncoderSetPipeline(uiPass, framegraph.quadPipeline);
+	font := *store.verdana;
 
-	uniforms: WFramegraph.UI_Uniform = .{};
-	uniforms.window_size = V2f.{ 1366, 768 };
-	writeTo(framegraph.uiUniformBuffer, 0, *uniforms);
-
-	framegraph.uiInstances.count = 0;
-
+	instances := append_ui_instance_buffer(frame);
 	for gui_state.quads {
 		if it.late
 			continue;
-		framegraph.uiInstances.count += 1;
-		instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
+		instances.count += 1;
+		instance := *instances[instances.count - 1];
 		instance.* = .{};
 		instance.pos = it.pos;
 		instance.size = it.size;
@@ -1609,12 +1815,9 @@ render_gui :: (
 		instance.texture_rect = it.texture_rect;
 	}
 
-
-	font := *store.verdana;
-	font_atlas := *store.verdana_atlas;
 	for gui_state.chars {
-		framegraph.uiInstances.count += 1;
-		instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
+		instances.count += 1;
+		instance := *instances[instances.count - 1];
 		instance.* = .{};
 
 		glyph := font.glyphs[it.id];
@@ -1630,40 +1833,25 @@ render_gui :: (
 		instance.outline = ifx it.outline then 1.0 else 0.0;
 	}
 
-	if framegraph.uiInstances.count > 0 {
-		quick_sort(
-			framegraph.uiInstances,
-			(a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
-				az := a.z30sdf2 / 4;
-				bz := b.z30sdf2 / 4;
-				if az < bz
-					return -1;
-				if az > bz
-					return 1;
-				return 0;
-			});
-
-		bindGroup := ui_instance_bind_group(
-			framegraph,
-			"UI Instances",
-			framegraph.uiInstances.count,
-			store.ui_atlas,
-			font_atlas
-		);
-		graphics.gpu.renderPassEncoderSetBindGroup(uiPass, 0, bindGroup, 0, null);
-		defer graphics.gpu.bindGroupRelease(bindGroup);
-		// writeTo(framegraph.uiInstanceBuffer, 0, framegraph.uiInstances);
-		graphics.gpu.renderPassEncoderDraw(uiPass, 6, xx framegraph.uiInstances.count, 0, 0);
-	}
-
+	quick_sort(
+		instances, (a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
+			az := a.z30sdf2 / 4;
+			bz := b.z30sdf2 / 4;
+			if az < bz
+				return -1;
+			if az > bz
+				return 1;
+			return 0;
+		}
+	);
+	commit_ui(frame, *frame.ui, instances.count);
+	instances = append_ui_instance_buffer(frame);
 	
-	before := framegraph.uiInstances.count;
-
 	for gui_state.quads {
 		if !it.late
 			continue;
-		framegraph.uiInstances.count += 1;
-		instance := *framegraph.uiInstances[framegraph.uiInstances.count - 1];
+		instances.count += 1;
+		instance := *instances[instances.count - 1];
 		instance.* = .{};
 		instance.pos = it.pos;
 		instance.size = it.size;
@@ -1671,39 +1859,18 @@ render_gui :: (
 		instance.z30sdf2 = xx (it.z * 400);
 		instance.texture_rect = it.texture_rect;
 	}
-	if framegraph.uiInstances.count > before {
-		view: [] WFramegraph.UI_Instance;
-		view.data = framegraph.uiInstances.data + before;
-		view.count = framegraph.uiInstances.count - before;
-		quick_sort(
-			view,
-			(a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
-				az := a.z30sdf2 / 4;
-				bz := b.z30sdf2 / 4;
-				if az < bz
-					return -1;
-				if az > bz
-					return 1;
-				return 0;
-			});
-
-		bindGroup := ui_instance_bind_group(
-			framegraph,
-			"UI late Instances",
-			framegraph.uiInstances.count,
-			store.ui_atlas,
-			store.font_atlas
-		);
-		graphics.gpu.renderPassEncoderSetBindGroup(uiPass, 0, bindGroup, 0, null);
-		defer graphics.gpu.bindGroupRelease(bindGroup);
-		graphics.gpu.renderPassEncoderDraw(
-			uiPass, 6, xx view.count, 0, xx before
-		);
-	}
-	writeTo(framegraph.uiInstanceBuffer, 0, framegraph.uiInstances);
-
-	graphics.gpu.renderPassEncoderEnd(uiPass);
-	graphics.gpu.renderPassEncoderRelease(uiPass);
+	quick_sort(
+		instances, (a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
+			az := a.z30sdf2 / 4;
+			bz := b.z30sdf2 / 4;
+			if az < bz
+				return -1;
+			if az > bz
+				return 1;
+			return 0;
+		}
+	);
+	commit_ui(frame, *frame.ui, instances.count);
 }
 
 add_debug_sphere :: (
@@ -1721,21 +1888,17 @@ add_debug_sphere :: (
 }
 
 render_mark :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	if to_float64_seconds(framegraph.current_time - scene.mark_clicked_time) < 0.25 {
-		instanced := append_instance_buffer(framegraph);
+	if to_float64_seconds(frame.current_time - scene.mark_clicked_time) < 0.25 {
+		instanced := append_instance_buffer(frame);
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
 		instance.M = M4f.translate(scene.mark_clicked_pos);
 		M4f.scale(*instance.M, V3f.{ 0.5, 0.5, 0.33 });
 		t := clamp(
-			(to_float64_seconds(framegraph.current_time - scene.mark_clicked_time) / 0.5),
+			(to_float64_seconds(frame.current_time - scene.mark_clicked_time) / 0.5),
 			0.0,
 			1.0
 		);
@@ -1743,21 +1906,16 @@ render_mark :: (
 		instance.texture_rect = Store.Colormaps_Rect.down_arrow;
 		instance.uv_offset = V2f.{ 0, xx t };
 		instance.flags = WFramegraph.Instance.UV_REPEAT;
-		draw(framegraph, pass, store.mark_model, instanced.count);
+		commit_geometry(frame, pass, *store.mark_model, instanced.count);
 	}
 }
 
 render_particles :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
 	dt := normalize(scene.camera.target - scene.camera.position);
 	R := to_rotation_matrix(from_unit_vectors(V3f.{ 0, 0, -1 }, dt));
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.particles {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1779,30 +1937,20 @@ render_particles :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.tile_model, instanced.count);
+	commit_geometry(frame, pass, *store.tile_model, instanced.count);
 }
 
 render_extra  :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	render_extra_numbers(framegraph, encoder, pass, scene, store, extra);
-	render_extra_cylinders(framegraph, encoder, pass, scene, store, extra);
+	render_extra_numbers(frame, pass, scene, store, extra);
+	render_extra_cylinders(frame, pass, scene, store, extra);
 }
 
 render_extra_cylinders :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for extra.cylinders {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1813,19 +1961,14 @@ render_extra_cylinders :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.unit_cylinder_model, instanced.count);
+	commit_geometry(frame, pass, *store.unit_cylinder_model, instanced.count);
 }
 
 render_extra_numbers :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
 	for n: 0..9 {
-		instanced := append_instance_buffer(framegraph);
+		instanced := append_instance_buffer(frame);
 		for extra.numbers {
 			if it.number != n
 				continue;
@@ -1839,19 +1982,14 @@ render_extra_numbers :: (
 		if instanced.count == 0
 			continue;
 
-		draw(framegraph, pass, Store.get_number_model(store, n), instanced.count);
+		commit_geometry(frame, pass, Store.get_number_model(store, n), instanced.count);
 	}
 }
 
 render_extra_quads :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for extra.quads {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1863,18 +2001,13 @@ render_extra_quads :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.tile_model, instanced.count);
+	commit_geometry(frame, pass, *store.tile_model, instanced.count);
 }
 
 render_within_zones :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 
 	for scene.within_zones {
 		instanced.count += 1;
@@ -1886,10 +2019,10 @@ render_within_zones :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0 {
-		draw(framegraph, pass, store.indicator_outline_model, instanced.count);
+		commit_geometry(frame, pass, *store.indicator_outline_model, instanced.count);
 	}
 
-	instanced = append_instance_buffer(framegraph);
+	instanced = append_instance_buffer(frame);
 	for scene.within_zones {
 		if it.time_stayed <= 0.0
 			continue;
@@ -1904,7 +2037,7 @@ render_within_zones :: (
 		instance.color = V4f.{ 1.0, 1.0, 1.0, 0.25 };
 	}
 	if instanced.count > 0 {
-		draw(framegraph, pass, store.indicator_stroke_model, instanced.count);
+		commit_geometry(frame, pass, *store.indicator_stroke_model, instanced.count);
 	}
 
 
@@ -1936,14 +2069,9 @@ render_within_zones :: (
 }
 
 render_explosions :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.explosions {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1956,17 +2084,13 @@ render_explosions :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.unit_sphere_model, instanced.count);
+	commit_geometry(frame, pass, *store.unit_sphere_model, instanced.count);
 }
 
 render_coins :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.coins {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -1980,18 +2104,13 @@ render_coins :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.coin_model, instanced.count);
+	commit_geometry(frame, pass, *store.coin_model, instanced.count);
 }
 
 render_antiairs :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.antiairs {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2001,10 +2120,10 @@ render_antiairs :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0 {
-		draw(framegraph, pass, store.antiair_camion_model, instanced.count);
+		commit_geometry(frame, pass, *store.antiair_camion_model, instanced.count);
 	}
 
-	instanced = append_instance_buffer(framegraph);
+	instanced = append_instance_buffer(frame);
 	for scene.antiairs {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2018,9 +2137,9 @@ render_antiairs :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0 {
-		draw(framegraph, pass, store.antiair_canon_model, instanced.count);
+		commit_geometry(frame, pass, *store.antiair_canon_model, instanced.count);
 	}
-	instanced = append_instance_buffer(framegraph);
+	instanced = append_instance_buffer(frame);
 	for scene.antiairs {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2063,7 +2182,7 @@ render_antiairs :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0 {
-		draw(framegraph, pass, store.missile_model, instanced.count);
+		commit_geometry(frame, pass, *store.missile_model, instanced.count);
 	}
 
 	for scene.antiairs {
@@ -2081,14 +2200,9 @@ render_antiairs :: (
 }
 
 render_turn_tables :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.turn_tables {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2097,9 +2211,9 @@ render_turn_tables :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0
-		draw(framegraph, pass, store.turn_table_base_model, instanced.count);
+		commit_geometry(frame, pass, *store.turn_table_base_model, instanced.count);
 	
-	instanced = append_instance_buffer(framegraph);
+	instanced = append_instance_buffer(frame);
 	for scene.turn_tables {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2110,18 +2224,13 @@ render_turn_tables :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0
-		draw(framegraph, pass, store.turn_table_turn_model, instanced.count);
+		commit_geometry(frame, pass, *store.turn_table_turn_model, instanced.count);
 }
 
 render_bombs :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.bombs {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2165,9 +2274,9 @@ render_bombs :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0
-		draw(framegraph, pass, store.bomb_model, instanced.count);
+		commit_geometry(frame, pass, *store.bomb_model, instanced.count);
 
-	instanced = append_instance_buffer(framegraph);
+	instanced = append_instance_buffer(frame);
 	for scene.bomb_spawners {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2176,29 +2285,19 @@ render_bombs :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0
-		draw(framegraph, pass, store.crate_model, instanced.count);
+		commit_geometry(frame, pass, *store.crate_model, instanced.count);
 }
 
 render_pressbuttons :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	render_pressbuttons_check(framegraph, encoder, pass, scene, store, extra);
-	render_pressbuttons_radio(framegraph, encoder, pass, scene, store, extra);
+	render_pressbuttons_check(frame, pass, scene, store, extra);
+	render_pressbuttons_radio(frame, pass, scene, store, extra);
 }
 render_pressbuttons_check :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.pressbuttons {
 		if it.activated
 			continue;
@@ -2233,9 +2332,9 @@ render_pressbuttons_check :: (
 		}
 	}
 	if instanced.count > 0
-		draw(framegraph, pass, store.pressbutton_unpressed, instanced.count);
+		commit_geometry(frame, pass, *store.pressbutton_unpressed, instanced.count);
 	
-	instanced = append_instance_buffer(framegraph);
+	instanced = append_instance_buffer(frame);
 	for scene.pressbuttons {
 		if !it.activated
 			continue;
@@ -2249,18 +2348,13 @@ render_pressbuttons_check :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0
-		draw(framegraph, pass, store.pressbutton_pressed, instanced.count);
+		commit_geometry(frame, pass, *store.pressbutton_pressed, instanced.count);
 }
 
 render_pressbuttons_radio :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.pressbuttons {
 		if it.activated
 			continue;
@@ -2275,9 +2369,9 @@ render_pressbuttons_radio :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0
-		draw(framegraph, pass, store.pressbutton_unpressed_radio, instanced.count);
+		commit_geometry(frame, pass, *store.pressbutton_unpressed_radio, instanced.count);
 	
-	instanced = append_instance_buffer(framegraph);
+	instanced = append_instance_buffer(frame);
 	for scene.pressbuttons {
 		if !it.activated
 			continue;
@@ -2291,18 +2385,13 @@ render_pressbuttons_radio :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0
-		draw(framegraph, pass, store.pressbutton_pressed_radio, instanced.count);
+		commit_geometry(frame, pass, *store.pressbutton_pressed_radio, instanced.count);
 }
 
 render_jukeboxes :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.jukeboxes {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2317,18 +2406,13 @@ render_jukeboxes :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.jukebox_model, instanced.count);
+	commit_geometry(frame, pass, *store.jukebox_model, instanced.count);
 }
 
 render_traps :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.traps {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2342,17 +2426,13 @@ render_traps :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.trap_spike_model, instanced.count);
+	commit_geometry(frame, pass, *store.trap_spike_model, instanced.count);
 }
 
 render_trophies :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.trophies {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2364,19 +2444,14 @@ render_trophies :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.trophy_model, instanced.count);
+	commit_geometry(frame, pass, *store.trophy_model, instanced.count);
 }
 
 render_robots :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
 	for axe: 0..5 {
-		instanced := append_instance_buffer(framegraph);
+		instanced := append_instance_buffer(frame);
 		for scene.robots {
 			instanced.count += 1;
 			instance := *instanced[instanced.count - 1];
@@ -2387,7 +2462,7 @@ render_robots :: (
 		if instanced.count == 0
 			continue;
 
-		draw(framegraph, pass, Store.get_axes_model(store, axe), instanced.count);
+		commit_geometry(frame, pass, Store.get_axes_model(store, axe), instanced.count);
 	}
 	for robot: scene.robots {
 		M := Scene.robot_matrix_local_to_joint(robot, 6);
@@ -2431,15 +2506,10 @@ render_robots :: (
 }
 
 render_flags :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
 	{
-		instanced := append_instance_buffer(framegraph);
+		instanced := append_instance_buffer(frame);
 		for scene.flags {
 			if (it.activated && it.activated_juice_t < 0.5)
 				continue;
@@ -2485,11 +2555,11 @@ render_flags :: (
 			}
 		}
 		if instanced.count > 0 {
-			draw(framegraph, pass, store.flag_down_model, instanced.count);
+			commit_geometry(frame, pass, *store.flag_down_model, instanced.count);
 		}
 	}
 	{
-		instanced := append_instance_buffer(framegraph);
+		instanced := append_instance_buffer(frame);
 		for scene.flags {
 			if !(it.activated && it.activated_juice_t < 0.5)
 				continue;
@@ -2514,19 +2584,15 @@ render_flags :: (
 			instance.texture_rect = Store.Colormaps_Rect.vehicle;
 		}
 		if instanced.count > 0 {
-			draw(framegraph, pass, store.flag_model, instanced.count);
+			commit_geometry(frame, pass, *store.flag_model, instanced.count);
 		}
 	}
 }
 
 render_block_rocks :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.block_rocks {
 		if it.exploded
 			continue;
@@ -2537,9 +2603,9 @@ render_block_rocks :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0
-		draw(framegraph, pass, store.block_rock, instanced.count);
+		commit_geometry(frame, pass, *store.block_rock, instanced.count);
 
-	instanced = append_instance_buffer(framegraph);
+	instanced = append_instance_buffer(frame);
 	for scene.block_rocks {
 		if !it.exploded
 			continue;
@@ -2550,16 +2616,12 @@ render_block_rocks :: (
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
 	if instanced.count > 0
-		draw(framegraph, pass, store.no_block_rock, instanced.count);
+		commit_geometry(frame, pass, *store.no_block_rock, instanced.count);
 }
 render_tombstones :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.tombstones {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2570,30 +2632,22 @@ render_tombstones :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.tombstone_model, instanced.count);
+	commit_geometry(frame, pass, *store.tombstone_model, instanced.count);
 }
 
 render_gates :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	render_gates_regular_open(framegraph, encoder, pass, scene, store);
-	render_gates_regular_closed(framegraph, encoder, pass, scene, store);
-	render_gates_finished_open(framegraph, encoder, pass, scene, store);
-	render_gates_finished_closed(framegraph, encoder, pass, scene, store);
+	render_gates_regular_open(frame, pass, scene, store, extra);
+	render_gates_regular_closed(frame, pass, scene, store, extra);
+	render_gates_finished_open(frame, pass, scene, store, extra);
+	render_gates_finished_closed(frame, pass, scene, store, extra);
 }
 
 render_gates_regular_open :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.gates {
 		if !(!it.is_end && !it.is_closed)
 			continue;
@@ -2609,17 +2663,13 @@ render_gates_regular_open :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.gate_model, instanced.count);
+	commit_geometry(frame, pass, *store.gate_model, instanced.count);
 }
 
 render_gates_regular_closed :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.gates {
 		if !(!it.is_end && it.is_closed)
 			continue;
@@ -2635,15 +2685,11 @@ render_gates_regular_closed :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.gate_close_model, instanced.count);
+	commit_geometry(frame, pass, *store.gate_close_model, instanced.count);
 }
 
 render_gates_finished_open :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
 	instanced := NewArray(scene.gates.count, WFramegraph.Instance, false,, temp);
 	instanced.count = 0;
@@ -2662,17 +2708,13 @@ render_gates_finished_open :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.gate_finish_model, instanced.count);
+	commit_geometry(frame, pass, *store.gate_finish_model, instanced.count);
 }
 
 render_gates_finished_closed :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.gates {
 		if !(it.is_end && it.is_closed)
 			continue;
@@ -2688,17 +2730,13 @@ render_gates_finished_closed :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.gate_finish_close_model, instanced.count);
+	commit_geometry(frame, pass, *store.gate_finish_close_model, instanced.count);
 }
 
 render_shurikens :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.shurikens {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2713,10 +2751,10 @@ render_shurikens :: (
 	}
 
 	if instanced.count > 0 {
-		draw(framegraph, pass, store.drone_model, instanced.count);
+		commit_geometry(frame, pass, *store.drone_model, instanced.count);
 	}
 
-	instanced = append_instance_buffer(framegraph);
+	instanced = append_instance_buffer(frame);
 	for scene.shurikens {
 		M := Scene.compute_moving_frame_server_world_matrix(
 			scene, Scene.find_by_frame_id(scene, it.frame_id)
@@ -2764,20 +2802,15 @@ render_shurikens :: (
 	}
 
 	if instanced.count > 0 {
-		draw(framegraph, pass, store.drone_blade_model, instanced.count);
+		commit_geometry(frame, pass, *store.drone_blade_model, instanced.count);
 	}
 }
 
 render_hooks :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store,
-	extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
 	{
-		instanced := append_instance_buffer(framegraph);
+		instanced := append_instance_buffer(frame);
 		for scene.hooks {
 			instanced.count += 1;
 			instance := *instanced[instanced.count - 1];
@@ -2798,18 +2831,14 @@ render_hooks :: (
 			array_add(*extra.cylinders, cylinder);
 		}
 		if instanced.count > 0
-			draw(framegraph, pass, store.end_hook_model, instanced.count);
+			commit_geometry(frame, pass, *store.end_hook_model, instanced.count);
 	}
 }
 
 render_presents :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.presents {
 		if !it.server.available
 			continue;
@@ -2823,9 +2852,9 @@ render_presents :: (
 		}
 	}
 	if instanced.count > 0
-		draw(framegraph, pass, store.present_a_model, instanced.count);
+		commit_geometry(frame, pass, *store.present_a_model, instanced.count);
 		
-	instanced = append_instance_buffer(framegraph);
+	instanced = append_instance_buffer(frame);
 	for scene.presents {
 		if !it.server.available
 			continue;
@@ -2839,17 +2868,13 @@ render_presents :: (
 		}
 	}
 	if instanced.count > 0
-		draw(framegraph, pass, store.present_b_model, instanced.count);
+		commit_geometry(frame, pass, *store.present_b_model, instanced.count);
 }
 
 render_safezones :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.safe_zones {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2865,17 +2890,13 @@ render_safezones :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.zone_wall_model, instanced.count);
+	commit_geometry(frame, pass, *store.zone_wall_model, instanced.count);
 }
 
 render_skulls :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for * scene.skulls {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2888,18 +2909,14 @@ render_skulls :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.pirateship_model, instanced.count);
+	commit_geometry(frame, pass, *store.pirateship_model, instanced.count);
 
 }
 
 render_keys :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for scene.keys {
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -2915,18 +2932,14 @@ render_keys :: (
 	if instanced.count == 0
 		return;
 
-	draw(framegraph, pass, store.key_model, instanced.count);
+	commit_geometry(frame, pass, *store.key_model, instanced.count);
 }
 
 render_standin :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
 	for model_id: 0..Scene.Model_Id_Count {
-		instanced := append_instance_buffer(framegraph);
+		instanced := append_instance_buffer(frame);
 		for scene.stand_in {
 			if it.model_id != model_id
 				continue;
@@ -2948,23 +2961,19 @@ render_standin :: (
 		if !model
 			continue;
 
-		draw(framegraph, pass, model, instanced.count);
+		commit_geometry(frame, pass, model, instanced.count);
 	}
 }
 
 render_players :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
 	max_model_id := 0;
 	for scene.players
 		max_model_id = max(max_model_id, it.server.model_id);
 
 	for model_id: 0..max_model_id {
-		instanced := append_instance_buffer(framegraph);
+		instanced := append_instance_buffer(frame);
 		for scene.players {
 			if it.server.dead
 				continue;
@@ -2987,7 +2996,7 @@ render_players :: (
 			model := Store.get_model(store, xx model_id);
 			if !model
 				model = *store.spirit_model;
-			draw(framegraph, pass, model, instanced.count);
+			commit_geometry(frame, pass, model, instanced.count);
 		}
 	}
 }
@@ -3002,15 +3011,11 @@ set_normal_map_idx :: (instance: *WFramegraph.Instance, idx: int) {
 }
 
 render_terrain :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
 	terrain := *scene.terrain;
 
-	instanced := append_instance_buffer(framegraph);
+	instanced := append_instance_buffer(frame);
 	for terrain.tiles {
 		x := it_index % terrain.tiles_count.x;
 		y := it_index / terrain.tiles_count.x;
@@ -3031,16 +3036,12 @@ render_terrain :: (
 		return;
 	}
 
-	draw(framegraph, pass, store.tile_model, instanced.count);
+	commit_geometry(frame, pass, *store.tile_model, instanced.count);
 
 }
 
 render_props :: (
-	framegraph: *WFramegraph,
-	encoder: WGPUCommandEncoder,
-	pass: WGPURenderPassEncoder,
-	scene: Scene.Scene,
-	store: Store.Store
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
 	if scene.props.count == 0
 		return;
@@ -3050,7 +3051,7 @@ render_props :: (
 		max_id = max(max_id, it.id);
 
 	for prop_id: 0..max_id {
-		instanced := append_instance_buffer(framegraph);
+		instanced := append_instance_buffer(frame);
 		for scene.props {
 			if it.id != prop_id
 				continue;
@@ -3063,7 +3064,7 @@ render_props :: (
 		if instanced.count == 0
 			continue;
 
-		draw(framegraph, pass, Store.get_wprop(store, xx prop_id), instanced.count);
+		commit_geometry(frame, pass, Store.get_wprop(store, xx prop_id), instanced.count);
 	}
 }
 

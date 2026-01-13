@@ -803,14 +803,14 @@ push_breaking_news :: (state: *GUI_State, news: [] Scene.Breaking_News) {
 	}
 }
 
-push_fps_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, current_idx: int) {
+push_app_loop_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, current_idx: int) {
 	avg := 0.0;
 	for data
 		avg += it;
 	avg /= data.count;
 
-	fps_text := tprint("FPS: %, Avg %", (1.0 / data[current_idx]).(s64), (1.0 / avg).(s64));
-	atom_label(state, fps_text, .{ pos.x + 4, pos.y + size.y - 20 }, 16, z=11);
+	ms_text := tprint("app_loop: %.2f ms, Avg %.2f ms", 1000 * data[current_idx], 1000 * avg);
+	atom_label(state, ms_text, .{ pos.x + 4, pos.y + size.y - 20 }, 16, z=11);
 
 	push_quad_screen(
 		state,
@@ -821,14 +821,13 @@ push_fps_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32,
 	);
 
 	project :: (x: float32) -> float32 #expand {
-		return min((600 / (1 + exp(-x / 100)) - 300) / 300, 1.0) * size.y;
+		return min(1.0, (600 / (1 + exp(-x / 5)) - 300) / 300) * size.y;
 	}
 
 	n := data.count;
 	for data {
-		fps := 1.0 / it;
-
-		h := project(fps);
+		ms := 1000 * it;
+		h := project(ms);
 		w := size.x / data.count - 1;
 
 		x := (it_index * size.x) / data.count;
@@ -854,8 +853,9 @@ push_fps_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32,
 		);
 	}
 
+	// Reference lines for ms thresholds
 	{
-		h := project(120);
+		h := project(8.33); // 120 fps target
 		push_quad_screen(
 			state,
 			pos = .{ pos.x, pos.y + 5 + h },
@@ -865,7 +865,7 @@ push_fps_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32,
 		);
 	}
 	{
-		h := project(60);
+		h := project(16.67); // 60 fps target
 		push_quad_screen(
 			state,
 			pos = .{ pos.x, pos.y + 5 + h },
@@ -875,7 +875,7 @@ push_fps_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32,
 		);
 	}
 	{
-		h := project(30);
+		h := project(33.33); // 30 fps target
 		push_quad_screen(
 			state,
 			pos = .{ pos.x, pos.y + 5 + h },
@@ -957,6 +957,96 @@ push_ping_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32
 	}
 	{
 		h := project(200);
+		push_quad_screen(
+			state,
+			pos = .{ pos.x, pos.y + 5 + h },
+			size = .{ size.x, 1 },
+			color = .{ 1.0, 0.0, 0.0 },
+			z = 12
+		);
+	}
+}
+
+push_ms_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, current_idx: int, label_prefix: string) {
+	avg := 0.0;
+	for data
+		avg += it;
+	avg /= data.count;
+
+	ms_text := tprint(
+		"%: %.% ms, Avg %.% ms",
+		label_prefix,
+		(1000 * data[current_idx]).(s64),
+		(10000 * data[current_idx]).(s64) % 10,
+		(1000 * avg).(s64),
+		(10000 * avg).(s64) % 10
+	);
+	atom_label(state, ms_text, .{ pos.x + 4, pos.y + size.y - 20 }, 16, z=11);
+
+	push_quad_screen(
+		state,
+		pos = pos,
+		size = size,
+		color = .{ 0.0, 0.0, 0.0 },
+		z = 10
+	);
+
+	project :: (x: float32) -> float32 #expand {
+		return min(1.0, (600 / (1 + exp(-x / 15)) - 300) / 300) * size.y;
+	}
+
+	n := data.count;
+	for data {
+		ms := 1000 * it;
+		h := project(ms);
+		w := size.x / data.count - 1;
+
+		x := (it_index * size.x) / data.count;
+
+		color := V3f.{ 1.0, 1.0, 1.0 };
+		if it_index == current_idx {
+			// Pink color
+			color = V3f.{ 1.0, 0.0, 1.0 };
+			push_quad_screen(
+				state,
+				pos = .{ pos.x + x, pos.y + 5 },
+				size = .{ w, size.y - 10 },
+				color = color,
+				z = 10.1
+			);
+		}
+		push_quad_screen(
+			state,
+			pos = .{ pos.x + x, pos.y + 5 },
+			size = .{ w, h },
+			color = color,
+			z = 11
+		);
+	}
+
+	// Reference lines for ms thresholds
+	{
+		h := project(8.33); // 120 fps target
+		push_quad_screen(
+			state,
+			pos = .{ pos.x, pos.y + 5 + h },
+			size = .{ size.x, 1 },
+			color = .{ 0.0, 0.0, 1.0 },
+			z = 12
+		);
+	}
+	{
+		h := project(16.67); // 60 fps target
+		push_quad_screen(
+			state,
+			pos = .{ pos.x, pos.y + 5 + h },
+			size = .{ size.x, 1 },
+			color = .{ 0.0, 1.0, 0.0 },
+			z = 12
+		);
+	}
+	{
+		h := project(33.33); // 30 fps target
 		push_quad_screen(
 			state,
 			pos = .{ pos.x, pos.y + 5 + h },

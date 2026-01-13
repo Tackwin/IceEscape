@@ -277,3 +277,9 @@ gate
 - position: 20.5 24 0
 - direction: 0 -1 0
 - wait_for_key_id: 2
+
+
+camera_rail
+- waypoint: 11.5 4.5 0
+- waypoint: 35.5 4.5 0
+- waypoint: 35.5 27.5 0

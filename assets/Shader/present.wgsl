@@ -14,6 +14,7 @@ struct VertexOutput {
 
 @group(0) @binding(0) var<uniform> uniforms: UniformData;
 @group(0) @binding(1) var albedoMap: texture_multisampled_2d<f32>;
+@group(0) @binding(2) var uiMap: texture_2d<f32>;
 
 @vertex fn vs(
 	@builtin(vertex_index) vertexIndex : u32
@@ -92,5 +93,10 @@ fn sampleTexture(uv: vec2f) -> vec4f {
 	let color = sampleTexture(uuv);
 	let mapped = CommerceToneMapping(color.rgb);
 	let gamma_corrected = pow(mapped, vec3f(1.0 / uniforms.gamma));
-	return vec4f(mapped, 1.0);
+
+	let ui_color = textureLoad(uiMap, vec2<u32>(uuv * uniforms.size), 0);
+	
+	let rgb = mix(mapped.xyz, ui_color.xyz, ui_color.w);
+
+	return vec4f(rgb, 1.0);
 }

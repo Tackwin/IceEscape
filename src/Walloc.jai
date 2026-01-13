@@ -133,7 +133,7 @@ CHUNK_SIZE_LOG_2   :: 8;
 GRANULE_SIZE       :: 8;
 GRANULE_SIZE_LOG_2 :: 3;
 
-heap_size: s64;
+heap_size := 0;
 pending_large_object_compaction: s64;
 
 large_object_freelist: *Large_Object;
@@ -346,45 +346,46 @@ allocate_large_object :: (size: s64) -> *Large_Object {
 }
 
 allocate_pages :: (size: s64) -> page: *Page, allocated_page_count: s64 {
-    needed := size + size_of(Page_Header);
-    memory_size := __builtin_wasm_memory_size(0) * PAGE_SIZE;
+    return PAGE_SIZE.(*Page), __builtin_wasm_memory_size(0);
+    // needed := size + size_of(Page_Header);
+    // memory_size := PAGE_SIZE;
+    // base := memory_size;
+    // preallocated := 0;
+    // grow := 0;
 
-    base := memory_size;
-    preallocated := 0;
-    grow := 0;
+    // if !heap_size {
+    //     // We are allocating the initial pages, if any. We skip the first 64 kB,
+    //     // then take any additional space up to the memory size.
+    //     //
+    //     // NOTE(jt): The otiginal comment above is a little misleading, but basically whatever
+    //     // __heap_base gets linked in, we make sure to align it to PAGE_SIZE.
+    //     preallocated = __builtin_wasm_memory_size(0) * PAGE_SIZE;
 
-    if !heap_size {
-        // We are allocating the initial pages, if any. We skip the first 64 kB,
-        // then take any additional space up to the memory size.
-        //
-        // NOTE(jt): The otiginal comment above is a little misleading, but basically whatever
-        // __heap_base gets linked in, we make sure to align it to PAGE_SIZE.
-        preallocated = memory_size - align(cast(s64, *__heap_base), PAGE_SIZE);
+    //     heap_size = preallocated;
+    // }
 
-        heap_size = preallocated;
-        base -= preallocated;
-    }
+    // if preallocated < needed {
+    //     write_string_unsynchronized("Walloc is trying to grow the memory, but that's illegal.");
+    //     // return null, 0;
+    //     // Always grow the walloc heap at least by 50%.
+    //     // grow = align(max(heap_size / 2, needed - preallocated), PAGE_SIZE);
+    //     // assert(grow > 0);
 
-    if preallocated < needed {
-        // Always grow the walloc heap at least by 50%.
-        grow = align(max(heap_size / 2, needed - preallocated), PAGE_SIZE);
-        assert(grow > 0);
+    //     // if __builtin_wasm_memory_grow(0, grow >> PAGE_SIZE_LOG_2) == -1 {
+    //     //     return null, 0;
+    //     // }
 
-        if __builtin_wasm_memory_grow(0, grow >> PAGE_SIZE_LOG_2) == -1 {
-            return null, 0;
-        }
+    //     // heap_size += grow;
+    // }
 
-        heap_size += grow;
-    }
+    // page := cast(*Page, base);
+    // pages_size := grow + preallocated;
+    // assert(pages_size > 0);
+    // assert(aligned(pages_size, PAGE_SIZE));
 
-    page := cast(*Page, base);
-    pages_size := grow + preallocated;
-    assert(pages_size > 0);
-    assert(aligned(pages_size, PAGE_SIZE));
+    // page_count := pages_size >> PAGE_SIZE_LOG_2;
 
-    page_count := pages_size >> PAGE_SIZE_LOG_2;
-
-    return page, page_count;
+    // return page, page_count;
 }
 
 allocate_small :: (chunk_kind: Chunk_Kind) -> *void {

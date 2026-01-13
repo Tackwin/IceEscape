@@ -1,4 +1,12 @@
-#load "webgpu_type.jai";
+#load "webgpu_wgpu.jai";
+// #load "webgpu_dawn.jai";
+
+#if OS == .WASM {
+    DEPTH_SLICE_UNDEFINED :: 0;
+} else {
+    DEPTH_SLICE_UNDEFINED :: 0xFFFFFFFF;
+}
+
 
 GPU_proc :: struct {
     createInstance: WGPUProcCreateInstance = null;

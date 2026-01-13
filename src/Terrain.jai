@@ -814,6 +814,76 @@ parse_terrain :: (text: string, scene: *Scene) {
 			cursor -= 1;
 		}
 
+		if scan2(line, "camera_rail") {
+			rail: Camera_Rail;
+			rail.id = scene.camera_rails.count;
+			rail.waypoints.index = scene.camera_rail_waypoints.count;
+			rail.waypoints.count = 0;
+			defer {
+				rail.waypoints.count = scene.camera_rail_waypoints.count - rail.waypoints.index;
+				array_add(*scene.camera_rails, rail);
+			}
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos: V3f;
+				if scan2(line, "- waypoint: % % %", *pos.x, *pos.y, *pos.z) {
+					array_add(*scene.camera_rail_waypoints, pos);
+					continue;
+				}
+
+				print("Error reading camera_rail, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
+
+		if scan2(line, "camera_poi") {
+			poi: Camera_POI;
+			poi.id = scene.camera_pois.count;
+			defer array_add(*scene.camera_pois, poi);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *poi.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+
+				if scan2(line, "- zoom_out_factor: %", *poi.zoom_out_factor)
+					continue;
+
+				print("Error reading camera_poi, unrecognized line: % (L%)\n", line, cursor);
+				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
+
 		if scan2(line, "standin") {
 			standin: Stand_In;
 			standin.id = scene.stand_in.count + 1;
@@ -1005,7 +1075,7 @@ parse_terrain :: (text: string, scene: *Scene) {
 
 				for id: 0..16 {
 					r := Rand.random_uniform(*rng);
-					if r < get_probability(xx id) / 3 {
+					if r < get_probability(xx id) {
 						prop: Prop;
 						prop.id = xx id;
 

@@ -542,7 +542,7 @@ build_wasm_2 :: () {
 
 	opts.Commonly_Propagated = seed.Commonly_Propagated;
 
-	opts.output_type                         = .EXECUTABLE;
+	opts.output_type                         = .DYNAMIC_LIBRARY;
 	opts.backend                             = .LLVM; // WASM only works with the LLVM backend, obviously.
 	opts.os_target                           = .WASM;
 	opts.cpu_target                          = .CUSTOM;
@@ -550,7 +550,7 @@ build_wasm_2 :: () {
 	opts.backtrace_on_crash                  = .OFF; // Runtime_Support_Crash_Handler doesn’t support WASM (yet?)
 	opts.output_path                         = "web/";
 	opts.output_executable_name              = "IceEscape";
-	opts.llvm_options.target_system_features = "+bulk-memory"; // "This options is needed so that "memcpy" and "memset" are mapped to "memory.copy" and "memory.fill" instructions in WASM.
+	opts.llvm_options.target_system_features = "+bulk-memory,+atomics"; // "This options is needed so that "memcpy" and "memset" are mapped to "memory.copy" and "memory.fill" instructions in WASM.
 	opts.llvm_options.enable_split_modules   = false;
 	opts.llvm_options.function_sections      = true; // To get around "LLVM ERROR: section already has a defining function: .text"
 
@@ -563,9 +563,16 @@ build_wasm_2 :: () {
 	// This was compiled from src/c/walloc.c via "clang -Oz --target=wasm64 -nostdlib -c -o walloc.o walloc.c".
 	walloc_object_file_path := "src/c/walloc.o";
 
-	STACK_SIZE :: 1024 * 1024;
+	STACK_SIZE :: 16 * 1024 * 1024;
 	opts.additional_linker_arguments = .[
-		"--stack-first", "-z", tprint("stack-size=%", STACK_SIZE), walloc_object_file_path
+		tprint("--initial-memory=%", 1024*1024*1024),
+		tprint("--max-memory=%", 1024*1024*1024),
+		"--import-memory",
+		"--shared-memory",
+		"--export-memory",
+		"--stack-first",
+		"-z", tprint("stack-size=%", STACK_SIZE),
+		walloc_object_file_path
 	];
 
 	// Replace the default allocator with Walloc (https://github.com/wingo/walloc).
@@ -584,17 +591,17 @@ build_wasm_2 :: () {
 	}
 	compiler_end_intercept(w);
 
-	args := string.[
-		"./tools/wasm-opt.exe",
-		"-O2",
-		"-g",
-		"--asyncify",
-		"./web/IceEscape.wasm",
-		"-o",
-		"./web/IceEscape.wasm"
-	];
-	print("Running wasm opt: %\n", join(..args, " "));
-	run_command(..args);
+	// args := string.[
+	// 	"./tools/wasm-opt.exe",
+	// 	"-O2",
+	// 	"-g",
+	// 	"--asyncify",
+	// 	"./web/IceEscape.wasm",
+	// 	"-o",
+	// 	"./web/IceEscape.wasm"
+	// ];
+	// print("Running wasm opt: %\n", join(..args, " "));
+	// run_command(..args);
 }
 build_c_lib :: () {
 	run_command(
@@ -629,6 +636,12 @@ build_c_lib :: () {
 		"./src/c/walloc.c"
 	);
 }
+build_bindings :: () {
+	opts: Generate_Bindings_Options;
+	opts.log_stripped_declarations = false;
+	array_add(*opts.source_files, "./src/c/webgpu_dawn.h");
+	generate_bindings(opts, "./src/webgpu_dawn.jai");
+}
 
 build_2 :: () {
 	set_build_options_dc(.{ do_output = false });
@@ -642,6 +655,7 @@ build_2 :: () {
 	win32 := false;
 	linux := false;
 	publish := false;
+	bindings := false;
 	for args {
 		clib |= compare(it, "clib") == 0;
 		game |= compare(it, "game") == 0;
@@ -650,9 +664,12 @@ build_2 :: () {
 		wasm |= compare(it, "wasm") == 0;
 		linux |= compare(it, "linux") == 0;
 		publish |= compare(it, "publish") == 0;
+		bindings |= compare(it, "bindings") == 0;
 	}
-	game |= !clib && !server && !wasm && !win32 && !linux && !publish;
+	game |= !clib && !server && !wasm && !win32 && !linux && !publish && !bindings;
 
+	if bindings
+		build_bindings();
 	if clib
 		build_c_lib();
 	if game

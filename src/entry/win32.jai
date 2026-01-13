@@ -5,8 +5,10 @@
 #import "miniaudio";
 #import "Basic"()(MEMORY_DEBUGGER=true);
 #import "Hash_Table";
+#import "Atomics";
 #import "Algebra";
 #import "String";
+#import "Thread";
 #import "File";
 #import "Math";
 #import "Random";
@@ -20,7 +22,6 @@ sdl_window: *SDL_Window;
 sdl_gl_context: SDL_GLContext;
 g_Time: u64 = 0;
 
-pressed: [Key_COUNT] bool;
 
 curl: *CURL;
 curl_connected := false;
@@ -90,7 +91,6 @@ Message :: struct {
 	sent_time: Apollo_Time;
 }
 messages_pending: [..] Message;
-message_arrived: [..] Message;
 
 #scope_export
 
@@ -218,17 +218,30 @@ win32_set_token :: (token: int) {
 	// write_entire_file("token.txt", tprint("%", token));
 }
 
-win32_get_frame_info :: (info: *Frame_Info) {
-	push_context,defer_pop launcher_context;
-	info.* = .{};
-	// Setup display size (every frame to accommodate for window resizing)
-	w, h: s32;
-	SDL_GetWindowSize(sdl_window, *w, *h);
-	display_w, display_h: s32;
-	SDL_GL_GetDrawableSize(sdl_window, *display_w, *display_h);
+Platform_State :: struct {
+	width: s32;
+	height: s32;
+	display_width: s32;
+	display_height: s32;
+	pressed: [Key_COUNT] bool;
+	mouse_wheel := 0;
+	want_quit := false;
 
-	info.window_size = .{ xx w, xx h };
-	info.framebuffer_size = .{ xx display_w, xx display_h };
+	message_arrived: [1024] Message;
+	message_arrived_cursor_pulled := 0;
+	message_arrived_cursor_pushed := 0;
+	frame_file_change: [1024] string;
+	frame_file_change_count := 0;
+}
+platform_state: Platform_State;
+
+win32_get_frame_info :: (info: *Frame_Info) {
+	info.* = .{};
+	push_context,defer_pop launcher_context;
+	// Setup display size (every frame to accommodate for window resizing)
+
+	info.window_size = .{ xx platform_state.width, xx platform_state.height };
+	info.framebuffer_size = .{ xx platform_state.display_width, xx platform_state.display_height };
 
 	frequency := SDL_GetPerformanceFrequency();
 	current_time := SDL_GetPerformanceCounter();
@@ -247,7 +260,8 @@ win32_get_frame_info :: (info: *Frame_Info) {
 	info.mouse_position.x = xx mx;
 	info.mouse_position.y = xx (info.window_size.y - my);
 	info.window_focused =  (SDL_GetWindowFlags(sdl_window) & SDL_WINDOW_MOUSE_FOCUS) > 0;
-
+	info.quit = platform_state.want_quit;
+	info.mouse_wheel = platform_state.mouse_wheel;
 
 	GetKeyboardLayout :: (n: Win32.DWORD) -> Win32.HANDLE #foreign user32;
 	LANG_ENGLISH :: 0x09;
@@ -260,148 +274,62 @@ win32_get_frame_info :: (info: *Frame_Info) {
 			info.layout = .AZERTY;
 	}
 
-	event: SDL_Event;
-	while SDL_PollEvent(*event) {
-		if event.type == SDL_MOUSEWHEEL {
-			if event.wheel.y > 0
-				info.mouse_wheel = 1;
-			if event.wheel.y < 0
-				info.mouse_wheel = -1;
-		}
-		if event.type == SDL_MOUSEBUTTONDOWN {
-			if event.button.button == SDL_BUTTON_LEFT   pressed[Key.MouseLeft] = true;
-			if event.button.button == SDL_BUTTON_RIGHT  pressed[Key.MouseRight] = true;
-			if event.button.button == SDL_BUTTON_MIDDLE pressed[Key.MouseMiddle] = true;
-		}
-		if event.type == SDL_MOUSEBUTTONUP {
-			if event.button.button == SDL_BUTTON_LEFT   pressed[Key.MouseLeft] = false;
-			if event.button.button == SDL_BUTTON_RIGHT  pressed[Key.MouseRight] = false;
-			if event.button.button == SDL_BUTTON_MIDDLE pressed[Key.MouseMiddle] = false;
-		}
-		// if event.type == SDL_TEXTINPUT {
-		//     io.AddInputCharactersUTF8(io, xx event.text.text.data);
-		// }
-		if event.type == SDL_KEYUP {
-			key := event.key.keysym.sym;
-			map := map_sdl_to_key(xx key);
-			if map < pressed.count
-				pressed[map] = false;
-		}
-		if event.type == SDL_KEYDOWN {
-			key := event.key.keysym.sym;
-			map := map_sdl_to_key(xx key);
-			if map < pressed.count
-				pressed[map] = true;
-			// kmod := SDL_GetModState();
-			// io.KeyShift = ((kmod & KMOD_SHIFT) != 0);
-			// io.KeyCtrl = ((kmod & KMOD_CTRL) != 0);
-			// io.KeyAlt = ((kmod & KMOD_ALT) != 0);
-			// io.KeySuper = ((kmod & KMOD_GUI) != 0);
-		}
-		if event.type == SDL_QUIT
-			info.quit = true;
-		if event.type == SDL_WINDOWEVENT
-		&& event.window.event == SDL_WINDOWEVENT_CLOSE
-		&& event.window.windowID == SDL_GetWindowID(sdl_window)
-			info.quit = true;
-	}
-
 	for * info.key_pressed {
-		it.* = pressed[it_index];
-	}
-
-	frame: *curl_ws_frame;
-	recv: u64;
-
-	buffer := curl_buffer;
-	total_recv := 0;
-	while curl_connected {
-		recv = 0;
-		curl_ws_recv(curl, buffer.data, xx buffer.count, *recv, *frame);
-		if !frame || recv == 0
-			break;
-		buffer.data += recv;
-		buffer.count -= xx recv;
-		total_recv += xx recv;
-	}
-
-	cursor := 0;
-	while cursor < (xx total_recv) && info.message_received_count < info.message_received.count {
-		next_message_length := (cast(*u64)(curl_buffer.data + cursor)).*;
-
-		msg: Message;
-		array_resize(*msg.data, xx next_message_length);
-		memcpy(msg.data.data, curl_buffer.data + cursor, xx next_message_length);
-		msg.sent_time = current_time_monotonic();
-		array_add(*message_arrived, msg);
-
-		cursor += xx next_message_length;
+		it.* = platform_state.pressed[it_index];
 	}
 
 	info.message_received_count = 0;
-	cursor = 0;
-	for * message_arrived {
-		dt := to_float64_seconds(current_time_monotonic() - it.sent_time);
+	pulled := platform_state.message_arrived_cursor_pulled;
+	pushed := platform_state.message_arrived_cursor_pushed;
+	for pulled..pushed-1 {
+		msg := platform_state.message_arrived[it % platform_state.message_arrived.count];
 
-		if 1000 * dt >= fake_one_way_ping {
-			info.message_received_count += 1;
-			info.message_received[info.message_received_count - 1].data = NewArray(
-				it.data.count, u8, initialized = false,, temp
-			);
-			// There is only one possible sender (the server), so whatever
-			info.message_received[info.message_received_count - 1].sender = 0;
-			memcpy(
-				info.message_received[info.message_received_count - 1].data.data,
-				it.data.data,
-				it.data.count
-			);
-		} else {
-			message_arrived[cursor] = it.*;
-			cursor += 1;
-		}
-	}
-	message_arrived.count = cursor;
-
-	info.file_change_count = frame_file_change_count;
-	for 0..frame_file_change_count-1 {
-		info.file_change[it] = talloc_string(frame_file_change[it].count);
+		info.message_received_count += 1;
+		info.message_received[info.message_received_count - 1].data =
+			NewArray(msg.data.count, u8, initialized = false,, temp);
+		info.message_received[info.message_received_count - 1].sender = 0;
 		memcpy(
-			info.file_change[it].data,
-			frame_file_change[it].data,
-			frame_file_change[it].count
+			info.message_received[info.message_received_count - 1].data.data,
+			msg.data.data,
+			msg.data.count
 		);
-		free(frame_file_change[it]);
 	}
-	frame_file_change_count = 0;
+	platform_state.message_arrived_cursor_pulled = pushed;
+
+	// info.file_change_count = platform_state.frame_file_change_count;
+	// for 0..platform_state.frame_file_change_count-1 {
+	// 	info.file_change[it] = talloc_string(platform_state.frame_file_change[it].count);
+	// 	memcpy(
+	// 		info.file_change[it].data,
+	// 		platform_state.frame_file_change[it].data,
+	// 		platform_state.frame_file_change[it].count
+	// 	);
+	// 	free(platform_state.frame_file_change[it]);
+	// }
+	// platform_state.frame_file_change_count = 0;
 }
 
 frame_counter := 0;
 win32_end_frame :: () {
 	push_context,defer_pop launcher_context;
-	// SDL_GL_SwapWindow(sdl_window);
 
-	cursor := 0;
 	if curl_connected for * messages_pending {
 		dt := to_float64_seconds(current_time_monotonic() - it.sent_time);
-		if true || dt * 1000 >= fake_one_way_ping {
-			sent: u64 = 0;
-			code := curl_ws_send(curl, it.data.data, xx it.data.count, *sent, 0, CURLWS_BINARY);
-			if code {
-				str: string;
-				str.data = curl_errbuf.data;
-				str.count = c_style_strlen(curl_errbuf.data);
-				print("Error sending message: %\n", str);
-				curl_connected = false;
-			}
 
-			array_free(it.data);
-		} else {
-			messages_pending[cursor] = it.*;
-			cursor += 1;
+		sent: u64 = 0;
+		code := curl_ws_send(curl, it.data.data, xx it.data.count, *sent, 0, CURLWS_BINARY);
+		if code {
+			str: string;
+			str.data = curl_errbuf.data;
+			str.count = c_style_strlen(curl_errbuf.data);
+			print("Error sending message: %\n", str);
+			curl_connected = false;
 		}
+
+		array_free(it.data);
 	}
-frame_counter += 1;
-	messages_pending.count = cursor;
+	frame_counter += 1;
+	messages_pending.count = 0;
 	process_changes(*watcher);
 }
 
@@ -417,7 +345,7 @@ sound_id_to_sound: Table(int, Win32_Sound);
 audio_counter := 0;
 sound_counter := 0;
 
-load_audio :: (data: string, compressed: bool) -> Audio {
+load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_ref {
 	push_context,defer_pop launcher_context;
 	audio_counter += 1;
 
@@ -427,8 +355,12 @@ load_audio :: (data: string, compressed: bool) -> Audio {
 
 	table_add(*audio_id_to_data, audio.id, data);
 	audio.loaded = true;
-	return audio;
+	out.* = audio;
+
+	return 0;
 }
+
+
 play_audio :: (audio: Audio, position: V3f) -> Sound {
 	push_context,defer_pop launcher_context;
 	ok, data := table_find(*audio_id_to_data, audio.id);
@@ -547,25 +479,63 @@ volume_audio :: (x: float) -> float {
 	return master_volume;
 }
 
+
+P_Thread :: struct {
+	thread: Thread;
+	proc: Platform.Thread_F;
+	data: *void;
+}
+threads: Table(int, *P_Thread);
+thread_count := 0;
+
+win32_spawn :: (func: Platform.Thread_F, data: *void) -> int {
+	p_thread := table_add(*threads, thread_count, New(P_Thread)).*;
+	thread_count += 1;
+
+	p_thread.thread.data = p_thread;
+	p_thread.proc = func;
+	p_thread.data = data;
+	thread_init(*p_thread.thread, (thread: *Thread) -> s64 {
+		p_thread := thread.data.(*P_Thread);
+		p_thread.proc(p_thread.data);
+		return 0;
+	});
+	thread_start(*p_thread.thread);
+
+	return -1;
+}
+
+win32_join :: (thread_id: int) {
+	ok, p_thread := table_find(*threads, thread_id);
+	if ok {
+		thread_deinit(*p_thread.thread);
+		free(p_thread);
+		table_remove(*threads, thread_id);
+	}
+}
+
+win32_wait :: (promise: Platform.extern_ref) {
+	// no op
+}
+
 watcher: File_Watcher(Platform);
-frame_file_change: [1024] string;
-frame_file_change_count := 0;
 
 audio_engine: ma_engine;
 
 init_platform :: () -> Platform {
 	platform: Platform;
-	memset(pressed.data, 0, pressed.count);
+	memset(platform_state.pressed.data, 0, platform_state.pressed.count);
 
 	init(*watcher, (watcher: *File_Watcher(Platform), change: *File_Change, user_data: *Platform) {
-		frame_file_change_count %= frame_file_change.count;
-		frame_file_change[frame_file_change_count] = alloc_string(change.full_path.count);
+		platform_state.frame_file_change_count %= platform_state.frame_file_change.count;
+		platform_state.frame_file_change[platform_state.frame_file_change_count] =
+			alloc_string(change.full_path.count);
 		memcpy(
-			frame_file_change[frame_file_change_count].data,
+			platform_state.frame_file_change[platform_state.frame_file_change_count].data,
 			change.full_path.data,
 			change.full_path.count
 		);
-		frame_file_change_count += 1;
+		platform_state.frame_file_change_count += 1;
 	}, *platform);
 	add_directories(*watcher, tprint("%/../../assets/", #filepath));
 
@@ -600,6 +570,9 @@ init_platform :: () -> Platform {
 		return .{};
 	}
 
+	platform.spawn = win32_spawn;
+	platform.join = win32_join;
+	platform.wait = win32_wait;
 	platform.connect_server = win32_connect_server;
 	platform.is_server_connected = win32_is_server_connected;
 	platform.read_entire_file = win32_read_entire_file;
@@ -878,6 +851,8 @@ dll_last_write: u64 = 0;
 dll_generation := 0;
 app: App;
 
+dll_mutex: Mutex;
+
 load_dll :: () {
 	Win32.CopyFileA("IceEscape.dll", "IceEscape_temp.dll", 0);
 
@@ -895,10 +870,19 @@ load_dll :: () {
 }
 
 reload_dll :: () {
-	Win32.FreeLibrary(dll);
+	lock(*dll_mutex);
+	defer unlock(*dll_mutex);
+	if dll {
+		// Get the function pointer of app_reload
+		app_reload_before := Win32.GetProcAddress(dll, "app_reload_before").(#type (app: *App));
+		if app_reload_before {
+			app_reload_before(*app);
+		}
+	}
 
-	// Win32.DeleteFileA("IceEscape_temp.dll");
+	dll_generation += 1;
 	dll_name := tprint("IceEscape_temp_%.dll\0", dll_generation);
+	print("Copying IceEscape to %\n", dll_name);
 	Win32.CopyFileA("IceEscape.dll", dll_name.data, 0);
 
 	dll_reloaded := Win32.LoadLibraryA(dll_name.data);
@@ -906,20 +890,125 @@ reload_dll :: () {
 		print("Failed to reload IceEscape.dll\n");
 		return;
 	}
+	// Now we can safely reload the DLL
+	if dll
+		Win32.FreeLibrary(dll);
 	dll = dll_reloaded;
 
-	// Get the function pointer of app_init
+	// Get the function pointer of app_reload
 	app_reload := Win32.GetProcAddress(dll, "app_reload").(#type (app: *App) -> ());
 	if app_reload {
 		app_reload(*app);
+	}
+}
+loop := true;
+
+update_thread_proc :: (thread: *Thread) -> s64 {
+	while loop {
+		if dll {
+
+			lock(*dll_mutex);
+			defer unlock(*dll_mutex);
+
+			// Get the function pointer of app_loop
+			app_update_loop := Win32.GetProcAddress(dll, "app_update_loop").(#type (app: *App) -> bool);
+			if app_update_loop {
+				app_update_loop(*app);
+			}
+		}
+	}
+	return 0;
+}
+
+platform_frame :: () {
+	event: SDL_Event;
+	while SDL_PollEvent(*event) {
+		if event.type == SDL_MOUSEWHEEL {
+			if event.wheel.y > 0
+				platform_state.mouse_wheel = 1;
+			if event.wheel.y < 0
+				platform_state.mouse_wheel = -1;
+		}
+		if event.type == SDL_MOUSEBUTTONDOWN {
+			if event.button.button == SDL_BUTTON_LEFT   platform_state.pressed[Key.MouseLeft] = true;
+			if event.button.button == SDL_BUTTON_RIGHT  platform_state.pressed[Key.MouseRight] = true;
+			if event.button.button == SDL_BUTTON_MIDDLE platform_state.pressed[Key.MouseMiddle] = true;
+		}
+		if event.type == SDL_MOUSEBUTTONUP {
+			if event.button.button == SDL_BUTTON_LEFT   platform_state.pressed[Key.MouseLeft] = false;
+			if event.button.button == SDL_BUTTON_RIGHT  platform_state.pressed[Key.MouseRight] = false;
+			if event.button.button == SDL_BUTTON_MIDDLE platform_state.pressed[Key.MouseMiddle] = false;
+		}
+		// if event.type == SDL_TEXTINPUT {
+		//     io.AddInputCharactersUTF8(io, xx event.text.text.data);
+		// }
+		if event.type == SDL_KEYUP {
+			key := event.key.keysym.sym;
+			map := map_sdl_to_key(xx key);
+			if map < platform_state.pressed.count
+				platform_state.pressed[map] = false;
+		}
+		if event.type == SDL_KEYDOWN {
+			key := event.key.keysym.sym;
+			map := map_sdl_to_key(xx key);
+			if map < platform_state.pressed.count
+				platform_state.pressed[map] = true;
+			// kmod := SDL_GetModState();
+			// io.KeyShift = ((kmod & KMOD_SHIFT) != 0);
+			// io.KeyCtrl = ((kmod & KMOD_CTRL) != 0);
+			// io.KeyAlt = ((kmod & KMOD_ALT) != 0);
+			// io.KeySuper = ((kmod & KMOD_GUI) != 0);
+		}
+		if event.type == SDL_QUIT
+			platform_state.want_quit = true;
+		if event.type == SDL_WINDOWEVENT
+		&& event.window.event == SDL_WINDOWEVENT_CLOSE
+		&& event.window.windowID == SDL_GetWindowID(sdl_window)
+			platform_state.want_quit = true;
+	}
+	SDL_GetWindowSize(sdl_window, *platform_state.width, *platform_state.height);
+	SDL_GL_GetDrawableSize(
+		sdl_window, *platform_state.display_width, *platform_state.display_height
+	);
+	frame: *curl_ws_frame;
+	recv: u64;
+
+	buffer := curl_buffer;
+	total_recv := 0;
+	while curl_connected {
+		recv = 0;
+		curl_ws_recv(curl, buffer.data, xx buffer.count, *recv, *frame);
+		if !frame || recv == 0
+			break;
+		buffer.data += recv;
+		buffer.count -= xx recv;
+		total_recv += xx recv;
+	}
+
+	cursor := 0;
+	while cursor < (xx total_recv) {
+		next_message_length := (cast(*u64)(curl_buffer.data + cursor)).*;
+
+		msg: Message;
+		array_resize(*msg.data, xx next_message_length);
+		memcpy(msg.data.data, curl_buffer.data + cursor, xx next_message_length);
+		msg.sent_time = current_time_monotonic();
+
+		curr_pushed := platform_state.message_arrived_cursor_pushed;
+		curr_pushed %= platform_state.message_arrived.count;
+		next_pushed := platform_state.message_arrived_cursor_pushed + 1;
+		next_pushed %= platform_state.message_arrived.count;
+
+		platform_state.message_arrived[curr_pushed] = msg;
+		platform_state.message_arrived_cursor_pushed = next_pushed;
+
+		cursor += xx next_message_length;
 	}
 }
 
 #import "tracy"(ENABLED = false);
 
 main :: () {
-	dll_generation = xx random_get();
-
 	args := get_command_line_arguments();
 	defer array_free(args);
 
@@ -928,10 +1017,16 @@ main :: () {
 	app.user_data = null;
 
 	load_dll();
+	init(*dll_mutex);
 
-	loop := true;
+	update_thread: Thread;
+	thread_init(*update_thread, update_thread_proc);
+	thread_start(*update_thread);
+
 	while (loop) {
 		FrameMarkStart();
+		platform_frame();
+
 		if dll {
 			file := Win32.CreateFileA("IceEscape.dll", Win32.FILE_GENERIC_READ);
 			defer Win32.CloseHandle(file);
@@ -963,4 +1058,5 @@ main :: () {
 }
 
 wgpu_native :: #library "../lib/wgpu_native";
+// wgpu_native :: #library "../../lib/webgpu_dawn";
 user32      :: #library,system "user32";

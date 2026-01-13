@@ -59,7 +59,7 @@ menu_loop :: (_app: *App) -> bool {
 		if no_connection_ret.retry_clicked {
 			if !state.is_communication_established {
 				connection:, state.is_communication_established = _app.platform.connect_server(
-					"game.tackwin.fr", 443, "wss"
+					"tackwin.fr", 443, "wss"
 				);
 			}
 
@@ -72,7 +72,7 @@ menu_loop :: (_app: *App) -> bool {
 		if no_connection_ret.retry_localhost_clicked {
 			if !state.is_communication_established {
 				connection:, state.is_communication_established = _app.platform.connect_server(
-					"localhost", 2356, "ws"
+					"localhost", 8000, "ws"
 				);
 			}
 
@@ -155,8 +155,8 @@ menu_loop :: (_app: *App) -> bool {
 	}
 
 	frame := WRender.begin_frame(*framegraph, controls.time);
-	WRender.render_gui(*frame, *framegraph, app_user.gui_state, store);
-	WRender.end_frame(*frame);
+	WRender.render_gui(frame, *framegraph, app_user.gui_state, store);
+	WRender.end_frame(*framegraph, frame);
 
 	return true;
 }

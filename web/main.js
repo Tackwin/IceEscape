@@ -64,7 +64,7 @@ const copy_any_to_js = (address, type_info, view = undefined) => {
         case "string": {
             const count = view.getBigUint64(Number(address) + 0, true);
             const data  = view.getBigUint64(Number(address) + 8, true);
-            return copy_string_to_js(count, data, false);
+            return getStringX(count, data);
         }
         case "float": return view.getFloat32(Number(address), true);
         case "u64":   return view.getBigUint64(Number(address), true);
@@ -97,66 +97,11 @@ const log_context_stack_trace = (ident) => {
     console.log(`[${ident}] context.stack_trace = 0x${stack_trace_address.toString(16)}`, stack_trace);
 }
 
-const entry_point = () => {
-    while (true) {
-        try {
-            jai_exports.__program_main(jai_context);
-        } catch (e) {
-            create_fullscreen_canvas("Program exited due to an exception.\nSee console for details.");
-            console.error(e);
-            return;
-        }
-        
-        // The exit from main was the application actually exitting
-        if (active_jmp_buf === 0n) {
-            null_context_stack_trace(); // :WasmNullStackTrace:
-            jai_imports.js_exit(0);
-            null_context_stack_trace(); // :WasmNullStackTrace:
-            return;
-        }
-        
-        // The exit from main happened because the we are either doing setjmp/longjmp stuff or we are pausing execution.
-        jai_exports.asyncify_stop_unwind();
-        
-        
-        // wasm_prepare_rewind returns true if active_jmp_buf was unwound with
-        // the intention of being rewound immediately (setjmp was called)
-        // and returns false if active_jmp_buf was unwound with the intent
-        // of being rewound at a later point (wasm_pause was called).
-        if (wasm_prepare_for_rewind()) {
-            jai_exports.asyncify_start_rewind(active_jmp_buf);
-        } else {
-            // do NOT rewind and do NOT re-enter __program_main
-            return;
-        }
-    }
-};
-
-
 let audio_context = null;
 
 window.addEventListener("load", async () => {
-    await initialize_wasm_module("IceEscape.wasm", 4 * 4096);
 	audio_context = new AudioContext();
-    
-    entry_point();
-});
-
-window.addEventListener("wasm_exit", (e) => {
-    if (e.code === 0) {
-        // Because a PWA is a long running interactive application, it isn't expected you will exit unless something
-        // bad happens. Reloading the page makes games like Invaders restart when you lose which seems like reasonable
-        // enough behaviour for most programs written in this style.    -nzizic, 27 June 2025
-        // window.location.reload();
-    } else {
-        // Remove any existing canvases so that the user can see the error code message
-        document.querySelectorAll("canvas").forEach(canvas => canvas.remove());
-        window.addEventListener("click", (event) => window.location.reload());
-        create_fullscreen_canvas(
-            `Program exited with error code ${e.code}.\n`+
-            "Press Ctrl+Shift+I for more information.\n"
-        );
-    }
+    await initialize_wasm_module("IceEscape.wasm", 1024 * 16);
 });
 
 const create_fullscreen_canvas = (text) => {
@@ -186,109 +131,21 @@ const create_fullscreen_canvas = (text) => {
 };
 
 
-
-/*
-
-Module Basic platform layer inserted from C:/Users/Tackwin/Documents/Code/jai/modules/Toolchains/Web/libjs/Basic.js
-
-*/
-
-const time_origin = Date.now();
-jai_imports.js_get_microseconds = () => {
-    return BigInt((Number(time_origin) + Number(performance.now())) * 1000);
-};
-
-jai_imports.js_sleep_milliseconds = (ms) => {
-    if (wasm_pause() === 0) setTimeout(() => { wasm_resume(1); }, ms);
-};
-
-jai_imports.js_set_working_directory = (path_count, path_data, path_is_constant) => {
-    switch (wasm_pause()) {
-    case 0: (async () => {
-
-        return +1;
-    })().then(wasm_resume); break;
-    case +1: return true;
-    case -1: {
-        log_resume_error();
-        return false;
-    }
-    }
-};
-
-
-
 /*
 
 Module Runtime_Support platform layer inserted from C:/Users/Tackwin/Documents/Code/jai/modules/Toolchains/Web/libjs/Runtime_Support.js
 
 */
 
-let granule_size = 8;
-let bits_per_byte = 8;
-let bits_per_byte_log2 = 3;
-
-function assert(c, msg) { if (!c) throw new Error(msg); }
-class HeapVerifier {
-    constructor(maxbytes) {
-        this.maxwords = maxbytes / granule_size;
-        this.state = new Uint8Array(this.maxwords / bits_per_byte);
-        this.allocations = new Map;
-    }
-    acquire(offset, len) {
-        assert_aligned(offset, granule_size);
-        for (let i = 0; i < len; i += granule_size) {
-            let bit = (offset + i) / granule_size;
-            let byte = bit >> bits_per_byte_log2;
-            let mask = 1 << (bit & (bits_per_byte - 1));
-            assert((this.state[byte] & mask) == 0, "word in use");
-            this.state[byte] |= mask;
-        }
-        this.allocations.set(offset, len);
-    }
-    release(offset) {
-        assert(this.allocations.has(offset))
-        let len = this.allocations.get(offset);
-        this.allocations.delete(offset);
-        for (let i = 0; i < len; i += granule_size) {
-            let bit = (offset + i) / granule_size;
-            let byte = bit >> bits_per_byte_log2;
-            let mask = 1 << (bit & (bits_per_byte - 1));
-            this.state[byte] &= ~mask;
-        }
-    }
-}
-
-class LinearMemory {
-    constructor({initial = 256, maximum = 256}) {
-        this.memory = new WebAssembly.Memory({ initial, maximum, shared: true });
-        this.verifier = new HeapVerifier(maximum * 65536);
-    }
-    record_malloc(ptr, len) { this.verifier.acquire(ptr, len); }
-    record_free(ptr) { this.verifier.release(ptr); }
-    read_string(offset) {
-        let view = new Uint8Array(this.memory.buffer);
-        let bytes = []
-        for (let byte = view[offset]; byte; byte = view[++offset])
-            bytes.push(byte);
-        return String.fromCharCode(...bytes);
-    }
-    log(str)      { console.log(`wasm log: ${str}`) }
-    log_i(str, i) { console.log(`wasm log: ${str}: ${i}`) }
-    env() {
-        return {
-            memory: this.memory,
-            wasm_log: (off) => this.log(this.read_string(off)),
-            wasm_log_i: (off, i) => this.log_i(this.read_string(off), i)
-        }
-    }
-}
 // Runtime_Support does not schedule for the wasm application to be loaded. We do this so that 
 // See Toolchains/Web/Progressive_Web_App.jai (and PWA_JS_HEADER in particular) for example usage.
 // There currently isn't support for loading multiple wasm modules on a single page.
 const initialize_wasm_module = async (module_path, initial_pages = 0) => {
     // If you forget to implement something jai_imports expects, the Proxy below will log a nice error.
-    const imports = {
+	jai_imports.memory = new WebAssembly.Memory({
+		initial: BigInt(initial_pages), maximum: BigInt(initial_pages), shared: true, "address": "i64"
+	})
+	const imports = {
         "env": new Proxy(jai_imports, {
             get(target, prop, receiver) {
                 // if (prop === "memcpy") throw new Error("these");
@@ -296,50 +153,45 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
                 return () => { throw new Error("Missing function: " + prop); };
             },
         }),
-        
-        "memory": new LinearMemory({initial: initial_pages, maximum: initial_pages}),
-        
-        // TODO: look into this
-        // __memory_base: 256, // from https://www.tutorialspoint.com/webassembly/webassembly_dynamic_linking.htm idk why
     };
     
     const wasm_file = await fetch(module_path);
 	const wasm_data = await wasm_file.arrayBuffer();
 
-    // load the wasm module and extract what we want from it
-    const module = await WebAssembly.instantiate(wasm_data, imports);
-    jai_exports  = module.instance.exports;
-    jai_context  = jai_exports.__jai_runtime_init(0, 0n);
-    // log_context_stack_trace("init");
-    
-    // allocate space for unwinding and rewinding the callstack
-    const memory = jai_exports.context_alloc(jai_context, JMP_BUF_SIZE*2n);
-    null_context_stack_trace(); // :WasmNullStackTrace:
-    
-    jmp_buf_for_pausing = memory;
-    jmp_buf_init(jmp_buf_for_pausing);
-    
-    jmp_buf_for_garbage = memory+JMP_BUF_SIZE;
-    jmp_buf_init(jmp_buf_for_garbage);
+	const module = await WebAssembly.compile(wasm_data);
+
+    const mainInstance = await WebAssembly.instantiate(module, imports);
+    jai_exports  = mainInstance.exports;
+	const init = WebAssembly.promising(jai_exports.wasm_init);
+	jai_context = jai_exports.wasm_get_main_context();
+	await init();
+	
+	const worker = new Worker("worker.js", { type: "module" });
+
+	worker.onmessage = e => {
+		if (e.data.ready) {
+			worker.postMessage({ start: true });
+
+			const main_loop = WebAssembly.promising(jai_exports.wasm_main_loop);
+
+			const frame = async () => {
+				await main_loop();
+		
+				requestAnimationFrame(frame);
+			}
+			requestAnimationFrame(frame);
+		}
+		if (e.data.set_token) {
+			jai_imports.js_set_token(e.data.set_token);
+		}
+	}
+	worker.postMessage({ module, memory: jai_imports.memory, controls_buffer });
+
+	// const worker_loop = WebAssembly.promising(jai_exports.wasm_worker_loop);
 }
-
-
 
 let jai_exports; // contains procedures and globals from the loaded wasm module
 let jai_context; // *Runtime_Support.first_thread_context
-
-// Used by the js runtime to pause and resume the
-// wasm module when waiting for async APIs
-let jmp_buf_for_pausing;
-
-// In order to implement longjmp we have to unwind the current
-// stack and then never rewind back to it, so we the runtime
-// allocates another jmp_buf in initialize_wasm_module()
-// that we reuse every time we want to unwind a stack and
-// never return.
-let jmp_buf_for_garbage;
-
-
 
 /*
 
@@ -348,249 +200,6 @@ Exports needed for Runtime_Support.jai and the C code included with the Jai dist
 */
 
 // TODO: this should not be necesarry, but it is.....
-jai_imports.memcmp = (a, b, count) => {
-    const [na, nb, nc] = [Number(a), Number(b), Number(count)];
-    const u8    = new Uint8Array(jai_exports.memory.buffer);
-    const buf_a = u8.subarray(na, na + nc);
-    const buf_b = u8.subarray(nb, nb + nc);
-    for (let i = 0; i < count; i++) {
-        const delta = Number(buf_a[i]) - Number(buf_b[i]);
-        if (delta !== 0) return delta;
-    }
-    return 0;
-};
-
-jai_imports.js_debug_break = () => { debugger; };
-
-// Here we dispatch an event so that the specifics of what happens when an application exits is left to the "js header".
-// This way a library could call reject() on a promise representing the current call while a PWA could just reload the page.
-jai_imports.js_exit = (code) => {
-    const event = new Event("wasm_exit");
-    event.code  = code;
-    window.dispatchEvent(event);
-    wasm_pause();
-};
-
-jai_imports.js_alloca = (size) => jai_exports.temporary_alloc(jai_context, size);
-
-// for c code that needs math.h
-jai_imports.js_log   = Math.log;
-jai_imports.js_exp   = Math.exp;
-jai_imports.js_pow   = Math.pow;
-jai_imports.js_sin   = Math.sin;
-jai_imports.js_cos   = Math.cos;
-jai_imports.js_abs   = Math.abs;
-jai_imports.js_floor = Math.floor;
-
-// freetype checks this for some settings of whatever, put some stuff here
-// if you actually want to expose environment variables to wasm
-jai_imports.js_getenv = (_name) => {
-    return 0n;
-};
-
-
-
-
-let active_jmp_buf = 0n;
-
-jai_imports.js_setjmp = (jmp_buf) => {
-    const view = new DataView(jai_exports.memory.buffer);
-    const buf  = Number(jmp_buf);
-    
-    
-    // This checks wether this is the initial call to setjmp
-    // That wasn't called as part of a wasm_pause. We clear 
-    // the memory here because setjmp could be called by some
-    // C code that allocated the jmp_buf on the stack and did not
-    // initialize it.
-    if (active_jmp_buf === 0n && jmp_buf !== jmp_buf_for_pausing) {
-        view.setBigInt64(buf + JMP_BUF_OFFSET_TOP, 0n, true);
-        view.setBigInt64(buf + JMP_BUF_OFFSET_END, 0n, true);
-        view.setBigInt64(buf + JMP_BUF_OFFSET_UNWOUND, 0n, true);
-        view.setInt32(buf + JMP_BUF_OFFSET_STATE, 0, true);
-        view.setInt32(buf + JMP_BUF_OFFSET_VALUE, 0, true);
-    }
-    
-    if (active_jmp_buf !== 0n && active_jmp_buf !== jmp_buf) throw new Error(`unreachable? ${active_jmp_buf} ${jmp_buf}`);
-    
-    const state = view.getInt32(buf + JMP_BUF_OFFSET_STATE, true);
-    if (state === JMP_BUF_STATE_INITIALIZED) {
-        view.setInt32(buf + JMP_BUF_OFFSET_VALUE, 0, true);
-        view.setInt32(buf + JMP_BUF_OFFSET_STATE, JMP_BUF_STATE_CAPTURING, true);
-        
-        active_jmp_buf = jmp_buf;
-        jmp_buf_init(jmp_buf);
-        jai_exports.asyncify_start_unwind(jmp_buf);
-        
-        return 0; 
-    } else if (state === JMP_BUF_STATE_CAPTURING) {
-        if (active_jmp_buf !== jmp_buf) throw new Error(`unreachable? ${active_jmp_buf} ${jmp_buf}`);
-        view.setInt32(buf + JMP_BUF_OFFSET_STATE, JMP_BUF_STATE_CAPTURED, true);
-        active_jmp_buf = 0n;
-        jai_exports.asyncify_stop_rewind();
-        return 0;
-    } else if (state === JMP_BUF_STATE_RETURNING) {
-        jai_exports.asyncify_stop_rewind();
-        view.setInt32(buf + JMP_BUF_OFFSET_STATE, JMP_BUF_STATE_CAPTURED, true);
-        active_jmp_buf = 0n;
-        return view.getInt32(buf + JMP_BUF_OFFSET_VALUE, true);
-    } else {
-        throw new Error(`unreachable jmp_buf state ${state}`);
-    }
-};
-
-jai_imports.js_longjmp = (jmp_buf, value) => {
-    if (active_jmp_buf !== 0n) throw new Error(`Unreachable? ${active_jmp_buf} ${jmp_buf}`);
-    if (value === 0) throw new Error("Dude do not pass 0 to longjmp what is wrong with you?");
-    
-    const view = new DataView(jai_exports.memory.buffer);
-    const buf  = Number(jmp_buf);
-    view.setInt32(buf + JMP_BUF_OFFSET_STATE, JMP_BUF_STATE_RETURNING, true);
-    view.setInt32(buf + JMP_BUF_OFFSET_VALUE, value, true);
-    
-    // It would be really cool if there was a way to just unwind without doing any of the saving.
-    // But after staring at https://github.com/WebAssembly/binaryen/blob/main/src/passes/Asyncify.cpp
-    // for way too long trying to make asyncify_start_unwind() not save the locals if the provided
-    // jmp_buf was null I gave up. So for now our runtime has to allocate another 4096 bytes to make
-    // this work. If you or a loved one could figure this out, I would be very happy.
-    // -nzizic, 1 July 2025
-    jmp_buf_init(jmp_buf_for_garbage);
-    jai_exports.asyncify_start_unwind(jmp_buf_for_garbage);
-    active_jmp_buf = jmp_buf;
-};
-
-
-
-/*
-
-@Volatile has to match definitions in Toolchains/Web/module.jai
-
-TODO: document this crazyness more fully
-setjmp/logjmp implementation
-used by libc and our wasm_pause/wasm_resume
-
-ASYNC_BUF_SIZE :: 4096;
-
-jmp_buf_header :: struct {
-    top: *void;
-    end: *void;
-    unwound: *void;
-    state: s32;
-    value: s32;
-};
-
-jmp_buf :: struct {
-    using header: jmp_buf_header;
-    buffer: [ASYNC_BUF_SIZE - sizeof(jmp_buf_header)]u8;
-};
-
-*/
-
-const JMP_BUF_SIZE = 4096n;
-
-const JMP_BUF_STATE_INITIALIZED = 0;
-const JMP_BUF_STATE_CAPTURING   = 1;
-const JMP_BUF_STATE_CAPTURED    = 2;
-const JMP_BUF_STATE_RETURNING   = 3;
-const JMP_BUF_STATE_PAUSING    = 4;
-
-const JMP_BUF_OFFSET_TOP     = 0;
-const JMP_BUF_OFFSET_END     = 8;
-const JMP_BUF_OFFSET_UNWOUND = 16;
-const JMP_BUF_OFFSET_STATE   = 24;
-const JMP_BUF_OFFSET_VALUE   = 28;
-const JMP_BUF_OFFSET_PAYLOAD = 32;
-
-const jmp_buf_log_header = (_jmp_buf) => {
-    const jmp_buf = Number(_jmp_buf);
-    const view = new DataView(jai_exports.memory.buffer);
-    console.log(`jmp_buf: 0x${jmp_buf.toString(16)}
-    top: 0x${view.getBigInt64(jmp_buf + JMP_BUF_OFFSET_TOP, true).toString(16)}
-    end: 0x${view.getBigInt64(jmp_buf + JMP_BUF_OFFSET_END, true).toString(16)}
-    unwound: 0x${view.getBigInt64(jmp_buf + JMP_BUF_OFFSET_UNWOUND, true).toString(16)}
-    state: ${view.getInt32(jmp_buf + JMP_BUF_OFFSET_STATE, true)}
-    value: ${view.getInt32(jmp_buf + JMP_BUF_OFFSET_VALUE, true)}
-    `);
-};
-
-const jmp_buf_init = (jmp_buf) => {
-    const view = new DataView(jai_exports.memory.buffer);
-    const buf  = Number(jmp_buf);
-    view.setBigInt64(buf + JMP_BUF_OFFSET_TOP, BigInt(buf + JMP_BUF_OFFSET_PAYLOAD), true);
-    view.setBigInt64(buf + JMP_BUF_OFFSET_END, jmp_buf + JMP_BUF_SIZE, true);
-    view.setBigInt64(buf + JMP_BUF_OFFSET_UNWOUND, 0n, true);
-};
-
-// wasm_prepare_rewind returns true if active_jmp_buf was unwound with
-// the intention of being rewound immediately (setjmp was called)
-// and returns false if active_jmp_buf was unwound with the intent
-// of being rewound at a later point (wasm_pause was called).
-const wasm_prepare_for_rewind = () => {
-    const view  = new DataView(jai_exports.memory.buffer);
-    const buf   = Number(active_jmp_buf);
-    const state = view.getInt32(buf + JMP_BUF_OFFSET_STATE, true);
-    const value = view.getInt32(buf + JMP_BUF_OFFSET_VALUE, true);
-    
-    switch (state) {
-    case JMP_BUF_STATE_PAUSING: {
-        active_jmp_buf = 0n;
-        return false;
-    }
-    case JMP_BUF_STATE_CAPTURING: {
-        view.setBigInt64(
-            buf + JMP_BUF_OFFSET_UNWOUND,
-            view.getBigInt64(buf + JMP_BUF_OFFSET_TOP, true),
-            true
-        );
-    } break;
-    case JMP_BUF_STATE_CAPTURED:
-    case JMP_BUF_STATE_RETURNING: {
-        view.setBigInt64(
-            buf + JMP_BUF_OFFSET_TOP,
-            view.getBigInt64(buf + JMP_BUF_OFFSET_UNWOUND, true),
-            true
-        );
-    } break;
-    default: {
-        jmp_buf_log_header(active_jmp_buf);
-        throw Error(`unreachable active_jmp_buf state ${state}`);
-    }
-    }
-    
-    return true;
-};
-
-
-const wasm_pause = () => {
-    const value = jai_imports.js_setjmp(jmp_buf_for_pausing);
-    const view  = new DataView(jai_exports.memory.buffer);
-    const buf   = Number(jmp_buf_for_pausing);
-    const state = view.getInt32(buf + JMP_BUF_OFFSET_STATE, true);
-    
-    switch (state) {
-    case JMP_BUF_STATE_CAPTURING : view.setInt32(buf + JMP_BUF_OFFSET_STATE, JMP_BUF_STATE_PAUSING,     true); break;
-    case JMP_BUF_STATE_CAPTURED  : view.setInt32(buf + JMP_BUF_OFFSET_STATE, JMP_BUF_STATE_INITIALIZED, true); break;
-    }
-    return value;
-};
-
-// TODO: try compiling a to a library with a different js header that does a Proxy thing that sets entry_point
-const wasm_resume = (value) => {
-    jai_imports.js_longjmp(jmp_buf_for_pausing, value);
-    active_jmp_buf = 0n;
-    jai_exports.asyncify_start_rewind(jmp_buf_for_pausing);
-    entry_point();
-};
-
-// We have to do this because you cannot call context.logger (or any wasm procedure)
-// While in a suspended state. So use set_resume_error at the moment the error happens
-// and log_resume_error when resuming execution, See File.js for examples
-let resume_error_message = "";
-const set_resume_error = (message) => { resume_error_message = message;      }
-const log_resume_error = ()        => { jai_log_error(resume_error_message); }
-
-
-
 
 /*
 
@@ -610,130 +219,6 @@ const null_context_stack_trace = () => {
     view.setBigInt64(context_stack_trace_address, 0n, true);
 };
 
-    throw `Could not find ${name} in the wasm module!`;
-}
-    
-// TODO: expose a proper jai_log_* that use get_caller_location() and jai_exports.jai_log()
-const jai_log_error = (message) => {
-    const encoder = text_encoder ?? new TextEncoder();
-    const source  = encoder.encode(message);
-    const count   = BigInt(source.length);
-    const data    = jai_exports.temporary_alloc(jai_context, count);
-    new Uint8Array(jai_exports.memory.buffer, Number(data), source.length).set(source);
-    jai_exports.context_log(jai_context, data, count);
-};
-
-const get_caller_location = () => {
-    const lines = new Error().stack.split("\n");
-    const location     = lines[3].split("at ")[1];
-    const start_column = location.lastIndexOf(":");
-    const start_line   = location.lastIndexOf(":", start_column-1);
-    return {
-        file   : location.substring(0, start_line),
-        line   : Number(location.substring(start_line+1, start_column)),
-        column : Number(location.substring(start_column+1)),
-    };
-}
-
-
-// Since passing strings to and from wasm land sucks big time and 
-// a lot of time we are just passing constants, we are going to maintain
-// a cache of constants that we copy over so that we do not copy every frame
-const constant_string_table = new Map();
-
-const text_decoder = new TextDecoder();
-const copy_string_to_js = (count, data, is_constant) => {
-    if (!is_constant) {
-        const u8 = new Uint8Array(jai_exports.memory.buffer)
-        const bytes = u8.subarray(Number(data), Number(data) + Number(count));
-        const result = text_decoder.decode(bytes);
-        // console.log(`normal decode "${result}"`);
-        return result;
-    }
-    
-    const key = (count << 64n) | data;
-    const str = constant_string_table.get(key);
-    if (str !== undefined) {
-        // console.log(`cached decdode "${str}"!`);
-        return str;
-    }
-    
-    const u8 = new Uint8Array(jai_exports.memory.buffer)
-    const bytes = u8.subarray(Number(data), Number(data) + Number(count));
-    const result = text_decoder.decode(bytes);
-    constant_string_table.set(key, result);
-    // console.log(`caching decode "${result}"`);
-    return result;  
-};
-
-const text_encoder = new TextEncoder();
-const copy_string_from_js = (jai_string_pointer, js_string) => {
-    const source = text_encoder.encode(js_string);
-    const count  = BigInt(source.length);
-    const data   = jai_exports.context_alloc(jai_context, count); // should we expose this with other allocators or should the user just copy this if they need to?
-    
-    const view = new DataView(jai_exports.memory.buffer);
-    const base = Number(jai_string_pointer);
-    view.setBigInt64(base + 0, count, true);
-    view.setBigInt64(base + 8, data, true);
-    
-    const destination = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(count));
-    destination.set(source);
-}
-
-// console.log and console.error always add newlines so we need to buffer the output from write_string
-// to simulate a more basic I/O behavior. We’ll flush it after a certain time so that you still
-// see the last line if you forget to terminate it with a newline for some reason.
-let console_buffer = "";
-let console_buffer_is_standard_error;
-let console_timeout;
-const FLUSH_CONSOLE_AFTER_MS = 3;
-const flush_console_buffer = () => {
-    if (!console_buffer) return;
-
-    if (console_buffer_is_standard_error) {
-        console.error(console_buffer);
-    } else {
-        console.log(console_buffer);
-    }
-
-    console_buffer = "";
-};
-
-const write_to_console_log = (str, to_standard_error) => {
-    if (console_buffer && console_buffer_is_standard_error != to_standard_error) {
-        flush_console_buffer();
-    }
-
-    console_buffer_is_standard_error = to_standard_error;
-    const lines = str.split("\n");
-    for (let i = 0; i < lines.length - 1; i++) {
-        console_buffer += lines[i];
-        flush_console_buffer();
-    }
-
-    console_buffer += lines[lines.length - 1];
-
-    clearTimeout(console_timeout);
-    if (console_buffer) {
-        console_timeout = setTimeout(() => { flush_console_buffer(); }, FLUSH_CONSOLE_AFTER_MS);
-    }
-}
-
-jai_imports.js_get_web_message_received = (data, count, recv_ptr) => {
-    const dest = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(count));
-
-    dest.set(web_buffer);
-
-    // Interpret recv_ptr as a s64 pointer to jai_exports.memory
-    const view = new DataView(jai_exports.memory.buffer);
-    const recv_address = Number(recv_ptr);
-
-    view.setBigInt64(recv_address, BigInt(web_buffer_cursor), true);
-
-    web_buffer_cursor = 0;
-};
-
 jai_imports.js_get_token = () => {
     if (sessionStorage.getItem("token")) {
         return parseInt(sessionStorage.getItem("token"), 10);
@@ -745,6 +230,77 @@ jai_imports.js_set_token = (token) => {
     sessionStorage.setItem("token", token);
 };
 
+jai_imports.memcmp = (a, b, count) => {
+	const [na, nb, nc] = [Number(a), Number(b), Number(count)];
+	const u8    = new Uint8Array(jai_exports.memory.buffer);
+	const buf_a = u8.subarray(na, na + nc);
+	const buf_b = u8.subarray(nb, nb + nc);
+	for (let i = 0; i < count; i++) {
+		const delta = Number(buf_a[i]) - Number(buf_b[i]);
+		if (delta !== 0) return delta;
+	}
+	return 0;
+};
+
+jai_imports.js_debug_break = () => { debugger; };
+
+// console.log and console.error always add newlines so we need to buffer the output from write_string
+// to simulate a more basic I/O behavior. We’ll flush it after a certain time so that you still
+// see the last line if you forget to terminate it with a newline for some reason.
+let console_buffer = "";
+let console_buffer_is_standard_error;
+let console_timeout;
+const FLUSH_CONSOLE_AFTER_MS = 3;
+const flush_console_buffer = () => {
+	if (!console_buffer) return;
+
+	if (console_buffer_is_standard_error) {
+		console.error(console_buffer);
+	} else {
+		console.log(console_buffer);
+	}
+
+	console_buffer = "";
+};
+
+const write_to_console_log = (str, to_standard_error) => {
+	if (console_buffer && console_buffer_is_standard_error != to_standard_error) {
+		flush_console_buffer();
+	}
+
+	console_buffer_is_standard_error = to_standard_error;
+	const lines = str.split("\n");
+	for (let i = 0; i < lines.length - 1; i++) {
+		console_buffer += lines[i];
+		flush_console_buffer();
+	}
+
+	console_buffer += lines[lines.length - 1];
+
+	clearTimeout(console_timeout);
+	if (console_buffer) {
+		console_timeout = setTimeout(() => { flush_console_buffer(); }, FLUSH_CONSOLE_AFTER_MS);
+	}
+}
+
+jai_imports.wasm_write_string = (s_count, s_data, to_standard_error) => {
+	const string = getStringX(s_data, s_count);
+	write_to_console_log(string, to_standard_error);
+};
+jai_imports.wasm_debug_break = () => {
+	debugger;
+};
+
+jai_imports.js_get_current_time_monotonic = (low_ptr, high_ptr) => {
+	const epoch = new Date("1969-07-20T20:17:40Z").getTime();
+	const now = performance.now() + performance.timeOrigin - epoch;
+	const fs = BigInt(Math.round(now)) * 1000n * 1000n * 1000n * 1000n;
+	const high = fs >> 64n;
+	const low = fs & ((1n << 64n) - 1n)
+
+	setU64(low_ptr, 0, low);
+	setU64(high_ptr, 0, high);
+}
 
 //IO
 const Key_A = 0;
@@ -807,12 +363,15 @@ const Key_Period = 56;
 const Key_Backspace = 57;
 const Key_Left = 58;
 const Key_Right = 59;
+const Key_Count = 60;
+const Mouse_X = 128;
+const Mouse_Y = 132;
+const Mouse_Wheel = 136;
+const Window_W = 140;
+const Window_H = 144;
+const Control_Token = 148;
 
-let key_buffer = [];
-
-let mouse_x = 0;
-let mouse_y = 0;
-let mouse_wheel_delta = 0;
+let controls_buffer = new SharedArrayBuffer(256);
 
 const mapKeyNameToKeyIndex = (e) => {
 	const lowered = e.toLowerCase();
@@ -880,8 +439,8 @@ const mapKeyNameToKeyIndex = (e) => {
 
 document.addEventListener("keydown", (e) => {
 	const keyIndex = mapKeyNameToKeyIndex(e.key);
-	if (keyIndex !== -1) {
-		key_buffer[keyIndex] = true;
+	if (0 <= keyIndex && keyIndex < Key_Count) {
+		new DataView(controls_buffer).setUint8(keyIndex, 1);
 		if (e.preventDefault) {
 			e.preventDefault();
 		}
@@ -890,8 +449,8 @@ document.addEventListener("keydown", (e) => {
 
 document.addEventListener("keyup", (e) => {
 	const keyIndex = mapKeyNameToKeyIndex(e.key);
-	if (keyIndex !== -1) {
-		key_buffer[keyIndex] = false;
+	if (0 <= keyIndex && keyIndex < Key_Count) {
+		new DataView(controls_buffer).setUint8(keyIndex, 0);
 		if (e.preventDefault) {
 			e.preventDefault();
 		}
@@ -900,21 +459,21 @@ document.addEventListener("keyup", (e) => {
 
 document.addEventListener("mousedown", (e) => {
 	if (e.button === 0) {
-		key_buffer[Key_MouseLeft] = true;
+		new DataView(controls_buffer).setUint8(Key_MouseLeft, 1);
 	} else if (e.button === 1) {
-		key_buffer[Key_MouseMiddle] = true;
+		new DataView(controls_buffer).setUint8(Key_MouseMiddle, 1);
 	} else if (e.button === 2) {
-		key_buffer[Key_MouseRight] = true;
+		new DataView(controls_buffer).setUint8(Key_MouseRight, 1);
 	}
 });
 
 document.addEventListener("mouseup", (e) => {
 	if (e.button === 0) {
-		key_buffer[Key_MouseLeft] = false;
+		new DataView(controls_buffer).setUint8(Key_MouseLeft, 0);
 	} else if (e.button === 1) {
-		key_buffer[Key_MouseMiddle] = false;
+		new DataView(controls_buffer).setUint8(Key_MouseMiddle, 0);
 	} else if (e.button === 2) {
-		key_buffer[Key_MouseRight] = false;
+		new DataView(controls_buffer).setUint8(Key_MouseRight, 0);
 	}
 });
 
@@ -924,63 +483,35 @@ document.addEventListener("mousemove", (e) => {
 		return;
 	}
 	const rect = canvas.getBoundingClientRect();
-	mouse_x = e.clientX - rect.left;
-	mouse_y = e.clientY - rect.top;
+	new DataView(controls_buffer).setUint32(Mouse_X, e.clientX - rect.left);
+	new DataView(controls_buffer).setUint32(Mouse_Y, e.clientY - rect.top);
 });
 
 document.addEventListener("wheel", (e) => {
 	// Prevent scrolling the page
 	e.preventDefault();
-
-	mouse_wheel_delta -= e.deltaY;
+	let w = new DataView(controls_buffer).getFloat32(Mouse_Wheel);
+	w -= e.deltaY;
+	new DataView(controls_buffer).setFloat32(Mouse_Wheel, w);
 });
 
-jai_imports.jsGetKeyState = (key_map_ptr, key_map_count) => {
+jai_imports.js_get_key_state = (key_map_ptr, key_map_count) => {
 	for (let i = 0; i < key_map_count; i++) {
-		const index = key_buffer[i] ? 1 : 0;
-		setU8(key_map_ptr, i, index);
+		setU8(key_map_ptr, i, new DataView(controls_buffer).getUint8(i));
 	}
 }
 
-jai_imports.wasm_write_string = (s_count, s_data, to_standard_error) => {
-	try {
-		data_view.byteLength;
-	} catch {
-		data_view = new DataView(jai_exports.memory.buffer);
-	}
-
-	const string = new TextDecoder().decode(
-		new Uint8Array(jai_exports.memory.buffer, Number(s_data), Number(s_count))
-	);
-	write_to_console_log(string, to_standard_error);
-};
-
-jai_imports.wasm_debug_break = () => {
-	debugger;
-};
-
-jai_imports.jsGetCurrentTimeMonotonic = (low_ptr, high_ptr) => {
-	const epoch = new Date("1969-07-20T20:17:40Z").getTime();
-	const now = performance.now() + performance.timeOrigin - epoch;
-	const fs = BigInt(Math.round(now)) * 1000n * 1000n * 1000n * 1000n;
-	const high = fs >> 64n;
-	const low = fs & ((1n << 64n) - 1n)
-
-	setU64(low_ptr, 0, low);
-	setU64(high_ptr, 0, high);
+jai_imports.js_get_mouse_pointer = (x_ptr, y_ptr) => {
+	setU32(x_ptr, 0, new DataView(controls_buffer).getUint32(Mouse_X));
+	setU32(y_ptr, 0, new DataView(controls_buffer).getUint32(Mouse_Y));
 }
 
-jai_imports.jsGetMousePointer = (x_ptr, y_ptr) => {
-	setU32(x_ptr, 0, mouse_x);
-	setU32(y_ptr, 0, mouse_y);
+jai_imports.js_get_mouse_wheel_delta = (delta_ptr) => {
+	setF32(delta_ptr, 0, new DataView(controls_buffer).getFloat32(Mouse_Wheel));
+	new DataView(controls_buffer).setFloat32(Mouse_Wheel, 0)
 }
 
-jai_imports.jsGetMouseWheelDelta = (delta_ptr) => {
-	setF32(delta_ptr, 0, mouse_wheel_delta);
-	mouse_wheel_delta = 0;
-}
-
-jai_imports.jsGetDimensions = (dim_ptr) => {
+jai_imports.js_get_dimemsions = (dim_ptr) => {
 	const canvas = document.getElementById("webgpu-canvas");
 	if (!canvas) {
 		setU32(dim_ptr, 0, 0);
@@ -989,90 +520,11 @@ jai_imports.jsGetDimensions = (dim_ptr) => {
 		setU32(dim_ptr, 12, 0);
 		return;
 	}
-	setU32(dim_ptr, 0, canvas.x);
-	setU32(dim_ptr, 4, canvas.y);
-	setU32(dim_ptr, 8, canvas.width);
-	setU32(dim_ptr, 12, canvas.height);
+	setU32(dim_ptr, 0, 0);
+	setU32(dim_ptr, 4, 0);
+	setU32(dim_ptr, 8, new DataView(controls_buffer).getUint32(Window_W));
+	setU32(dim_ptr, 12, new DataView(controls_buffer).getUint32(Window_H));
 }
-
-let web_buffer = new Uint8Array(1024*1024*32);
-let web_buffer_cursor = 0;
-let websocket;
-jai_imports.jsConnectServer = (
-	protocol_ptr, protocol_len, address_ptr, address_len, port, success_ptr
-) => {
-	const address = new TextDecoder().decode(
-		new Uint8Array(jai_exports.memory.buffer, Number(address_ptr), Number(address_len))
-	);
-	const protocol = new TextDecoder().decode(
-		new Uint8Array(jai_exports.memory.buffer, Number(protocol_ptr), Number(protocol_len))
-	);
-
-	const uri = `${protocol}://${address}:${port}/ws`;
-	console.log(`Connecting to server at ${uri}...`);
-	websocket = new WebSocket(uri);
-	websocket.onopen = () => {
-		console.log("Websocket server opened !");
-	}
-	websocket.onerror = (e) => {
-		console.error("Websocket error:", e);
-	}
-	websocket.onclose = (e) => {
-		console.log("Websocket close", e);
-	}
-	websocket.onmessage = async (event) => {
-        // Append event.data to web_buffer at web_buffer_cursor
-        const blob = event.data;
-        const buffer = await blob.arrayBuffer();
-        const data = new Uint8Array(buffer);
-        // const data = new Uint8Array(await event.data.arrayBuffer());
-        if (web_buffer_cursor + data.length > web_buffer.length) {
-            console.error("Web buffer overflow, dropping message");
-            return;
-        }
-
-        web_buffer.set(data, web_buffer_cursor);
-        web_buffer_cursor += data.length;
-	}
-}
-
-jai_imports.jsIsServerConnected = (connected_ptr) => {
-	let connected = 0;
-	if (websocket && websocket.readyState === WebSocket.OPEN) {
-		connected = 1;
-	}
-	setU32(connected_ptr, 0, connected);
-}
-
-const copy_array_to_js = (count, data) => {
-    const u8 = new Uint8Array(jai_exports.memory.buffer)
-    const bytes = u8.subarray(Number(data), Number(data) + Number(count));
-    return bytes;
-}
-jai_imports.js_send_web_message = (data, length) => {
-    if (websocket.readyState != WebSocket.OPEN)
-        return;
-    const x = copy_array_to_js(length, data);
-    websocket.send(x);
-};
-
-jai_imports.js_get_web_message_received_buffer_count = (count_ptr) => {
-	setU64(count_ptr, 0, web_buffer_cursor);
-};
-
-jai_imports.js_get_web_message_received = (data, count, recv_ptr) => {
-    const dest = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(count));
-
-    dest.set(web_buffer.subarray(0, Number(count)));
-
-    // Interpret recv_ptr as a s64 pointer to jai_exports.memory
-    const view = new DataView(jai_exports.memory.buffer);
-    const recv_address = Number(recv_ptr);
-
-    view.setBigInt64(recv_address, BigInt(web_buffer_cursor), true);
-
-    web_buffer_cursor = 0;
-};
 
 jai_imports.js_get_token = () => {
     if (sessionStorage.getItem("token")) {
@@ -1083,8 +535,8 @@ jai_imports.js_get_token = () => {
 
 jai_imports.js_set_token = (token) => {
     sessionStorage.setItem("token", token);
+	new DataView(controls_buffer).setUint32(Control_Token, token);
 };
-
 
 
 //SOUND
@@ -1105,25 +557,22 @@ const blobToAudioBuffer = async (blob) => {
 	return await audio_context.decodeAudioData(buffer);
 }
 
-jai_imports.js_load_audio = (params_ptr) => {
+jai_imports.js_wait = new WebAssembly.Suspending(x => x);
+
+jai_imports.js_load_audio = async (params_ptr) => {
 	const data = getU64(params_ptr, 0);
 	const size = getU64(params_ptr, 8);
 	const id_ptr = getU64(params_ptr, 16);
 	const compressed = getU64(params_ptr, 24) != 0;
 
-	switch (wasm_pause()) {
-		case 0: (async () => {
-			const array = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(size));
-			const buffer = await blobToAudioBuffer(new Blob([array]));
+	const array = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(size));
+	const buffer = await blobToAudioBuffer(new Blob([array]));
 
-			audio_id_counter += 1;
-			const audio_id = audio_id_counter;
-			audio_id_to_buffer[audio_id] = buffer;
+	audio_id_counter += 1;
+	const audio_id = audio_id_counter;
+	audio_id_to_buffer[audio_id] = buffer;
 
-			setU64(id_ptr, 0, audio_id);
-			return +1;
-		})().then(wasm_resume); break;
-	}
+	setU64(id_ptr, 0, audio_id);
 }
 
 jai_imports.js_play_audio = (params_ptr) => {
@@ -1318,9 +767,6 @@ jai_imports.js_set_listener_info = (params_ptr) => {
 	audio_context.listener.setPosition(x, y, z);
 	audio_context.listener.setOrientation(forward_x, forward_y, forward_z, 0, 0, 1);
 }
-
-
-
 
 //WEBGPU
 let object_map = [];
@@ -1954,12 +1400,17 @@ const setU64 = (ptr, offset, value) => {
 	data_view.setBigUint64(Number(ptr) + Number(offset), BigInt(value), true);
 }
 
+const getStringX = (data, length) => {
+	const span = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(length));
+	const copy = new ArrayBuffer(Number(length));
+	new Uint8Array(copy).set(span);
+	return new TextDecoder().decode(copy);
+}
+
 const getString = (stringview_ptr) => {
 	const data = getU64(stringview_ptr, 0);
 	const length = getU64(stringview_ptr, 8);
-	return new TextDecoder().decode(
-		new Uint8Array(jai_exports.memory.buffer, Number(data), Number(length))
-	);
+	return getStringX(data, length);
 }
 
 jai_imports.js_memory_grew = () => {
@@ -1973,18 +1424,15 @@ jai_imports.jsCreateInstance = (params_ptr, returns_ptr) => {
 	setU64(returns_ptr, 0, object_map_counter);
 }
 
-jai_imports.jsInstanceRequestAdapter = (params_ptr, returns_ptr) => {
-	switch(wasm_pause()) {
-		case 0: (async () => {
-			const adapter = await navigator.gpu.requestAdapter();
+jai_imports.jsInstanceRequestAdapter = new WebAssembly.Suspending(
+	async (params_ptr, returns_ptr) => {
+		const adapter = await navigator.gpu.requestAdapter();
 
-			object_map_counter += 1;
-			object_map[object_map_counter] = adapter;
-			setU64(returns_ptr, 0, object_map_counter);
-			return +1;
-		})().then(wasm_resume); break;
+		object_map_counter += 1;
+		object_map[object_map_counter] = adapter;
+		setU64(returns_ptr, 0, object_map_counter);
 	}
-}
+);
 
 jai_imports.jsAdapterGetLimits = (params_ptr, returns_ptr) => {
 	const adapter_idx = getU64(params_ptr, 0);
@@ -2173,74 +1621,72 @@ jai_imports.jsAdapterRelease = (params_ptr, returns_ptr) => {
 	object_map[adapter_idx] = null;
 }
 
-jai_imports.jsAdapterRequestDevice = (params_ptr, returns_ptr) => {
-	const adapter_idx = getU64(params_ptr, 0);
-	const descriptor_ptr = getU64(params_ptr, 8);
-	if (adapter_idx == 0 || descriptor_ptr == 0) {
-		return;
+jai_imports.jsAdapterRequestDevice = new WebAssembly.Suspending(
+	async (params_ptr, returns_ptr) => {
+		const adapter_idx = getU64(params_ptr, 0);
+		const descriptor_ptr = getU64(params_ptr, 8);
+		if (adapter_idx == 0 || descriptor_ptr == 0) {
+			return;
+		}
+		const adapter = object_map[adapter_idx];
+
+		const feature_count = getU64(descriptor_ptr, 8 + 16);
+		const feature_ptr   = getU64(descriptor_ptr, 8 + 16 + 8);
+		const features = [];
+		for (let i = 0; i < feature_count; i++) {
+			const feature = getU32(feature_ptr, i * 4);
+			const feature_name = feature_enum_to_name(feature);
+			features.push(feature_name);
+		}
+
+		const limit_ptr = getU64(descriptor_ptr, 8 + 16 + 8 + 8); // ??
+		const defaultQueue_ptr = getU64(descriptor_ptr, 8 + 16 + 8 + 8 + 8); // ??
+		const deviceLostCallback_ptr = getU64(descriptor_ptr, 8 + 16 + 8 + 8 + 8 + 8); // ??
+		const uncapturedExceptions_ptr = getU64(descriptor_ptr, 8 + 16 + 8 + 8 + 8 + 8 + 8);
+
+		const uncapturedExceptionsCallback = getU64(uncapturedExceptions_ptr, 8);
+		const uncapturedExceptionsUserData1 = getU64(uncapturedExceptions_ptr, 16);
+		const uncapturedExceptionsUserData2 = getU64(uncapturedExceptions_ptr, 24);
+
+		const jsDescriptor = {
+			defaultQueue: { label: "<default-queue>" },
+			label: "<device-label>",
+			requiredFeatures: features,
+			requiredLimits: [],
+		};
+		const device = await adapter.requestDevice(jsDescriptor);
+		device.lost.then((info) => {
+			console.error("WebGPU device lost:", info);
+		});
+		device_used = device;
+		
+		object_map_counter += 1;
+		object_map[object_map_counter] = device;
+
+		const device_idx = object_map_counter;
+		
+		device.addEventListener('uncapturederror', event => {
+			console.error("WebGPU uncaptured error:", event.error);
+			const userData1 = uncapturedExceptionsUserData1;
+			const userData2 = uncapturedExceptionsUserData2;
+
+			const string_ptr = jai_exports.context_alloc(
+				jai_context, BigInt(event.error.message.length)
+			);
+
+			jai_exports.jaiAdapterRequestDeviceErrorCallback(
+				jai_context,
+				BigInt(device_idx),
+				BigInt(string_ptr),
+				BigInt(event.error.message.length),
+				BigInt(uncapturedExceptionsCallback),
+				BigInt(uncapturedExceptionsUserData1),
+				BigInt(uncapturedExceptionsUserData2)
+			);
+		});
+		setU64(returns_ptr, 0, object_map_counter);
 	}
-	const adapter = object_map[adapter_idx];
-
-	const feature_count = getU64(descriptor_ptr, 8 + 16);
-	const feature_ptr   = getU64(descriptor_ptr, 8 + 16 + 8);
-	const features = [];
-	for (let i = 0; i < feature_count; i++) {
-		const feature = getU32(feature_ptr, i * 4);
-		const feature_name = feature_enum_to_name(feature);
-		features.push(feature_name);
-	}
-
-	const limit_ptr = getU64(descriptor_ptr, 8 + 16 + 8 + 8); // ??
-	const defaultQueue_ptr = getU64(descriptor_ptr, 8 + 16 + 8 + 8 + 8); // ??
-	const deviceLostCallback_ptr = getU64(descriptor_ptr, 8 + 16 + 8 + 8 + 8 + 8); // ??
-	const uncapturedExceptions_ptr = getU64(descriptor_ptr, 8 + 16 + 8 + 8 + 8 + 8 + 8);
-
-	const uncapturedExceptionsCallback = getU64(uncapturedExceptions_ptr, 8);
-	const uncapturedExceptionsUserData1 = getU64(uncapturedExceptions_ptr, 16);
-	const uncapturedExceptionsUserData2 = getU64(uncapturedExceptions_ptr, 24);
-
-	const jsDescriptor = {
-		defaultQueue: { label: "<default-queue>" },
-		label: "<device-label>",
-		requiredFeatures: features,
-		requiredLimits: [],
-	};
-	switch(wasm_pause()) {
-		case 0: (async () => {
-			const device = await adapter.requestDevice(jsDescriptor);
-			device.lost.then((info) => {
-				console.error("WebGPU device lost:", info);
-			});
-			device_used = device;
-			
-			object_map_counter += 1;
-			object_map[object_map_counter] = device;
-
-			const device_idx = object_map_counter;
-			
-			device.addEventListener('uncapturederror', event => {
-				console.error("WebGPU uncaptured error:", event.error);
-				const userData1 = uncapturedExceptionsUserData1;
-				const userData2 = uncapturedExceptionsUserData2;
-
-				const string_ptr = jai_exports.context_alloc(
-					jai_context, BigInt(event.error.message.length)
-				);
-
-				jai_exports.jaiAdapterRequestDeviceErrorCallback(
-					jai_context,
-					BigInt(device_idx),
-					BigInt(string_ptr),
-					BigInt(event.error.message.length),
-					BigInt(uncapturedExceptionsCallback),
-					BigInt(uncapturedExceptionsUserData1),
-					BigInt(uncapturedExceptionsUserData2)
-				);
-			});
-			setU64(returns_ptr, 0, object_map_counter);
-		})().then(wasm_resume); break;
-	}
-}
+)
 
 jai_imports.jsDeviceGetQueue = (params_ptr, returns_ptr) => {
 	const device_idx = getU64(params_ptr, 0);
@@ -2577,6 +2023,8 @@ jai_imports.jsInstanceCreateSurface = (params_ptr, returns_ptr) => {
 	object_map[object_map_counter] = document.createElement('canvas');
 	object_map[object_map_counter].width = 1366;
 	object_map[object_map_counter].height = 768;
+	new DataView(controls_buffer).setUint32(Window_W, object_map[object_map_counter].width);
+	new DataView(controls_buffer).setUint32(Window_H, object_map[object_map_counter].height);
 	const canvas = object_map[object_map_counter];
 	canvas.id = "webgpu-canvas";
 	document.body.appendChild(canvas);
@@ -3301,25 +2749,25 @@ jai_imports.jsRenderPassEncoderRelease = (params_ptr, returns_ptr) => {
 }
 
 jai_imports.jsSurfacePresent = (params_ptr, returns_ptr) => {
-	const surface_idx = getU64(params_ptr, 0);
-	if (surface_idx <= 0) {
-		return;
-	}
+	// const surface_idx = getU64(params_ptr, 0);
+	// if (surface_idx <= 0) {
+	// 	return;
+	// }
 	
-	const surface = object_map[surface_idx];
-	if (!surface) {
-		return;
-	}
+	// const surface = object_map[surface_idx];
+	// if (!surface) {
+	// 	return;
+	// }
 
-	const vsync = true;
-	if (wasm_pause() === 0) {
-		const render_and_resume = () => {
-			wasm_resume(1);
-		};
+	// const vsync = true;
+	// if (wasm_pause() === 0) {
+	// 	const render_and_resume = () => {
+	// 		wasm_resume(1);
+	// 	};
 		
-		if (vsync) requestAnimationFrame(render_and_resume);
-		else       setTimeout(render_and_resume, 0);
-	}
+	// 	if (vsync) requestAnimationFrame(render_and_resume);
+	// 	else       setTimeout(render_and_resume, 0);
+	// }
 }
 
 jai_imports.jsTextureGetFormat = (params_ptr, returns_ptr) => {

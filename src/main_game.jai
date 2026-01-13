@@ -69,47 +69,28 @@ App_User :: struct {
 	gui_state: GUI.GUI_State;
 }
 
-#program_export "app_init" app_init :: (app: *App) {
-	Remap_Context();
+#program_export "app_update_loop" app_update_loop :: (app: *App) {
+	start_time := current_time_monotonic();
+	defer {
+		end_time := current_time_monotonic();
+		app_user := app.user_data.(*App_User);
+		app_user.state.history_app_update_loop_dt[app_user.state.history_cursor] = cast(float32) to_float64_seconds(end_time - start_time);
+	}
 
-	app_user := New(App_User);
+	Remap_Context();
+	auto_release_temp();
+	app_user := app.user_data.(*App_User);
 	app_user.app = app;
-	app.user_data = app_user.(*void);
 	app_user.state.platform = app.platform;
 	app_user.graphics.gpu = app.platform.gpu;
-	
-	WRender.init_graphics(app.platform, *app_user.graphics);
-	WRender.graphics = *app_user.graphics;
-	init_store(app.platform, *app_user.store);
-	GUI.gui_state_init(*app_user.gui_state, *app_user.store);
-	WRender.init_framegraph(*app_user.framegraph, *app_user.store);
-
-	Scene.make(*app_user.state.scene);
-	Scene.init_camera(*app_user.state.scene);
-
-	launch_music(app_user, app.platform);
-}
-
-#program_export "app_reload" app_reload :: (_app: *App) {
-	app_user := _app.user_data.(*App_User);
-
-	scene: Scene.Scene;
-	Scene.reload(*scene);
-}
-
-#program_export "app_loop" app_loop :: (_app: *App) -> bool {
-	app_user := _app.user_data.(*App_User);
-	Remap_Context();
-	reset_temporary_storage();
-
-	app_user.state.is_communication_established = _app.platform.is_server_connected();
+	app_user.state.is_communication_established = app.platform.is_server_connected();
 	app_user.state.is_connected &= app_user.state.is_communication_established;
 
-	_app.platform.get_frame_info(*app_user.allocated_frame_info);
+	app.platform.get_frame_info(*app_user.allocated_frame_info);
+	defer app.platform.end_frame();
 	app_user.state.current_time = app_user.allocated_frame_info.time;
-
 	if app_user.allocated_frame_info.quit
-		return false;
+		return;
 
 	GUI.begin_frame(*app_user.gui_state, app_user.allocated_frame_info, *app_user.controls, app_user.state.keyboard_layout);
 
@@ -138,18 +119,70 @@ App_User :: struct {
 	quit := false;
 	if app_user.state.screen_state == {
 		case .Menu;
-			quit = menu_loop(_app);
+			quit = menu_loop(app);
 		case .Game;
 			quit = game_loop(app_user);
 		case .Editor;
 			quit = editor_loop(app_user);
 	}
+}
 
+#program_export "app_init" app_init :: (app: *App) {
+	Remap_Context();
 
-	_app.platform.gpu.surfacePresent(app_user.graphics.surface);
-	_app.platform.end_frame();
+	app_user := New(App_User);
+	app.user_data = app_user.(*void);
+	app_user.app = app;
+	app_user.state.platform = app.platform;
+	app_user.graphics.gpu = app.platform.gpu;
+	WRender.init_graphics(app.platform, *app_user.graphics);
+	WRender.graphics = *app_user.graphics;
+	init_store(app.platform, *app_user.store);
+	GUI.gui_state_init(*app_user.gui_state, *app_user.store);
+	WRender.init_framegraph(*app_user.framegraph, *app_user.store);
 
-	return quit;
+	Scene.make(*app_user.state.scene);
+	Scene.init_camera(*app_user.state.scene);
+
+	launch_music(app_user, app.platform);
+}
+
+#program_export "app_reload_before" app_reload_before :: (_app: *App) {
+	Remap_Context();
+	reset_temporary_storage();
+}
+#program_export "app_reload" app_reload :: (_app: *App) {
+	Remap_Context();
+	app_user := _app.user_data.(*App_User);
+	app_user.app = _app;
+	app_user.state.platform = _app.platform;
+	app_user.graphics.gpu = _app.platform.gpu;
+	WRender.graphics = *app_user.graphics;
+
+	scene: Scene.Scene;
+	Scene.reload(*scene);
+}
+
+#program_export "app_loop" app_loop :: (_app: *App) -> bool {
+	start_time := current_time_monotonic();
+	defer {
+		end_time := current_time_monotonic();
+		app_user := _app.user_data.(*App_User);
+		app_user.state.history_app_loop_dt[app_user.state.history_cursor] = cast(float32) to_float64_seconds(end_time - start_time);
+	}
+
+	app_user := _app.user_data.(*App_User);
+	app_user.app = _app;
+	app_user.state.platform = _app.platform;
+	app_user.graphics.gpu = _app.platform.gpu;
+	Remap_Context();
+	auto_release_temp();
+
+	to_present := WRender.present_frame(*app_user.framegraph, *app_user.store);
+	if to_present
+		_app.platform.gpu.surfacePresent(app_user.graphics.surface);
+
+	return true;
 }
 #load "menu_loop.jai";
 #load "game_loop.jai";
@@ -196,8 +229,10 @@ State :: struct {
 	ntp_history_cursor := 0;
 
 	received_command_history: [..] Command.payload.Kind;
-	
+
 	history_dt: [100] float;
+	history_app_update_loop_dt: [100] float;
+	history_app_loop_dt: [100] float;
 	history_cursor := 0;
 	render_fps := false;
 	render_command_debug := false;

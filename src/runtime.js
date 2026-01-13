@@ -245,6 +245,7 @@ const copy_array_to_js = (count, data) => {
     const bytes = u8.subarray(Number(data), Number(data) + Number(count));
     return bytes;
 }
+
 jai_imports.js_send_web_message = (data, length) => {
     if (websocket.readyState != WebSocket.OPEN)
         return;

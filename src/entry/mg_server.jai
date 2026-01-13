@@ -126,25 +126,27 @@ main :: () {
 	loop := true;
 	while (loop) {
 		#if OS == .WINDOWS {
-			if dll {
-				file := Win32.CreateFileA("IceEscapeServer.dll", Win32.FILE_GENERIC_READ);
-				defer Win32.CloseHandle(file);
+			// if dll {
+			// 	file := Win32.CreateFileA("IceEscapeServer.dll", Win32.FILE_GENERIC_READ);
+			// 	defer Win32.CloseHandle(file);
 
-				time_struct: Win32.FILETIME;
-				Win32.GetFileTime(file, null, null, *time_struct);
+			// 	time_struct: Win32.FILETIME;
+			// 	Win32.GetFileTime(file, null, null, *time_struct);
 
-				if time_struct.QuadPart != dll_last_write {
-					print("Reloading DLL...\n");
-					reload_dll();
-					dll_last_write = time_struct.QuadPart;
-				}
-			}
+			// 	if time_struct.QuadPart != dll_last_write {
+			// 		print("Reloading DLL...\n");
+			// 		reload_dll();
+			// 		dll_last_write = time_struct.QuadPart;
+			// 	}
+			// }
 
 			if dll {
 				// Get the function pointer of app_loop
 				app_loop := Win32.GetProcAddress(dll, "app_loop").(#type (app: *App) -> bool);
 				if app_loop {
 					loop = app_loop(*app);
+				} else {
+					print("App loop not found \n");
 				}
 			}
 		} else {
