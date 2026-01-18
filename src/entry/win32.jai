@@ -185,6 +185,27 @@ send_web_message :: (msg: [] u8, connection: Connection) {
 	array_add(*messages_pending, message);
 }
 
+win32_send_web_messages :: (msg_pool: [] u8, msg_indices: [] int, connection: Connection) {
+	push_context,defer_pop launcher_context;
+
+	before := 0;
+	for msg_indices {
+		count := it - before;
+
+		message: Message;
+		array_resize(*message.data, count);
+		memcpy(message.data.data, msg_pool.data + before, count);
+		message.sent_time = current_time_monotonic();
+		array_add(*messages_pending, message);
+
+		before = it;
+	}
+}
+
+win32_get_current_time :: () -> Apollo_Time {
+	return current_time_monotonic();
+}
+
 win32_get_token :: () -> int {
 	push_context,defer_pop launcher_context;
 	args := get_command_line_arguments();
@@ -237,7 +258,6 @@ platform_state: Platform_State;
 
 win32_get_frame_info :: (info: *Frame_Info) {
 	info.* = .{};
-	push_context,defer_pop launcher_context;
 	// Setup display size (every frame to accommodate for window resizing)
 
 	info.window_size = .{ xx platform_state.width, xx platform_state.height };
@@ -285,8 +305,7 @@ win32_get_frame_info :: (info: *Frame_Info) {
 		msg := platform_state.message_arrived[it % platform_state.message_arrived.count];
 
 		info.message_received_count += 1;
-		info.message_received[info.message_received_count - 1].data =
-			NewArray(msg.data.count, u8, initialized = false,, temp);
+		info.message_received[info.message_received_count - 1].data = msg.data;
 		info.message_received[info.message_received_count - 1].sender = 0;
 		memcpy(
 			info.message_received[info.message_received_count - 1].data.data,
@@ -333,6 +352,10 @@ win32_end_frame :: () {
 	process_changes(*watcher);
 }
 
+win32_sleep :: (ms: int) {
+	sleep_milliseconds(xx ms);
+}
+
 Win32_Sound :: struct {
 	audio_id: int;
 	sound: *ma_sound;
@@ -346,6 +369,7 @@ audio_counter := 0;
 sound_counter := 0;
 
 load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_ref {
+	return 0;
 	push_context,defer_pop launcher_context;
 	audio_counter += 1;
 
@@ -362,6 +386,7 @@ load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_r
 
 
 play_audio :: (audio: Audio, position: V3f) -> Sound {
+	return .{};
 	push_context,defer_pop launcher_context;
 	ok, data := table_find(*audio_id_to_data, audio.id);
 	
@@ -417,6 +442,8 @@ play_audio :: (audio: Audio, position: V3f) -> Sound {
 	return sound;
 }
 set_listener_info :: (listener: Listener) {
+	return;
+	
 	push_context,defer_pop launcher_context;
 	ma_engine_listener_set_position(
 		*audio_engine, 0, listener.position.x, listener.position.y, listener.position.z
@@ -428,6 +455,7 @@ set_listener_info :: (listener: Listener) {
 	ma_engine_listener_set_enabled(*audio_engine, 0, xx true);
 }
 query_sound :: (sound_id: int) -> Sound {
+	return .{};
 	push_context,defer_pop launcher_context;
 	sound: Sound;
 	sound.id = -1;
@@ -452,7 +480,7 @@ query_sound :: (sound_id: int) -> Sound {
 	return sound;
 }
 set_sound :: (sound: Sound) {
-	push_context,defer_pop launcher_context;
+	return;
 	ok, win32_sound := table_find(*sound_id_to_sound, sound.id);
 	if ok && win32_sound.sound {
 		ma_sound_set_position(
@@ -471,6 +499,7 @@ set_sound :: (sound: Sound) {
 
 master_volume := 1.0;
 volume_audio :: (x: float) -> float {
+	return 0;
 	push_context,defer_pop launcher_context;
 	if x < 0
 		return master_volume;
@@ -582,6 +611,8 @@ init_platform :: () -> Platform {
 	platform.end_frame = win32_end_frame;
 	platform.send_web_message = send_web_message;
 	platform.get_token = win32_get_token;
+	platform.sleep = win32_sleep;
+	platform.get_current_time = win32_get_current_time;
 	platform.set_token = win32_set_token;
 	platform.query_sound = query_sound;
 	platform.set_sound = set_sound;
@@ -855,6 +886,7 @@ dll_mutex: Mutex;
 
 load_dll :: () {
 	Win32.CopyFileA("IceEscape.dll", "IceEscape_temp.dll", 0);
+	Win32.CopyFileA("IceEscape.pdb", "IceEscape_temp.pdb", 0);
 
 	dll = Win32.LoadLibraryA("IceEscape_temp.dll");
 	if dll == null {
@@ -882,8 +914,10 @@ reload_dll :: () {
 
 	dll_generation += 1;
 	dll_name := tprint("IceEscape_temp_%.dll\0", dll_generation);
+	pdb_name := tprint("IceEscape_temp_%.pdb\0", dll_generation);
 	print("Copying IceEscape to %\n", dll_name);
 	Win32.CopyFileA("IceEscape.dll", dll_name.data, 0);
+	Win32.CopyFileA("IceEscape.pdb", pdb_name.data, 0);
 
 	dll_reloaded := Win32.LoadLibraryA(dll_name.data);
 	if dll_reloaded == null {
@@ -904,7 +938,7 @@ reload_dll :: () {
 loop := true;
 
 update_thread_proc :: (thread: *Thread) -> s64 {
-	while loop {
+	while !platform_state.want_quit {
 		if dll {
 
 			lock(*dll_mutex);
@@ -1015,6 +1049,7 @@ main :: () {
 	platform := init_platform();
 	app.platform = *platform;
 	app.user_data = null;
+	launcher_context = context;
 
 	load_dll();
 	init(*dll_mutex);
@@ -1023,7 +1058,7 @@ main :: () {
 	thread_init(*update_thread, update_thread_proc);
 	thread_start(*update_thread);
 
-	while (loop) {
+	while !platform_state.want_quit {
 		FrameMarkStart();
 		platform_frame();
 
@@ -1042,6 +1077,12 @@ main :: () {
 		}
 
 		if dll {
+			// Get the function pointer of app_loop
+			// app_update_loop := Win32.GetProcAddress(dll, "app_update_loop").(#type (app: *App) -> bool);
+			// if app_update_loop {
+			// 	app_update_loop(*app);
+			// }
+
 			// Get the function pointer of app_loop
 			app_loop := Win32.GetProcAddress(dll, "app_loop").(#type (app: *App) -> bool);
 			if app_loop {

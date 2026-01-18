@@ -656,7 +656,9 @@ build_2 :: () {
 	linux := false;
 	publish := false;
 	bindings := false;
+	all := false;
 	for args {
+		all |= compare(it, "all") == 0;
 		clib |= compare(it, "clib") == 0;
 		game |= compare(it, "game") == 0;
 		server |= compare(it, "server") == 0;
@@ -666,6 +668,14 @@ build_2 :: () {
 		publish |= compare(it, "publish") == 0;
 		bindings |= compare(it, "bindings") == 0;
 	}
+	clib |= all;
+	game |= all;
+	server |= all;
+	wasm |= all;
+	win32 |= all;
+	linux |= all;
+	publish |= all;
+	bindings |= all;
 	game |= !clib && !server && !wasm && !win32 && !linux && !publish && !bindings;
 
 	if bindings

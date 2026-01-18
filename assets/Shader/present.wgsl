@@ -13,8 +13,9 @@ struct VertexOutput {
 
 
 @group(0) @binding(0) var<uniform> uniforms: UniformData;
-@group(0) @binding(1) var albedoMap: texture_multisampled_2d<f32>;
+@group(0) @binding(1) var albedoMap: texture_2d<f32>;
 @group(0) @binding(2) var uiMap: texture_2d<f32>;
+@group(0) @binding(3) var albedoSampler: sampler;
 
 @vertex fn vs(
 	@builtin(vertex_index) vertexIndex : u32
@@ -71,16 +72,75 @@ fn Tonemap_ACES(x: vec3f) -> vec3f
 	return (x * (a * x + b)) / (x * (c * x + d) + e);
 }
 
+fn fxaa(uv: vec2u) -> vec4f {
+	let SPAN_MAX = (8.0);
+	//These are more technnical and probably don't need changing:
+	//Minimum "dir" reciprocal
+	let REDUCE_MIN = (1.0/128.0);
+	//Luma multiplier for "dir" reciprocal
+	let REDUCE_MUL = (1.0/32.0);
+
+	let u_texel = vec2f(1.0 / uniforms.size.x, 1.0 / uniforms.size.y);
+	let rgbCC: vec3f = textureLoad(albedoMap, uv, 0).rgb;
+	let rgb00: vec3f = textureLoad(albedoMap, uv-vec2u(1,1), 0).rgb;
+	let rgb10: vec3f = textureLoad(albedoMap, uv+vec2u(1,0)-vec2u(0,1), 0).rgb;
+	let rgb01: vec3f = textureLoad(albedoMap, uv+vec2u(1,0)-vec2u(0,1), 0).rgb;
+	let rgb11: vec3f = textureLoad(albedoMap, uv+vec2u(1,1), 0).rgb;
+	
+	//Luma coefficients
+	let luma: vec3f = vec3f(0.299, 0.587, 0.114);
+	//Get luma from the 5 samples
+	let lumaCC = dot(rgbCC, luma);
+	let luma00 = dot(rgb00, luma);
+	let luma10 = dot(rgb10, luma);
+	let luma01 = dot(rgb01, luma);
+	let luma11 = dot(rgb11, luma);
+
+	
+	//Compute gradient from luma values
+	var dir = vec2((luma01 + luma11) - (luma00 + luma10), (luma00 + luma01) - (luma10 + luma11));
+	//Diminish dir length based on total luma
+	let dirReduce = max((luma00 + luma10 + luma01 + luma11) * REDUCE_MUL, REDUCE_MIN);
+	//Divide dir by the distance to nearest edge plus dirReduce
+	let rcpDir = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+	//Multiply by reciprocal and limit to pixel span
+	dir = clamp(dir * rcpDir, vec2f(-SPAN_MAX), vec2f(SPAN_MAX)) * u_texel.xy;
+	
+	//Average middle texels along dir line
+	let A = 0.5 * (
+		textureSample(albedoMap, albedoSampler, vec2f(uv) / uniforms.size - dir * (1.0/6.0)) +
+		textureSample(albedoMap, albedoSampler, vec2f(uv) / uniforms.size + dir * (1.0/6.0))
+	);
+	
+	//Average with outer texels along dir line
+	let B = A * 0.5 + 0.25 * (
+		textureSample(albedoMap, albedoSampler, vec2f(uv) / uniforms.size - dir * 0.5) +
+		textureSample(albedoMap, albedoSampler, vec2f(uv) / uniforms.size + dir * 0.5)
+	);
+		
+		
+	//Get lowest and highest luma values
+	let lumaMin = min(lumaCC, min(min(luma00, luma10), min(luma01, luma11)));
+	let lumaMax = max(lumaCC, max(max(luma00, luma10), max(luma01, luma11)));
+	
+	//Get average luma
+	let lumaB = dot(B.rgb, luma);
+	//If the average is outside the luma range, using the middle average
+	if ((lumaB < lumaMin) || (lumaB > lumaMax)) {
+		return A;
+	}
+	else {
+		return B;
+	}
+}
+
 fn sampleTexture(uv: vec2f) -> vec4f {
 	var pos: vec2<u32> = vec2<u32>(uv * uniforms.size);
 
 	var sum: vec4f = vec4f(0.0);
 	sum += textureLoad(albedoMap, pos, 0);
-	sum += textureLoad(albedoMap, pos, 1);
-	sum += textureLoad(albedoMap, pos, 2);
-	sum += textureLoad(albedoMap, pos, 3);
 
-	return sum / 4.0;
+	return sum / 1.0;
 }
 
 @fragment fn fs(
@@ -90,7 +150,10 @@ fn sampleTexture(uv: vec2f) -> vec4f {
 	var uuv = uv;
 	uuv.y = 1.0 - uv.y;
 
-	let color = sampleTexture(uuv);
+	var color = sampleTexture(uuv);
+	if uuv.y > 10 {
+		color = fxaa(vec2u(uuv * uniforms.size));
+	}
 	let mapped = CommerceToneMapping(color.rgb);
 	let gamma_corrected = pow(mapped, vec3f(1.0 / uniforms.gamma));
 

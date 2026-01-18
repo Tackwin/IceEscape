@@ -1,6 +1,10 @@
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import socket
 import select
+import time
+
+# Fake latency in seconds for WebSocket proxy (0 = no latency)
+FAKE_LATENCY = 0.0
 
 class COOPHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
@@ -45,6 +49,8 @@ class COOPHandler(SimpleHTTPRequestHandler):
                             data = self.connection.recv(4096)
                             if not data:
                                 break
+                            if FAKE_LATENCY > 0:
+                                time.sleep(FAKE_LATENCY)
                             backend.sendall(data)
                         except:
                             break
@@ -54,6 +60,8 @@ class COOPHandler(SimpleHTTPRequestHandler):
                             data = backend.recv(4096)
                             if not data:
                                 break
+                            if FAKE_LATENCY > 0:
+                                time.sleep(FAKE_LATENCY)
                             self.connection.sendall(data)
                         except:
                             break

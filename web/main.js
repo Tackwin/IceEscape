@@ -160,8 +160,22 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 
 	const module = await WebAssembly.compile(wasm_data);
 
-    const mainInstance = await WebAssembly.instantiate(module, imports);
-    jai_exports  = mainInstance.exports;
+	const mainInstance = await WebAssembly.instantiate(module, imports);
+	jai_exports  = mainInstance.exports;
+	jai_exports.wasm_init_buffers();
+	controls_buffer_data = Number(jai_exports.wasm_get_controls_buffer());
+
+	{
+		var token = 0;
+		if (sessionStorage.getItem("token")) {
+			token = parseInt(sessionStorage.getItem("token"), 10);
+		}
+		else
+			token = Math.random() * 1024 * 1024;
+		Atomics.store(getControlsBufferU32(), Control_Token, token);
+	}
+
+
 	const init = WebAssembly.promising(jai_exports.wasm_init);
 	jai_context = jai_exports.wasm_get_main_context();
 	await init();
@@ -185,7 +199,7 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 			jai_imports.js_set_token(e.data.set_token);
 		}
 	}
-	worker.postMessage({ module, memory: jai_imports.memory, controls_buffer });
+	worker.postMessage({ module, memory: jai_imports.memory });
 
 	// const worker_loop = WebAssembly.promising(jai_exports.wasm_worker_loop);
 }
@@ -226,8 +240,13 @@ jai_imports.js_get_token = () => {
     return Math.random() * 1024 * 1024;
 }
 
+jai_imports.js_sleep = new WebAssembly.Suspending(async (ms) => {
+	await new Promise(r => setTimeout(r, Number(ms)));
+})
+
 jai_imports.js_set_token = (token) => {
-    sessionStorage.setItem("token", token);
+	Atomics.store(getControlsBufferU32(), Control_Token, token);
+	sessionStorage.setItem("token", token);
 };
 
 jai_imports.memcmp = (a, b, count) => {
@@ -371,7 +390,16 @@ const Window_W = 140;
 const Window_H = 144;
 const Control_Token = 148;
 
-let controls_buffer = new SharedArrayBuffer(256);
+let controls_buffer_data = 0;
+const getControlsBufferU8 = () => {
+	return new Uint8Array(jai_exports.memory.buffer, controls_buffer_data, 256);
+}
+const getControlsBufferU32 = () => {
+	return new Uint32Array(jai_exports.memory.buffer, controls_buffer_data, 256);
+}
+const getControlsBufferF32 = () => {
+	return new Float32Array(jai_exports.memory.buffer, controls_buffer_data, 256);
+}
 
 const mapKeyNameToKeyIndex = (e) => {
 	const lowered = e.toLowerCase();
@@ -438,9 +466,10 @@ const mapKeyNameToKeyIndex = (e) => {
 };
 
 document.addEventListener("keydown", (e) => {
+	console.log("Key down", performance.now());
 	const keyIndex = mapKeyNameToKeyIndex(e.key);
 	if (0 <= keyIndex && keyIndex < Key_Count) {
-		new DataView(controls_buffer).setUint8(keyIndex, 1);
+		Atomics.store(getControlsBufferU8(), keyIndex, 1);
 		if (e.preventDefault) {
 			e.preventDefault();
 		}
@@ -450,7 +479,7 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("keyup", (e) => {
 	const keyIndex = mapKeyNameToKeyIndex(e.key);
 	if (0 <= keyIndex && keyIndex < Key_Count) {
-		new DataView(controls_buffer).setUint8(keyIndex, 0);
+		Atomics.store(getControlsBufferU8(), keyIndex, 0);
 		if (e.preventDefault) {
 			e.preventDefault();
 		}
@@ -459,21 +488,21 @@ document.addEventListener("keyup", (e) => {
 
 document.addEventListener("mousedown", (e) => {
 	if (e.button === 0) {
-		new DataView(controls_buffer).setUint8(Key_MouseLeft, 1);
+		Atomics.store(getControlsBufferU8(), Key_MouseLeft, 1);
 	} else if (e.button === 1) {
-		new DataView(controls_buffer).setUint8(Key_MouseMiddle, 1);
+		Atomics.store(getControlsBufferU8(), Key_MouseMiddle, 1);
 	} else if (e.button === 2) {
-		new DataView(controls_buffer).setUint8(Key_MouseRight, 1);
+		Atomics.store(getControlsBufferU8(), Key_MouseRight, 1);
 	}
 });
 
 document.addEventListener("mouseup", (e) => {
 	if (e.button === 0) {
-		new DataView(controls_buffer).setUint8(Key_MouseLeft, 0);
+		Atomics.store(getControlsBufferU8(), Key_MouseLeft, 0);
 	} else if (e.button === 1) {
-		new DataView(controls_buffer).setUint8(Key_MouseMiddle, 0);
+		Atomics.store(getControlsBufferU8(), Key_MouseMiddle, 0);
 	} else if (e.button === 2) {
-		new DataView(controls_buffer).setUint8(Key_MouseRight, 0);
+		Atomics.store(getControlsBufferU8(), Key_MouseRight, 0);
 	}
 });
 
@@ -483,48 +512,49 @@ document.addEventListener("mousemove", (e) => {
 		return;
 	}
 	const rect = canvas.getBoundingClientRect();
-	new DataView(controls_buffer).setUint32(Mouse_X, e.clientX - rect.left);
-	new DataView(controls_buffer).setUint32(Mouse_Y, e.clientY - rect.top);
+	const span = getControlsBufferU32();
+	Atomics.store(span, Mouse_X / 4, e.clientX - rect.left);
+	Atomics.store(span, Mouse_Y / 4, e.clientY - rect.top);
 });
 
 document.addEventListener("wheel", (e) => {
 	// Prevent scrolling the page
 	e.preventDefault();
-	let w = new DataView(controls_buffer).getFloat32(Mouse_Wheel);
+	let w = Atomics.load(getControlsBufferF32(), Mouse_Wheel / 4);
 	w -= e.deltaY;
-	new DataView(controls_buffer).setFloat32(Mouse_Wheel, w);
+	Atomics.store(getControlsBufferF32(), Mouse_Wheel / 4, w);
 });
 
-jai_imports.js_get_key_state = (key_map_ptr, key_map_count) => {
-	for (let i = 0; i < key_map_count; i++) {
-		setU8(key_map_ptr, i, new DataView(controls_buffer).getUint8(i));
-	}
-}
+// jai_imports.js_get_key_state = (key_map_ptr, key_map_count) => {
+// 	for (let i = 0; i < key_map_count; i++) {
+// 		setU8(key_map_ptr, i, getControlsBufferSpan().getUint8(i));
+// 	}
+// }
 
-jai_imports.js_get_mouse_pointer = (x_ptr, y_ptr) => {
-	setU32(x_ptr, 0, new DataView(controls_buffer).getUint32(Mouse_X));
-	setU32(y_ptr, 0, new DataView(controls_buffer).getUint32(Mouse_Y));
-}
+// jai_imports.js_get_mouse_pointer = (x_ptr, y_ptr) => {
+// 	setU32(x_ptr, 0, getControlsBufferSpan().getUint32(Mouse_X));
+// 	setU32(y_ptr, 0, getControlsBufferSpan().getUint32(Mouse_Y));
+// }
 
-jai_imports.js_get_mouse_wheel_delta = (delta_ptr) => {
-	setF32(delta_ptr, 0, new DataView(controls_buffer).getFloat32(Mouse_Wheel));
-	new DataView(controls_buffer).setFloat32(Mouse_Wheel, 0)
-}
+// jai_imports.js_get_mouse_wheel_delta = (delta_ptr) => {
+// 	setF32(delta_ptr, 0, getControlsBufferSpan().getFloat32(Mouse_Wheel));
+// 	getControlsBufferSpan().setFloat32(Mouse_Wheel, 0)
+// }
 
-jai_imports.js_get_dimemsions = (dim_ptr) => {
-	const canvas = document.getElementById("webgpu-canvas");
-	if (!canvas) {
-		setU32(dim_ptr, 0, 0);
-		setU32(dim_ptr, 4, 0);
-		setU32(dim_ptr, 8, 0);
-		setU32(dim_ptr, 12, 0);
-		return;
-	}
-	setU32(dim_ptr, 0, 0);
-	setU32(dim_ptr, 4, 0);
-	setU32(dim_ptr, 8, new DataView(controls_buffer).getUint32(Window_W));
-	setU32(dim_ptr, 12, new DataView(controls_buffer).getUint32(Window_H));
-}
+// jai_imports.js_get_dimemsions = (dim_ptr) => {
+// 	const canvas = document.getElementById("webgpu-canvas");
+// 	if (!canvas) {
+// 		setU32(dim_ptr, 0, 0);
+// 		setU32(dim_ptr, 4, 0);
+// 		setU32(dim_ptr, 8, 0);
+// 		setU32(dim_ptr, 12, 0);
+// 		return;
+// 	}
+// 	setU32(dim_ptr, 0, 0);
+// 	setU32(dim_ptr, 4, 0);
+// 	setU32(dim_ptr, 8, getControlsBufferSpan().getUint32(Window_W));
+// 	setU32(dim_ptr, 12, getControlsBufferSpan().getUint32(Window_H));
+// }
 
 jai_imports.js_get_token = () => {
     if (sessionStorage.getItem("token")) {
@@ -535,7 +565,7 @@ jai_imports.js_get_token = () => {
 
 jai_imports.js_set_token = (token) => {
     sessionStorage.setItem("token", token);
-	new DataView(controls_buffer).setUint32(Control_Token, token);
+	Atomics.store(getControlsBufferU32(), Control_Token / 4, token);
 };
 
 
@@ -2023,8 +2053,9 @@ jai_imports.jsInstanceCreateSurface = (params_ptr, returns_ptr) => {
 	object_map[object_map_counter] = document.createElement('canvas');
 	object_map[object_map_counter].width = 1366;
 	object_map[object_map_counter].height = 768;
-	new DataView(controls_buffer).setUint32(Window_W, object_map[object_map_counter].width);
-	new DataView(controls_buffer).setUint32(Window_H, object_map[object_map_counter].height);
+	const span = getControlsBufferU32();
+	Atomics.store(span, Window_W / 4, object_map[object_map_counter].width);
+	Atomics.store(span, Window_H / 4, object_map[object_map_counter].height);
 	const canvas = object_map[object_map_counter];
 	canvas.id = "webgpu-canvas";
 	document.body.appendChild(canvas);
@@ -2410,7 +2441,7 @@ jai_imports.jsDeviceCreateRenderPipeline = (params_ptr, returns_ptr) => {
 	const label = getString(descriptor_ptr + 8n);
 	const layout = getU64(descriptor_ptr, 24n);
 	const vertexState = getVertexState(descriptor_ptr + 32n);
-	const primitiveState = getPrimitiveState(descriptor_ptr + 98n);
+	const primitiveState = getPrimitiveState(descriptor_ptr + 96n);
 	const depthStencil_ptr = getU64(descriptor_ptr, 128);
 	const depthStencilState = depthStencil_ptr ? getDepthStencilState(depthStencil_ptr) : undefined;
 	const multisample_ptr = getMultisampleState(descriptor_ptr + 136n);

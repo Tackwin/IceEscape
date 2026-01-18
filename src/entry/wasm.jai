@@ -8,6 +8,7 @@
 pressed: [Key_COUNT] bool;
 
 web_buffer: [] u8;
+controls_buffer: [] u8;
 last_frame: Apollo_Time;
 last_frame_init := false;
 #scope_export
@@ -17,16 +18,35 @@ send_web_message :: (msg: [] u8, target: Connection) {
 	js_send_web_message(msg.data, msg.count);
 }
 
+send_web_message :: (msg_pool: [] u8, msg_indices: [] int, target: Connection) {
+	js_send_web_messages :: (
+		data: *void, count: int, data_indices: *void, count_indices: int
+	) #foreign;
+	js_send_web_messages(msg_pool.data, msg_pool.count, msg_indices.data, msg_indices.count);
+}
+
 wasm_read_entire_file :: (path: string, data: [] u8) -> int {
 	print("Don't read files in wasm you fool!\n");
 	return 0;
 }
 
+wasm_get_current_time :: () -> Apollo_Time {
+	js_get_current_time_monotonic :: (low_ptr: *u64, high_ptr: *u64) #foreign;
+	now: Apollo_Time;
+	js_get_current_time_monotonic((*now).(*u64), (*now).(*u64) + 1);
+	return now;
+}
+
+wasm_sleep :: (ms: int) {
+	js_sleep :: (ms: int) #foreign;
+	js_sleep(ms);
+}
+
 wasm_get_frame_info :: (info: *Frame_Info) {
 	info.* = .{};
 
-	js_get_current_time_monotonic :: (low_ptr: *u64, high_ptr: *u64) #foreign;
 	now: Apollo_Time;
+	js_get_current_time_monotonic :: (low_ptr: *u64, high_ptr: *u64) #foreign;
 	js_get_current_time_monotonic((*now).(*u64), (*now).(*u64) + 1);
 
 	info.delta_time = 1.0 / 60.0;
@@ -43,34 +63,27 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	info.window_focused = true;
 	info.window_size = .{ xx 1366, xx 768 };
 
-	js_get_key_state :: (key_map_ptr: *bool, key_map_count: s64) #foreign;
-	js_get_key_state(pressed.data, pressed.count);
-
-	x: u32;
-	y: u32;
-	js_get_mouse_pointer :: (x_ptr: *u32, y_ptr: *u32) #foreign;
-	js_get_mouse_pointer(*x, *y);
-	info.mouse_position.x = xx x;
-	info.mouse_position.y = xx y;
-
-	delta: float32;
-	js_get_mouse_wheel_delta :: (delta_ptr: *float32) #foreign;
-	js_get_mouse_wheel_delta(*delta);
-	info.mouse_wheel = xx delta;
+	Mouse_X :: 128;
+	Mouse_Y :: 132;
+	Mouse_Wheel :: 136;
+	Window_W :: 140;
+	Window_H :: 144;
+	info.mouse_position.x = xx (controls_buffer.data + Mouse_X).(*u32).*;
+	info.mouse_position.y = xx (controls_buffer.data + Mouse_Y).(*u32).*;
+	info.mouse_wheel = xx (controls_buffer.data + Mouse_Wheel).(*float32).*;
 
 	dim: [4] u32;
-	js_get_dimemsions :: (dim_ptr: *u32) #foreign;
-	js_get_dimemsions(dim.data);
-	wx := dim[0];
-	wy := dim[1];
 	ww := dim[2];
 	wh := dim[3];
-	info.framebuffer_size = .{ xx ww, xx wh };
-	info.window_size = .{ xx ww, xx wh };
+	info.framebuffer_size = .{
+		xx (controls_buffer.data + Window_W).(*u32).*, xx (controls_buffer.data + Window_H).(*u32).*
+	};
+	info.window_size = .{
+		xx (controls_buffer.data + Window_W).(*u32).*, xx (controls_buffer.data + Window_H).(*u32).*
+	};
 	info.mouse_position.y = info.window_size.y - info.mouse_position.y;
-
-	for * info.key_pressed {
-		it.* = pressed[it_index];
+	for 0..Key_COUNT-1 {
+		info.key_pressed[it] = controls_buffer.data[it] > 0;
 	}
 
 	frame_buffer_count: u64 = 0;
@@ -299,7 +312,9 @@ init_platform :: () -> Platform {
 	platform.load_image = wasm_load_image;
 	platform.free_image = wasm_free_image;
 	platform.get_frame_info = wasm_get_frame_info;
+	platform.get_current_time = wasm_get_current_time;
 	platform.end_frame = wasm_end_frame;
+	platform.sleep = wasm_sleep;
 	platform.send_web_message = send_web_message;
 	platform.get_token = get_token;
 	platform.set_token = set_token;
@@ -1205,7 +1220,11 @@ update_thread_temporary_storage_data: [TEMPORARY_STORAGE_SIZE] u8 #align 64;
 	return *update_thread_wasm_context;
 }
 
-#program_export "wasm_init" wasm_init :: () #c_call {
+#program_export "wasm_get_controls_buffer" wasm_get_controls_buffer :: () -> u64 #c_call {
+	return controls_buffer.data.(u64);
+}
+
+#program_export "wasm_init_buffers" wasm_init_buffers :: () #c_call {
 	main_thread_temporary_storage.data          = main_thread_temporary_storage_data.data;
 	main_thread_temporary_storage.original_data = main_thread_temporary_storage_data.data;
 	main_thread_temporary_storage.size          = main_thread_temporary_storage_data.count;
@@ -1222,6 +1241,11 @@ update_thread_temporary_storage_data: [TEMPORARY_STORAGE_SIZE] u8 #align 64;
 	context.allocator.proc(.STARTUP, 0, 0, null, null);
 	app.allocator = context.allocator;
 	app.user_data = null;
+
+	controls_buffer = NewArray(1024 * 4, u8);
+}
+#program_export "wasm_init" wasm_init :: () #c_call {
+	push_context, defer_pop main_thread_wasm_context;
 
 	platform = init_platform();
 	app.platform = *platform;

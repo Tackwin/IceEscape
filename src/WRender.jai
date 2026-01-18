@@ -170,7 +170,7 @@ init_graphics :: (platform: Platform, _graphics: *Graphics) {
 	config.usage = WGPUTextureUsage_RenderAttachment;
 	config.width = 1366;
 	config.height = 768;
-	config.presentMode = .Fifo;
+	config.presentMode = .Immediate;
 	platform.gpu.surfaceConfigure(graphics.surface, *config);
 
 	graphics.mainQueue = platform.gpu.deviceGetQueue(graphics.device);
@@ -296,10 +296,18 @@ WTexture :: struct {
 Model :: struct {
 	gpu: WGPUBuffer;
 	prim_count: int;
+	min: V3f;
+	max: V3f;
 
 	make_from_obj :: (obj: [] u8, debug: string = "unknown") -> Model {
 		print("Loading OBJ model: %\n", debug);
 		model: Model;
+		model.min.x = +FLOAT32_MAX;
+		model.min.y = +FLOAT32_MAX;
+		model.min.z = +FLOAT32_MAX;
+		model.max.x = -FLOAT32_MAX;
+		model.max.y = -FLOAT32_MAX;
+		model.max.z = -FLOAT32_MAX;
 
 		vertices: [..] V3f;
 		vertices.allocator = temp;
@@ -390,6 +398,16 @@ Model :: struct {
 			}
 		}
 
+		for vertices {
+			model.min.x = ifx model.min.x < it.x then model.min.x else it.x;
+			model.min.y = ifx model.min.y < it.y then model.min.y else it.y;
+			model.min.z = ifx model.min.z < it.z then model.min.z else it.z;
+			
+			model.max.x = ifx model.max.x < it.x then it.x else model.max.x;
+			model.max.y = ifx model.max.y < it.y then it.y else model.max.y;
+			model.max.z = ifx model.max.z < it.z then it.z else model.max.z;
+		}
+
 		cpu_buffer := NewArray(faces.count * 3, WFramegraph.Vertex, false,, temp);
 		for faces {
 			cpu_buffer[it_index * 3 + 0].position = vertices[it.positions[0]];
@@ -449,6 +467,19 @@ Frame :: struct {
 }
 
 WFramegraph :: struct {
+	Settings :: struct {
+		multisamples := 1;
+		shadow_size := 1024;
+		shadow_samples := 5;
+		fxaa := false;
+
+		render_particles := true;
+		render_props := true;
+		render_shadows := true;
+	}
+
+	settings: Settings;
+
 	rng: XORState;
 	current_time: Apollo_Time;
 
@@ -471,6 +502,7 @@ WFramegraph :: struct {
 	presentModule: WGPUShaderModule;
 	presentPipeline: WGPURenderPipeline;
 	presentPipelineLayout: WGPUPipelineLayout;
+	presentSampler: WGPUSampler;
 
 	depthTexture: WGPUTexture;
 	depthView: WGPUTextureView;
@@ -511,9 +543,14 @@ WFramegraph :: struct {
 		shadowP: M4f;
 
 		sun_dir: V3f;
-		padding2: u32;
+		shadow_pcf_count: u32 = 3;
 		sun_color: V3f;
 		sun_strength: float32;
+
+		use_shadow_map := 1.0;
+		padding3: float32;
+		padding4: float32;
+		padding5: float32;
 	}
 
 	Vertex :: struct {
@@ -565,6 +602,8 @@ init_bindgroup_layout :: (framegraph: *WFramegraph) {
 		layout.entryCount = entries.count;
 		layout.entries = entries.data;
 		layout.label = toWGPUStringView("Instance Bind Group Layout");
+		if framegraph.instanceBindGroupLayout
+			graphics.gpu.bindGroupLayoutRelease(framegraph.instanceBindGroupLayout);
 		framegraph.instanceBindGroupLayout =
 			graphics.gpu.deviceCreateBindGroupLayout(graphics.device, *layout);
 	}
@@ -598,42 +637,9 @@ init_bindgroup_layout :: (framegraph: *WFramegraph) {
 		layout.entryCount = entries.count;
 		layout.entries = entries.data;
 		layout.label = toWGPUStringView("Texture Bind Group Layout");
+		if framegraph.textureBindGroupLayout
+			graphics.gpu.bindGroupLayoutRelease(framegraph.textureBindGroupLayout);
 		framegraph.textureBindGroupLayout =
-			graphics.gpu.deviceCreateBindGroupLayout(graphics.device, *layout);
-	}
-	if false {
-		layout: WGPUBindGroupLayoutDescriptor = .{};
-		entries: [6] WGPUBindGroupLayoutEntry;
-			entries[0].binding = 0;
-			entries[0].visibility = WGPUShaderStage_Vertex;
-			entries[0].buffer.type = .Uniform;
-			entries[0].buffer.hasDynamicOffset = 0;
-			entries[0].buffer.minBindingSize = 8;
-			entries[1].binding = 1;
-			entries[1].visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
-			entries[1].buffer.type = .ReadOnlyStorage;
-			entries[1].buffer.hasDynamicOffset = 0;
-			entries[1].buffer.minBindingSize = 0;
-			entries[2].binding = 2;
-			entries[2].visibility = WGPUShaderStage_Fragment;
-			entries[2].texture.sampleType = .Float;
-			entries[2].texture.viewDimension = ._2D;
-			entries[2].texture.multisampled = 0;
-			entries[3].binding = 3;
-			entries[3].visibility = WGPUShaderStage_Fragment;
-			entries[3].sampler.type = .Filtering;
-			entries[4].binding = 4;
-			entries[4].visibility = WGPUShaderStage_Fragment;
-			entries[4].texture.sampleType = .Float;
-			entries[4].texture.viewDimension = ._2D;
-			entries[4].texture.multisampled = 0;
-			entries[5].binding = 5;
-			entries[5].visibility = WGPUShaderStage_Fragment;
-			entries[5].sampler.type = .Filtering;
-		layout.entryCount = entries.count;
-		layout.entries = entries.data;
-		layout.label = toWGPUStringView("UI Bind Group Layout");
-		framegraph.quadBindGroupLayout =
 			graphics.gpu.deviceCreateBindGroupLayout(graphics.device, *layout);
 	}
 }
@@ -709,18 +715,22 @@ init_present_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 			graphics.device, *desc
 		);
 	}
-
 	{
-		// layout: WGPUPipelineLayoutDescriptor = .{};
-		// layout.label = toWGPUStringView("Present Pipeline Layout");
-		// layoutEntries: [1] WGPUBindGroupLayout;
-		// layoutEntries[0] = framegraph.textureBindGroupLayout;
-		// layout.bindGroupLayoutCount = 1;
-		// layout.bindGroupLayouts = layoutEntries.data;
-		// framegraph.presentPipelineLayout = graphics.gpu.deviceCreatePipelineLayout(
-		// 	graphics.device, *layout
-		// );
-
+		samplerDesc: WGPUSamplerDescriptor = .{};
+		samplerDesc.label = toWGPUStringView("Present Sampler");
+		samplerDesc.addressModeU = .Repeat;
+		samplerDesc.addressModeV = .Repeat;
+		samplerDesc.addressModeW = .Repeat;
+		samplerDesc.magFilter = .Linear;
+		samplerDesc.minFilter = .Linear;
+		samplerDesc.mipmapFilter = .Linear;
+		samplerDesc.lodMinClamp = 0;
+		samplerDesc.lodMaxClamp = 32;
+		samplerDesc.maxAnisotropy = 1;
+		framegraph.presentSampler =
+			graphics.gpu.deviceCreateSampler(graphics.device, *samplerDesc);
+	}
+	{
 		desc: WGPURenderPipelineDescriptor = .{};
 		desc.label = toWGPUStringView("Present Pipeline");
 		desc.layout = null;
@@ -819,7 +829,7 @@ init_geometry_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.primitive.topology = .WGPUPrimitiveTopology_TriangleList;
 		desc.primitive.stripIndexFormat = .Undefined;
 		desc.primitive.frontFace = .CCW;
-		desc.primitive.cullMode = .None;
+		desc.primitive.cullMode = .Back;
 		desc.primitive.unclippedDepth = 0;
 
 			depthDesc: WGPUDepthStencilState = .{};
@@ -836,7 +846,7 @@ init_geometry_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 
 		desc.depthStencil = *depthDesc;
 
-		desc.multisample.count = 4;
+		desc.multisample.count = xx framegraph.settings.multisamples;
 		desc.multisample.mask = 0xFFFFFFFF;
 		desc.multisample.alphaToCoverageEnabled = 0;
 
@@ -919,7 +929,7 @@ init_geometry_shadow_pipeline :: (framegraph: *WFramegraph, store: *Store.Store)
 		desc.primitive.topology = .WGPUPrimitiveTopology_TriangleList;
 		desc.primitive.stripIndexFormat = .Undefined;
 		desc.primitive.frontFace = .CCW;
-		desc.primitive.cullMode = .None;
+		desc.primitive.cullMode = .Back;
 		desc.primitive.unclippedDepth = 0;
 
 			depthDesc: WGPUDepthStencilState = .{};
@@ -958,6 +968,8 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
 		desc.size = 128 * 1024 * 1024;
 		desc.mappedAtCreation = 0;
+		if framegraph.frame_buffer
+			graphics.gpu.bufferRelease(framegraph.frame_buffer);
 		framegraph.frame_buffer = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
 	}
 	for * framegraph.frames {
@@ -974,9 +986,11 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.size.height = 768;
 		desc.size.depthOrArrayLayers = 1;
 		desc.mipLevelCount = 1;
-		desc.sampleCount = 4;
+		desc.sampleCount = xx framegraph.settings.multisamples;
 		desc.dimension = ._2D;
 		desc.format = .Depth32Float;
+		if framegraph.depthTexture
+			graphics.gpu.textureRelease(framegraph.depthTexture);
 		framegraph.depthTexture = graphics.gpu.deviceCreateTexture(graphics.device, *desc);
 
 		viewDesc: WGPUTextureViewDescriptor = .{};
@@ -984,6 +998,8 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		viewDesc.format = .Depth32Float;
 		viewDesc.dimension = ._2D;
 		viewDesc.aspect = .DepthOnly;
+		if framegraph.depthView
+			graphics.gpu.textureViewRelease(framegraph.depthView);
 		framegraph.depthView = graphics.gpu.textureCreateView(framegraph.depthTexture, null);
 	}
 
@@ -995,9 +1011,11 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.size.height = 768;
 		desc.size.depthOrArrayLayers = 1;
 		desc.mipLevelCount = 1;
-		desc.sampleCount = 4;
+		desc.sampleCount = xx framegraph.settings.multisamples;
 		desc.dimension = ._2D;
 		desc.format = .RGBA16Float;
+		if framegraph.hdrTexture.gpu
+			graphics.gpu.textureRelease(framegraph.hdrTexture.gpu);
 		framegraph.hdrTexture.gpu = graphics.gpu.deviceCreateTexture(graphics.device, *desc);
 
 		viewDesc: WGPUTextureViewDescriptor = .{};
@@ -1005,7 +1023,10 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		viewDesc.format = .RGBA16Float;
 		viewDesc.dimension = ._2D;
 		viewDesc.aspect = .All;
-		framegraph.hdrTexture.view = graphics.gpu.textureCreateView(framegraph.hdrTexture.gpu, null);
+		if framegraph.hdrTexture.view
+			graphics.gpu.textureViewRelease(framegraph.hdrTexture.view);
+		framegraph.hdrTexture.view =
+			graphics.gpu.textureCreateView(framegraph.hdrTexture.gpu, null);
 
 		samplerDesc: WGPUSamplerDescriptor = .{};
 		samplerDesc.label = toWGPUStringView("HDR Texture Sampler");
@@ -1018,6 +1039,8 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		samplerDesc.lodMinClamp = 0;
 		samplerDesc.lodMaxClamp = 32;
 		samplerDesc.maxAnisotropy = 1;
+		if framegraph.hdrTexture.sampler
+			graphics.gpu.samplerRelease(framegraph.hdrTexture.sampler);
 		framegraph.hdrTexture.sampler =
 			graphics.gpu.deviceCreateSampler(graphics.device, *samplerDesc);
 	}
@@ -1033,6 +1056,8 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc.sampleCount = 1;
 		desc.dimension = ._2D;
 		desc.format = .RGBA8Unorm;
+		if framegraph.uiTexture.gpu
+			graphics.gpu.textureRelease(framegraph.uiTexture.gpu);
 		framegraph.uiTexture.gpu = graphics.gpu.deviceCreateTexture(graphics.device, *desc);
 
 		viewDesc: WGPUTextureViewDescriptor = .{};
@@ -1040,6 +1065,8 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		viewDesc.format = .RGBA8Unorm;
 		viewDesc.dimension = ._2D;
 		viewDesc.aspect = .All;
+		if framegraph.uiTexture.view
+			graphics.gpu.textureViewRelease(framegraph.uiTexture.view);
 		framegraph.uiTexture.view = graphics.gpu.textureCreateView(framegraph.uiTexture.gpu, null);
 
 		samplerDesc: WGPUSamplerDescriptor = .{};
@@ -1053,6 +1080,8 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		samplerDesc.lodMinClamp = 0;
 		samplerDesc.lodMaxClamp = 32;
 		samplerDesc.maxAnisotropy = 1;
+		if framegraph.uiTexture.sampler
+			graphics.gpu.samplerRelease(framegraph.uiTexture.sampler);
 		framegraph.uiTexture.sampler =
 			graphics.gpu.deviceCreateSampler(graphics.device, *samplerDesc);
 	}
@@ -1061,13 +1090,15 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		desc: WGPUTextureDescriptor = .{};
 		desc.label = toWGPUStringView("Shadow Texture");
 		desc.usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TextureBinding;
-		desc.size.width = 4096;
-		desc.size.height = 4096;
+		desc.size.width = xx framegraph.settings.shadow_size;
+		desc.size.height = xx framegraph.settings.shadow_size;
 		desc.size.depthOrArrayLayers = 1;
 		desc.mipLevelCount = 1;
 		desc.sampleCount = 1;
 		desc.dimension = ._2D;
 		desc.format = .Depth32Float;
+		if framegraph.shadowTexture.gpu
+			graphics.gpu.textureRelease(framegraph.shadowTexture.gpu);
 		framegraph.shadowTexture.gpu =
 			graphics.gpu.deviceCreateTexture(graphics.device, *desc);
 
@@ -1076,6 +1107,8 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		viewDesc.format = .Depth32Float;
 		viewDesc.dimension = ._2D;
 		viewDesc.aspect = .DepthOnly;
+		if framegraph.shadowTexture.view
+			graphics.gpu.textureViewRelease(framegraph.shadowTexture.view);
 		framegraph.shadowTexture.view =
 			graphics.gpu.textureCreateView(framegraph.shadowTexture.gpu, null);
 
@@ -1091,35 +1124,28 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		samplerDesc.lodMinClamp = 0;
 		samplerDesc.lodMaxClamp = 32;
 		samplerDesc.maxAnisotropy = 1;
+		if framegraph.shadowTexture.sampler
+			graphics.gpu.samplerRelease(framegraph.shadowTexture.sampler);
 		framegraph.shadowTexture.sampler =
 			graphics.gpu.deviceCreateSampler(graphics.device, *samplerDesc);
 	}
 
 	init_bindgroup_layout(framegraph);
 
-	if store.geometry_shader.dirty {
-		store.geometry_shader.dirty = false;
-		init_geometry_pipeline(framegraph, store);
-	}
+	init_geometry_pipeline(framegraph, store);
 
-	if store.geometry_shadow_shader.dirty {
-		store.geometry_shadow_shader.dirty = false;
-		init_geometry_shadow_pipeline(framegraph, store);
-	}
+	init_geometry_shadow_pipeline(framegraph, store);
+	init_present_pipeline(framegraph, store);
 
-	if store.present_shader.dirty {
-		store.present_shader.dirty = false;
-		init_present_pipeline(framegraph, store);
-	}
+	init_quad_pipeline(framegraph, store);
 
-	if store.quad_shader.dirty {
-		store.quad_shader.dirty = false;
-		init_quad_pipeline(framegraph, store);
-	}
-
-	framegraph.geometryBindGroup =texture_bind_group(
+	if framegraph.geometryBindGroup
+		graphics.gpu.bindGroupRelease(framegraph.geometryBindGroup);
+	framegraph.geometryBindGroup = texture_bind_group(
 		framegraph, "Typical textures", *store.colormaps, null, *framegraph.shadowTexture
 	);
+	if framegraph.textureBindGroup
+		graphics.gpu.bindGroupRelease(framegraph.textureBindGroup);
 	framegraph.textureBindGroup = texture_bind_group(
 		framegraph,
 		"Terrain textures",
@@ -1127,6 +1153,8 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 		*store.terrain_tile_normal,
 		*framegraph.shadowTexture
 	);
+	if framegraph.particleBindGroup
+		graphics.gpu.bindGroupRelease(framegraph.particleBindGroup);
 	framegraph.particleBindGroup = texture_bind_group(
 		framegraph,
 		"Particle textures",
@@ -1149,7 +1177,7 @@ present_bind_group :: (
 	desc: WGPUBindGroupDescriptor = .{};
 	desc.label = toWGPUStringView(tprint("% Present Bind Group", name));
 	desc.layout = framegraph.presentBindGroupLayout;
-	entries: [3] WGPUBindGroupEntry;
+	entries: [4] WGPUBindGroupEntry;
 	entries[0].binding = 0;
 	entries[0].buffer = framegraph.frame_buffer;
 	entries[0].offset = xx frame.cpu_cursor;
@@ -1158,6 +1186,8 @@ present_bind_group :: (
 	entries[1].textureView = hdr.view;
 	entries[2].binding = 2;
 	entries[2].textureView = ui.view;
+	entries[3].binding = 3;
+	entries[3].sampler = framegraph.presentSampler;
 	desc.entryCount = entries.count;
 	desc.entries = entries.data;
 
@@ -1637,6 +1667,27 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 	return true;
 }
 
+snap_shadow_center :: (VP: M4f, iVP: M4f, center: V3f, width: u32) -> V3f {
+	scale := 2.0 / width;
+	
+	projected := iVP * VP * v4(center, 1.0);
+	projected = VP * v4(center, 1.0);
+	projected.x /= projected.w;
+	projected.y /= projected.w;
+	projected.z /= projected.w;
+	projected.x = floor(projected.x / scale) * scale;
+	projected.y = floor(projected.y / scale) * scale;
+	projected.z = floor(projected.z / scale) * scale;
+	projected.w = 1.0;
+
+	projected = iVP * projected;
+	new_center: V3f;
+	new_center.x = projected.x / projected.w;
+	new_center.y = projected.y / projected.w;
+	new_center.z = projected.z / projected.w;
+	return new_center;
+}
+
 render_scene :: (
 	frame: *Frame, framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store
 ) {
@@ -1645,14 +1696,30 @@ render_scene :: (
 		Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
 	frame.geometry.uniforms.P = Scene.perspective(scene.camera);
 
-	center := V3f.{ 0, 0, 0 };
-	center = v3(Scene.terrain_size(scene), 0.0) / 2.0;
-	frame.geometry.uniforms.shadowV =
-		Scene.look_at(center + V3f.{ 100, 100, 100 }, center, V3f.{ 0, 1, 0 });
-	frame.geometry.uniforms.shadowP = Scene.orthographic(-40, 40, -40, 40, 0.1, 500);
+	center := scene.camera.target;
+	frame.geometry.uniforms.shadowV = Scene.look_at(
+		center + V3f.{ 100, 100, 100 }, center, V3f.{ 0, 1, 0 }
+	);
+	iV := Scene.look_at_inverse(
+		center + V3f.{ 100, 100, 100 }, center, V3f.{ 0, 1, 0 }
+	);
+	frame.geometry.uniforms.shadowP = Scene.orthographic(-9, 9, -9, 9, 0.1, 500);
+	iP := Scene.orthographic_inverse(-9, 9, -9, 9, 0.1, 500);
+	VP := frame.geometry.uniforms.shadowP * frame.geometry.uniforms.shadowV;
+	iVP := iV * iP;
+	center = snap_shadow_center(VP, iVP, center, 1024);
+	frame.geometry.uniforms.shadowV = Scene.look_at(
+		center + V3f.{ 100, 100, 100 }, center, V3f.{ 0, 1, 0 }
+	);
+	frame.geometry.uniforms.shadowP = Scene.orthographic(-9, 9, -9, 9, 0.1, 500);
+	
 	frame.geometry.uniforms.sun_dir = normalize(V3f.{ -1, -1, -1 });
 	frame.geometry.uniforms.sun_color = V3f.{ 1, 1, 1 };
 	frame.geometry.uniforms.sun_strength = 0.5;
+	frame.geometry.uniforms.use_shadow_map = 0.0;
+	frame.geometry.uniforms.shadow_pcf_count = xx framegraph.settings.shadow_samples;
+	if framegraph.settings.render_shadows
+		frame.geometry.uniforms.use_shadow_map = 1.0;
 	frame.shadow.uniforms = frame.geometry.uniforms;
 	
 	extra: Extra;
@@ -1660,7 +1727,7 @@ render_scene :: (
 	defer {
 		free(*extra);
 	}
-	if true {
+	if framegraph.settings.render_shadows {
 		clear(*extra);
 
 		frame.shadow.current_bind_group = null;
@@ -1670,7 +1737,8 @@ render_scene :: (
 		render_skulls(frame, *frame.shadow, scene, store, *extra);
 		render_shurikens(frame, *frame.shadow, scene, store, *extra);
 		render_standin(frame, *frame.shadow, scene, store, *extra);
-		render_props(frame, *frame.shadow, scene, store, *extra);
+		if framegraph.settings.render_props
+			render_props(frame, *frame.shadow, scene, store, *extra);
 		render_gates(frame, *frame.shadow, scene, store, *extra);
 		render_tombstones(frame, *frame.shadow, scene, store, *extra);
 		render_coins(frame, *frame.shadow, scene, store, *extra);
@@ -1702,7 +1770,8 @@ render_scene :: (
 		render_skulls(frame, *frame.geometry, scene, store, *extra);
 		render_shurikens(frame, *frame.geometry, scene, store, *extra);
 		render_standin(frame, *frame.geometry, scene, store, *extra);
-		render_props(frame, *frame.geometry, scene, store, *extra);
+		if framegraph.settings.render_props
+			render_props(frame, *frame.geometry, scene, store, *extra);
 		render_gates(frame, *frame.geometry, scene, store, *extra);
 		render_tombstones(frame, *frame.geometry, scene, store, *extra);
 		render_coins(frame, *frame.geometry, scene, store, *extra);
@@ -1786,7 +1855,8 @@ render_scene :: (
 		render_safezones(frame, *frame.geometry, scene, store, *extra);
 
 		frame.geometry.current_bind_group = *framegraph.particleBindGroup;
-		render_particles(frame, *frame.geometry, scene, store, *extra);
+		if framegraph.settings.render_particles
+			render_particles(frame, *frame.geometry, scene, store, *extra);
 		render_extra_quads(frame, *frame.geometry, scene, store, *extra);
 
 		frame.geometry.current_bind_group = *framegraph.geometryBindGroup;
@@ -3016,21 +3086,24 @@ render_terrain :: (
 	terrain := *scene.terrain;
 
 	instanced := append_instance_buffer(frame);
+	VP := pass.uniforms.P * pass.uniforms.V;
 	for terrain.tiles {
 		x := it_index % terrain.tiles_count.x;
 		y := it_index / terrain.tiles_count.x;
+		pos := Scene.tile_bottom_left(scene, V2i.{ x, y });
+		if cull(VP, M4f.translate(pos + v3(0.5, 0.5, 0.0)), safety = 1.5)
+			continue;
 
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
-		pos := Scene.tile_bottom_left(scene, V2i.{ x, y });
 		instance.M = M4f.translate(pos) * scale_matrix(v3(terrain.tile_size, 1.0));
 		set_normal_map_idx(instance, Store.get_tile_idx(it.kind));
 		set_albedo_map_idx(instance, Store.get_tile_idx(it.kind));
 		instance.texture_rect.x = xx x;
 		instance.texture_rect.y = xx y;
-		if it.kind != .Grass
-			instance.flags = instance.UV_NO_TILE;
+		// if it.kind != .Grass
+		// 	instance.flags = instance.UV_NO_TILE;
 	}
 	if instanced.count == 0 {
 		return;
@@ -3050,11 +3123,15 @@ render_props :: (
 	for scene.props
 		max_id = max(max_id, it.id);
 
+	VP := pass.uniforms.P * pass.uniforms.V;
 	for prop_id: 0..max_id {
 		instanced := append_instance_buffer(frame);
 		for scene.props {
 			if it.id != prop_id
 				continue;
+			if cull(VP, it.M)
+				continue;
+
 			instanced.count += 1;
 			instance := *instanced[instanced.count - 1];
 			instance.* = .{};
@@ -3068,3 +3145,15 @@ render_props :: (
 	}
 }
 
+cull :: (VP: M4f, M: M4f, safety := 1.0) -> bool {
+	pos := M4f.col(M, 3);
+	pos = VP * pos;
+
+	if pos.x < -pos.w - safety || +pos.w + safety < pos.x
+		return true;
+	if pos.y < -pos.w - safety || +pos.w + safety < pos.y
+		return true;
+	if pos.z < -pos.w - safety || +pos.w + safety < pos.z
+		return true;
+	return false;
+}

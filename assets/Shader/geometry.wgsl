@@ -8,9 +8,11 @@ struct UniformData {
 	shadowP: mat4x4<f32>,
 
 	sun_dir: vec3f,
-	padding2: f32,
+	shadow_pcf_count: u32,
 	sun_color: vec3f,
 	sun_strength: f32,
+
+	use_shadow_map: f32,
 };
 
 struct InstanceData {
@@ -69,18 +71,20 @@ fn in_shadow(world_pos: vec3f) -> f32 {
 	shadowUV.y = 1.0 - shadowUV.y;
 	let shadowDepth = shadowCoord.z / shadowCoord.w;
 
-	var offset: vec2f = vec2f(0.5, 0.5) / 4096.0;
+	var offset: vec2f = vec2f(0.5, 0.5) / 1024.0;
 
-	for (var i: i32 = -2; i <= 2; i = i + 1) {
-		for (var j: i32 = -2; j <= 2; j = j + 1) {
-			var uv = shadowUV + vec2f(f32(i) * offset.x,  f32(j) * offset.y);
-			let visibility = textureSampleCompare(shadowMap, shadowSampler, uv, shadowDepth - 0.0001);
-			if (visibility > 0) {
-				shadow += 1.0;
-			}
+	for (var i: u32 = 0; i < uniforms.shadow_pcf_count; i += 1) {
+		var t = 2 * 3.1415926 * f32(i) / f32(uniforms.shadow_pcf_count);
+		var c = cos(t) * 2;
+		var s = sin(t) * 2;
+		var uv = shadowUV + vec2f(c * offset.x, s * offset.y);
+		let visibility = textureSampleCompare(shadowMap, shadowSampler, uv, shadowDepth - 0.0001);
+		if (visibility > 0) {
+			shadow += 1.0;
 		}
 	}
-	shadow = shadow / 25.0;
+	shadow = shadow / f32(uniforms.shadow_pcf_count);
+	return shadow;
 
 	// var uvB = shadowUV + vec2f( offset.x, -offset.y);
 	// var uvC = shadowUV + vec2f(-offset.x,  offset.y);
@@ -108,7 +112,7 @@ fn in_shadow(world_pos: vec3f) -> f32 {
 	// 	shadow += 1.0;
 	// }
 	// shadow = shadow / 5.0;
-	return shadow;
+	// return shadow;
 }
 
 fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
@@ -117,7 +121,7 @@ fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
 	var sun_dot: f32 = -dot(uniforms.sun_dir, normalize(world_nor));
 	var sun_intensity: f32 = clamp(sun_dot, 0.0, 1.0) * uniforms.sun_strength;
 	var shadow: f32 = 1.0;
-	if (use_shadow > 0.0) {
+	if (use_shadow > 0.0 && uniforms.use_shadow_map > 0.0) {
 		shadow = in_shadow(world_pos);
 	}
 

@@ -5,10 +5,12 @@ struct UniformData {
 	shadowV: mat4x4<f32>,
 	shadowP: mat4x4<f32>,
 
-	useAlbedoMap: u32,
-	useNormalMap: u32,
-	useShadowMap: u32,
-	padding: u32,
+	sun_dir: vec3f,
+	shadow_pcf_count: u32,
+	sun_color: vec3f,
+	sun_strength: f32,
+
+	use_shadow_map: f32,
 };
 
 struct InstanceData {

@@ -1058,6 +1058,28 @@ orthographic :: (
 	M.data[3 + 3 * 4] = 1;
 	return M;
 }
+orthographic_inverse :: (
+	left: float, right: float, bottom: float, top: float, near: float, far: float
+) -> M4f {
+	M: M4f = ---;
+	M.data[0 + 0 * 4] = (right - left) / 2;
+	M.data[1 + 0 * 4] = 0;
+	M.data[2 + 0 * 4] = 0;
+	M.data[3 + 0 * 4] = 0;
+	M.data[0 + 1 * 4] = 0;
+	M.data[1 + 1 * 4] = (top - bottom) / 2;
+	M.data[2 + 1 * 4] = 0;
+	M.data[3 + 1 * 4] = 0;
+	M.data[0 + 2 * 4] = 0;
+	M.data[1 + 2 * 4] = 0;
+	M.data[2 + 2 * 4] = -(far - near);
+	M.data[3 + 2 * 4] = 0;
+	M.data[0 + 3 * 4] = (right + left) / 2;
+	M.data[1 + 3 * 4] = (top + bottom) / 2;
+	M.data[2 + 3 * 4] = -near;
+	M.data[3 + 3 * 4] = 1;
+	return M;
+}
 
 look_at :: (eye: V3f, target: V3f, up: V3f) -> M4f {
 	M: M4f = ---;
@@ -1079,6 +1101,31 @@ look_at :: (eye: V3f, target: V3f, up: V3f) -> M4f {
 	M.data[12] = -dot(eye, x);
 	M.data[13] = -dot(eye, y);
 	M.data[14] = -dot(eye, z);
+	M.data[15] = 1.0;
+	return M;
+}
+
+look_at_inverse :: (eye: V3f, target: V3f, up: V3f) -> M4f {
+	M: M4f = ---;
+	z := normalize(eye - target);
+	x := normalize(cross(up, z));
+	y := cross(z, x);
+	// Inverse of look_at: transpose the rotation part, use eye directly for translation
+	M.data[0 ]  = x.x;
+	M.data[1 ]  = x.y;
+	M.data[2 ]  = x.z;
+	M.data[3 ]  = 0;
+	M.data[4 ]  = y.x;
+	M.data[5 ]  = y.y;
+	M.data[6 ]  = y.z;
+	M.data[7 ]  = 0;
+	M.data[8 ]  = z.x;
+	M.data[9 ]  = z.y;
+	M.data[10] = z.z;
+	M.data[11] = 0;
+	M.data[12] = eye.x;
+	M.data[13] = eye.y;
+	M.data[14] = eye.z;
 	M.data[15] = 1.0;
 	return M;
 }
@@ -1527,7 +1574,7 @@ add_snow :: (scene: *Scene, dt: float32) {
 	// Add snow particles
 	n_snow :=
 		dt * (scene.camera_max.x - scene.camera_min.x) * (scene.camera_max.y - scene.camera_min.y);
-	n_snow *= 0.25;
+	n_snow *= 0.35;
 	while n_snow > 0.0 {
 		r := Rand.random_uniform(*scene.client_rng, 0.0, 1.0);
 		if r > n_snow

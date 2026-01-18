@@ -2,14 +2,24 @@
 
 let started = false;
 
-let controls_buffer;
+let controls_buffer_data;
+const getControlsBuffer8 = () => {
+	return new Uint8Array(jai_exports.memory.buffer, controls_buffer_data, 256);
+}
+const getControlsBuffer32 = () => {
+	return new Uint32Array(jai_exports.memory.buffer, controls_buffer_data, 256);
+}
+const getControlsBuffer32f = () => {
+	return new FLoat32Array(jai_exports.memory.buffer, controls_buffer_data, 256);
+}
+
 let workerInstance;
 let jai_exports; // contains procedures and globals from the loaded wasm module
 
 const jai_imports = {};
 
 self.onmessage = async e => {
-	if (e.data.module && e.data.memory && e.data.controls_buffer) {
+	if (e.data.module && e.data.memory) {
 		jai_imports.memory = e.data.memory;
 		const imports = {
 			"env": new Proxy(jai_imports, {
@@ -22,7 +32,7 @@ self.onmessage = async e => {
 		};
 		workerInstance = await WebAssembly.instantiate(e.data.module, imports);
 		jai_exports = workerInstance.exports;
-		controls_buffer = e.data.controls_buffer;
+		controls_buffer_data = Number(jai_exports.wasm_get_controls_buffer());
 
 		postMessage({ ready: true });
 	}
@@ -33,7 +43,7 @@ self.onmessage = async e => {
 			setInterval(async () => {
 				await worker_loop();
 				// await start();
-			}, 1)
+			}, 0)
 	}
 }
 
@@ -101,6 +111,25 @@ jai_imports.js_send_web_message = (data, length) => {
 	new Uint8Array(copy).set(span);
     websocket.send(copy);
 };
+
+jai_imports.js_send_web_messages = (data, length, data_indices, count_indices) => {
+	const span = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(length));
+
+	var before = 0;
+	for (var i = 0; i < count_indices; i += 1) {
+		var idx = getU64(data_indices, i * 8);
+
+		const copy = new ArrayBuffer(Number(idx - before));
+		new Uint8Array(copy).set(span, before);
+		websocket.send(copy);
+
+		before = idx;
+	}
+};
+
+jai_imports.js_sleep = new WebAssembly.Suspending(async (ms) => {
+	await new Promise(r => setTimeout(r, Number(ms)));
+})
 
 jai_imports.jsDontOptimize = (count_ptr) => {};
 
@@ -201,35 +230,36 @@ const Window_H = 144;
 const Control_Token = 148;
 
 jai_imports.js_get_token = () => {
-	return new DataView(controls_buffer).getUint32(Control_Token);
+	return Atomics.load(getControlsBuffer32(), Control_Token);
 }
 jai_imports.js_set_token = (token) => {
-	new DataView(controls_buffer).setUint32(Control_Token, token);
+	Atomics.store(getControlsBuffer32(), Control_Token, token);
 	postMessage({ set_token: token });
 }
 
-jai_imports.js_get_key_state = (key_map_ptr, key_map_count) => {
-	for (let i = 0; i < key_map_count; i++) {
-		setU8(key_map_ptr, i, new DataView(controls_buffer).getUint8(i));
-	}
-}
+// jai_imports.js_get_key_state = (key_map_ptr, key_map_count) => {
+// 	const view = getControlsBufferSpan();
+// 	for (let i = 0; i < key_map_count; i++) {
+// 		setU8(key_map_ptr, i, view.getUint8(i));
+// 	}
+// }
 
-jai_imports.js_get_mouse_pointer = (x_ptr, y_ptr) => {
-	setU32(x_ptr, 0, new DataView(controls_buffer).getUint32(Mouse_X));
-	setU32(y_ptr, 0, new DataView(controls_buffer).getUint32(Mouse_Y));
-}
+// jai_imports.js_get_mouse_pointer = (x_ptr, y_ptr) => {
+// 	setU32(x_ptr, 0, getControlsBufferSpan().getUint32(Mouse_X));
+// 	setU32(y_ptr, 0, getControlsBufferSpan().getUint32(Mouse_Y));
+// }
 
-jai_imports.js_get_mouse_wheel_delta = (delta_ptr) => {
-	setF32(delta_ptr, 0, new DataView(controls_buffer).getFloat32(Mouse_Wheel));
-	new DataView(controls_buffer).setFloat32(Mouse_Wheel, 0)
-}
+// jai_imports.js_get_mouse_wheel_delta = (delta_ptr) => {
+// 	setF32(delta_ptr, 0, getControlsBufferSpan().getFloat32(Mouse_Wheel));
+// 	getControlsBufferSpan().setFloat32(Mouse_Wheel, 0)
+// }
 
-jai_imports.js_get_dimemsions = (dim_ptr) => {
-	setU32(dim_ptr, 0, 0);
-	setU32(dim_ptr, 4, 0);
-	setU32(dim_ptr, 8, new DataView(controls_buffer).getUint32(Window_W));
-	setU32(dim_ptr, 12, new DataView(controls_buffer).getUint32(Window_H));
-}
+// jai_imports.js_get_dimemsions = (dim_ptr) => {
+// 	setU32(dim_ptr, 0, 0);
+// 	setU32(dim_ptr, 4, 0);
+// 	setU32(dim_ptr, 8, getControlsBufferSpan().getUint32(Window_W));
+// 	setU32(dim_ptr, 12, getControlsBufferSpan().getUint32(Window_H));
+// }
 
 jai_imports.js_load_audio = async (params_ptr) => {
 }

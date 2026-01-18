@@ -212,6 +212,7 @@ Platform :: struct {
 	is_server_connected: #type () -> bool = null;
 
 	send_web_message   : #type (msg: [] u8, target: Connection) = null;
+	send_web_messages  : #type (msg_pool: [] u8, msg_indices: [] int, target: Connection) = null;
 	gather_web_messages: #type () -> [] Web_Message = null;
 	gather_connection_changes: #type () -> [] Connection_Change = null;
 
@@ -219,6 +220,10 @@ Platform :: struct {
 	set_token:        #type (token: int)     = null;
 	get_frame_info:   #type (info: *Frame_Info) = null;
 	end_frame:        #type ()               = null;
+
+	get_current_time: #type () -> Apollo_Time = null;
+
+	sleep: #type (ms: int) =null;
 
 	set_listener_info: #type (listener: Listener) = null;
 	load_audio: #type (data: string, compressed: bool, out: *Audio) -> extern_ref = null;

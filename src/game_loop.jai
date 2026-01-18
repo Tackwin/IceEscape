@@ -1,4 +1,5 @@
 Game_Page :: struct {
+	rebuild_pipelines := false;
 	sound_enabled := false;
 
 	Stats :: struct {
@@ -170,12 +171,6 @@ process_game :: (
 gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 	using app_user;
 
-	defer {
-		state.history_cursor += 1;
-		state.history_cursor %= state.history_dt.count;
-	}
-	state.history_dt[state.history_cursor] = controls.delta_time;
-
 	GUI.push_action_palette(*gui_state, scene);
 	GUI.push_buy_prompt(*gui_state, *scene);
 
@@ -244,10 +239,36 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		escape_args: GUI.Escape_Menu_Args;
 		escape_args.sound_enabled = state.volume_on;
 		escape_args.keyboard_layout = state.keyboard_layout;
+		escape_args.shadows_enabled = state.shadows_enabled;
+		escape_args.shadow_samples_index = cast(int) state.shadow_samples;
+		escape_args.aa_mode_index = cast(int) state.aa_mode;
+		escape_args.particles_enabled = state.particles_enabled;
+		escape_args.props_enabled = state.props_enabled;
+		escape_args.shadow_map_size_index = cast(int) state.shadow_map_size;
 		ret := GUI.push_escape_menu(*app_user.gui_state, escape_args);
+
 		state.volume_on = ret.sound_checked;
 		if ret.layout_changed {
 			state.keyboard_layout = ret.keyboard_layout;
+		}
+		state.render_throttle = ret.slowdown_enabled;
+		if ret.shadows_changed {
+			state.shadows_enabled = ret.shadows_enabled;
+		}
+		if ret.shadow_samples_changed {
+			state.shadow_samples = cast(type_of(state.shadow_samples)) ret.shadow_samples_index;
+		}
+		if ret.aa_mode_changed {
+			state.aa_mode = cast(type_of(state.aa_mode)) ret.aa_mode_index;
+		}
+		if ret.particles_changed {
+			state.particles_enabled = ret.particles_enabled;
+		}
+		if ret.props_changed {
+			state.props_enabled = ret.props_enabled;
+		}
+		if ret.shadow_map_size_changed {
+			state.shadow_map_size = cast(type_of(state.shadow_map_size)) ret.shadow_map_size_index;
 		}
 		if ret.resume_clicked {
 			state.playing.escape_menu_open = false;
@@ -258,6 +279,10 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 			state.screen_state = .Menu;
 			state.playing.escape_menu_open = false;
 		}
+		state.game.rebuild_pipelines = ret.aa_mode_changed;
+		state.game.rebuild_pipelines |= ret.shadow_map_size_changed;
+		state.game.rebuild_pipelines |= ret.shadow_samples_changed;
+
 	}
 
 	if state.render_command_debug {
@@ -323,12 +348,13 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 	}
 
 	if state.render_fps {
+		// gui_demo_page(*gui_state, .{ 200, 500 }, 1024 );
 		GUI.push_ms_histogram(
 			*gui_state,
 			.{ 10, 10 },
 			.{ 300, 150 },
-			state.history_app_loop_dt,
-			state.history_cursor,
+			state.history_app_render_loop_dt,
+			state.history_app_render_cursor,
 			"Render"
 		);
 		GUI.push_ms_histogram(
@@ -336,7 +362,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 			.{ 10, 170 },
 			.{ 300, 150 },
 			state.history_app_update_loop_dt,
-			state.history_cursor,
+			state.history_app_update_cursor,
 			"Update"
 		);
 

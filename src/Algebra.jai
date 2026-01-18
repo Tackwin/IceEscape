@@ -716,6 +716,10 @@ point_aabb :: (p: V2($T), low: V2(T), high: V2(T)) -> bool {
 	return p.x >= low.x && p.x <= high.x && p.y >= low.y && p.y <= high.y;
 }
 
+point_aabb :: (p: V2($T), aabb: AABB(T)) -> bool {
+	return point_aabb(p, aabb.min, aabb.max);
+}
+
 ease_quad :: (x: float) -> float {
 	return x * x;
 }

@@ -196,9 +196,9 @@ FORMAT;
 #insert #run embed_data("INDICATOR_OUTLINE_OBJ", "indicator_outline.obj", #filepath);
 #insert #run embed_data("INDICATOR_STROKE_OBJ", "indicator_stroke.obj", #filepath);
 
-#insert #run embed_data("TERRAIN_TREE_SNOW_A", "Terrain/tree_snow_a.obj", #filepath);
-#insert #run embed_data("TERRAIN_TREE_SNOW_B", "Terrain/tree_snow_b.obj", #filepath);
-#insert #run embed_data("TERRAIN_TREE_SNOW_C", "Terrain/tree_snow_c.obj", #filepath);
+#insert #run embed_data("TERRAIN_TREE_SNOW_A", "Mesh/tree_snow_a.obj", #filepath);
+#insert #run embed_data("TERRAIN_TREE_SNOW_B", "Mesh/tree_snow_b.obj", #filepath);
+#insert #run embed_data("TERRAIN_TREE_SNOW_C", "Mesh/tree_snow_c.obj", #filepath);
 #insert #run embed_data("TERRAIN_SNOWMAN", "Terrain/snowman.obj", #filepath);
 #insert #run embed_data("TERRAIN_SNOWMAN_HAT", "Terrain/snowman_hat.obj", #filepath);
 #insert #run embed_data("TERRAIN_SNOW_FLAT", "Terrain/snow_flat.obj", #filepath);

@@ -16,6 +16,7 @@ WRender :: #import "WRender";
 Scene :: #import "Scene";
 Assets :: #import "Assets";
 GUI :: #import "GUI";
+#import "gui_demo";
 
 process_complete_ntp :: (state: *State, ntp: Command.NTP) {
 	result: State.NTP_Result;
@@ -70,16 +71,17 @@ App_User :: struct {
 }
 
 #program_export "app_update_loop" app_update_loop :: (app: *App) {
-	start_time := current_time_monotonic();
+	app_user := app.user_data.(*App_User);
+	start_time := app.platform.get_current_time();
+	app_user.state.history_app_update_loop_dt[app_user.state.history_app_update_cursor] =
+		to_float64_seconds(start_time - app_user.state.update_loop_timestamp).(float32);
 	defer {
-		end_time := current_time_monotonic();
-		app_user := app.user_data.(*App_User);
-		app_user.state.history_app_update_loop_dt[app_user.state.history_cursor] = cast(float32) to_float64_seconds(end_time - start_time);
+		app_user.state.update_loop_timestamp = start_time;
+		app_user.state.history_app_update_cursor += 1;
+		app_user.state.history_app_update_cursor %= app_user.state.history_app_update_loop_dt.count;
 	}
-
 	Remap_Context();
 	auto_release_temp();
-	app_user := app.user_data.(*App_User);
 	app_user.app = app;
 	app_user.state.platform = app.platform;
 	app_user.graphics.gpu = app.platform.gpu;
@@ -164,19 +166,47 @@ App_User :: struct {
 }
 
 #program_export "app_loop" app_loop :: (_app: *App) -> bool {
-	start_time := current_time_monotonic();
+	app_user := _app.user_data.(*App_User);
+
+	start_time := _app.platform.get_current_time();
+	app_user.state.history_app_render_loop_dt[app_user.state.history_app_render_cursor] =
+		to_float64_seconds(start_time - app_user.state.render_loop_timestamp).(float32);
 	defer {
-		end_time := current_time_monotonic();
-		app_user := _app.user_data.(*App_User);
-		app_user.state.history_app_loop_dt[app_user.state.history_cursor] = cast(float32) to_float64_seconds(end_time - start_time);
+		if app_user.state.render_throttle {
+			while true {
+				dt := to_float64_seconds(_app.platform.get_current_time() - app_user.state.render_loop_timestamp);
+				if (1000 * dt) > 60
+					break;
+				_app.platform.sleep(2);
+			}
+		}
+
+		app_user.state.render_loop_timestamp = start_time;
+		app_user.state.history_app_render_cursor += 1;
+		app_user.state.history_app_render_cursor %= app_user.state.history_app_render_loop_dt.count;
 	}
 
-	app_user := _app.user_data.(*App_User);
 	app_user.app = _app;
 	app_user.state.platform = _app.platform;
 	app_user.graphics.gpu = _app.platform.gpu;
 	Remap_Context();
 	auto_release_temp();
+
+	
+	app_user.framegraph.settings.render_shadows = app_user.state.shadows_enabled;
+	app_user.framegraph.settings.render_props = app_user.state.props_enabled;
+	app_user.framegraph.settings.render_particles = app_user.state.particles_enabled;
+	if app_user.state.game.rebuild_pipelines {
+		app_user.framegraph.settings.multisamples = 4;
+		if app_user.state.aa_mode == .No_AA
+			app_user.framegraph.settings.multisamples = 1;
+		app_user.framegraph.settings.shadow_size = 4096;
+		if app_user.state.shadow_map_size == ._2048
+			app_user.framegraph.settings.shadow_size = 2048;
+		if app_user.state.shadow_map_size == ._1024
+			app_user.framegraph.settings.shadow_size = 1024;
+		WRender.init_framegraph(*app_user.framegraph, *app_user.store);
+	}
 
 	to_present := WRender.present_frame(*app_user.framegraph, *app_user.store);
 	if to_present
@@ -230,16 +260,30 @@ State :: struct {
 
 	received_command_history: [..] Command.payload.Kind;
 
-	history_dt: [100] float;
 	history_app_update_loop_dt: [100] float;
-	history_app_loop_dt: [100] float;
-	history_cursor := 0;
+	history_app_update_cursor := 0;
+	update_loop_timestamp: Apollo_Time;
+
+	history_app_render_loop_dt: [100] float;
+	history_app_render_cursor := 0;
+	render_loop_timestamp: Apollo_Time;
+	
 	render_fps := false;
 	render_command_debug := false;
 	filter_command_debug: [#run enum_highest_value(Command.payload.Kind) + 1] bool;
 
+	render_throttle := false;
+
 	volume_on := true;
 	keyboard_layout: Layout = .AZERTY;
+
+	// Render settings
+	shadows_enabled := true;
+	shadow_samples: enum { _4 :: 0; _9 :: 1; _25 :: 2; } = ._9;
+	aa_mode: enum { FXAA :: 0; MSAA_2x :: 1; MSAA_4x :: 2; No_AA :: 3; } = .FXAA;
+	particles_enabled := true;
+	props_enabled := true;
+	shadow_map_size: enum { _1024 :: 0; _2048 :: 1; _4096 :: 2; } = ._2048;
 
 	skull_id_to_sound: Table(int, Sound);
 	shurikens_id_to_sound: Table(int, Sound);
