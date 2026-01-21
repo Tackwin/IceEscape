@@ -235,7 +235,7 @@ State :: struct {
 
 	menu: Menu;
 	game: Game_Page;
-	editor: Editor_Page;
+	editor: Editor;
 
 	Playing :: struct {
 		escape_menu_open: bool = false;

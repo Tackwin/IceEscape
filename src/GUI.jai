@@ -209,6 +209,8 @@ GUI_State :: struct {
 	widgets: Table(u64, Widget);
 
 	id_stack: [..] u64;
+
+	register_stack: [..] [..] u64;
 }
 
 Action_Key :: enum {
@@ -311,6 +313,18 @@ pop_id :: (state: *GUI_State) {
 	state.id_stack.count -= 1;
 }
 
+push_register :: (state: *GUI_State) {
+	array_add(*state.register_stack, .{});
+}
+
+pop_register :: (state: *GUI_State) {
+	if state.register_stack.count > 0 {
+		array_free(*state.register_stack[state.register_stack.count - 1]);
+		state.register_stack.count -= 1;
+	}
+}
+
+
 widget_aabb ::(state: *GUI_State, id: $Id) -> AABBf
 #modify {
 	if Id == u64 || Id == s64 || Id == string {
@@ -396,6 +410,9 @@ widget :: (state: *GUI_State, raw_id: $Id, $T: Type, default: T = .{}) -> *T, *G
 			user_state.touched = true;
 			return user_state.user.(*T), user_state;
 		}
+	}
+	if state.register_stack.count > 0 {
+		array_add(*state.register_stack[state.register_stack.count - 1], iid);
 	}
 
 	widget_state: GUI_State.Widget;
@@ -3352,4 +3369,3 @@ labeled_slider :: (
 	w.aabb = widgets_aabb(gui, string.[ "label", "slider" ]);
 	return slider_comp;
 }
-

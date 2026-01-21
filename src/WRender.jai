@@ -8,8 +8,10 @@
 #import "Rand";
 #import "Sort";
 #import "Pool";
+#import "Reflect";
 Store :: #import "Store";
 Scene :: #import "Scene";
+Editor :: #import "Editor";
 GUI :: #import "GUI";
 
 offset_of :: ($T: Type, $member: string) -> int {
@@ -458,6 +460,7 @@ Frame :: struct {
 	}
 	shadow: Pass(WFramegraph.Uniforms);
 	geometry: Pass(WFramegraph.Uniforms);
+	editor: Pass(WFramegraph.Uniforms);
 	ui: Pass(WFramegraph.UI_Uniform);
 
 	cpu: [..] u8;
@@ -1433,6 +1436,7 @@ begin_frame :: (framegraph: *WFramegraph, current_time: Apollo_Time) -> *Frame
 	frame.cpu_cursor = 0;
 	frame.shadow.draws.count = 0;
 	frame.geometry.draws.count = 0;
+	frame.editor.draws.count = 0;
 	frame.ui.draws.count = 0;
 	frame.current_time = current_time;
 
@@ -1596,6 +1600,55 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 		}
 		graphics.gpu.renderPassEncoderEnd(pass);
 	}
+	render_editor :: true;
+	if render_editor {
+		attachment: WGPURenderPassColorAttachment;
+		attachment.view = framegraph.hdrTexture.view;
+		attachment.depthSlice = DEPTH_SLICE_UNDEFINED;
+		attachment.loadOp = .Load;
+		attachment.storeOp = .Store;
+		attachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
+	
+		depthAttachment: WGPURenderPassDepthStencilAttachment;
+		depthAttachment.view = framegraph.depthView;
+		depthAttachment.depthLoadOp = .Load;
+		depthAttachment.depthStoreOp = .Store;
+		depthAttachment.depthClearValue = 1.0;
+		depthAttachment.stencilLoadOp = .Undefined;
+		depthAttachment.stencilStoreOp = .Undefined;
+		depthAttachment.stencilClearValue = 0;
+	
+		passDesc: WGPURenderPassDescriptor = .{};
+		passDesc.label = toWGPUStringView("Editor Pass");
+		passDesc.colorAttachments = *attachment;
+		passDesc.colorAttachmentCount = 1;
+		passDesc.depthStencilAttachment = *depthAttachment;
+		pass := graphics.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
+		defer graphics.gpu.renderPassEncoderRelease(pass);
+
+		graphics.gpu.renderPassEncoderSetPipeline(pass, framegraph.geometryPipeline);
+		graphics.gpu.renderPassEncoderSetBindGroup(pass, 0, geometry_bind_group, 0, null);
+		
+		last_bind_group: *WGPUBindGroup = null;
+		for * frame.editor.draws {
+			if it.second_bind_group != last_bind_group {
+				graphics.gpu.renderPassEncoderSetBindGroup(
+					pass, 1, it.second_bind_group.*, 0, null
+				);
+				last_bind_group = it.second_bind_group;
+			}
+			if !it.model
+				continue;
+
+			graphics.gpu.renderPassEncoderSetVertexBuffer(
+				pass, 0, it.model.gpu, 0, xx (it.model.prim_count * size_of(WFramegraph.Vertex))
+			);
+			graphics.gpu.renderPassEncoderDraw(
+				pass, xx it.model.prim_count, xx it.instance_count, 0, xx it.instance_start
+			);
+		}
+		graphics.gpu.renderPassEncoderEnd(pass);
+	}
 	render_ui:: true;
 	if render_ui {
 		passDesc: WGPURenderPassDescriptor = .{};
@@ -1688,6 +1741,34 @@ snap_shadow_center :: (VP: M4f, iVP: M4f, center: V3f, width: u32) -> V3f {
 	return new_center;
 }
 
+set_camera :: (
+	frame: *Frame, framegraph: *WFramegraph, V: M4f, P: M4f
+) {
+
+}
+
+render_editor :: (
+	frame: *Frame, framegraph: *WFramegraph, editor: *Editor.Editor, store: Store.Store
+) {
+	frame.editor.uniforms = frame.geometry.uniforms;
+
+	gui := editor.gui_state;
+
+	extra: Extra;
+	picking_place := Editor.screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
+	add_debug_sphere(*extra, picking_place, scale=0.1);
+
+	entities := get_scene_placeable_entities();
+	for entity: entities {
+		for 0..get_count(*editor.scene, entity)-1 {
+			pos := get_position(*editor.scene, entity, it);
+			add_debug_sphere(*extra, pos, scale=0.2);
+		}
+	}
+
+	render_extra(frame, *frame.geometry, store, *extra);
+}
+
 render_scene :: (
 	frame: *Frame, framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store
 ) {
@@ -1754,7 +1835,7 @@ render_scene :: (
 		render_pressbuttons(frame, *frame.shadow, scene, store, *extra);
 		render_jukeboxes(frame, *frame.shadow, scene, store, *extra);
 		render_traps(frame, *frame.shadow, scene, store, *extra);
-		render_extra(frame, *frame.shadow, scene, store, *extra);
+		render_extra(frame, *frame.shadow, store, *extra);
 		//render_mark(framegraph, encoder, shadowPass, scene, store);
 	}
 
@@ -1851,13 +1932,13 @@ render_scene :: (
 			}
 		}
 		render_within_zones(frame, *frame.geometry, scene, store, *extra);
-		render_extra(frame, *frame.geometry, scene, store, *extra);
+		render_extra(frame, *frame.geometry, store, *extra);
 		render_safezones(frame, *frame.geometry, scene, store, *extra);
 
 		frame.geometry.current_bind_group = *framegraph.particleBindGroup;
 		if framegraph.settings.render_particles
 			render_particles(frame, *frame.geometry, scene, store, *extra);
-		render_extra_quads(frame, *frame.geometry, scene, store, *extra);
+		render_extra_quads(frame, *frame.geometry, store, *extra);
 
 		frame.geometry.current_bind_group = *framegraph.geometryBindGroup;
 		render_mark(frame, *frame.geometry, scene, store, *extra);
@@ -1949,12 +2030,11 @@ add_debug_sphere :: (
 	color := V4f.{ 1, 1, 1, 1 },
 	scale := 1.0
 ) {
-	cylinder: Extra.Cylinder;
-	cylinder.M = M4f.translate(pos);
-	M4f.scale(*cylinder.M, v3(scale, scale, scale));
-	cylinder.color = v3(color);
-	array_add(*extra.cylinders, cylinder);
-
+	sphere: Extra.Sphere;
+	sphere.M = M4f.translate(pos);
+	M4f.scale(*sphere.M, v3(scale, scale, scale));
+	sphere.color = v3(color);
+	array_add(*extra.spheres, sphere);
 }
 
 render_mark :: (
@@ -2011,14 +2091,33 @@ render_particles :: (
 }
 
 render_extra  :: (
-	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, store: Store.Store, extra: *Extra
 ) {
-	render_extra_numbers(frame, pass, scene, store, extra);
-	render_extra_cylinders(frame, pass, scene, store, extra);
+	render_extra_numbers(frame, pass, store, extra);
+	render_extra_cylinders(frame, pass, store, extra);
+	render_extra_spheres(frame, pass, store, extra);
+}
+
+render_extra_spheres :: (
+	frame: *Frame, pass: *Frame.Pass, store: Store.Store, extra: *Extra
+) {
+	instanced := append_instance_buffer(frame);
+	for extra.spheres {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = it.M;
+		instance.color = v4(it.color, 1.0);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count == 0
+		return;
+
+	commit_geometry(frame, pass, *store.unit_sphere_model, instanced.count);
 }
 
 render_extra_cylinders :: (
-	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, store: Store.Store, extra: *Extra
 ) {
 	instanced := append_instance_buffer(frame);
 	for extra.cylinders {
@@ -2035,7 +2134,7 @@ render_extra_cylinders :: (
 }
 
 render_extra_numbers :: (
-	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, store: Store.Store, extra: *Extra
 ) {
 	for n: 0..9 {
 		instanced := append_instance_buffer(frame);
@@ -2057,7 +2156,7 @@ render_extra_numbers :: (
 }
 
 render_extra_quads :: (
-	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, store: Store.Store, extra: *Extra
 ) {
 	instanced := append_instance_buffer(frame);
 	for extra.quads {

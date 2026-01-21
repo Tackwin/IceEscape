@@ -4,6 +4,7 @@
 #import "String";
 #import "Bindings_Generator";
 #import "File";
+#import "Sort";
 #import "File_Utilities";
 
 build_game :: () -> Workspace {
@@ -298,19 +299,21 @@ build :: () {
 		array_add(*mains, "src/entry/mg_server.jai");
 	}
 
-	for wss
+	editable_entities_name: [..] string;
+	game_phases := 0;
+
+	for ws: wss
 	{
-		compiler_begin_intercept(it);
-		add_build_file(mains[it_index], it);
+		compiler_begin_intercept(ws);
+		add_build_file(mains[it_index], ws);
 		while true {
 			message := compiler_wait_for_message();
-
 			if message.kind == {
 				case .COMPLETE;
 					break;
 			}
 		}
-		compiler_end_intercept(it);
+		compiler_end_intercept(ws);
 	}
 
 	if wasm {

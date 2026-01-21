@@ -154,6 +154,19 @@ menu_loop :: (_app: *App) -> bool {
 		}
 	}
 
+	// Editor button (always visible)
+	editor_clicked, _, _ := GUI.text_button(
+		*app_user.gui_state,
+		"Level Editor",
+		V2f.{ 20, 20 },
+		z = 10,
+		id = "editor_btn"
+	);
+	if editor_clicked {
+		state.screen_state = .Editor;
+		state.editor.initialized = false;
+	}
+
 	frame := WRender.begin_frame(*framegraph, controls.time);
 	WRender.render_gui(frame, *framegraph, app_user.gui_state, store);
 	WRender.end_frame(*framegraph, frame);

@@ -109,6 +109,11 @@ get :: (span: ISpan($T), array: [] T, index: s64) -> *T {
 	return *array[span.index + index];
 }
 
+Entity :: struct {
+	id: int;
+	position: V3f;
+}
+
 Scene :: struct {
 	State :: enum {
 		Normal :: 0;
@@ -257,6 +262,12 @@ clear_string :: (info: Type_Info_Struct) -> string {
 	// print("clear string: %\n", str);
 	return str;
 }
+
+clear_scene :: (scene: *Scene) {
+	clear_scene_run(scene);
+	scene.players.count = 0;
+}
+
 rellocate_string :: (value_info: Type_Info_Struct, parent_info: Type_Info_Struct) -> string {
 	sb: String_Builder;
 	snake_case_type := to_lower_copy(value_info.name,, temp);
@@ -695,7 +706,7 @@ Trap :: struct {
 	id: int;
 	position: V3f;
 	radius_hitbox := 0.5;
-}
+} @editable
 
 Present :: struct {
 	id: int;
@@ -1158,7 +1169,7 @@ Flag :: struct {
 	n_present := 0;
 
 	last_player_count := 0;
-}
+} @editable
 
 Trigger_Zone :: struct {
 	id: int;
@@ -1294,6 +1305,7 @@ Camera_POI :: struct {
 }
 
 Tombstone :: struct {
+	id: int;
 	player_id: int;
 	position: V3f;
 }
@@ -1309,7 +1321,7 @@ Gate :: struct {
 	wait_for_key_id := -1;
 	wait_for_trigger_id := -1;
 	is_end := false;
-}
+} @editable
 
 Hook :: struct {
 	id: int;
@@ -4445,4 +4457,110 @@ remove_player_from_scene :: (player_id: int, scene: *Scene) {
 			break;
 		}
 	}
+}
+
+
+serialize :: (scene: Scene) -> string {
+	sb: String_Builder;
+
+	terrain := *scene.terrain;
+
+	// Write ASCII representation (bottom to top in file = top to bottom visually)
+	for y_inv: 0..terrain.tiles_count.y - 1 {
+		y := terrain.tiles_count.y - 1 - y_inv;
+		for x: 0..terrain.tiles_count.x - 1 {
+			tile_idx := x + y * terrain.tiles_count.x;
+			tile := terrain.tiles[tile_idx];
+
+			char: u8;
+			if x == terrain.spawn_tile.x && y == terrain.spawn_tile.y {
+				char = #char "S";
+			} else if tile.kind == {
+				case .None;       char = #char "X";
+				case .Ice;        char = #char "I";
+				case .Grass;      char = #char "G";
+				case .Slippy_Ice; char = #char "i";
+				case .Dirt;       char = #char "X";
+				case .Funny_Ice;  char = #char "R";
+			}
+			append(*sb, char);
+		}
+		append(*sb, "\n");
+	}
+
+	// Add empty line separator
+	append(*sb, "\n");
+
+	print_to_builder(
+		*sb,
+		#string TROPHY
+			frame
+			- position: % %
+			- size: % %
+		TROPHY,
+		scene.camera_min.x, scene.camera_min.y,
+		scene.camera_max.x - scene.camera_min.x, scene.camera_max.y - scene.camera_min.y
+	);
+	
+	for * scene.flags {
+		print_to_builder(
+			*sb,
+			#string FLAG
+				flag
+				- position: % % %
+				- index: %
+			FLAG,
+			it.position.x, it.position.y, it.position.z,
+			it.index
+		);
+	}
+	
+	for * scene.traps {
+		print_to_builder(
+			*sb,
+			#string TRAP
+				trap
+				- position: % % %
+				- radius_hitbox: %
+			TRAP,
+			it.position.x, it.position.y, it.position.z,
+			it.radius_hitbox
+		);
+	}
+
+	for * scene.trophies {
+		print_to_builder(
+			*sb,
+			#string TROPHY
+				trophy
+				- position: % % %
+			TROPHY,
+			it.position.x, it.position.y, it.position.z
+		);
+	}
+	
+	for * scene.gates {
+		print_to_builder(
+			*sb,
+			#string GATE
+				gate
+				- position: % % %
+				- direction: % % %
+				- is_closed: %
+				- wait_for_key_id: %
+				- wait_for_trigger_id: %
+			GATE,
+			it.position.x, it.position.y, it.position.z,
+			it.direction.x, it.direction.y, it.direction.z,
+			it.is_closed,
+			it.wait_for_key_id,
+			it.wait_for_trigger_id,
+		);
+		for idx: 0..it.pressbutton_ids.count - 1 {
+			id := scene.gate_indices[idx + it.pressbutton_ids.index];
+			print_to_builder(*sb, "	- wait_for_pressbutton_id: %\n", id);
+		}
+	}
+
+	return builder_to_string(*sb);
 }

@@ -902,8 +902,12 @@ load_dll :: () {
 }
 
 reload_dll :: () {
+	print("Entering reload\n");
 	lock(*dll_mutex);
-	defer unlock(*dll_mutex);
+	defer {
+		print("Exiting reload\n");
+		unlock(*dll_mutex);
+	}
 	if dll {
 		// Get the function pointer of app_reload
 		app_reload_before := Win32.GetProcAddress(dll, "app_reload_before").(#type (app: *App));
@@ -956,6 +960,7 @@ update_thread_proc :: (thread: *Thread) -> s64 {
 
 platform_frame :: () {
 	event: SDL_Event;
+	platform_state.mouse_wheel = 0;
 	while SDL_PollEvent(*event) {
 		if event.type == SDL_MOUSEWHEEL {
 			if event.wheel.y > 0
