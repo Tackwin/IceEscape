@@ -13,7 +13,12 @@ Editor_Mode :: enum {
 }
 
 // A Array of every types that can be placed in the editor.
-editable_entities_type :: Type.[ Scene.Gate, Scene.Trap, Scene.Trophy ];
+editable_entities_type :: Type.[
+	Scene.Gate,
+	Scene.Trap,
+	Scene.Trophy,
+	Scene.Flag
+];
 
 Editor :: struct {
 	scene: Scene.Scene;

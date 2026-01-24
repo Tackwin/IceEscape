@@ -929,8 +929,8 @@ reload_dll :: () {
 		return;
 	}
 	// Now we can safely reload the DLL
-	if dll
-		Win32.FreeLibrary(dll);
+	// if dll
+	// 	Win32.FreeLibrary(dll);
 	dll = dll_reloaded;
 
 	// Get the function pointer of app_reload

@@ -440,10 +440,123 @@ draw_entity_type_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_aabb: A
 
 	GUI.push_quad_screen(gui, panel_aabb, V3f.{ 0.15, 0.15, 0.15 }, z = 50);
 
-	cursor := panel_aabb.min + v2(8.0);
+	panel_width := panel_aabb.max.x - panel_aabb.min.x;
+	cursor := panel_aabb.min + v2(8.0, panel_aabb.max.y - panel_aabb.min.y - 24);
+
+	// Entity type name
 	GUI.atom_label(gui, editor.selected_entity_type.name, cursor, scale = 16, z = 51, id = 1);
 	cursor.x += GUI.widget_width(gui, 1) + 8;
-	GUI.text_button(gui, "Remove", cursor, z = 51, id = "remove_button");
+
+	// Remove button
+	remove_clicked, _, _ := GUI.text_button(gui, "Remove", cursor, z = 51, id = "remove_button");
+	if remove_clicked {
+		// Find and remove the entity from its array
+		entities := get_scene_placeable_entities();
+		for entity: entities {
+			if entity.type.name == editor.selected_entity_type.name {
+				count := get_count(*editor.scene, entity);
+				for i: 0..count-1 {
+					ptr := get_pointer(*editor.scene, entity, i);
+					if ptr == editor.selected_entity_ptr {
+						// Remove entity at index i by calling the appropriate array removal
+						remove_entity_at(*editor.scene, entity, i);
+						editor.selected_entity_ptr = null;
+						return;
+					}
+				}
+			}
+		}
+	}
+
+	// Position editing
+	cursor.x = panel_aabb.min.x + 8;
+	cursor.y -= 32;
+
+	GUI.default_params(gui).cursor = cursor;
+	GUI.default_params(gui).align = .Center_Left;
+	GUI.default_params(gui).z = 52;
+
+	GUI.atom_label(
+		gui, "Position:", cursor, scale = 14, z = 51, color = V4f.{ 0.8, 0.8, 0.8, 1 }, id = 2,
+		align = .Center_Left
+	);
+	GUI.move_cursor(gui, V2f.{ GUI.widget_width(gui, 2) + 8, 0 });
+
+	// Get current position from the entity
+	position_offset := offset_of(editor.selected_entity_type, "position");
+	current_pos := (editor.selected_entity_ptr.(int) + position_offset).(*V3f);
+
+	pos_result := GUI.v3_input(
+		gui,
+		panel_width - GUI.default_params(gui).cursor.x + panel_aabb.min.x,
+		24,
+		value = current_pos.*,
+		drag_speed = editor.grid_snapping,
+		precision = 2,
+		id = "entity_position",
+	);
+	if pos_result.changed {
+		current_pos.* = pos_result.value;
+	}
+
+	// GATE
+	if compare(editor.selected_entity_type.name, "Gate") == 0 {
+		direction_offset := offset_of(editor.selected_entity_type, "direction");
+		current_dir := (editor.selected_entity_ptr.(int) + direction_offset).(*V3f);
+		dir_result := GUI.v3_input(
+			gui,
+			panel_width - GUI.default_params(gui).cursor.x + panel_aabb.min.x,
+			24,
+			value = current_dir.*,
+			drag_speed = 0.1,
+			precision = 2,
+			id = "entity_direction",
+		);
+		if dir_result.changed {
+			current_dir.* = normalize(dir_result.value);
+		}
+	}
+	
+	// FLAG
+	if compare(editor.selected_entity_type.name, "Flag") == 0 {
+		direction_offset := offset_of(editor.selected_entity_type, "direction");
+		current_dir := (editor.selected_entity_ptr.(int) + direction_offset).(*V3f);
+		dir_result := GUI.v3_input(
+			gui,
+			panel_width - GUI.default_params(gui).cursor.x + panel_aabb.min.x,
+			24,
+			value = current_dir.*,
+			drag_speed = editor.grid_snapping,
+			precision = 2,
+			id = "entity_direction",
+		);
+		if dir_result.changed {
+			current_dir.* = normalize(dir_result.value);
+		}
+	}
+}
+
+remove_entity_at :: (scene: *Scene.Scene, entity: Scene_Placeable_Entity, index: int) {
+	// Get the array info - offset to the count and data pointer
+	count_ptr := (scene.(int) + entity.array_offset).(*int);
+	data_ptr_ptr := (scene.(int) + entity.array_offset + 8).(**u8);
+
+	count := count_ptr.*;
+	data_ptr := data_ptr_ptr.*;
+	element_size := entity.type.runtime_size.(int);
+
+	if index < 0 || index >= count
+		return;
+
+	// Shift elements after the removed one
+	for i: index..count - 2 {
+		src := data_ptr + (i + 1) * element_size;
+		dst := data_ptr + i * element_size;
+		memcpy(dst, src, element_size);
+	}
+
+	// Decrease count
+	count_ptr.* = count - 1;
 }
 
 draw_editor_toolbar :: (editor: *Editor, gui: *GUI.GUI_State, state: *State) {

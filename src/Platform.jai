@@ -68,6 +68,11 @@ Key :: enum s32 {
 	Backspace;
 	Left;
 	Right;
+	Up;
+	Down;
+	Enter;
+	Control;
+	Minus;
 }
 Key_COUNT :: #run enum_values_as_s64(Key).count;
 

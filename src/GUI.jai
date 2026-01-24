@@ -173,6 +173,19 @@ GUI_State :: struct {
 
 	main_font: *Platform.Font;
 
+	Default_Params :: struct {
+		z := 0.0;
+		direction: enum {
+			Right :: 0;
+			Down :: 1;
+			Left :: 2;
+			Up :: 3;
+		} = .Down;
+		align: Align = .Top_Left;
+		cursor := V2f.{ 0, 0 };
+	};
+	default_params_stack: [..] Default_Params;
+
 	Widget :: struct {
 		id: u64;
 		z: float32;
@@ -291,6 +304,25 @@ string_id :: (text: string) -> u64 {
 gui_state_init :: (state: *GUI_State, store: *Store) {
 	state.* = .{};
 	state.main_font = *store.verdana;
+}
+
+default_params :: (state: *GUI_State) -> *GUI_State.Default_Params {
+	if state.default_params_stack.count == 0 {
+		array_add(*state.default_params_stack, .{});
+	}
+	return *state.default_params_stack[state.default_params_stack.count - 1];
+}
+move_cursor :: (state: *GUI_State, delta: V2f) {
+	default_params(state).cursor += delta;
+}
+push_default_params :: (state: *GUI_State, params: GUI_State.Default_Params = .{}) {
+	array_add(*state.default_params_stack, params);
+}
+pop_default_params :: (state: *GUI_State) {
+	assert(state.default_params_stack.count > 0);
+	if state.default_params_stack.count == 0
+		return;
+	state.default_params_stack.count -= 1;
 }
 
 last_id :: (state: *GUI_State) -> u64 {
@@ -548,7 +580,6 @@ begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Con
 
 		if in(widget.aabb, state.controls.mouse_pos) {
 			widget.hovered = (widget.physical & .Mouse) != .Empty;
-
 			if !state.controls.captured_mouse {
 				if widget.physical & .Mouse_Left {
 					if state.controls.pressed[Key.MouseLeft] {
@@ -688,6 +719,7 @@ push_late_quad_screen :: (state: *GUI_State, pos: V2f, size: V2f, color: V4f, z 
 }
 
 Align :: enum {
+	Undefined :: 0b0000;
 	Left :: 0b01;
 	Right :: 0b10;
 	HCenter :: 0b11;
@@ -2207,6 +2239,35 @@ Atom_Label :: struct {
 	gui_char_start_index: int;
 	gui_char_count: int;
 }
+_atom_label :: (
+	gui: *GUI_State,
+	text: string,
+	scale := 16.0,
+	color := V4f.{ 1, 1, 1, 1 },
+	outline := false,
+	id : string = "atom_label",
+	_z := FLOAT32_MAX,
+	_align := Align.Undefined,
+	_pos: V2f = .{ FLOAT32_MAX, FLOAT32_MAX },
+	generate_offsets := false
+) -> Atom_Label {
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+	return atom_label(
+		gui,
+		text,
+		pos,
+		scale,
+		z,
+		align,
+		color,
+		outline,
+		string_id(id),
+		generate_offsets
+	);
+}
+
 atom_label :: (
 	gui: *GUI_State,
 	text: string,
@@ -3368,4 +3429,646 @@ labeled_slider :: (
 
 	w.aabb = widgets_aabb(gui, string.[ "label", "slider" ]);
 	return slider_comp;
+}
+
+// ============================================================================
+// Scroll List Widget
+// ============================================================================
+
+Scroll_List :: struct {
+	scroll_offset: float;
+	content_height: float;
+	visible_height: float;
+	aabb: AABBf;
+
+	// For clipping - items outside this range should not be rendered
+	visible_min_y: float;
+	visible_max_y: float;
+
+	is_scrolling := false;
+	hovered := false;
+}
+
+scroll_list_begin :: (
+	gui: *GUI_State,
+	pos: V2f,
+	width: float,
+	height: float,
+	content_height: float,
+	z := 0.0,
+	id := "scroll_list",
+	align := Align.Bottom_Left,
+	background_color := GRAY_80,
+	scrollbar_width := 12.0
+) -> *Scroll_List {
+	state, widget := widget(gui, id, Scroll_List);
+
+	push_id(gui, id);
+
+	lower_left := align_pos(pos, .{ width, height }, align);
+
+	state.visible_height = height;
+	state.content_height = max(content_height, height);
+	state.aabb = pos_size(lower_left, v2(width, height));
+	state.visible_min_y = lower_left.y;
+	state.visible_max_y = lower_left.y + height;
+
+	// Clamp scroll offset
+	max_scroll := max(0.0, state.content_height - height);
+	state.scroll_offset = clamp(state.scroll_offset, 0.0, max_scroll);
+
+	// Draw background
+	push_quad_screen(gui, lower_left, .{ width, height }, v3(GRAY_40), z);
+	push_quad_screen(gui, lower_left + v2(1), .{ width - 2, height - 2 }, v3(background_color), z + 0.01);
+
+	// Check if mouse is in the scroll area
+	content_area := pos_size(lower_left, v2(width - scrollbar_width, height));
+	state.hovered = point_aabb(gui.controls.mouse_pos, content_area);
+
+	// Handle mouse wheel scrolling
+	if state.hovered && !gui.controls.captured_mouse {
+		scroll_delta := gui.controls.mouse_wheel.(float) * 30.0;
+		state.scroll_offset -= scroll_delta;
+		state.scroll_offset = clamp(state.scroll_offset, 0.0, max_scroll);
+		if gui.controls.mouse_wheel != 0 {
+			gui.controls.captured_mouse = true;
+		}
+	}
+
+	// Draw scrollbar if content is larger than visible area
+	if state.content_height > height {
+		scrollbar_x := lower_left.x + width - scrollbar_width;
+		scrollbar_track_height := height - 4;
+
+		// Track
+		push_quad_screen(gui, .{ scrollbar_x + 2, lower_left.y + 2 }, .{ scrollbar_width - 4, scrollbar_track_height }, v3(GRAY_60), z + 0.02);
+
+		// Calculate thumb size and position
+		visible_ratio := height / state.content_height;
+		thumb_height := max(20.0, scrollbar_track_height * visible_ratio);
+		scroll_ratio := state.scroll_offset / max_scroll;
+		thumb_y := lower_left.y + 2 + (scrollbar_track_height - thumb_height) * (1.0 - scroll_ratio);
+
+		// Thumb
+		thumb_color := ifx state.is_scrolling then v3(GREEN_BRIGHT) else v3(GRAY_20);
+		push_quad_screen(gui, .{ scrollbar_x + 4, thumb_y }, .{ scrollbar_width - 8, thumb_height }, thumb_color, z + 0.03);
+
+		// Handle scrollbar dragging
+		scrollbar_aabb := pos_size(v2(scrollbar_x, lower_left.y), v2(scrollbar_width, height));
+		if point_aabb(gui.controls.mouse_pos, scrollbar_aabb) {
+			if gui.controls.just_pressed[Key.MouseLeft] {
+				state.is_scrolling = true;
+				gui.controls.captured_mouse = true;
+			}
+		}
+
+		if !gui.controls.pressed[Key.MouseLeft] {
+			state.is_scrolling = false;
+		}
+
+		if state.is_scrolling {
+			gui.controls.captured_mouse = true;
+			// Map mouse Y position to scroll offset
+			mouse_y_normalized := (gui.controls.mouse_pos.y - lower_left.y - 2 - thumb_height / 2) / (scrollbar_track_height - thumb_height);
+			mouse_y_normalized = 1.0 - clamp(mouse_y_normalized, 0.0, 1.0);
+			state.scroll_offset = mouse_y_normalized * max_scroll;
+		}
+	}
+
+	widget.aabb = state.aabb;
+	widget.physical = .Mouse;
+
+	return state;
+}
+
+// Helper to check if an item is visible within the scroll list
+scroll_list_item_visible :: (scroll_list: *Scroll_List, item_y: float, item_height: float) -> bool {
+	item_top := item_y + item_height;
+	item_bottom := item_y;
+	return item_top > scroll_list.visible_min_y && item_bottom < scroll_list.visible_max_y;
+}
+
+// Get the adjusted Y position for an item accounting for scroll offset
+scroll_list_item_y :: (scroll_list: *Scroll_List, item_index: int, item_height: float, padding := 2.0) -> float {
+	base_y := scroll_list.aabb.max.y - (item_index + 1).(float) * (item_height + padding) - padding;
+	return base_y + scroll_list.scroll_offset;
+}
+
+scroll_list_end :: (gui: *GUI_State) {
+	pop_id(gui);
+}
+
+// ============================================================================
+// Float Input Widget (Blender-style draggable)
+// ============================================================================
+
+Float_Input :: struct {
+	value: float;
+	changed := false;
+	dragging := false;
+	editing := false;  // Text editing mode
+	drag_start_value: float;
+	drag_start_x: float;
+	aabb_min: V2f;
+	aabb_max: V2f;
+
+	edit_text: [32] u8;
+	edit_text_len: int;
+	edit_cursor: int;
+}
+
+float_input :: (
+	gui: *GUI_State,
+	width: float,
+	height: float,
+	value := 0.0,
+	min_value := -FLOAT32_MAX,
+	max_value := FLOAT32_MAX,
+	drag_speed := 0.01,
+	precision := 3,
+	_pos: V2f,
+	_z := FLOAT32_MAX,
+	_align := Align.Center,
+	id := "float_input"
+) -> Float_Input {
+	state, widget := widget(gui, id, Float_Input);
+	
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + 4;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - 4;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - 4;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + 4;
+		}
+	}
+
+	push_id(gui, id);
+	defer pop_id(gui);
+	state.value = clamp(value, min_value, max_value);
+
+	lower_left := align_pos(pos, .{ width, height }, align);
+
+	state.aabb_min = lower_left;
+	state.aabb_max = lower_left + .{ width, height };
+	state.changed = false;
+
+	widget.aabb = pos_size(lower_left, v2(width, height));
+	widget.physical = .Solid;
+
+	mouse_in_widget := point_aabb(gui.controls.mouse_pos, widget.aabb);
+
+	// Background
+	border_color := ifx state.editing then v3(GREEN_BRIGHT) else ifx state.dragging then v3(GRAY_00) else v3(GRAY_40);
+	push_quad_screen(gui, lower_left, .{ width, height }, border_color, z);
+	push_quad_screen(gui, lower_left + v2(1), .{ width - 2, height - 2 }, v3(GRAY_90), z + 0.01);
+
+	// Draw drag indicator arrows on the sides when not editing
+	if !state.editing {
+		arrow_width := 6.0;
+		// Left arrow indicator
+		push_quad_screen(gui, lower_left + v2(2.0, height/2.0 - 3.0), v2(arrow_width, 6.0), v3(GRAY_50), z + 0.02);
+		// Right arrow indicator
+		push_quad_screen(gui, lower_left + v2(width - arrow_width - 2.0, height/2.0 - 3.0), v2(arrow_width, 6.0), v3(GRAY_50), z + 0.02);
+	}
+
+	if state.editing {
+		// Text editing mode
+		text: string;
+		text.data = state.edit_text.data;
+		text.count = state.edit_text_len;
+
+		label := atom_label(
+			gui,
+			text,
+			lower_left + v2(4.0, height / 2.0),
+			height * 0.6,
+			z = z + 0.03,
+			align = .Center_Left,
+			color = GRAY_00,
+			generate_offsets = true
+		);
+
+		// Draw cursor
+		state.edit_cursor = clamp(state.edit_cursor, 0, state.edit_text_len);
+		cursor_x := lower_left.x + 4.0 + (ifx label.offsets.count > state.edit_cursor then label.offsets[state.edit_cursor] else 0.0);
+		cursor_aabb := pos_size(v2(cursor_x, lower_left.y + 4.0), v2(2.0, height - 8.0));
+		push_quad_screen(gui, cursor_aabb, v3(GRAY_00), z + 0.04);
+
+		// Handle keyboard input for text editing
+		if widget.keyboard_focused {
+			handle_char :: (key: int, char: u8, shift_char: u8 = 0) #expand {
+				if gui.controls.just_pressed[key] {
+					if state.edit_text_len < 31 {
+						actual_char := ifx gui.controls.pressed[Platform.Key.Shift] && shift_char != 0 then shift_char else char;
+						// Shift characters after cursor
+						for < i: state.edit_text_len..state.edit_cursor + 1 {
+							state.edit_text[i] = state.edit_text[i - 1];
+						}
+						state.edit_text[state.edit_cursor] = actual_char;
+						state.edit_text_len += 1;
+						state.edit_cursor += 1;
+					}
+				}
+			}
+
+			// Numbers
+			handle_char(xx Platform.Key._0, #char "0");
+			handle_char(xx Platform.Key._1, #char "1");
+			handle_char(xx Platform.Key._2, #char "2");
+			handle_char(xx Platform.Key._3, #char "3");
+			handle_char(xx Platform.Key._4, #char "4");
+			handle_char(xx Platform.Key._5, #char "5");
+			handle_char(xx Platform.Key._6, #char "6");
+			handle_char(xx Platform.Key._7, #char "7");
+			handle_char(xx Platform.Key._8, #char "8");
+			handle_char(xx Platform.Key._9, #char "9");
+			handle_char(xx Platform.Key.Period, #char ".");
+			handle_char(xx Platform.Key.Minus, #char "-");
+
+			// Backspace
+			if gui.controls.just_pressed[Platform.Key.Backspace] {
+				if state.edit_cursor > 0 && state.edit_text_len > 0 {
+					for i: state.edit_cursor - 1..state.edit_text_len - 2 {
+						state.edit_text[i] = state.edit_text[i + 1];
+					}
+					state.edit_text_len -= 1;
+					state.edit_cursor -= 1;
+				}
+			}
+
+			// Arrow keys
+			if gui.controls.just_pressed[Platform.Key.Left] {
+				state.edit_cursor = max(0, state.edit_cursor - 1);
+			}
+			if gui.controls.just_pressed[Platform.Key.Right] {
+				state.edit_cursor = min(state.edit_text_len, state.edit_cursor + 1);
+			}
+
+			// Enter to confirm
+			if gui.controls.just_pressed[Platform.Key.Enter] {
+				text_str: string;
+				text_str.data = state.edit_text.data;
+				text_str.count = state.edit_text_len;
+				parsed, success := string_to_float(text_str);
+				if success {
+					parsed = clamp(parsed, min_value, max_value);
+					if parsed != state.value {
+						state.value = parsed;
+						state.changed = true;
+					}
+				}
+				state.editing = false;
+				widget.keyboard_focused = false;
+			}
+
+			// Escape to cancel
+			if gui.controls.just_pressed[Platform.Key.Escape] {
+				state.editing = false;
+				widget.keyboard_focused = false;
+			}
+		}
+	} else {
+		// Display mode - show value
+		value_text := tprint("%", formatFloat(state.value, width=precision));
+		atom_label(
+			gui,
+			value_text,
+			lower_left + v2(width / 2, height / 2),
+			height * 0.6,
+			z = z + 0.03,
+			align = .Center,
+			color = GRAY_00
+		);
+
+		// Handle interactions
+		if mouse_in_widget {
+			// Double-click to enter edit mode
+			if widget.released && widget.age > 0 && !state.dragging {
+				// Check for double-click (this is a simplified check)
+				state.editing = true;
+				widget.keyboard_focused = true;
+				// Initialize edit text with current value
+				value_str := tprint("%", formatFloat(state.value, width=precision));
+				for i: 0..min(value_str.count, 31) - 1 {
+					state.edit_text[i] = value_str[i];
+				}
+				state.edit_text_len = min(value_str.count, 31);
+				state.edit_cursor = state.edit_text_len;
+			}
+
+			// Start dragging on mouse press
+			if gui.controls.just_pressed[Key.MouseLeft] {
+				state.dragging = true;
+				state.drag_start_value = state.value;
+				state.drag_start_x = gui.controls.mouse_pos.x;
+				gui.controls.captured_mouse = true;
+			}
+		}
+		// Handle dragging
+		if state.dragging {
+			gui.controls.captured_mouse = true;
+
+			if !gui.controls.pressed[Key.MouseLeft] {
+				state.dragging = false;
+			} else {
+				delta_x := floor((gui.controls.mouse_pos.x - state.drag_start_x) / 4);
+
+				// Adjust speed based on modifiers
+				actual_speed := drag_speed;
+				if gui.controls.pressed[Platform.Key.Shift] {
+					actual_speed *= 0.1;  // Slow down with shift
+				}
+				if gui.controls.pressed[Platform.Key.Control] {
+					actual_speed *= 10.0;  // Speed up with ctrl
+				}
+
+				new_value := state.drag_start_value + delta_x * actual_speed;
+				new_value = clamp(new_value, min_value, max_value);
+
+				if new_value != state.value {
+					state.value = new_value;
+					state.changed = true;
+				}
+			}
+		}
+	}
+
+	return state.*;
+}
+
+labeled_float_input :: (
+	gui: *GUI_State,
+	label: string,
+	pos: V2f,
+	width: float,
+	height: float,
+	default_value := 0.0,
+	min_value := -FLOAT32_MAX,
+	max_value := FLOAT32_MAX,
+	drag_speed := 0.01,
+	precision := 3,
+	z := 0.0,
+	id := "labeled_float_input",
+	align := Align.Center,
+	padding := 4.0
+) -> Float_Input {
+	_, w := widget(gui, id, struct {});
+
+	push_id(gui, id);
+	defer pop_id(gui);
+
+	lower_left := align_pos(pos, .{ width, height }, horizontal(align));
+
+
+	label_comp := atom_label(
+		gui,
+		label,
+		lower_left + v2(padding, 0.0),
+		height * 0.6,
+		z,
+		align = vertical(align) | Align.Left,
+		color = v4(0.0, 0, 0, 1),
+		id = xx string_id("label")
+	);
+
+	input_width := min(width - widget_width(gui, "label") - padding * 3, 128.0);
+	input_comp := float_input(
+		gui,
+		lower_left + v2(width - padding, height / 2),
+		input_width,
+		height,
+		default_value = default_value,
+		min_value = min_value,
+		max_value = max_value,
+		drag_speed = drag_speed,
+		precision = precision,
+		z = z,
+		align = vertical(align) | Align.Right,
+		id = "input"
+	);
+
+	w.aabb = widgets_aabb(gui, string.[ "label", "input" ]);
+	return input_comp;
+}
+
+// ============================================================================
+// Vector Input Widgets (using Float_Input)
+// ============================================================================
+
+V2_Input :: struct {
+	value: V2f;
+	changed := false;
+	x_changed := false;
+	y_changed := false;
+}
+
+v2_input :: (
+	gui: *GUI_State,
+	pos: V2f,
+	width: float,
+	height: float,
+	default_value := V2f.{},
+	min_value := V2f.{ -FLOAT32_MAX, -FLOAT32_MAX },
+	max_value := V2f.{ FLOAT32_MAX, FLOAT32_MAX },
+	drag_speed := 0.01,
+	precision := 3,
+	z := 0.0,
+	id := "v2_input",
+	align := Align.Center,
+	labels := string.[ "X", "Y" ]
+) -> V2_Input {
+	state, w := widget(gui, id, V2_Input);
+
+	push_id(gui, id);
+	defer pop_id(gui);
+
+	if w.age == 0 {
+		state.value = default_value;
+	}
+
+	lower_left := align_pos(pos, .{ width, height }, align);
+
+	component_width := (width - 4.0) / 2.0;
+	label_width := 16.0;
+	input_width := component_width - label_width - 4.0;
+
+	state.changed = false;
+	state.x_changed = false;
+	state.y_changed = false;
+
+	// X component
+	atom_label(gui, labels[0], lower_left + v2(2.0, height / 2), height * 0.5, z, align = .Center_Left, color = GRAY_00, id = xx 0);
+	x_input := float_input(
+		gui,
+		lower_left + v2(label_width + 2.0, height / 2),
+		input_width,
+		height - 4,
+		default_value = state.value.x,
+		min_value = min_value.x,
+		max_value = max_value.x,
+		drag_speed = drag_speed,
+		precision = precision,
+		z = z,
+		align = .Center_Left,
+		id = "x"
+	);
+	if x_input.changed {
+		state.value.x = x_input.value;
+		state.x_changed = true;
+		state.changed = true;
+	}
+
+	// Y component
+	x_offset := component_width + 4.0;
+	atom_label(gui, labels[1], lower_left + v2(x_offset + 2.0, height / 2), height * 0.5, z, align = .Center_Left, color = GRAY_00, id = xx 1);
+	y_input := float_input(
+		gui,
+		lower_left + v2(x_offset + label_width + 2.0, height / 2),
+		input_width,
+		height - 4,
+		default_value = state.value.y,
+		min_value = min_value.y,
+		max_value = max_value.y,
+		drag_speed = drag_speed,
+		precision = precision,
+		z = z,
+		align = .Center_Left,
+		id = "y"
+	);
+	if y_input.changed {
+		state.value.y = y_input.value;
+		state.y_changed = true;
+		state.changed = true;
+	}
+
+	w.aabb = pos_size(lower_left, v2(width, height));
+	return state.*;
+}
+
+V3_Input :: struct {
+	value: V3f;
+	changed := false;
+	x_changed := false;
+	y_changed := false;
+	z_changed := false;
+}
+
+v3_input :: (
+	gui: *GUI_State,
+	width: float,
+	height: float,
+	value: V3f,
+	id := "v3_input",
+	min_value := V3f.{ -FLOAT32_MAX, -FLOAT32_MAX, -FLOAT32_MAX },
+	max_value := V3f.{ FLOAT32_MAX, FLOAT32_MAX, FLOAT32_MAX },
+	drag_speed := 0.01,
+	precision := 3,
+	_pos: V2f = .{ FLOAT32_MAX, FLOAT32_MAX },
+	_z := FLOAT32_MAX,
+	_align := Align.Undefined,
+	labels := string.[ "X", "Y", "Z" ]
+) -> V3_Input {
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	state, w := widget(gui, id, V3_Input);
+ 
+	push_id(gui, id);
+	defer pop_id(gui);
+
+	state.value = value;
+
+	lower_left := align_pos(pos, .{ width, height }, align);
+
+	component_width := (width - 8.0) / 3.0;
+	label_width := 16.0;
+	input_width := component_width - label_width - 4.0;
+
+	state.changed = false;
+	state.x_changed = false;
+	state.y_changed = false;
+	state.z_changed = false;
+
+	// X component
+	atom_label(
+		gui,
+		labels[0],
+		lower_left + v2(2.0, height / 2.0),
+		height * 0.5, z, align = .Center_Left, color = GRAY_80, id = xx 0
+	);
+	x_input := float_input(
+		gui,
+		input_width,
+		height - 4.0,
+		value = state.value.x,
+		min_value = min_value.x,
+		max_value = max_value.x,
+		drag_speed = drag_speed,
+		precision = precision,
+		_pos = lower_left + v2(label_width + 2.0, height / 2.0),
+		_align = .Center_Left,
+		id = "x"
+	);
+	if x_input.changed {
+		state.value.x = x_input.value;
+		state.x_changed = true;
+		state.changed = true;
+	}
+
+	// Y component
+	x_offset := component_width + 4.0;
+	atom_label(gui, labels[1], lower_left + v2(x_offset + 2.0, height / 2.0), height * 0.5, z, align = .Center_Left, color = GRAY_80, id = xx 1);
+	y_input := float_input(
+		gui,
+		input_width,
+		height - 4.0,
+		value = state.value.y,
+		min_value = min_value.y,
+		max_value = max_value.y,
+		drag_speed = drag_speed,
+		precision = precision,
+		_pos = lower_left + v2(x_offset + label_width + 2.0, height / 2.0),
+		_align = .Center_Left,
+		id = "y"
+	);
+	if y_input.changed {
+		state.value.y = y_input.value;
+		state.y_changed = true;
+		state.changed = true;
+	}
+
+	// Z component
+	x_offset2 := 2.0 * component_width + 8.0;
+	atom_label(gui, labels[2], lower_left + v2(x_offset2 + 2.0, height / 2.0), height * 0.5, z, align = .Center_Left, color = GRAY_80, id = xx 2);
+	z_input := float_input(
+		gui,
+		input_width,
+		height - 4.0,
+		value = state.value.z,
+		min_value = min_value.z,
+		max_value = max_value.z,
+		drag_speed = drag_speed,
+		precision = precision,
+		_pos = lower_left + v2(x_offset2 + label_width + 2.0, height / 2.0),
+		_align = .Center_Left,
+		id = "zcomp"
+	);
+	if z_input.changed {
+		state.value.z = z_input.value;
+		state.z_changed = true;
+		state.changed = true;
+	}
+
+	w.aabb = pos_size(lower_left, v2(width, height));
+	return state.*;
 }

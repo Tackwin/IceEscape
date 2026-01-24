@@ -83,6 +83,20 @@ offset_of :: (type: Type_Info_Struct, member_name: string) -> int {
 	}
 	return 0;
 }
+member_pointer :: (data: *$T, member_name: string, $type: Type) -> *type {
+	ti := type_info(data);
+	if ti.type != .STRUCT
+		return null;
+	ti_struct := ti.(*Type_Info_Struct);
+	return member_pointer(ti_struct, data.(*void), member_name, type);
+}
+member_pointer :: (info: Type_Info_Struct, base: *void, member_name: string, $type: Type) -> *type {
+	for member: info.members {
+		if compare(member.name, member_name) == 0
+			return ((*base).(int) + member.offset_in_bytes).(*type);
+	}
+	return null;
+}
 
 get_count :: (scene: *Scene.Scene, entity: Scene_Placeable_Entity) -> int {
 	return (scene.(int) + entity.array_offset).(*int).*;
