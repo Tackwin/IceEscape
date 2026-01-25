@@ -62,6 +62,7 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	info.quit = false;
 	info.window_focused = true;
 	info.window_size = .{ xx 1366, xx 768 };
+	info.layout = .Unknown;
 
 	Mouse_X :: 128;
 	Mouse_Y :: 132;

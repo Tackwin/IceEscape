@@ -2058,6 +2058,7 @@ jai_imports.jsInstanceCreateSurface = (params_ptr, returns_ptr) => {
 	Atomics.store(span, Window_H / 4, object_map[object_map_counter].height);
 	const canvas = object_map[object_map_counter];
 	canvas.id = "webgpu-canvas";
+	canvas.oncontextmenu = (e) => e.preventDefault();
 	document.body.appendChild(canvas);
 
 	setU64(returns_ptr, 0, object_map_counter);

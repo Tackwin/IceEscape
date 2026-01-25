@@ -1,4 +1,5 @@
 #import "Basic";
+#import "String";
 #import "Algebra";
 
 #scope_export
@@ -6,6 +7,7 @@
 Layout :: enum s32 {
 	AZERTY :: 0;
 	QWERTY :: 1;
+	Unknown :: 2;
 }
 
 Key :: enum s32 {
@@ -206,6 +208,93 @@ Font :: struct {
 	glyphs: [256] Glyph;
 }
 
+DB_query :: struct {
+	Handle :: int;
+	
+	kind: enum {
+		OPEN;
+		EXEC;
+		CLOSE;
+		STORE;
+		LOAD;
+		FLUSH;
+	};
+
+	handle: Handle;
+	memory := false;
+
+	query_string: string;
+
+	input: [] *void;
+	output: [] *void;
+	output_allocator: Allocator;
+
+	type: *Type_Info;
+}
+
+store_database :: (platform: *Platform, db: DB_query.Handle, table: string, inputs: [] $T) {
+	query := DB_query.{};
+	query.kind = .STORE;
+	query.handle = db;
+	query.input = NewArray(inputs.count, *void,, temp);
+	for 0..inputs.count - 1 {
+		query.input[it] = (inputs.data + it).(*void);
+	}
+	query.type = type_info(T);
+	info := query.type.(*Type_Info_Struct);
+	assert(query.type.type == .STRUCT);
+
+	sb: String_Builder;
+	sb.allocator = temp;
+	print_to_builder(*sb, "INSERT INTO % (", table);
+	sep := "";
+	for info.members {
+		print_to_builder(*sb, "%1%2", sep, to_lower_copy(it.name,, temp));
+		sep = ", ";
+	}
+	print_to_builder(*sb, ") VALUES (");
+	sep = "";
+	for info.members {
+		print_to_builder(*sb, "%1?", sep);
+		sep = ", ";
+	}
+	print_to_builder(*sb, ");");
+
+	query.query_string = builder_to_string(*sb);
+
+	platform.db_query(*query);
+}
+
+flush_database :: (platform: *Platform, db: DB_query.Handle) {
+	query := DB_query.{};
+	query.kind = .FLUSH;
+	query.handle = db;
+	platform.db_query(*query);
+}
+
+open_database :: (platform: *Platform, path: string) -> DB_query.Handle {
+	query := DB_query.{};
+	query.kind = .OPEN;
+	query.query_string = path;
+	platform.db_query(*query);
+	return query.handle;
+}
+
+quit_database :: (platform: *Platform, handle: DB_query.Handle) {
+	query := DB_query.{};
+	query.kind = .CLOSE;
+	query.handle = handle;
+	platform.db_query(*query);
+}
+
+exec_database :: (platform: *Platform, handle: DB_query.Handle, query_string: string) {
+	query := DB_query.{};
+	query.kind = .EXEC;
+	query.handle = handle;
+	query.query_string = query_string;
+	platform.db_query(*query);
+}
+
 Platform :: struct {
 	extern_ref :: s32;
 	wait: #type (promise: extern_ref) = null;
@@ -240,6 +329,8 @@ Platform :: struct {
 	read_entire_file: #type (path: string, data: [] u8) -> int = null;
 	load_image: #type (data: [] u8) -> Image = null;
 	free_image: #type (image: *Image) = null;
+
+	db_query: #type (query: *DB_query) = null;
 
 	Thread_F :: #type (data: *void);
 	spawn: #type (func: Thread_F, data: *void) -> int = null;

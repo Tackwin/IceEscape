@@ -183,6 +183,7 @@ GUI_State :: struct {
 		} = .Down;
 		align: Align = .Top_Left;
 		cursor := V2f.{ 0, 0 };
+		padding: V2f = V2f.{ 8, 8 };
 	};
 	default_params_stack: [..] Default_Params;
 
@@ -523,7 +524,11 @@ begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Con
 	state.controls.delta_time = info.delta_time;
 	state.controls.time = info.time;
 	// Use the user's preferred layout override instead of the auto-detected one
-	state.controls.layout = layout_override;
+	if info.layout == .Unknown
+		state.controls.layout = layout_override;
+	else
+		state.controls.layout = info.layout;
+
 
 	state.chars.count = 0;
 	state.quads.count = 0;
@@ -1714,7 +1719,6 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 	).checked;
 	cursor.y += widget_height(state, "sound_checkbox") + 4;
 	popup_size.* = grow(popup_size, pos, cursor);
-	push_debug_mark(state, cursor);
 
 	// Keyboard layout dropdown
 	layout_options :: string.[ "AZERTY", "QWERTY" ];
@@ -1735,7 +1739,6 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 	ret.keyboard_layout = cast(Platform.Layout) layout_dropdown.selected_index;
 	ret.layout_changed = layout_dropdown.changed;
 	cursor.y += widget_height(state, "keyboard_dropdown") + 4;
-	push_debug_mark(state, cursor);
 	popup_size.* = grow(popup_size, pos, cursor);
 
 	// Shadows checkbox
@@ -1754,7 +1757,6 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 	ret.shadows_enabled = shadows_checkbox.checked;
 	ret.shadows_changed = shadows_checkbox.just_checked;
 	cursor.y += widget_height(state, "shadows_checkbox") + 4;
-	push_debug_mark(state, cursor);
 	popup_size.* = grow(popup_size, pos, cursor);
 
 	// // Shadow samples dropdown
@@ -1775,7 +1777,6 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 	ret.shadow_samples_index = shadow_samples_dropdown.selected_index;
 	ret.shadow_samples_changed = shadow_samples_dropdown.changed;
 	cursor.y += widget_height(state, "shadow_samples_dropdown") + 4;
-	push_debug_mark(state, cursor);
 	popup_size.* = grow(popup_size, pos, cursor);
 
 	// // Shadow map size dropdown
@@ -1796,7 +1797,6 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 	ret.shadow_map_size_index = shadow_map_size_dropdown.selected_index;
 	ret.shadow_map_size_changed = shadow_map_size_dropdown.changed;
 	cursor.y += widget_height(state, "shadow_map_size_dropdown") + 4;
-	push_debug_mark(state, cursor);
 	popup_size.* = grow(popup_size, pos, cursor);
 
 	// // Anti-aliasing dropdown
@@ -1817,7 +1817,6 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 	ret.aa_mode_index = aa_mode_dropdown.selected_index;
 	ret.aa_mode_changed = aa_mode_dropdown.changed;
 	cursor.y += widget_height(state, "aa_mode_dropdown") + 4;
-	push_debug_mark(state, cursor);
 	popup_size.* = grow(popup_size, pos, cursor);
 
 	// // Particles checkbox
@@ -1836,7 +1835,6 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 	ret.particles_enabled = particles_checkbox.checked;
 	ret.particles_changed = particles_checkbox.just_checked;
 	cursor.y += widget_height(state, "particles_checkbox") + 4;
-	push_debug_mark(state, cursor);
 	popup_size.* = grow(popup_size, pos, cursor);
 
 	// // Props checkbox
@@ -1855,28 +1853,8 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 	ret.props_enabled = props_checkbox.checked;
 	ret.props_changed = props_checkbox.just_checked;
 	cursor.y += widget_height(state, "props_checkbox") + 4;
-	push_debug_mark(state, cursor);
 	popup_size.* = grow(popup_size, pos, cursor);
 	
-	// // Props checkbox
-	slowdown := labeled_checkbox(
-		state,
-		"Slowdown",
-		cursor,
-		popup_size.x - 28,
-		16,
-		z = 12,
-		"slowdown_checkbox",
-		align = .Bottom_Left,
-		padding = 0,
-		default = args.props_enabled
-	);
-	ret.slowdown_enabled = slowdown.checked;
-	ret.slowdown_changed = slowdown.just_checked;
-	cursor.y += widget_height(state, "slowdown_checkbox") + 4;
-	push_debug_mark(state, cursor);
-	popup_size.* = grow(popup_size, pos, cursor);
-
 	ret.resume_clicked = resume_button.clicked;
 	ret.leave_instance_clicked = leave_button.clicked;
 
@@ -2833,6 +2811,71 @@ text_button :: (
 	return state.clicked, state, widget;
 }
 
+labeled_text_button :: (
+	gui: *GUI_State,
+	label: string,
+	button_text: string,
+	width: float,
+	height: float,
+	_pos := V2f.{ FLOAT32_MAX, FLOAT32_MAX },
+	_z := FLOAT32_MAX,
+	id := "labeled_text_button",
+	_align := Align.Undefined,
+	padding := 4.0,
+	size: Text_Button.Size = .Small
+) -> bool, Text_Button, *GUI_State.Widget {
+	_, w := widget(gui, id, struct {});
+
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
+		}
+	}
+
+	push_id(gui, id);
+	defer pop_id(gui);
+
+
+	lower_left := align_pos(pos, .{ width, height }, horizontal(align));
+
+	label_comp := atom_label(
+		gui,
+		label,
+		lower_left + v2(padding, 0.0),
+		height * 0.6,
+		z,
+		align = vertical(align) | Align.Left,
+		color = GRAY_80,
+		id = xx string_id("label")
+	);
+
+	clicked, button_state, button_widget := text_button(
+		gui,
+		button_text,
+		lower_left + v2(width - padding, 0),
+		z = z,
+		id = "button",
+		align = vertical(align) | Align.Right,
+		size = size
+	);
+
+	w.aabb = widgets_aabb(gui, string.[ "label", "button" ]);
+	return clicked, button_state, button_widget;
+}
+
 Checkbox :: struct {
 	checked: bool;
 
@@ -2879,6 +2922,35 @@ checkbox :: (
 
 	return state.*;
 }
+_labeled_checkbox :: (
+	gui: *GUI_State,
+	label: string,
+	width: float,
+	size: float,
+	id := "labeled_checkbox",
+	_pos: V2f = .{ FLOAT32_MAX, FLOAT32_MAX },
+	_z := FLOAT32_MAX,
+	_align := Align.Undefined,
+	padding := 4.0,
+	default := false
+) -> Checkbox {
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	return labeled_checkbox(
+		gui,
+		label,
+		pos,
+		width,
+		size,
+		z,
+		id,
+		align,
+		padding,
+		default
+	);
+}
 labeled_checkbox :: (
 	gui: *GUI_State,
 	label: string,
@@ -2892,6 +2964,22 @@ labeled_checkbox :: (
 	default := false
 ) -> Checkbox {
 	_, w := widget(gui, id, struct {});
+
+
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
+		}
+	}
 
 	push_id(gui, id);
 	defer pop_id(gui);
@@ -3577,6 +3665,21 @@ Float_Input :: struct {
 	edit_cursor: int;
 }
 
+Int_Input :: struct {
+	value: int;
+	changed := false;
+	dragging := false;
+	editing := false;  // Text editing mode
+	drag_start_value: int;
+	drag_start_x: float;
+	aabb_min: V2f;
+	aabb_max: V2f;
+
+	edit_text: [32] u8;
+	edit_text_len: int;
+	edit_cursor: int;
+}
+
 float_input :: (
 	gui: *GUI_State,
 	width: float,
@@ -3601,13 +3704,13 @@ float_input :: (
 		dir := default_params(gui).direction;
 		if dir == {
 			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + 4;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
 			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - 4;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
 			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - 4;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
 			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + 4;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
 		}
 	}
 
@@ -3805,29 +3908,271 @@ float_input :: (
 	return state.*;
 }
 
+int_input :: (
+	gui: *GUI_State,
+	width: float,
+	height: float,
+	value: int,
+	min_value := S64_MIN,
+	max_value := S64_MAX,
+	drag_speed := 1,
+	_pos := V2f.{ FLOAT32_MAX, FLOAT32_MAX },
+	_z := FLOAT32_MAX,
+	_align := Align.Undefined,
+	id := "int_input"
+) -> Int_Input {
+	state, widget := widget(gui, id, Int_Input);
+
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
+		}
+	}
+
+	push_id(gui, id);
+	defer pop_id(gui);
+	state.value = clamp(value, min_value, max_value);
+
+	lower_left := align_pos(pos, .{ width, height }, align);
+
+	state.aabb_min = lower_left;
+	state.aabb_max = lower_left + .{ width, height };
+	state.changed = false;
+
+	widget.aabb = pos_size(lower_left, v2(width, height));
+	widget.physical = .Solid;
+
+	mouse_in_widget := point_aabb(gui.controls.mouse_pos, widget.aabb);
+
+	// Background
+	border_color := ifx state.editing then v3(GREEN_BRIGHT) else ifx state.dragging then v3(GRAY_00) else v3(GRAY_40);
+	push_quad_screen(gui, lower_left, .{ width, height }, border_color, z);
+	push_quad_screen(gui, lower_left + v2(1), .{ width - 2, height - 2 }, v3(GRAY_90), z + 0.01);
+
+	// Draw drag indicator arrows on the sides when not editing
+	if !state.editing {
+		arrow_width := 6.0;
+		// Left arrow indicator
+		push_quad_screen(gui, lower_left + v2(2.0, height/2.0 - 3.0), v2(arrow_width, 6.0), v3(GRAY_50), z + 0.02);
+		// Right arrow indicator
+		push_quad_screen(gui, lower_left + v2(width - arrow_width - 2.0, height/2.0 - 3.0), v2(arrow_width, 6.0), v3(GRAY_50), z + 0.02);
+	}
+
+	if state.editing {
+		// Text editing mode
+		text: string;
+		text.data = state.edit_text.data;
+		text.count = state.edit_text_len;
+
+		label := atom_label(
+			gui,
+			text,
+			lower_left + v2(4.0, height / 2.0),
+			height * 0.6,
+			z = z + 0.03,
+			align = .Center_Left,
+			color = GRAY_00,
+			generate_offsets = true
+		);
+
+		// Draw cursor
+		state.edit_cursor = clamp(state.edit_cursor, 0, state.edit_text_len);
+		cursor_x := lower_left.x + 4.0 + (ifx label.offsets.count > state.edit_cursor then label.offsets[state.edit_cursor] else 0.0);
+		cursor_aabb := pos_size(v2(cursor_x, lower_left.y + 4.0), v2(2.0, height - 8.0));
+		push_quad_screen(gui, cursor_aabb, v3(GRAY_00), z + 0.04);
+
+		// Handle keyboard input for text editing
+		if widget.keyboard_focused {
+			handle_char :: (key: int, char: u8) #expand {
+				if gui.controls.just_pressed[key] {
+					if state.edit_text_len < 31 {
+						// Shift characters after cursor
+						for < i: state.edit_text_len..state.edit_cursor + 1 {
+							state.edit_text[i] = state.edit_text[i - 1];
+						}
+						state.edit_text[state.edit_cursor] = char;
+						state.edit_text_len += 1;
+						state.edit_cursor += 1;
+					}
+				}
+			}
+
+			// Numbers
+			handle_char(xx Platform.Key._0, #char "0");
+			handle_char(xx Platform.Key._1, #char "1");
+			handle_char(xx Platform.Key._2, #char "2");
+			handle_char(xx Platform.Key._3, #char "3");
+			handle_char(xx Platform.Key._4, #char "4");
+			handle_char(xx Platform.Key._5, #char "5");
+			handle_char(xx Platform.Key._6, #char "6");
+			handle_char(xx Platform.Key._7, #char "7");
+			handle_char(xx Platform.Key._8, #char "8");
+			handle_char(xx Platform.Key._9, #char "9");
+			handle_char(xx Platform.Key.Minus, #char "-");
+
+			// Backspace
+			if gui.controls.just_pressed[Platform.Key.Backspace] {
+				if state.edit_cursor > 0 && state.edit_text_len > 0 {
+					for i: state.edit_cursor - 1..state.edit_text_len - 2 {
+						state.edit_text[i] = state.edit_text[i + 1];
+					}
+					state.edit_text_len -= 1;
+					state.edit_cursor -= 1;
+				}
+			}
+
+			// Arrow keys
+			if gui.controls.just_pressed[Platform.Key.Left] {
+				state.edit_cursor = max(0, state.edit_cursor - 1);
+			}
+			if gui.controls.just_pressed[Platform.Key.Right] {
+				state.edit_cursor = min(state.edit_text_len, state.edit_cursor + 1);
+			}
+
+			// Enter to confirm
+			if gui.controls.just_pressed[Platform.Key.Enter] {
+				text_str: string;
+				text_str.data = state.edit_text.data;
+				text_str.count = state.edit_text_len;
+				parsed, success, _ := string_to_int(text_str);
+				if success {
+					parsed = clamp(parsed, min_value, max_value);
+					if parsed != state.value {
+						state.value = parsed;
+						state.changed = true;
+					}
+				}
+				state.editing = false;
+				widget.keyboard_focused = false;
+			}
+
+			// Escape to cancel
+			if gui.controls.just_pressed[Platform.Key.Escape] {
+				state.editing = false;
+				widget.keyboard_focused = false;
+			}
+		}
+	} else {
+		// Display mode - show value
+		value_text := tprint("%", state.value);
+		atom_label(
+			gui,
+			value_text,
+			lower_left + v2(width / 2, height / 2),
+			height * 0.6,
+			z = z + 0.03,
+			align = .Center,
+			color = GRAY_00
+		);
+
+		// Handle interactions
+		if mouse_in_widget {
+			// Double-click to enter edit mode
+			if widget.released && widget.age > 0 && !state.dragging {
+				state.editing = true;
+				widget.keyboard_focused = true;
+				// Initialize edit text with current value
+				value_str := tprint("%", state.value);
+				for i: 0..min(value_str.count, 31) - 1 {
+					state.edit_text[i] = value_str[i];
+				}
+				state.edit_text_len = min(value_str.count, 31);
+				state.edit_cursor = state.edit_text_len;
+			}
+
+			// Start dragging on mouse press
+			if gui.controls.just_pressed[Key.MouseLeft] {
+				state.dragging = true;
+				state.drag_start_value = state.value;
+				state.drag_start_x = gui.controls.mouse_pos.x;
+				gui.controls.captured_mouse = true;
+			}
+		}
+		// Handle dragging
+		if state.dragging {
+			gui.controls.captured_mouse = true;
+
+			if !gui.controls.pressed[Key.MouseLeft] {
+				state.dragging = false;
+			} else {
+				delta_x := cast(int) floor((gui.controls.mouse_pos.x - state.drag_start_x) / 4);
+
+				// Adjust speed based on modifiers
+				actual_speed := drag_speed;
+				if gui.controls.pressed[Platform.Key.Shift] {
+					actual_speed = max(1, actual_speed / 10);  // Slow down with shift
+				}
+				if gui.controls.pressed[Platform.Key.Control] {
+					actual_speed *= 10;  // Speed up with ctrl
+				}
+
+				new_value := state.drag_start_value + delta_x * actual_speed;
+				new_value = clamp(new_value, min_value, max_value);
+
+				if new_value != state.value {
+					state.value = new_value;
+					state.changed = true;
+				}
+			}
+		}
+	}
+
+	return state.*;
+}
+
 labeled_float_input :: (
 	gui: *GUI_State,
 	label: string,
-	pos: V2f,
 	width: float,
 	height: float,
-	default_value := 0.0,
+	value: float,
 	min_value := -FLOAT32_MAX,
 	max_value := FLOAT32_MAX,
 	drag_speed := 0.01,
 	precision := 3,
-	z := 0.0,
+	_pos: V2f = V2f.{ FLOAT32_MAX, FLOAT32_MAX },
+	_z := FLOAT32_MAX,
+	_align := Align.Undefined,
 	id := "labeled_float_input",
-	align := Align.Center,
 	padding := 4.0
 ) -> Float_Input {
 	_, w := widget(gui, id, struct {});
+
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
+		}
+	}
 
 	push_id(gui, id);
 	defer pop_id(gui);
 
 	lower_left := align_pos(pos, .{ width, height }, horizontal(align));
-
 
 	label_comp := atom_label(
 		gui,
@@ -3836,23 +4181,94 @@ labeled_float_input :: (
 		height * 0.6,
 		z,
 		align = vertical(align) | Align.Left,
-		color = v4(0.0, 0, 0, 1),
+		color = GRAY_80,
 		id = xx string_id("label")
 	);
 
 	input_width := min(width - widget_width(gui, "label") - padding * 3, 128.0);
 	input_comp := float_input(
 		gui,
-		lower_left + v2(width - padding, height / 2),
 		input_width,
 		height,
-		default_value = default_value,
+		_pos = lower_left + v2(width - padding, 0),
+		value = value,
 		min_value = min_value,
 		max_value = max_value,
 		drag_speed = drag_speed,
 		precision = precision,
-		z = z,
-		align = vertical(align) | Align.Right,
+		_z = z,
+		_align = vertical(align) | Align.Right,
+		id = "input"
+	);
+
+	w.aabb = widgets_aabb(gui, string.[ "label", "input" ]);
+	return input_comp;
+}
+
+labeled_int_input :: (
+	gui: *GUI_State,
+	label: string,
+	width: float,
+	height: float,
+	value: int,
+	min_value := S64_MIN,
+	max_value := S64_MAX,
+	drag_speed := 1,
+	_pos := V2f.{ FLOAT32_MAX, FLOAT32_MAX },
+	_z := FLOAT32_MAX,
+	id := "labeled_int_input",
+	_align := Align.Undefined,
+	padding := 4.0
+) -> Int_Input {
+	_, w := widget(gui, id, struct {});
+
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
+		}
+	}
+
+	push_id(gui, id);
+	defer pop_id(gui);
+
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	lower_left := align_pos(pos, .{ width, height }, horizontal(align));
+
+	label_comp := atom_label(
+		gui,
+		label,
+		lower_left + v2(padding, 0.0),
+		height * 0.6,
+		z,
+		align = vertical(align) | Align.Left,
+		color = GRAY_80,
+		id = xx string_id("label")
+	);
+
+	input_width := min(width - widget_width(gui, "label") - padding * 3, 128.0);
+	input_comp := int_input(
+		gui,
+		input_width,
+		height,
+		value = value,
+		min_value = min_value,
+		max_value = max_value,
+		drag_speed = drag_speed,
+		_pos = lower_left + v2(width - padding, 0.0),
+		_z = z,
+		_align = vertical(align) | Align.Right,
 		id = "input"
 	);
 
@@ -4071,4 +4487,78 @@ v3_input :: (
 
 	w.aabb = pos_size(lower_left, v2(width, height));
 	return state.*;
+}
+
+labeled_v3_input :: (
+	gui: *GUI_State,
+	label: string,
+	width: float,
+	height: float,
+	value: V3f,
+	min_value := V3f.{ -FLOAT32_MAX, -FLOAT32_MAX, -FLOAT32_MAX },
+	max_value := V3f.{ FLOAT32_MAX, FLOAT32_MAX, FLOAT32_MAX },
+	drag_speed := 0.01,
+	precision := 3,
+	_pos := V2f.{ FLOAT32_MAX, FLOAT32_MAX },
+	_z := FLOAT32_MAX,
+	id := "labeled_v3_input",
+	_align := Align.Undefined,
+	padding := 4.0,
+	labels := string.[ "X", "Y", "Z" ]
+) -> V3_Input {
+	_, w := widget(gui, id, struct {});
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
+		}
+	}
+
+	push_id(gui, id);
+	defer pop_id(gui);
+
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	lower_left := align_pos(pos, .{ width, height }, horizontal(align));
+
+	label_comp := atom_label(
+		gui,
+		label,
+		lower_left + v2(padding, 0.0),
+		height * 0.6,
+		z,
+		align = vertical(align) | Align.Left,
+		color = GRAY_80,
+		id = xx string_id("label")
+	);
+
+	input_width := width - widget_width(gui, "label") - padding * 3;
+	input_comp := v3_input(
+		gui,
+		input_width,
+		height,
+		value = value,
+		min_value = min_value,
+		max_value = max_value,
+		drag_speed = drag_speed,
+		precision = precision,
+		_pos = lower_left + v2(width - padding, 0.0),
+		_z = z,
+		_align = vertical(align) | Align.Right,
+		id = "input",
+		labels = labels
+	);
+
+	w.aabb = widgets_aabb(gui, string.[ "label", "input" ]);
+	return input_comp;
 }

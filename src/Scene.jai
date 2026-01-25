@@ -76,6 +76,12 @@ Scene_Parameters :: struct {
 	auto_revive := false;
 }
 
+Scene_Info :: struct {
+	id: int;
+	name: [128] u8;
+	author_profile_id: int = -1;
+}
+
 ISpan :: struct(T: Type) {
 	count: s64;
 	index: s64;
@@ -121,6 +127,8 @@ Scene :: struct {
 		Wipe_Fade_Out :: 2;
 	}
 	state: State;
+
+	info: Scene_Info;
 	params: Scene_Parameters;
 
 	server: struct {
@@ -132,8 +140,6 @@ Scene :: struct {
 		end_level: Command.End_Level;
 	}
 
-	name: [64] u8;
-
 	id := 1;
 	next_id := -1;
 
@@ -143,9 +149,11 @@ Scene :: struct {
 
 	// >TODO put all allocation relating to the map in the same pool.
 	players: [..] Player; @allocate("lifetime")
+	checkpoints: [..] Checkpoint; @allocate("lifetime") @clear("run")
 	tombstones: [..] Tombstone; @allocate("lifetime") @clear("run")
 	skulls: [..] Skull; @allocate("lifetime") @clear("run")
 	coins: [..] Coin; @allocate("lifetime") @clear("run")
+	paths: [..] Path; @allocate("lifetime") @clear("run")
 	keys: [..] Key; @allocate("lifetime") @clear("run")
 	gates: [..] Gate; @allocate("lifetime") @clear("run")
 	moving_frames: [..] Moving_Frame; @allocate("lifetime") @clear("run")
@@ -180,6 +188,7 @@ Scene :: struct {
 	trigger_activated: Table(int, bool); @allocate("lifetime") @clear("run")
 
 	terrain: Terrain;
+	spawn: Spawn;
 
 	camera_min: V2f;
 	camera_max: V2f;
@@ -608,6 +617,11 @@ Safe_Zone :: struct {
 	}
 }
 
+Spawn :: struct {
+	position: V3f;
+	size: V2f;
+}
+
 AntiAir :: struct {
 	id: int;
 	server: struct {
@@ -634,8 +648,8 @@ Bomb_Spawner :: struct {
 	position: V3f;
 
 	spawned_id := -1;
-	explosion_time := 10.0;
-	explosion_radius := 0.5;
+	explosion_time := 10.0; @edit
+	explosion_radius := 0.5; @edit
 }
 
 Bomb :: struct {
@@ -665,6 +679,8 @@ Bomb :: struct {
 }
 
 Block_Rock :: struct {
+	EDIT_PICK_RADIUS :: 0.5;
+
 	id: int;
 	exploded := false;
 	position: V3f;
@@ -1277,11 +1293,11 @@ Key :: struct {
 
 Skull :: struct {
 	id: int;
-	path_id: int;
+	path_id: int; @edit
 
 	server: struct {
-		speed: float = 1.0;
-		offset: float = 0.0;
+		speed: float = 1.0; @edit
+		offset: float = 0.0; @edit
 	}
 	client: struct {
 		direction: V3f = .{ 1, 0, 0 };
@@ -1289,8 +1305,16 @@ Skull :: struct {
 }
 
 Path :: struct {
-	checkpoints: [32] V3f;
-	checkpoints_count := 0;
+	id: int;
+	checkpoints: ISpan(Checkpoint);
+	closed := false;
+	theta_dir := false;
+}
+
+Checkpoint :: struct {
+	position: V3f;
+	theta: float = 0;
+	speed: float = 1.0;
 }
 
 Camera_Rail :: struct {
@@ -1320,6 +1344,7 @@ Gate :: struct {
 
 	wait_for_key_id := -1;
 	wait_for_trigger_id := -1;
+
 	is_end := false;
 } @editable
 
@@ -1454,7 +1479,13 @@ find_by_frame_id :: (scene: Scene, id: int) -> *Moving_Frame {
 	}
 	return null;
 }
-
+find_by_path_id :: (scene: Scene, id: int) -> *Path {
+	for * scene.paths {
+		if it.id == id
+			return it;
+	}
+	return null;
+}
 find_by_player_id :: (scene: Scene, id: int) -> *Player, int {
 	for * scene.players {
 		if it.id == id
@@ -1548,6 +1579,21 @@ get_pointing_angle :: (scene: Scene, turn_table: Turn_Table) -> float {
 		return xx (fmod_cycling(offset + speed * scene.server.clock, 1) * 2 * 3.1415926);
 	else
 		return xx (fmod_cycling(offset + speed * scene.client.clock, 1) * 2 * 3.1415926);
+}
+
+interpolate_all_to_server :: (scene: *Scene, dt: float) {
+	for * scene.players {
+		interpolate_to_server(it, dt);
+	}
+	for * scene.skulls {
+		interpolate_to_server(it);
+	}
+	for * scene.keys {
+		interpolate_to_server(it, dt);
+	}
+	for * scene.bombs {
+		interpolate_to_server(it, dt);
+	}
 }
 
 interpolate_to_server :: (player: *Player, dt: float) {
@@ -3322,13 +3368,8 @@ update :: (scene: Scene, skull: *Skull, dt: float32) {
 	if !scene.is_server
 		interpolate_to_server(skull);
 
-	if skull.path_id < scene.terrain.paths.count {
-		path: *Path = *scene.terrain.paths[skull.path_id];
-		if path.checkpoints_count > 0 {
-			dir := compute_skull_dir(scene, skull);
-			skull.client.direction = damp_angle_between(skull.client.direction, dir, 20.0, dt);
-		}
-	}
+	dir := compute_skull_dir(scene, skull);
+	skull.client.direction = damp_angle_between(skull.client.direction, dir, 20.0, dt);
 }
 
 update :: (scene: Scene, coin: *Coin, dt: float32) {
@@ -4180,15 +4221,13 @@ Terrain :: struct {
 	text: string;
 
 	tiles_count: V2i;
-	spawn_tile: V2i;
 	tile_size: V2f = V2f.{ 3.0 / 3.0, 3.0 / 3.0 };
+	spawn_tile_: V2i;
 
 	tiles: [..] Tile;
-	paths: [..] Path;
 }
 free :: (terrain: *Terrain) {
 	array_free(terrain.tiles);
-	array_free(terrain.paths);
 	free(terrain.text);
 }
 
@@ -4248,108 +4287,188 @@ touch_a_tile :: (scene: Scene, spot: V3f, radius: float, kind: Tile.Kind) -> boo
 
 	return false;
 }
-compute_skull_matrix :: (scene: Scene, skull: Skull) -> M4f {
-	if skull.path_id >= scene.terrain.paths.count
+
+compute_path_matrix :: (scene: Scene, path: Path, t: float, offset := 0.0) -> M4f {
+	if path.checkpoints.count == 0
 		return M4f.identity();
 
-	path: *Path = *scene.terrain.paths[skull.path_id];
-	if path.checkpoints_count == 0
-		return M4f.identity();
+	beg := path.checkpoints.index + 0;
+	cnt := path.checkpoints.count;
+	off := ifx path.closed then 1 else 0;
 
 	total_t := 0.0;
-	for 1..path.checkpoints_count - 1 {
-		a := path.checkpoints[it - 1];
-		b := path.checkpoints[it + 0];
-		d := norm(b - a);
+	for 1..cnt + off - 1 {
+		a := scene.checkpoints[beg + (it - 1) % cnt];
+		b := scene.checkpoints[beg + (it + 0) % cnt];
+		d := norm(b.position - a.position) / b.speed;
 		total_t += d;
 	}
 
-	t := fmod_cycling(
-		scene.server.clock * skull.server.speed + skull.server.offset * total_t, total_t
-	);
+	t += offset * total_t;
 
-	for 1..path.checkpoints_count - 1 {
-		a := path.checkpoints[it - 1];
-		b := path.checkpoints[it + 0];
-		d := norm(b - a);
+	t = fmod_cycling(t, total_t);
+
+	theta_sum := 0.0;
+	for 1..cnt + off - 1 {
+		a := scene.checkpoints[beg + (it - 1) % cnt];
+		b := scene.checkpoints[beg + (it + 0) % cnt];
+		d := norm(b.position - a.position) / b.speed;
 		if t <= d {
-			dir := normalize(b - a);
-			pos := a + (b - a) * (t / d);
-			M := M4f.translate(pos) * to_rotation_matrix(
-				from_unit_vectors(V3f.{ 1, 0, 0 }, dir)
-			);
+			pos := a.position + (b.position - a.position) * (t / d);
+			M := M4f.translate(pos);
+
+			if path.theta_dir {
+				theta := theta_sum + b.theta * (t / d);
+				M = M * to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, theta));
+			} else {
+				dir := normalize(b.position - a.position);
+				M = M * to_rotation_matrix(
+					from_unit_vectors(V3f.{ 1, 0, 0 }, dir)
+				);
+			}
 			return M;
 		}
+		theta_sum += a.theta;
 		t -= d;
 	}
+
 	return M4f.identity();
 }
+compute_path_pos :: (scene: Scene, path: Path, t: float, offset := 0.0) -> V3f {
+	M := compute_path_matrix(scene, path, t, offset);
+	return v3(M * v4(0.0, 0.0, 0.0, 1.0));
+}
+compute_path_dir :: (scene: Scene, path: Path, t: float, offset := 0.0) -> V3f {
+	M := compute_path_matrix(scene, path, t, offset);
+	return v3(M * v4(1.0, 0.0, 0.0, 0.0));
+}
 
+
+compute_skull_matrix :: (scene: Scene, skull: Skull) -> M4f {
+	path := find_by_path_id(scene, skull.path_id);
+	if !path
+		return M4f.identity();
+	t := scene.server.clock * skull.server.speed;
+	return compute_path_matrix(scene, path, xx t, skull.server.offset);
+}
 compute_skull_dir :: (scene: Scene, skull: Skull) -> V3f {
-	if skull.path_id >= scene.terrain.paths.count
+	path := find_by_path_id(scene, skull.path_id);
+	if !path
 		return V3f.{ 1, 0, 0 };
-
-	path: *Path = *scene.terrain.paths[skull.path_id];
-	if path.checkpoints_count == 0
-		return V3f.{ 1, 0, 0 };
-
-	total_t := 0.0;
-	for 1..path.checkpoints_count - 1 {
-		a := path.checkpoints[it - 1];
-		b := path.checkpoints[it + 0];
-		d := norm(b - a);
-		total_t += d;
-	}
-
-	t := fmod_cycling(
-		scene.server.clock * skull.server.speed + skull.server.offset * total_t, total_t
-	);
-
-	for 1..path.checkpoints_count - 1 {
-		a := path.checkpoints[it - 1];
-		b := path.checkpoints[it + 0];
-		d := norm(b - a);
-		if t <= d {
-			dir := normalize(b - a);
-			return dir;
-		}
-		t -= d;
-	}
-	return V3f.{ 1, 0, 0 };
+	t := scene.server.clock * skull.server.speed;
+	return compute_path_dir(scene, path, xx t, skull.server.offset);
 }
-
 compute_skull_pos :: (scene: Scene, skull: Skull) -> V3f {
-	if skull.path_id >= scene.terrain.paths.count
+	path := find_by_path_id(scene, skull.path_id);
+	if !path
 		return V3f.{ 0, 0, 0 };
-
-	path: *Path = *scene.terrain.paths[skull.path_id];
-	if path.checkpoints_count == 0
-		return V3f.{ 0, 0, 0 };
-
-	total_t := 0.0;
-	for 1..path.checkpoints_count - 1 {
-		a := path.checkpoints[it - 1];
-		b := path.checkpoints[it + 0];
-		d := norm(b - a);
-		total_t += d;
-	}
-
-	t := fmod_cycling(
-		scene.server.clock * skull.server.speed + skull.server.offset * total_t, total_t
-	);
-
-	for 1..path.checkpoints_count - 1 {
-		a := path.checkpoints[it - 1];
-		b := path.checkpoints[it + 0];
-		d := norm(b - a);
-		if t <= d {
-			pos := a + (b - a) * (t / d);
-			return pos;
-		}
-		t -= d;
-	}
-	return V3f.{ 0, 0, 0 };
+	t := scene.server.clock * skull.server.speed;
+	return compute_path_pos(scene, path, xx t, skull.server.offset);
 }
+
+
+// compute_skull_matrix :: (scene: Scene, skull: Skull) -> M4f {
+// 	if skull.path_id >= scene.terrain.paths.count
+// 		return M4f.identity();
+
+// 	path: *Path = *scene.terrain.paths[skull.path_id];
+// 	if path.checkpoints_count == 0
+// 		return M4f.identity();
+
+// 	total_t := 0.0;
+// 	for 1..path.checkpoints_count - 1 {
+// 		a := path.checkpoints[it - 1];
+// 		b := path.checkpoints[it + 0];
+// 		d := norm(b - a);
+// 		total_t += d;
+// 	}
+
+// 	t := fmod_cycling(
+// 		scene.server.clock * skull.server.speed + skull.server.offset * total_t, total_t
+// 	);
+
+// 	for 1..path.checkpoints_count - 1 {
+// 		a := path.checkpoints[it - 1];
+// 		b := path.checkpoints[it + 0];
+// 		d := norm(b - a);
+// 		if t <= d {
+// 			dir := normalize(b - a);
+// 			pos := a + (b - a) * (t / d);
+// 			M := M4f.translate(pos) * to_rotation_matrix(
+// 				from_unit_vectors(V3f.{ 1, 0, 0 }, dir)
+// 			);
+// 			return M;
+// 		}
+// 		t -= d;
+// 	}
+// 	return M4f.identity();
+// }
+
+// compute_skull_dir :: (scene: Scene, skull: Skull) -> V3f {
+// 	if skull.path_id >= scene.terrain.paths.count
+// 		return V3f.{ 1, 0, 0 };
+
+// 	path: *Path = *scene.terrain.paths[skull.path_id];
+// 	if path.checkpoints_count == 0
+// 		return V3f.{ 1, 0, 0 };
+
+// 	total_t := 0.0;
+// 	for 1..path.checkpoints_count - 1 {
+// 		a := path.checkpoints[it - 1];
+// 		b := path.checkpoints[it + 0];
+// 		d := norm(b - a);
+// 		total_t += d;
+// 	}
+
+// 	t := fmod_cycling(
+// 		scene.server.clock * skull.server.speed + skull.server.offset * total_t, total_t
+// 	);
+
+// 	for 1..path.checkpoints_count - 1 {
+// 		a := path.checkpoints[it - 1];
+// 		b := path.checkpoints[it + 0];
+// 		d := norm(b - a);
+// 		if t <= d {
+// 			dir := normalize(b - a);
+// 			return dir;
+// 		}
+// 		t -= d;
+// 	}
+// 	return V3f.{ 1, 0, 0 };
+// }
+
+// compute_skull_pos :: (scene: Scene, skull: Skull) -> V3f {
+// 	if skull.path_id >= scene.terrain.paths.count
+// 		return V3f.{ 0, 0, 0 };
+
+// 	path: *Path = *scene.terrain.paths[skull.path_id];
+// 	if path.checkpoints_count == 0
+// 		return V3f.{ 0, 0, 0 };
+
+// 	total_t := 0.0;
+// 	for 1..path.checkpoints_count - 1 {
+// 		a := path.checkpoints[it - 1];
+// 		b := path.checkpoints[it + 0];
+// 		d := norm(b - a);
+// 		total_t += d;
+// 	}
+
+// 	t := fmod_cycling(
+// 		scene.server.clock * skull.server.speed + skull.server.offset * total_t, total_t
+// 	);
+
+// 	for 1..path.checkpoints_count - 1 {
+// 		a := path.checkpoints[it - 1];
+// 		b := path.checkpoints[it + 0];
+// 		d := norm(b - a);
+// 		if t <= d {
+// 			pos := a + (b - a) * (t / d);
+// 			return pos;
+// 		}
+// 		t -= d;
+// 	}
+// 	return V3f.{ 0, 0, 0 };
+// }
 
 compute_moving_frame_server_world_matrix :: (scene: Scene, frame: Moving_Frame) -> M4f {
 	if frame.keys.count == 0 {
@@ -4412,7 +4531,7 @@ spawn_into :: (player: *Player, scene: Scene) {
 		player.server.position.x = xx best.position.x;
 		player.server.position.y = xx best.position.y;
 	} else {
-		player.server.position = tile_center(scene, scene.terrain.spawn_tile);
+		player.server.position = scene.spawn.position;
 	}
 
 	player.server.walking_toward = false;
@@ -4473,9 +4592,7 @@ serialize :: (scene: Scene) -> string {
 			tile := terrain.tiles[tile_idx];
 
 			char: u8;
-			if x == terrain.spawn_tile.x && y == terrain.spawn_tile.y {
-				char = #char "S";
-			} else if tile.kind == {
+			if tile.kind == {
 				case .None;       char = #char "X";
 				case .Ice;        char = #char "I";
 				case .Grass;      char = #char "G";
@@ -4493,10 +4610,21 @@ serialize :: (scene: Scene) -> string {
 
 	print_to_builder(
 		*sb,
+		#string SPAWN
+spawn
+- position: % % %
+- size: % %
+		SPAWN,
+		scene.spawn.position.x, scene.spawn.position.y, scene.spawn.position.z,
+		scene.spawn.size.x, scene.spawn.size.y
+	);
+
+	print_to_builder(
+		*sb,
 		#string TROPHY
-			frame
-			- position: % %
-			- size: % %
+frame
+- position: % %
+- size: % %
 		TROPHY,
 		scene.camera_min.x, scene.camera_min.y,
 		scene.camera_max.x - scene.camera_min.x, scene.camera_max.y - scene.camera_min.y
@@ -4506,9 +4634,9 @@ serialize :: (scene: Scene) -> string {
 		print_to_builder(
 			*sb,
 			#string FLAG
-				flag
-				- position: % % %
-				- index: %
+flag
+- position: % % %
+- index: %
 			FLAG,
 			it.position.x, it.position.y, it.position.z,
 			it.index
@@ -4519,9 +4647,9 @@ serialize :: (scene: Scene) -> string {
 		print_to_builder(
 			*sb,
 			#string TRAP
-				trap
-				- position: % % %
-				- radius_hitbox: %
+trap
+- position: % % %
+- radius_hitbox: %
 			TRAP,
 			it.position.x, it.position.y, it.position.z,
 			it.radius_hitbox
@@ -4532,23 +4660,64 @@ serialize :: (scene: Scene) -> string {
 		print_to_builder(
 			*sb,
 			#string TROPHY
-				trophy
-				- position: % % %
+trophy
+- position: % % %
 			TROPHY,
 			it.position.x, it.position.y, it.position.z
 		);
 	}
-	
+
+	for * scene.block_rocks {
+		print_to_builder(
+			*sb,
+			#string BLOCK_ROCK
+block_rock
+- position: % % %
+BLOCK_ROCK,
+			it.position.x, it.position.y, it.position.z
+		);
+	}
+
+	for * scene.bomb_spawners {
+		print_to_builder(
+			*sb,
+			#string BOMB_SPAWNER
+bomb_spawner
+- position: % % %
+- explosion_time: %
+- explosion_radius: %
+BOMB_SPAWNER,
+			it.position.x, it.position.y, it.position.z,
+			it.explosion_time,
+			it.explosion_radius
+		);
+	}
+
+	for * scene.skulls {
+		print_to_builder(
+			*sb,
+			#string SKULL
+skull
+- path_id: %
+- speed: %
+- offset: %
+SKULL,
+			it.path_id,
+			it.server.speed,
+			it.server.offset
+		);
+	}
+
 	for * scene.gates {
 		print_to_builder(
 			*sb,
 			#string GATE
-				gate
-				- position: % % %
-				- direction: % % %
-				- is_closed: %
-				- wait_for_key_id: %
-				- wait_for_trigger_id: %
+gate
+- position: % % %
+- direction: % % %
+- is_closed: %
+- wait_for_key_id: %
+- wait_for_trigger_id: %
 			GATE,
 			it.position.x, it.position.y, it.position.z,
 			it.direction.x, it.direction.y, it.direction.z,

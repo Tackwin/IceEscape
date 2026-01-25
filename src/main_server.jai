@@ -11,6 +11,7 @@
 #import "File_Watcher";
 #import "Communication";
 Scene :: #import "Scene";
+#import "Database";
 
 #scope_export
 
@@ -51,6 +52,8 @@ Server :: struct {
 
 	file_watcher: File_Watcher(Server);
 	changes: [..] string;
+
+	db: DB_query.Handle;
 }
 
 find_user_by_token :: (server: *Server, token: int) -> *User {
@@ -154,7 +157,7 @@ append_queue :: (server: *Server, cmd: $T, connection: Connection) {
 	server.queue.count += 1;
 }
 
-process :: (server: *Server, cmd: Command, sender: Connection) -> bool {
+process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platform) -> bool {
 	version_info := isa(cmd.payload, Command.Version_Info);
 	if version_info {
 		reply: Command.Version_Info;
@@ -208,6 +211,35 @@ process :: (server: *Server, cmd: Command, sender: Connection) -> bool {
 			append_queue(server, reply, sender);
 		}
 		return true;
+	}
+
+	save_terrain := isa(cmd.payload, Command.Save_Terrain);
+	if save_terrain {
+		new_id := Rand.random_positive_int(*server.rng);
+
+		ids: [1] DB_Terrain_Id;
+		ids[0].id = new_id;
+		store_database(platform, server.db, "terrain_ids", ids);
+
+		to_saves: [1] DB_Terrain_Infos;
+		to_save := *to_saves[0];
+		to_save.id = new_id;
+		to_save.author_profile_id = save_terrain.info.author_profile_id;
+		to_save.name.data = save_terrain.info.name.data;
+		for 0..save_terrain.info.name.count - 1 {
+			to_save.name.count = it;
+			if save_terrain.info.name.data[it] == 0
+				break;
+		}
+
+		store_database(platform, server.db, "terrain_infos", to_saves);
+
+		to_asciis: [1] DB_Terrain_Ascii;
+		to_ascii := *to_asciis[0];
+		to_ascii.id = new_id;
+		to_ascii.ascii = save_terrain.ascii;
+
+		store_database(platform, server.db, "terrain_asciis", to_asciis);
 	}
 
 	ask_instance_list := isa(cmd.payload, Command.Ask_Instance_List);
@@ -282,6 +314,50 @@ process :: (server: *Server, cmd: Command, sender: Connection) -> bool {
 			}
 		}
 
+		return true;
+	}
+
+	ask_enter_custom_instance := isa(cmd.payload, Command.Ask_Enter_Custom_Instance);
+	if ask_enter_custom_instance {
+		user := find_user_by_connection(server, sender);
+		if !user {
+			command: Command.Ans_Enter_Custom_Instance;
+			command.reason = .Rejected;
+			append_queue(server, command, sender);
+			return true;
+		}
+		if server.instance_count >= server.instances.count {
+			command: Command.Ans_Enter_Custom_Instance;
+			command.reason = .Server_Full;
+			append_queue(server, command, sender);
+			return true;
+		}
+
+		params: Scene.Scene_Parameters;
+		params.auto_revive = true;
+		
+		init_instance_with_custom_terrain(
+			*server.instances[server.instance_count], ask_enter_custom_instance.terrain
+		);
+		server.instances[server.instance_count].scene_parameters = params;
+		server.instances[server.instance_count].id = server.instance_generation;
+		server.instances[server.instance_count].private = true;
+		server.instances[server.instance_count].user_created = true;
+		server.instance_count += 1;
+		server.instance_generation += 1;
+
+		if !add_new_person(*server.instances[server.instance_count - 1], user.id) {
+			command: Command.Ans_Enter_Custom_Instance;
+			command.reason = .Rejected;
+			append_queue(server, command, sender);
+			return true;
+		}
+		user.instance_id = server.instances[server.instance_count - 1].id;
+
+		ans_enter_custom_instance: Command.Ans_Enter_Custom_Instance;
+		ans_enter_custom_instance.reason = .Accepted;
+		ans_enter_custom_instance.instance_id = server.instances[server.instance_count - 1].id;
+		append_queue(server, ans_enter_custom_instance, sender);
 		return true;
 	}
 
@@ -366,7 +442,7 @@ server_receive_tick :: (platform: *Platform, server: *Server) {
 		// The main thing we need to do here is route the command to the appropriate instance
 		// Or handle it if it's a global command (like login)
 
-		processed := process(server, cmd, msg.sender);
+		processed := process(server, cmd, msg.sender, platform);
 		if processed
 			continue;
 
@@ -483,6 +559,7 @@ gc_instances :: (server: *Server) {
 				inactive_duration
 			);
 			free(instance);
+			continue;
 		}
 
 		if cursor != it {
@@ -491,6 +568,71 @@ gc_instances :: (server: *Server) {
 		cursor += 1;
 	}
 	server.instance_count = cursor;
+}
+
+ensure_database :: (app: *App) {
+	app_user := app.user_data.(*App_User);
+	app_user.server.db = open_database(app.platform, "IceEscapeServer.db");
+	exec_database(app.platform, app_user.server.db, "PRAGMA journal_mode=WAL;");
+	exec_database(app.platform, app_user.server.db, "PRAGMA synchronous=NORMAL;");
+
+	exec_database(
+		app.platform,
+		app_user.server.db,
+		#string QUERY
+			CREATE TABLE IF NOT EXISTS profile_ids (
+				id INTEGER PRIMARY KEY
+			);
+		QUERY
+	);
+
+	exec_database(
+		app.platform,
+		app_user.server.db,
+		#string QUERY
+			CREATE TABLE IF NOT EXISTS profile_stats (
+				id INTEGER PRIMARY KEY,
+				win_count INTEGER DEFAULT 0,
+				death_count INTEGER DEFAULT 0,
+				revive_count INTEGER DEFAULT 0,
+				FOREIGN KEY(id) REFERENCES profile_ids(id) ON DELETE CASCADE
+			);
+		QUERY
+	);
+
+	exec_database(
+		app.platform,
+		app_user.server.db,
+		#string QUERY
+			CREATE TABLE IF NOT EXISTS terrain_ids (
+				id INTEGER PRIMARY KEY
+			);
+		QUERY
+	);
+	
+	exec_database(
+		app.platform,
+		app_user.server.db,
+		#string QUERY
+			CREATE TABLE IF NOT EXISTS terrain_infos (
+				id INTEGER PRIMARY KEY,
+				name TEXT,
+				author_profile_id INTEGER,
+				FOREIGN KEY(id) REFERENCES terrain_ids(id) ON DELETE CASCADE
+			);
+		QUERY
+	);
+	exec_database(
+		app.platform,
+		app_user.server.db,
+		#string QUERY
+			CREATE TABLE IF NOT EXISTS terrain_asciis (
+				id INTEGER PRIMARY KEY,
+				ascii TEXT,
+				FOREIGN KEY(id) REFERENCES terrain_ids(id) ON DELETE CASCADE
+			);
+		QUERY
+	);
 }
 
 App_User :: struct {
@@ -517,10 +659,14 @@ WATCH_CHANGE :: true;
 	app_user.server.tick_period.last = current_time_monotonic();
 	prefill_fixed_instances(*app_user.server);
 
+	app_user.server.rng = Rand.seed(to_float64_seconds(app_user.server.tick_period.last).(u64));
+
 	#if WATCH_CHANGE {
 		init(*app_user.server.file_watcher, null, *app_user.server, events_to_watch = .MODIFIED);
 		add_directories(*app_user.server.file_watcher, "../assets/terrain");
 	}
+
+	ensure_database(app);
 }
 
 #program_export "app_reload" app_reload :: (app: *App) {
@@ -571,5 +717,6 @@ server_loop :: (app: *App) {
 }
 
 #program_export "app_quit" app_quit :: (app: *App) {
+	quit_database(app.platform, app.user_data.(*App_User).server.db);
 }
 

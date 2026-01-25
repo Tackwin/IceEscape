@@ -162,15 +162,15 @@ get_current_level_name :: (instance: Instance) -> string {
 	if !scene
 		return "??";
 	
-	name_count := scene.name.count;
-	for scene.name {
+	name_count := scene.info.name.count;
+	for scene.info.name {
 		if it == 0 {
 			name_count = it_index;
 			break;
 		}
 	}
 
-	return string.{ name_count, scene.name.data };
+	return string.{ name_count, scene.info.name.data };
 }
 
 sync :: (instance: *Instance) {
@@ -237,6 +237,14 @@ handle_file_change :: (instance: *Instance, path: string) {
 			}
 		}
 	}
+}
+
+init_instance_with_custom_terrain :: (
+	instance: *Instance, terrain_data: string
+) {
+	instance.pick_scene_id = add_scene(instance, terrain_data);
+	instance.playing_scene_id = instance.pick_scene_id;
+	instance.last_activity_time = current_time_monotonic();
 }
 
 init_instance :: (instance: *Instance) {

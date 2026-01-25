@@ -1758,12 +1758,58 @@ render_editor :: (
 	picking_place := Editor.screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
 	add_debug_sphere(*extra, picking_place, scale=0.1);
 
+	{ // SPAWN
+		center := editor.scene.spawn.position;
+		size := editor.scene.spawn.size;
+
+		a := center + V3f.{ -size.x / 2, -size.y / 2, 0 };
+		b := center + V3f.{ size.x / 2, -size.y / 2, 0 };
+		c := center + V3f.{ size.x / 2, size.y / 2, 0 };
+		d := center + V3f.{ -size.x / 2, size.y / 2, 0 };
+		add_debug_sphere(*extra, a, scale=0.2, color=V4f.{ 0.0, 1.0, 0.0, 1.0 });
+		add_debug_sphere(*extra, b, scale=0.2, color=V4f.{ 0.0, 1.0, 0.0, 1.0 });
+		add_debug_sphere(*extra, c, scale=0.2, color=V4f.{ 0.0, 1.0, 0.0, 1.0 });
+		add_debug_sphere(*extra, d, scale=0.2, color=V4f.{ 0.0, 1.0, 0.0, 1.0 });
+	}
+
 	entities := get_scene_placeable_entities();
 	for entity: entities {
 		for 0..get_count(*editor.scene, entity)-1 {
 			pos := get_position(*editor.scene, entity, it);
 			add_debug_sphere(*extra, pos, scale=0.2);
 		}
+	}
+
+	for gate: editor.scene.gates {
+		key := Scene.find_by_key_id(editor.scene, gate.wait_for_key_id);
+		if key {
+			a := gate.position;
+			b := key.server.position;
+
+			add_debug_cylinder(*extra, a, b, color=V3f.{ 1.0, 1.0, 0.0 });
+		}
+	}
+
+	for path: editor.scene.paths {
+		beg := path.checkpoints.index + 0;
+		cnt := path.checkpoints.count;
+		off := ifx path.closed then 1 else 0;
+
+		for 0..cnt - 1 {
+			a := editor.scene.checkpoints[beg + it].position;
+			add_debug_sphere(*extra, a, scale=0.1);
+		}
+		
+		for 1..cnt + off - 1 {
+			a := editor.scene.checkpoints[beg + (it - 1) % cnt].position;
+			b := editor.scene.checkpoints[beg + (it + 0) % cnt].position;
+			add_debug_cylinder(*extra, a, b, color=V3f.{ 0.0, 1.0, 1.0 }, radius=0.05);
+		}
+	}
+
+	for skull: editor.scene.skulls {
+		pos := Scene.compute_skull_pos(editor.scene, skull);
+		add_debug_sphere(*extra, pos, scale=0.5);
 	}
 
 	render_extra(frame, *frame.geometry, store, *extra);
@@ -2035,6 +2081,26 @@ add_debug_sphere :: (
 	M4f.scale(*sphere.M, v3(scale, scale, scale));
 	sphere.color = v3(color);
 	array_add(*extra.spheres, sphere);
+}
+
+add_debug_cylinder :: (
+	extra: *Extra,
+	a: V3f,
+	b: V3f,
+	color := V3f.{ 1, 1, 1 },
+	radius := 0.1
+) {
+	direction := b - a;
+	length := norm(direction);
+	if length < 0.001
+		return;
+
+	cylinder: Extra.Cylinder;
+	cylinder.color = color;
+	cylinder.M = M4f.translate(a);
+	cylinder.M *= to_rotation_matrix(from_unit_vectors(V3f.{ 0, 0, 1 }, normalize(direction)));
+	cylinder.M *= scale_matrix(v3(radius, radius, length));
+	array_add(*extra.cylinders, cylinder);
 }
 
 render_mark :: (

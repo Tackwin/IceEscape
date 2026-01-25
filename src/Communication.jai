@@ -335,6 +335,31 @@ Command :: struct {
 		}
 	}
 
+	Ask_Enter_Custom_Instance :: struct {
+		terrain: string;
+	}
+
+	Ans_Enter_Custom_Instance :: struct {
+		reason: enum {
+			Accepted;
+			Rejected;
+			Server_Full;
+		}
+
+		instance_id: int;
+		terrain: string;
+	}
+
+	Save_Terrain :: struct {
+		info: Scene_Info;
+		ascii: string;
+	}
+	Ask_List_Terrain :: struct {
+	}
+	Ans_List_Terrain :: struct {
+		terrains: [] string;
+	}
+
 	Create_Instance :: struct {
 		name: [64] u8;
 		password: [64] u8;
@@ -374,7 +399,9 @@ Command :: struct {
 		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook, Cheat_Action, Buy_Ask, Buy_Response,
 		Sync_Stand_In, Ask_Respawn, Ask_Instance_List, Ans_Instance_List, Ask_Enter_Instance,
 		Ans_Enter_Instance, Leave_Instance, Create_Instance, Ans_Create_Instance, Version_Info,
-		Sync_Stats, Sync_Clock, Note_Played, Sync_Bomb_Spawner, Sync_Bomb, Sync_Score
+		Sync_Stats, Sync_Clock, Note_Played, Sync_Bomb_Spawner, Sync_Bomb, Sync_Score,
+		Ask_Enter_Custom_Instance, Ans_Enter_Custom_Instance, Save_Terrain, Ask_List_Terrain,
+		Ans_List_Terrain
 	);
 	sent_timestamp: float64;
 }
@@ -453,6 +480,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Create_Instance; #through;
 		case .Ans_Create_Instance; #through;
 		case .Version_Info; #through;
+		case .Ask_List_Terrain; #through;
 		case .Sync_Stats; #through;
 		case .Sync_Clock; #through;
 		case .AntiAir_Shoot; #through;
@@ -476,6 +504,86 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Ask_Enter_Instance; #through;
 		case .Move_To_Play_World;
 			// Nothing
+		case .Save_Terrain;
+			save_terrain := isa(cmd.payload, Command.Save_Terrain);
+			if !save_terrain {
+				print("Weirdge\n");
+				break label;
+			}
+
+			additional_data_size := save_terrain.ascii.count;
+			array_reserve(buffer, dry_size + additional_data_size);
+
+			cursor := dry_size;
+			memcpy(
+				buffer.data + cursor,
+				save_terrain.ascii.data,
+				save_terrain.ascii.count
+			);
+			cursor += save_terrain.ascii.count;
+			buffer.count = cursor;
+		case .Ans_List_Terrain;
+			ans_list_terrain := isa(cmd.payload, Command.Ans_List_Terrain);
+			if !ans_list_terrain {
+				print("Weirdge\n");
+				break label;
+			}
+
+			additional_data_size := 0;
+			for ans_list_terrain.terrains {
+				additional_data_size += size_of(u64); // Size prefix
+				additional_data_size += it.count;
+			}
+			array_reserve(buffer, dry_size + additional_data_size);
+
+			cursor := dry_size;
+			for ans_list_terrain.terrains {
+				// Write size prefix
+				size_prefix := it.count.(u64);
+				memcpy(buffer.data + cursor, *size_prefix, size_of(u64));
+				cursor += size_of(u64);
+
+				// Write data
+				memcpy(buffer.data + cursor, it.data, it.count);
+				cursor += it.count;
+			}
+			buffer.count = cursor;
+		case .Ans_Enter_Custom_Instance;
+			ans_enter_custom_instance := isa(cmd.payload, Command.Ans_Enter_Custom_Instance);
+			if !ans_enter_custom_instance {
+				print("Weirdge\n");
+				break label;
+			}
+
+			additional_data_size := ans_enter_custom_instance.terrain.count;
+			array_reserve(buffer, dry_size + additional_data_size);
+
+			cursor := dry_size;
+			memcpy(
+				buffer.data + cursor,
+				ans_enter_custom_instance.terrain.data,
+				ans_enter_custom_instance.terrain.count
+			);
+			cursor += ans_enter_custom_instance.terrain.count;
+			buffer.count = cursor;
+		case .Ask_Enter_Custom_Instance;
+			ask_enter_custom_instance := isa(cmd.payload, Command.Ask_Enter_Custom_Instance);
+			if !ask_enter_custom_instance {
+				print("Weirdge\n");
+				break label;
+			}
+
+			additional_data_size := ask_enter_custom_instance.terrain.count;
+			array_reserve(buffer, dry_size + additional_data_size);
+
+			cursor := dry_size;
+			memcpy(
+				buffer.data + cursor,
+				ask_enter_custom_instance.terrain.data,
+				ask_enter_custom_instance.terrain.count
+			);
+			cursor += ask_enter_custom_instance.terrain.count;
+			buffer.count = cursor;
 		case .Ans_Instance_List;
 			ans_instance_list := isa(cmd.payload, Command.Ans_Instance_List);
 			if !ans_instance_list {
@@ -654,9 +762,71 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Ask_Enter_Instance; #through;
 		case .Ans_Enter_Instance; #through;
 		case .Ask_Instance_List; #through;
+		case .Ask_List_Terrain; #through;
 		case .Move_To_Play_World;
 			return cmd, true;
-		
+		case .Ans_List_Terrain;
+			ans_list_terrain := isa(cmd.payload, Command.Ans_List_Terrain);
+			if !ans_list_terrain {
+				print("Weirdge\n");
+				return cmd, false;
+			}
+
+			terrains: [..] string;
+			terrains.allocator = temp;
+			cursor := 0;
+			while cursor < expected_size {
+				size_prefix: u64;
+				memcpy(*size_prefix, buffer.data + cursor, size_of(u64));
+				cursor += size_of(u64);
+
+				new_terrain: string;
+				new_terrain.count = size_prefix.(int);
+				new_terrain.data = (buffer.data + cursor).(*u8);
+				cursor += new_terrain.count;
+
+				array_add(*terrains, new_terrain);
+			}
+			ans_list_terrain.terrains = terrains;
+
+			return cmd, true;
+		case .Save_Terrain;
+			save_terrain := isa(cmd.payload, Command.Save_Terrain);
+			if !save_terrain {
+				print("Weirdge\n");
+				return cmd, false;
+			}
+
+			remaining_size := expected_size - cursor;
+			save_terrain.ascii.data = (buffer.data + cursor).(*u8);
+			save_terrain.ascii.count = remaining_size;
+			cursor += remaining_size;
+
+			return cmd, true;
+		case .Ans_Enter_Custom_Instance;
+			ans_enter_custom_instance := isa(cmd.payload, Command.Ans_Enter_Custom_Instance);
+			if !ans_enter_custom_instance {
+				print("Weirdge\n");
+				return cmd, false;
+			}
+
+			remaining_size := expected_size - cursor;
+			ans_enter_custom_instance.terrain.data = (buffer.data + cursor).(*u8);
+			ans_enter_custom_instance.terrain.count = remaining_size;
+			cursor += remaining_size;
+		case .Ask_Enter_Custom_Instance;
+			ask_enter_custom_instance := isa(cmd.payload, Command.Ask_Enter_Custom_Instance);
+			if !ask_enter_custom_instance {
+				print("Weirdge\n");
+				return cmd, false;
+			}
+
+			remaining_size := expected_size - cursor;
+			ask_enter_custom_instance.terrain.data = (buffer.data + cursor).(*u8);
+			ask_enter_custom_instance.terrain.count = remaining_size;
+			cursor += remaining_size;
+
+			return cmd, true;
 		case .Ans_Instance_List;
 			list := isa(cmd.payload, Command.Ans_Instance_List);
 			if !list {

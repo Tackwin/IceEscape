@@ -28,6 +28,11 @@ random_u64 :: (state: *XORState) -> u64 {
 	return xor_shift_next(state);
 }
 
+random_positive_int :: (state: *XORState) -> s64 {
+	u := xor_shift_next(state);
+	return (u & 0x7FFFFFFFFFFFFFFF).(s64);
+}
+
 random_uniform :: (state: *XORState, min: float = 0.0, max: float = 1.0) -> float {
 	u := random_u64(state);
 	u &= 0xFFFFFFFF;

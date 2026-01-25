@@ -3,10 +3,13 @@
 #import "File_Watcher";
 #import "File";
 #import "Hash_Table";
+#import "sqlite";
 #if OS == .WINDOWS
 	Win32 :: #import "Windows";
 
 receive_buffer: [] u8;
+
+sqlite_array: [..] *sqlite3;
 
 init_platform :: () -> Platform {
 	platform: Platform;
@@ -14,8 +17,237 @@ init_platform :: () -> Platform {
 	platform.open_server = win32_open_server;
 	platform.send_web_message = win32_send_web_message;
 	platform.gather_web_messages = win32_gather_web_messages;
+	platform.db_query = win32_db_query;
 
 	return platform;
+}
+
+print_sqliterror :: (db: *sqlite3, msg: string) {
+	errstr: string;
+	errstr.data = sqlite3_errmsg(db);
+	errstr.count = c_style_strlen(errstr.data);
+	print("SQLite Error: % - %\n", msg, errstr);
+}
+
+win32_db_query :: (query: *DB_query) {
+	bind_type :: (
+		stmt: *sqlite3_stmt, info: *Type_Info, value_ptr: *void, index: int) -> bool #expand {
+		tag := info.type;
+		if tag == .INTEGER {
+			integer: int;
+			if info.runtime_size == 1 {
+				integer = value_ptr.(*s8).*;
+			} else if info.runtime_size == 2 {
+				integer = value_ptr.(*s16).*;
+			} else if info.runtime_size == 4 {
+				integer = value_ptr.(*s32).*;
+			} else {
+				integer = value_ptr.(*s64).*;
+			}
+			if info.runtime_size == 8 {
+				sqlite3_bind_int64(stmt, (index + 1).(s32), integer.(s64));
+			} else {
+				sqlite3_bind_int(stmt, (index + 1).(s32), integer.(s32));
+			}
+		} else if tag == .FLOAT {
+			double: float64;
+			if info.runtime_size == 4 {
+				double = value_ptr.(*float32).*;
+			} else {
+				double = value_ptr.(*float64).*;
+			}
+			sqlite3_bind_double(stmt, (index + 1).(s32), double);
+		} else if tag == .STRING {
+			str_ptr := value_ptr.(*string);
+			sqlite3_bind_text(
+				stmt, (index + 1).(s32), str_ptr.data, xx str_ptr.count, SQLITE_STATIC
+			);
+		} else if tag == .BOOL {
+			sqlite3_bind_int(stmt, (index + 1).(s32), (ifx value_ptr.(*bool).* then 1 else 0).(s32));
+		} else {
+			return false;
+		}
+		return true;
+	}
+
+	read_type :: (stmt: *sqlite3_stmt, info: *Type_Info, value_ptr: *void, index: int) #expand {
+		tag := info.type;
+		if tag == .INTEGER {
+			integer := sqlite3_column_int(stmt, (index + 1).(s32));
+			if info.runtime_size == 1 {
+				value_ptr.(*s8).* = integer.(s8);
+			} else if info.runtime_size == 2 {
+				value_ptr.(*s16).* = integer.(s16);
+			} else if info.runtime_size == 4 {
+				value_ptr.(*s32).* = integer.(s32);
+			} else {
+				value_ptr.(*s64).* = integer.(s64);
+			}
+		} else if tag == .FLOAT {
+			double := sqlite3_column_double(stmt, (index + 1).(s32));
+			if info.runtime_size == 4 {
+				value_ptr.(*float32).* = double.(float32);
+			} else {
+				value_ptr.(*float64).* = double.(float64);
+			}
+		} else if tag == .STRING {
+			text := sqlite3_column_text(stmt, (index + 1).(s32));
+			length := sqlite3_column_bytes(stmt, (index + 1).(s32));
+			value_ptr.(*string).data = text;
+			value_ptr.(*string).count = length;
+		} else if tag == .BOOL {
+			bool_value := sqlite3_column_int(stmt, (index + 1).(s32));
+			value_ptr.(*bool).* = bool_value != 0;
+		} else {
+			print(
+				"Unsupported type for reading from database\n"
+			);
+		}
+	}
+
+	if query.kind == {
+		case .OPEN;
+			db: *sqlite3;
+			result := sqlite3_open(tprint("%\0", query.query_string).data, *db);
+			if result != SQLITE_OK {
+				print_sqliterror(db, "Failed to open database");
+			} else {
+				array_add(*sqlite_array, db);
+				query.handle = sqlite_array.count - 1;
+			}
+		case .CLOSE;
+			if query.handle < 0 || query.handle >= sqlite_array.count {
+				print("Invalid database handle %\n", query.handle);
+				return;
+			}
+			db := sqlite_array[query.handle];
+			result := sqlite3_close(db);
+			if result != SQLITE_OK {
+				print_sqliterror(db, "Failed to close database");
+			}
+		case .FLUSH;
+			if query.handle < 0 || query.handle >= sqlite_array.count {
+				print("Invalid database handle %\n", query.handle);
+				return;
+			}
+			db := sqlite_array[query.handle];
+			result := sqlite3_exec(db, "PRAGMA wal_checkpoint(FULL);", null, null, null);
+			if result != SQLITE_OK {
+				print_sqliterror(db, "Failed to flush database");
+			}
+		case .EXEC;
+			if query.handle < 0 || query.handle >= sqlite_array.count {
+				print("Invalid database handle %\n", query.handle);
+				return;
+			}
+			db := sqlite_array[query.handle];
+			result := sqlite3_exec(db, tprint("%\0", query.query_string).data, null, null, null);
+			if result != SQLITE_OK {
+				print_sqliterror(db, "Failed to execute query");
+			}
+		case .STORE;
+			if query.handle < 0 || query.handle >= sqlite_array.count {
+				print("Invalid database handle %\n", query.handle);
+				return;
+			}
+			db := sqlite_array[query.handle];
+
+			result := sqlite3_exec(db, "BEGIN TRANSACTION;", null, null, null);
+			if result != SQLITE_OK {
+				print_sqliterror(db, "Failed to begin transaction");
+				return;
+			}
+			defer {
+				result := sqlite3_exec(db, "COMMIT;", null, null, null);
+				if result != SQLITE_OK {
+					print_sqliterror(db, "Failed to commit transaction");
+				}
+			}
+
+			stmt: *sqlite3_stmt;
+			result = sqlite3_prepare_v2(db, tprint("%\0", query.query_string).data, -1, *stmt, null);
+			if result != SQLITE_OK {
+				print_sqliterror(db, "Failed to prepare statement");
+				return;
+			}
+			defer {
+				sqlite3_finalize(stmt);
+			}
+
+			// Bind input parameters
+			for input: query.input {
+				sqlite3_reset(stmt);
+				sqlite3_clear_bindings(stmt);
+
+				if query.type.type == .STRUCT {
+					struct_info := query.type.(*Type_Info_Struct);
+					for field_idx: 0..struct_info.members.count - 1 {
+						field := struct_info.members[field_idx];
+						value_ptr := (input.(int) + field.offset_in_bytes).(*void);
+						if !bind_type(stmt, field.type, value_ptr, field_idx) {
+							print(
+								"Unsupported field (%::%) type for binding\n",
+								struct_info.name,
+								field.name
+							);
+						}
+					}
+				} else {
+					if !bind_type(stmt, query.type, input, 0) {
+						print("Unsupported type for binding %\n", query.type);
+					}
+				}
+
+				result := sqlite3_step(stmt);
+				if result != SQLITE_DONE {
+					print_sqliterror(db, "Failed to execute statement");
+				}
+			}
+		case .LOAD;
+			if query.handle < 0 || query.handle >= sqlite_array.count {
+				print("Invalid database handle %\n", query.handle);
+				return;
+			}
+
+			db := sqlite_array[query.handle];
+			stmt: *sqlite3_stmt;
+			result := sqlite3_prepare_v2(db, tprint("%\0", query.query_string).data, -1, *stmt, null);
+			if result != SQLITE_OK {
+				print_sqliterror(db, "Failed to prepare statement");
+				return;
+			}
+
+			defer {
+				sqlite3_finalize(stmt);
+			}
+
+			outputs: [..] *void;
+			outputs.allocator = query.output_allocator;
+			while true {
+				result := sqlite3_step(stmt);
+				if result == SQLITE_DONE {
+					break;
+				} else if result != SQLITE_ROW {
+					print_sqliterror(db, "Failed to execute statement");
+					break;
+				}
+
+				output_ptr := alloc(query.type.runtime_size,, query.output_allocator);
+				if query.type.type == .STRUCT {
+					struct_info := query.type.(*Type_Info_Struct);
+					for field_idx: 0..struct_info.members.count - 1 {
+						field := struct_info.members[field_idx];
+						value_ptr := (output_ptr.(int) + field.offset_in_bytes).(*void);
+						read_type(stmt, field.type, value_ptr, field_idx);
+					}
+				} else {
+					read_type(stmt, query.type, output_ptr, 0);
+				}
+
+				array_add(*outputs, output_ptr);
+			}
+			query.output = outputs;
+	}
 }
 
 win32_open_server :: (port: int) -> bool {
@@ -126,19 +358,19 @@ main :: () {
 	loop := true;
 	while (loop) {
 		#if OS == .WINDOWS {
-			// if dll {
-			// 	file := Win32.CreateFileA("IceEscapeServer.dll", Win32.FILE_GENERIC_READ);
-			// 	defer Win32.CloseHandle(file);
+			if dll {
+				file := Win32.CreateFileA("IceEscapeServer.dll", Win32.FILE_GENERIC_READ);
+				defer Win32.CloseHandle(file);
 
-			// 	time_struct: Win32.FILETIME;
-			// 	Win32.GetFileTime(file, null, null, *time_struct);
+				time_struct: Win32.FILETIME;
+				Win32.GetFileTime(file, null, null, *time_struct);
 
-			// 	if time_struct.QuadPart != dll_last_write {
-			// 		print("Reloading DLL...\n");
-			// 		reload_dll();
-			// 		dll_last_write = time_struct.QuadPart;
-			// 	}
-			// }
+				if time_struct.QuadPart != dll_last_write {
+					print("Reloading DLL...\n");
+					reload_dll();
+					dll_last_write = time_struct.QuadPart;
+				}
+			}
 
 			if dll {
 				// Get the function pointer of app_loop

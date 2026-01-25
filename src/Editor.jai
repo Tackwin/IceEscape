@@ -17,12 +17,20 @@ editable_entities_type :: Type.[
 	Scene.Gate,
 	Scene.Trap,
 	Scene.Trophy,
-	Scene.Flag
+	Scene.Flag,
+	Scene.Key,
+	Scene.Path,
+	Scene.Skull,
+	Scene.Spawn,
+	Scene.Bomb_Spawner,
+	Scene.Block_Rock
 ];
 
 Editor :: struct {
 	scene: Scene.Scene;
 	gui_state: GUI.GUI_State;
+
+	clock_running := true;
 
 	// Editor mode
 	mode: Editor_Mode = .Tiles;
@@ -38,10 +46,6 @@ Editor :: struct {
 	is_dragging_camera := false;
 	camera_offset: V3f = .{ 0, -4, 8 };  // Same as game camera
 
-	// Painting state
-	is_painting := false;
-	paint_mode: enum { Set; Erase; } = .Set;
-
 	// Terrain size
 	terrain_width := 40;
 	terrain_height := 30;
@@ -56,6 +60,14 @@ Editor :: struct {
 	grid_snapping := 0.05;
 }
 
+update :: (editor: *Editor) {
+	gui := *editor.gui_state;
+	Scene.interpolate_all_to_server(*editor.scene, gui.controls.delta_time);
+	if editor.clock_running {
+		editor.scene.server.clock += gui.controls.delta_time;
+		editor.scene.client.clock += gui.controls.delta_time;
+	}
+}
 
 screen_to_world :: (editor: *Editor, screen_pos: V2f, window_size: V2f) -> V3f {
 	// Create view and projection matrices
@@ -105,4 +117,39 @@ screen_to_world :: (editor: *Editor, screen_pos: V2f, window_size: V2f) -> V3f {
 	}
 
 	return V3f.{ 0, 0, 0 };
+}
+
+closest_point_on_line_segment :: (a: V3f, b: V3f, p: V3f) -> V3f {
+	ab := b - a;
+	t := dot(p - a, ab) / dot(ab, ab);
+	t = clamp(t, 0.0, 1.0);
+	return a + ab * t;
+}
+
+find_closest_path :: (editor: *Editor, position: V3f, cutoff := 5.0) -> *Scene.Path {
+	closest_path: *Scene.Path = null;
+	closest_dist := FLOAT32_MAX;
+
+	for * path: editor.scene.paths {
+		beg := path.checkpoints.index;
+		cnt := path.checkpoints.count;
+		off := ifx path.closed then +1 else 0;
+
+		for i: 0..cnt - 1 + off {
+			cp_a := editor.scene.checkpoints[(beg + i) % cnt];
+			cp_b := editor.scene.checkpoints[(beg + (i + 1) % cnt)];
+
+			seg_closest := closest_point_on_line_segment(cp_a.position, cp_b.position, position);
+			dist := norm(seg_closest - position);
+			if dist < closest_dist {
+				closest_dist = dist;
+				closest_path = path;
+			}
+		}
+	}
+
+	if closest_dist > cutoff
+		return null;
+
+	return closest_path;
 }

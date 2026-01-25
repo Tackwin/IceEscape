@@ -164,7 +164,6 @@ menu_loop :: (_app: *App) -> bool {
 	);
 	if editor_clicked {
 		state.screen_state = .Editor;
-		state.editor.initialized = false;
 	}
 
 	frame := WRender.begin_frame(*framegraph, controls.time);

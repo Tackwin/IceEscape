@@ -1,0 +1,167 @@
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGXXXXX
+XXXXXXXXiiiIiIiIiIiIiIiIiIiIiIiGGGGXXXXX
+XXXXXXXXiiiIiIiIiIiIiIiIiIiIiIiGGGGXXXXX
+XXXXXXXXiiXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXIIXIRIIRIXXIRIIRIXXIRIIRIXXXXXXX
+XXXXXXXXiiXRRRRRRXXRRRRRRXXRRRRRRXXXXXXX
+XXXXXXXXIIXIRIIRIXXIRXXRIXXIRXXRIXXXXXXX
+XXXXXXXXiiXRIXXIRXXRIXXIRXXRIXXIIXXXXXXX
+XXXXXXXXGGRRRXXRRRRRRXXRRRRRRXXIIXXXXXXX
+XXXXXXXXGGIRIXXIRIIRIXXIRIIRIXGGGGXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGXXXXXX
+XXXXXXGGXGIIIIIIIIIIIIIIIIXXXXGGGGXXXXXX
+XXXXXXGGGGIIIIIIIIIIIIIIIIIXXXGGGGXXXXXX
+XXXXXXGGXGIIIIIIIIIIIIIIIIIIXXXGGXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXIIIIIXXGGXXXXXXX
+XXXXXXGGGGIIIIIIIIIIIIIIIIIIIIGGGGXXXXXX
+XXXXXXGGGGIIIIIIIIIIIIIIIIIIIIGGGGXXXXXX
+XXXXXXGGGGIIIIIIIIIIIIIIIIIIIIGGGGXXXXXX
+XXXXXXGGGGIIIIIIIIIIIIIIIIIIIIGGGGXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXIIIIIXXXXXXXXXXX
+XXXXXXGGXGIIIIIIIIIIIIIIIIIIXXXXXXXXXXXX
+XXXXXXGGGGIIIIIIIIIIIIIIIIIXXXXXXXXXXXXX
+XXXXXXGGXGIIIIIIIIIIIIIIIIXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+spawn
+- position: 8 8 0
+- size: 0 0
+frame
+- position: 0 0
+- size: 40 30
+flag
+- position: 33 14.5 0
+- index: 0
+trap
+- position: 8.5 19.5 0
+- radius_hitbox: 0.5
+trap
+- position: 9.5 22.5 0
+- radius_hitbox: 0.5
+trap
+- position: 12.5 23.5 0
+- radius_hitbox: 0.5
+trap
+- position: 16.5 22.5 0
+- radius_hitbox: 0.5
+trap
+- position: 20.5 23.5 0
+- radius_hitbox: 0.5
+trap
+- position: 24.5 22.5 0
+- radius_hitbox: 0.5
+trap
+- position: 28.5 23.5 0
+- radius_hitbox: 0.5
+trophy
+- position: 33 26 0
+block_rock
+- position: 8.5 12.5 0
+block_rock
+- position: 8.5 3.5 0
+bomb_spawner
+- position: 7 9 0
+- explosion_time: 10
+- explostion_radius: 0.5
+bomb_spawner
+- position: 7 7 0
+- explosion_time: 10
+- explostion_radius: 0.5
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.05
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.1
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.15
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.2
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.25
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.3
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.35
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.4
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.45
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.5
+skull
+- path_id: 0
+- speed: 1
+- offset: -0.05
+skull
+- path_id: 0
+- speed: 1
+- offset: -0.1
+skull
+- path_id: 0
+- speed: 1
+- offset: -0.15
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.8
+skull
+- path_id: 0
+- speed: 1
+- offset: -0.25
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.7
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.55
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.6
+skull
+- path_id: 0
+- speed: 1
+- offset: 0.65
+skull
+- path_id: 0
+- speed: 1
+- offset: 0
+gate
+- position: 32 10.5 0
+- direction: 0 1 0
+- is_closed: true
+- wait_for_key_id: 1
+- wait_for_trigger_id: -1
+gate
+- position: 32 11.5 0
+- direction: 0 1 0
+- is_closed: true
+- wait_for_key_id: 0
+- wait_for_trigger_id: -1

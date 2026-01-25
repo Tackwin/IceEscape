@@ -176,8 +176,8 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 
 	{
 		name: string;
-		name.data = state.scene.name.data;
-		name.count = 64;
+		name.data = state.scene.info.name.data;
+		name.count = state.scene.info.name.count;
 		for name if it == 0 { name.count = it_index; break; }
 		label := GUI.atom_label(
 			*app_user.gui_state,

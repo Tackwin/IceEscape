@@ -61,6 +61,8 @@ parse_terrain :: (text: string, scene: *Scene) {
 	memcpy(new_terrain.text.data, text.data, text.count);
 	free(*scene.terrain);
 	scene.terrain = new_terrain;
+	scene.spawn.position = tile_center(scene, scene.terrain.spawn_tile_);
+	scene.spawn.size = .{ 0.05, 0.05 };
 
 	while cursor < lines.count {
 		defer cursor += 1;
@@ -80,7 +82,7 @@ parse_terrain :: (text: string, scene: *Scene) {
 			name: string;
 			name.data = line.data + 8;
 			name.count = line.count - 8;
-			for * scene.name {
+			for * scene.info.name {
 				if it_index < name.count
 					it.* = name[it_index];
 				else
@@ -110,7 +112,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading config, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -154,7 +155,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading present, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -198,7 +198,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading antiair, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			antiair.server.t += Rand.random_uniform(*rng, 0.0, current_config().antiair_offset_std);
@@ -242,7 +241,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 				
 				print("Error reading turning table, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 			cursor -= 1;
 		}
@@ -271,7 +269,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading trophy, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -301,7 +298,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading block_rock, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -381,7 +377,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading robot, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -411,7 +406,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 				}
 
 				print("Error reading frame, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -446,7 +440,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading flag, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -479,7 +472,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading shuriken, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -553,7 +545,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading moving frame, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -583,7 +574,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading key, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			key.server.home = key.server.position;
@@ -619,7 +609,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading skull, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -649,7 +638,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading jukebox, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -684,7 +672,38 @@ parse_terrain :: (text: string, scene: *Scene) {
 				}
 
 				print("Error reading pressbutton, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
+			}
+
+			cursor -= 1;
+		}
+
+		if scan2(line, "spawn") {
+			spawn: Spawn;
+			defer {
+				scene.spawn = spawn;
+			}
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *spawn.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+				size := *spawn.size;
+				if scan2(line, "- size: % %", *size.x, *size.y)
+					continue;
+
+				print("Error reading spawn, unrecognized line: % (L%)\n", line, cursor);
 			}
 
 			cursor -= 1;
@@ -719,8 +738,7 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 
-				print("Error reading pressbutton, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
+				print("Error reading bomb spawner, unrecognized line: % (L%)\n", line, cursor);
 			}
 
 			cursor -= 1;
@@ -776,7 +794,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading gate, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -784,7 +801,13 @@ parse_terrain :: (text: string, scene: *Scene) {
 
 		if scan2(line, "path") {
 			path: Path;
-			defer array_add(*scene.terrain.paths, path);
+			path.id = scene.paths.count;
+			path.checkpoints.count = 0;
+			path.checkpoints.index = scene.checkpoints.count;
+			defer {
+				path.checkpoints.count = scene.checkpoints.count - path.checkpoints.index;
+				array_add(*scene.paths, path);
+			}
 
 			cursor += 1;
 			while cursor < lines.count {
@@ -800,17 +823,69 @@ parse_terrain :: (text: string, scene: *Scene) {
 					break;
 				}
 
+				if compare(line, "- closed") == 0 {
+					path.closed = true;
+					continue;
+				}
+				if compare(line, "- theta_dir") == 0 {
+					path.theta_dir = true;
+					continue;
+				}
 				pos: V3f;
 				if scan2(line, "- checkpoint: % % %", *pos.x, *pos.y, *pos.z) {
-					path.checkpoints[path.checkpoints_count] = pos;
-					path.checkpoints_count += 1;
+					checkpoint: Checkpoint;
+					checkpoint.position = pos;
+					array_add(*scene.checkpoints, checkpoint);
+					continue;
+				}
+				theta: float;
+				if scan2(line, "- checkpoint: % % % theta %", *pos.x, *pos.y, *pos.z, *theta) {
+					checkpoint: Checkpoint;
+					checkpoint.position = pos;
+					checkpoint.theta = theta;
+					array_add(*scene.checkpoints, checkpoint);
+					continue;
+				}
+				speed: float;
+				if scan2(line, "- checkpoint: % % % speed %", *pos.x, *pos.y, *pos.z, *speed) {
+					checkpoint: Checkpoint;
+					checkpoint.position = pos;
+					checkpoint.speed = speed;
+					array_add(*scene.checkpoints, checkpoint);
+					continue;
+				}
+				if scan2(
+					line,
+					"- checkpoint: % % % theta % speed %",
+					*pos.x,
+					*pos.y,
+					*pos.z,
+					*theta,
+					*speed
+				) {
+					checkpoint: Checkpoint;
+					checkpoint.position = pos;
+					checkpoint.theta = theta;
+					checkpoint.speed = speed;
+					array_add(*scene.checkpoints, checkpoint);
+					continue;
+				}
+				if scene.checkpoints.count > 0 && scan2(
+					line,
+					"- checkpoint: theta % speed %",
+					*theta,
+					*speed
+				) {
+					checkpoint: Checkpoint;
+					checkpoint.position = scene.checkpoints[scene.checkpoints.count - 1].position;
+					checkpoint.theta = theta;
+					checkpoint.speed = speed;
+					array_add(*scene.checkpoints, checkpoint);
 					continue;
 				}
 
 				print("Error reading path, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
-
 			cursor -= 1;
 		}
 
@@ -845,7 +920,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 				}
 
 				print("Error reading camera_rail, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -878,7 +952,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading camera_poi, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -917,7 +990,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 				}
 
 				print("Error reading standin, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -957,7 +1029,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading trigger zone, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -997,7 +1068,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading within zone, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -1030,7 +1100,6 @@ parse_terrain :: (text: string, scene: *Scene) {
 					continue;
 
 				print("Error reading trap, unrecognized line: % (L%)\n", line, cursor);
-				cursor -= 1;
 			}
 
 			cursor -= 1;
@@ -1154,7 +1223,7 @@ load_terrain_from_ascii :: (ascii: string) -> Terrain {
 					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Funny_Ice;
 				case #char "S";
 					terrain.tiles[x + y * terrain.tiles_count.x].kind = .Grass;
-					terrain.spawn_tile = .{ x, y };
+					terrain.spawn_tile_ = .{ x, y };
 			}
 		}
 	}

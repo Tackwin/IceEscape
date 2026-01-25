@@ -103,6 +103,9 @@ App_User :: struct {
 			before_screen_state := app_user.state.screen_state;
 
 			if app_user.state.screen_state == {
+				case .Editor;
+					if process_editor(app_user, command)
+						continue command;
 				case .Menu;
 					if process_menu(*app_user.state, command)
 						continue command;
@@ -160,6 +163,7 @@ App_User :: struct {
 	app_user.state.platform = _app.platform;
 	app_user.graphics.gpu = _app.platform.gpu;
 	WRender.graphics = *app_user.graphics;
+	GUI.gui_state_init(*app_user.gui_state, *app_user.store);
 
 	scene: Scene.Scene;
 	Scene.reload(*scene);
