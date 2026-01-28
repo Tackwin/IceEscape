@@ -230,6 +230,43 @@ DB_query :: struct {
 	output_allocator: Allocator;
 
 	type: *Type_Info;
+
+	success := false;
+}
+
+load_database :: (
+	platform: *Platform, db: DB_query.Handle, table: string, $T: Type, where: string = ""
+) -> [] *T {
+	query := DB_query.{};
+	query.kind = .LOAD;
+	query.handle = db;
+	query.type = type_info(T);
+	info := query.type.(*Type_Info_Struct);
+	assert(query.type.type == .STRUCT);
+
+	sb: String_Builder;
+	sb.allocator = temp;
+	print_to_builder(*sb, "SELECT ");
+	sep := "";
+	for info.members {
+		print_to_builder(*sb, "%1%2", sep, to_lower_copy(it.name,, temp));
+		sep = ", ";
+	}
+	print_to_builder(*sb, " FROM %", table);
+	if where != "" {
+		print_to_builder(*sb, " WHERE %", where);
+	}
+	print_to_builder(*sb, ";");
+
+	query.query_string = builder_to_string(*sb);
+	query.output_allocator = temp;
+
+	platform.db_query(*query);
+
+	output: [] *T;
+	output.data = query.output.data.(**T);
+	output.count = query.output.count;
+	return output;
 }
 
 store_database :: (platform: *Platform, db: DB_query.Handle, table: string, inputs: [] $T) {
@@ -258,7 +295,29 @@ store_database :: (platform: *Platform, db: DB_query.Handle, table: string, inpu
 		print_to_builder(*sb, "%1?", sep);
 		sep = ", ";
 	}
-	print_to_builder(*sb, ");");
+
+	any_to_update := false;
+	for info.members {
+		if it.name != "id" {
+			any_to_update = true;
+			break;
+		}
+	}
+
+	print_to_builder(*sb, ")");
+	if any_to_update {
+		print_to_builder(*sb, " ON CONFLICT(id) DO UPDATE SET ");
+		sep = "";
+		for info.members {
+			if it.name == "id" {
+				continue;
+			}
+			print_to_builder(*sb, "%1%2 = excluded.%2", sep, to_lower_copy(it.name,, temp));
+			sep = ", ";
+		}
+	}
+	print_to_builder(*sb, ";");
+	
 
 	query.query_string = builder_to_string(*sb);
 

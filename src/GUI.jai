@@ -316,6 +316,17 @@ default_params :: (state: *GUI_State) -> *GUI_State.Default_Params {
 move_cursor :: (state: *GUI_State, delta: V2f) {
 	default_params(state).cursor += delta;
 }
+move_cursor :: (state: *GUI_State, delta: float) {
+	if default_params(state).direction == .Right {
+		default_params(state).cursor.x += delta;
+	} else if default_params(state).direction == .Left {
+		default_params(state).cursor.x -= delta;
+	} else if default_params(state).direction == .Down {
+		default_params(state).cursor.y -= delta;
+	} else if default_params(state).direction == .Up {
+		default_params(state).cursor.y += delta;
+	}
+}
 push_default_params :: (state: *GUI_State, params: GUI_State.Default_Params = .{}) {
 	array_add(*state.default_params_stack, params);
 }
@@ -1973,7 +1984,6 @@ push_main_menu :: (
 		v3(GRAY_10),
 		z = 0.02
 	);
-
 	Row :: struct {
 		instance_name: string; @"name(\"Name\")" @"size(128)" @"align(Left)"
 		players_count: string; @"name(\"# Players\")" @"align(Right)"
@@ -2032,14 +2042,15 @@ push_main_menu :: (
 	password_input := string_id("password_input");
 	ret.temp_enter_instance_password = atom_input_text(
 		state,
-		input_text_aabb,
-		16,
 		args.enter_instance_password,
-		z=1,
+		16,
+		128.0,
 		id = password_input,
 		placeholder = "Password",
 		max_chars = 8,
-		align = Align.Center_Left
+		_z=1,
+		_pos = input_text_aabb.min,
+		_align = Align.Center_Left
 	);
 
 	cursor =  .{ 16, state.controls.window_size.y - 64 - 16 };
@@ -2091,12 +2102,12 @@ push_main_menu :: (
 				state,
 				"Password",
 				args.create_instance_password,
-				popup.pos + V2f.{ 4 + 32, cursor },
 				popup.size.x - 32,
 				24,
 				scale = 16,
-				z = 1.1,
-				align = .Center_Left,
+				_pos = popup.pos + V2f.{ 4 + 32, cursor },
+				_z = 1.1,
+				_align = .Center_Left,
 				placeholder = "****",
 				max_chars = 8,
 				id = "private_instance_password_input",
@@ -2120,12 +2131,12 @@ push_main_menu :: (
 			state,
 			"Instance Name",
 			args.create_instance_name,
-			popup.pos + V2f.{ 4, cursor },
 			popup.size.x,
 			24,
 			scale = 16,
-			z = 1.1,
-			align = .Center_Left,
+			_pos = popup.pos + V2f.{ 4, cursor },
+			_z = 1.1,
+			_align = .Center_Left,
 			placeholder = "Name",
 			max_chars = 16,
 			id = "instance_name_input",
@@ -2377,6 +2388,8 @@ atom_label_replace :: (gui: *GUI_State, label: *Atom_Label, aabb: AABBf, align: 
 	}
 }
 
+// Change the position so that (pos, size) is aligned according to align.
+// For example, if align is Align.Top_Right, the returned (pos, size) top right corner will be at pos.
 align_pos :: (pos: V2f, size: V2f, align: Align) -> V2f {
 	ret := pos;
 	if (align & Align.HCenter) == Align.HCenter {
@@ -2393,6 +2406,34 @@ align_pos :: (pos: V2f, size: V2f, align: Align) -> V2f {
 	}
 	return ret;
 }
+align_aabb :: (aabb: AABBf, align: Align) -> AABBf {
+	aligned := aabb;
+	aligned.min = align_pos(aabb.min, aabb.max - aabb.min, align);
+	aligned.max = aligned.min + (aabb.max - aabb.min);
+	return aligned;
+}
+
+// Returns the anchor point inside the AABB according to the alignment
+// For example, Align.Top_Right returns the top-right corner of the AABB
+// Align.Center returns the center point of the AABB
+anchor_aabb :: (zone: AABBf, align: Align) -> V2f {
+	ret: V2f;
+	if (align & Align.HCenter) == Align.HCenter
+		ret.x = (zone.min.x + zone.max.x) / 2;
+	else if (align & Align.Right) == Align.Right
+		ret.x = zone.max.x;
+	else
+		ret.x = zone.min.x;
+
+	if (align & Align.VCenter) == Align.VCenter
+		ret.y = (zone.min.y + zone.max.y) / 2;
+	else if (align & Align.Top) == Align.Top
+		ret.y = zone.max.y;
+	else
+		ret.y = zone.min.y;
+	return ret;
+}
+
 
 align_aabb :: (to_align: AABBf, zone: AABBf, align: Align) -> AABBf {
 	pos := to_align.min;
@@ -2440,20 +2481,23 @@ atom_dash_quad :: (
 
 atom_input_text :: (
 	gui: *GUI_State,
-	aabb: AABBf,
-	scale: float,
 	text: string,
-	z := 0.0,
-	align := Align.Bottom_Left,
+	scale: float,
+	width := 128.0,
+	_pos := V2f.{ FLOAT32_MAX, FLOAT32_MAX },
+	_z := FLOAT32_MAX,
+	_align := Align.Undefined,
 	id : u64 = 0,
 	placeholder := "",
 	max_chars := -1,
-	padding := 2.0
+	margin := 2.0
 ) -> string {
-	pos := aabb.min;
-	size := aabb.max - aabb.min;
 	_max_chars := ifx max_chars < 0 then 1024 else max_chars;
-	
+
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
 	push_id(gui, id);
 	defer pop_id(gui);
 
@@ -2461,23 +2505,26 @@ atom_input_text :: (
 		cursor := 0;
 	};
 
+	size := v2(width, scale);
+
 	state, comp := widget(gui, "input", Input_Text);
-	comp.aabb = aabb;
+	comp.aabb.min = align_pos(pos, size, align);
+	comp.aabb.max = comp.aabb.min + size;
 	comp.physical = .Solid;
 
-	push_quad_screen(gui, aabb, v3(GRAY_20), z + 0.01);
-	push_quad_screen(gui, shrink(aabb, 1.0), v3(GRAY_90), z + 0.02);
+	push_quad_screen(gui, comp.aabb, v3(GRAY_20), z + 0.01);
+	push_quad_screen(gui, shrink(comp.aabb, 1.0), v3(GRAY_90), z + 0.02);
 
 	label := atom_label(
 		gui,
 		ifx text.count == 0 then placeholder else text,
-		pos,
-		scale,
+		comp.aabb.min,
+		scale * 0.6,
 		z = z + 0.03,
 		color = ifx comp.keyboard_focused then GRAY_00 else GRAY_60,
 		generate_offsets = true
 	);
-	atom_label_replace(gui, *label, move(aabb, v2(padding, 0)), align);
+	atom_label_replace(gui, *label, move(comp.aabb, v2(margin, 0)), .Center_Left);
 
 	ret := tprint("%", text);
 	ret.count = min(ret.count, _max_chars);
@@ -2759,6 +2806,40 @@ Text_Button :: struct {
 
 	clicked := false;
 }
+
+_text_button :: (
+	gui: *GUI_State,
+	text: string,
+	id := "text_button",
+	_pos: V2f = V2f.{ FLOAT32_MAX, FLOAT32_MAX },
+	_z := FLOAT32_MAX,
+	_align := Align.Undefined,
+	size: Text_Button.Size = .Small
+) -> bool, Text_Button, *GUI_State.Widget
+{
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
+		}
+	}
+
+	a, b, c := text_button(gui, text, pos, z, id, align, size);
+	return a, b, c;
+}
+
 text_button :: (
 	gui: *GUI_State,
 	text: string,
@@ -3217,48 +3298,74 @@ labeled_input_text :: (
 	gui: *GUI_State,
 	label: string,
 	text: string,
-	pos: V2f,
 	width: float,
 	size: float,
 	scale := 16.0,
-	z := 0.0,
 	id := "labeled_input_text",
-	align := Align.Center,
+	_pos: V2f = .{ FLOAT32_MAX, FLOAT32_MAX },
+	max_input_width := 128.0,
+	_z := FLOAT32_MAX,
+	_align := Align.Undefined,
 	max_chars := -1,
 	padding := 4.0,
 	placeholder := ""
 ) -> string {
+	_, w := widget(gui, id, struct {});
+
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
+		}
+	}
+
 	push_id(gui, id);
 	defer pop_id(gui);
 
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	row_aabb := AABBf.{ pos, pos + v2(width, size) };
+	row_aabb = align_aabb(row_aabb, align);
+
+	align_label := vertical(align) | Align.Left;
+	align_input := vertical(align) | Align.Right;
+
 	lower_left := align_pos(pos, .{ width, size }, horizontal(align));
-	label_comp := atom_label(
+	label_comp := _atom_label(
 		gui,
 		label,
-		lower_left + v2(padding, 0.0),
 		scale,
-		z,
-		align = vertical(align) | Align.Left,
+		_pos = anchor_aabb(row_aabb, .Center_Left) + v2(padding, 0.0),
+		_z = z,
+		_align = .Center_Left,
 		color = v4(0.0, 0, 0, 1),
-		id = xx string_id("label")
+		id = "label"
 	);
-
+	
 	input_comp := atom_input_text(
 		gui,
-		align_aabb(
-			pos_size(v2(0.0), v2(128.0, size)),
-			pos_size(lower_left - v2(padding, size / 2), v2(width - padding * 2, size)),
-			vertical(align) | Align.Right
-		),
-		scale,
 		text,
-		z,
-		align = Align.Center_Left,
+		scale / 0.6,
+		min(width - widget_width(gui, "label") - padding * 3, max_input_width),
+		_z = z,
+		_pos = anchor_aabb(row_aabb, .Center_Right) - v2(padding, 0.0),
+		_align = .Center_Right,
 		id = xx string_id("input_text"),
 		max_chars = max_chars,
 		placeholder = placeholder
 	);
 
+	w.aabb = widgets_aabb(gui, string.[ "label", "input_text" ]);
 	return input_comp;
 }
 
@@ -3299,7 +3406,7 @@ integer_input :: (
 		height * 0.6,
 		text,
 		z,
-		align = Align.Center,
+		align = Align.Bottom_Left,
 		id = xx string_id("input"),
 		max_chars = 20
 	);

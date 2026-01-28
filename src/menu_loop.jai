@@ -6,12 +6,44 @@ Menu :: struct {
 	enter_instance_password: string = "";
 
 	instances_list: [..] Command.Ans_Instance_List.Instance_Info;
+
+	passcode: u64 = 0;
+	passstring: string = "";
+}
+
+push_left_main_menu :: (
+	gui: *GUI.GUI_State,
+	menu: *Menu
+) {
+	cursor := v2(8.0, gui.controls.window_size.y - 8);
+	GUI.default_params(gui).cursor = cursor;
+	GUI.default_params(gui).align = .Top_Left;
+	GUI.default_params(gui).z = 2;
+
+	passcode_label := tprint("Passcode: %", menu.passstring);
+	GUI._atom_label(gui, passcode_label, id = "passcode_label");
+}
+
+code_to_string :: (code: u64) -> string {
+	unit :: "123456789ABCDEFGHJKMNPQRSTUVWXYZ";
+	_code := code;
+	str8 := NewArray(16, u8,, temp);
+	for 0..15 {
+		str8[it] = unit[(_code % 32).(int)];
+		_code /= 32;
+	}
+	str: string;
+	str.count = 16;
+	str.data = str8.data;
+	return sprint("%", str);
 }
 
 process_menu :: (state: *State, command: Command) -> bool {
 	connect := isa(command.payload, Command.Connect);
 	if connect {
 		state.is_connected = true;
+		state.menu.passcode = connect.passcode;
+		state.menu.passstring = code_to_string(connect.passcode);
 		state.platform.set_token(connect.token);
 		return true;
 	}
@@ -152,6 +184,8 @@ menu_loop :: (_app: *App) -> bool {
 		if main_menu_ret.create_instance_clicked {
 			state.menu.create_instance_popup_open = !state.menu.create_instance_popup_open;
 		}
+
+		push_left_main_menu(*app_user.gui_state, *state.menu);
 	}
 
 	// Editor button (always visible)

@@ -181,6 +181,19 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 		if user {
 			reply: Command.Connect;
 			reply.token = connect.token;
+			reply.profile_id = user.profile_id;
+			reply.passcode = 0xFFFFFFFFFFFFFFFF;
+			passes := load_database(
+				platform,
+				server.db,
+				"profile_passcodes",
+				DB_Profile_Passcode,
+				tprint("id = %", user.profile_id)
+			);
+			if passes.count > 0 {
+				reply.passcode = passes[0].passcode;
+			}
+
 			user.connection = sender;
 			append_queue(server, reply, user.connection);
 
@@ -203,14 +216,64 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			user.token = connect.token;
 			user.connection = user.id;
 			user.instance_id = -1;
+			user.profile_id = -1;
 			server.user_generation += 1;
 			server.user_count += 1;
 
+			// Let's create a profile id for them
+			new_profile_id: DB_Profile_Id;
+			new_profile_id.id = Rand.random_positive_int(*server.rng);
+			store_database(platform, server.db, "profile_ids", DB_Profile_Id.[ new_profile_id ]);
+			user.profile_id = new_profile_id.id;
+
+			// And a passcode
+			new_passcode: DB_Profile_Passcode;
+			new_passcode.id = user.profile_id;
+			new_passcode.passcode = Rand.random_u64(*server.rng);
+			store_database(
+				platform, server.db, "profile_passcodes", DB_Profile_Passcode.[ new_passcode ]
+			);
+
 			reply: Command.Connect;
 			reply.token = user.token;
+			reply.profile_id = user.profile_id;
+			reply.passcode = new_passcode.passcode;
 			append_queue(server, reply, sender);
 		}
 		return true;
+	}
+
+	login := isa(cmd.payload, Command.Login);
+	if login {
+		user := find_user_by_connection(server, sender);
+		if user {
+			passes := load_database(
+				platform,
+				server.db,
+				"profile_passcodes",
+				DB_Profile_Passcode,
+				tprint("passcode = %", user.profile_id)
+			);
+			
+			if passes.count == 0 {
+				command: Command.Login;
+				command.feedback = .Rejected;
+				append_queue(server, command, sender);
+			} else {
+				if passes[0].passcode == login.passcode {
+					command: Command.Login;
+					command.feedback = .Accepted;
+					append_queue(server, command, sender);
+					user.profile_id = passes[0].id;
+				} else {
+					command: Command.Login;
+					command.feedback = .Wrong_Password;
+					append_queue(server, command, sender);
+				}
+			}
+
+			return true;
+		}
 	}
 
 	save_terrain := isa(cmd.payload, Command.Save_Terrain);
@@ -604,6 +667,18 @@ ensure_database :: (app: *App) {
 		app.platform,
 		app_user.server.db,
 		#string QUERY
+			CREATE TABLE IF NOT EXISTS profile_passcodes (
+				id INTEGER PRIMARY KEY,
+				passcode INTEGER,
+				FOREIGN KEY(id) REFERENCES profile_ids(id) ON DELETE CASCADE
+			);
+		QUERY
+	);
+
+	exec_database(
+		app.platform,
+		app_user.server.db,
+		#string QUERY
 			CREATE TABLE IF NOT EXISTS terrain_ids (
 				id INTEGER PRIMARY KEY
 			);
@@ -630,6 +705,17 @@ ensure_database :: (app: *App) {
 				id INTEGER PRIMARY KEY,
 				ascii TEXT,
 				FOREIGN KEY(id) REFERENCES terrain_ids(id) ON DELETE CASCADE
+			);
+		QUERY
+	);
+
+	exec_database(
+		app.platform,
+		app_user.server.db,
+		#string QUERY
+			CREATE TABLE IF NOT EXISTS time_entries (
+				id INTEGER PRIMARY KEY,
+				FOREIGN KEY(id) REFERENCES profile_ids(id) ON DELETE CASCADE
 			);
 		QUERY
 	);

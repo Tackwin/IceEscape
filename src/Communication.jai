@@ -2,6 +2,7 @@
 #import "Basic";
 #import "String";
 #import "Algebra";
+#import "Profile";
 #import "Math";
 #import "Tagged_Union";
 Rand :: #import "Rand";
@@ -49,10 +50,27 @@ Sum_Type :: struct(types: ..Type) {
 Command :: struct {
 	Connect :: struct {
 		token: int;
+		profile_id: int;
+		passcode: u64;
+	}
+	Login :: struct {
+		passcode: u64;
+
+		feedback: enum {
+			Accepted;
+			Wrong_Password;
+			Rejected;
+		}
+	}
+	Set_Passcode :: struct {
+		passcode: u64;
 	}
 	Move :: struct {
 		player_id: int;
 		ground_target: V2f;
+	}
+	Get_Profile_Stats :: struct {
+		stats: Statistics;
 	}
 	Spawn :: struct {
 		scene_id: int;
@@ -401,7 +419,7 @@ Command :: struct {
 		Ans_Enter_Instance, Leave_Instance, Create_Instance, Ans_Create_Instance, Version_Info,
 		Sync_Stats, Sync_Clock, Note_Played, Sync_Bomb_Spawner, Sync_Bomb, Sync_Score,
 		Ask_Enter_Custom_Instance, Ans_Enter_Custom_Instance, Save_Terrain, Ask_List_Terrain,
-		Ans_List_Terrain
+		Ans_List_Terrain, Login, Set_Passcode, Get_Profile_Stats
 	);
 	sent_timestamp: float64;
 }
@@ -465,6 +483,9 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Buy_Response; #through;
 		case .Give_Control; #through;
 		case .Request_Stats; #through;
+		case .Login; #through;
+		case .Get_Profile_Stats; #through;
+		case .Set_Passcode; #through;
 		case .Retire; #through;
 		case .Ask_Respawn; #through;
 		case .Sync_Tombstone; #through;
@@ -730,6 +751,9 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Sync_Stats; #through;
 		case .Sync_Clock; #through;
 		case .Request_Stats; #through;
+		case .Get_Profile_Stats; #through;
+		case .Login; #through;
+		case .Set_Passcode; #through;
 		case .Die; #through;
 		case .Give_Control; #through;
 		case .Hooked_Player; #through;

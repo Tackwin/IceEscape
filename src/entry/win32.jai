@@ -233,6 +233,7 @@ win32_get_token :: () -> int {
 	return 1;
 }
 
+
 win32_set_token :: (token: int) {
 	// push_context,defer_pop launcher_context;
 	// print("Writing token to file: %\n", token);
@@ -920,8 +921,16 @@ reload_dll :: () {
 	dll_name := tprint("IceEscape_temp_%.dll\0", dll_generation);
 	pdb_name := tprint("IceEscape_temp_%.pdb\0", dll_generation);
 	print("Copying IceEscape to %\n", dll_name);
-	Win32.CopyFileA("IceEscape.dll", dll_name.data, 0);
-	Win32.CopyFileA("IceEscape.pdb", pdb_name.data, 0);
+	if !Win32.CopyFileA("IceEscape.dll", dll_name.data, 0)
+	{
+		print("Failed to copy IceEscape.dll\n");
+		return;
+	}
+	if !Win32.CopyFileA("IceEscape.pdb", pdb_name.data, 0)
+	{
+		print("Failed to copy IceEscape.pdb\n");
+		return;
+	}
 
 	dll_reloaded := Win32.LoadLibraryA(dll_name.data);
 	if dll_reloaded == null {
@@ -1061,7 +1070,7 @@ main :: () {
 
 	update_thread: Thread;
 	thread_init(*update_thread, update_thread_proc);
-	thread_start(*update_thread);
+	// thread_start(*update_thread);
 
 	while !platform_state.want_quit {
 		FrameMarkStart();
@@ -1083,10 +1092,10 @@ main :: () {
 
 		if dll {
 			// Get the function pointer of app_loop
-			// app_update_loop := Win32.GetProcAddress(dll, "app_update_loop").(#type (app: *App) -> bool);
-			// if app_update_loop {
-			// 	app_update_loop(*app);
-			// }
+			app_update_loop := Win32.GetProcAddress(dll, "app_update_loop").(#type (app: *App) -> bool);
+			if app_update_loop {
+				app_update_loop(*app);
+			}
 
 			// Get the function pointer of app_loop
 			app_loop := Win32.GetProcAddress(dll, "app_loop").(#type (app: *App) -> bool);

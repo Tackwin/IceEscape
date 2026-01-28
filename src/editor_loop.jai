@@ -913,10 +913,12 @@ draw_save_dialog :: (editor: *Editor, gui: *GUI.GUI_State, platform: *Platform) 
 	}
 	GUI.atom_input_text(
 		gui,
-		pos_size(V2f.{ input_x, input_y }, V2f.{ input_width, input_height }),
-		14,
 		filename_str,
-		z = 102
+		input_height,
+		input_width,
+		_z = 102,
+		_pos = .{ input_x, input_y },
+		_align = .Bottom_Left,
 	);
 
 	// Hint

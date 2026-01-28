@@ -73,30 +73,33 @@ win32_db_query :: (query: *DB_query) {
 	read_type :: (stmt: *sqlite3_stmt, info: *Type_Info, value_ptr: *void, index: int) #expand {
 		tag := info.type;
 		if tag == .INTEGER {
-			integer := sqlite3_column_int(stmt, (index + 1).(s32));
 			if info.runtime_size == 1 {
+				integer := sqlite3_column_int(stmt, index.(s32));
 				value_ptr.(*s8).* = integer.(s8);
 			} else if info.runtime_size == 2 {
+				integer := sqlite3_column_int(stmt, index.(s32));
 				value_ptr.(*s16).* = integer.(s16);
 			} else if info.runtime_size == 4 {
+				integer := sqlite3_column_int(stmt, index.(s32));
 				value_ptr.(*s32).* = integer.(s32);
 			} else {
+				integer := sqlite3_column_int64(stmt, index.(s32));
 				value_ptr.(*s64).* = integer.(s64);
 			}
 		} else if tag == .FLOAT {
-			double := sqlite3_column_double(stmt, (index + 1).(s32));
+			double := sqlite3_column_double(stmt, index.(s32));
 			if info.runtime_size == 4 {
 				value_ptr.(*float32).* = double.(float32);
 			} else {
 				value_ptr.(*float64).* = double.(float64);
 			}
 		} else if tag == .STRING {
-			text := sqlite3_column_text(stmt, (index + 1).(s32));
-			length := sqlite3_column_bytes(stmt, (index + 1).(s32));
+			text := sqlite3_column_text(stmt, index.(s32));
+			length := sqlite3_column_bytes(stmt, index.(s32));
 			value_ptr.(*string).data = text;
 			value_ptr.(*string).count = length;
 		} else if tag == .BOOL {
-			bool_value := sqlite3_column_int(stmt, (index + 1).(s32));
+			bool_value := sqlite3_column_int(stmt, index.(s32));
 			value_ptr.(*bool).* = bool_value != 0;
 		} else {
 			print(
@@ -114,6 +117,7 @@ win32_db_query :: (query: *DB_query) {
 			} else {
 				array_add(*sqlite_array, db);
 				query.handle = sqlite_array.count - 1;
+				query.success = true;
 			}
 		case .CLOSE;
 			if query.handle < 0 || query.handle >= sqlite_array.count {
@@ -124,7 +128,8 @@ win32_db_query :: (query: *DB_query) {
 			result := sqlite3_close(db);
 			if result != SQLITE_OK {
 				print_sqliterror(db, "Failed to close database");
-			}
+			} else
+				query.success = true;
 		case .FLUSH;
 			if query.handle < 0 || query.handle >= sqlite_array.count {
 				print("Invalid database handle %\n", query.handle);
@@ -134,7 +139,8 @@ win32_db_query :: (query: *DB_query) {
 			result := sqlite3_exec(db, "PRAGMA wal_checkpoint(FULL);", null, null, null);
 			if result != SQLITE_OK {
 				print_sqliterror(db, "Failed to flush database");
-			}
+			} else
+				query.success = true;
 		case .EXEC;
 			if query.handle < 0 || query.handle >= sqlite_array.count {
 				print("Invalid database handle %\n", query.handle);
@@ -144,7 +150,8 @@ win32_db_query :: (query: *DB_query) {
 			result := sqlite3_exec(db, tprint("%\0", query.query_string).data, null, null, null);
 			if result != SQLITE_OK {
 				print_sqliterror(db, "Failed to execute query");
-			}
+			} else
+				query.success = true;
 		case .STORE;
 			if query.handle < 0 || query.handle >= sqlite_array.count {
 				print("Invalid database handle %\n", query.handle);
@@ -161,7 +168,8 @@ win32_db_query :: (query: *DB_query) {
 				result := sqlite3_exec(db, "COMMIT;", null, null, null);
 				if result != SQLITE_OK {
 					print_sqliterror(db, "Failed to commit transaction");
-				}
+				} else
+					query.success = true;
 			}
 
 			stmt: *sqlite3_stmt;
@@ -226,6 +234,7 @@ win32_db_query :: (query: *DB_query) {
 			while true {
 				result := sqlite3_step(stmt);
 				if result == SQLITE_DONE {
+					query.success = true;
 					break;
 				} else if result != SQLITE_ROW {
 					print_sqliterror(db, "Failed to execute statement");
