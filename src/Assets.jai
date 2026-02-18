@@ -196,6 +196,7 @@ FORMAT;
 #insert #run embed_data("INDICATOR_OUTLINE_OBJ", "indicator_outline.obj", #filepath);
 #insert #run embed_data("INDICATOR_STROKE_OBJ", "indicator_stroke.obj", #filepath);
 
+#insert #run embed_data("LANTERN_OBJ", "Mesh/Lantern.obj", #filepath);
 #insert #run embed_data("TERRAIN_TREE_SNOW_A", "Mesh/tree_snow_a.obj", #filepath);
 #insert #run embed_data("TERRAIN_TREE_SNOW_B", "Mesh/tree_snow_b.obj", #filepath);
 #insert #run embed_data("TERRAIN_TREE_SNOW_C", "Mesh/tree_snow_c.obj", #filepath);
@@ -364,6 +365,7 @@ load_everything :: (platform: Platform) {
 			"INSTANCED_TEXTURE_FRAGMENT",
 			"SHADOW_INSTANCED_TEXTURE_VERTEX",
 			"SHADOW_INSTANCED_TEXTURE_FRAGMENT",
+			"LANTERN_OBJ",
 			"TERRAIN_TREE_SNOW_A",
 			"TERRAIN_TREE_SNOW_B",
 			"TERRAIN_TREE_SNOW_C",

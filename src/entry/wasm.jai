@@ -71,7 +71,7 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	Window_H :: 144;
 	info.mouse_position.x = xx (controls_buffer.data + Mouse_X).(*u32).*;
 	info.mouse_position.y = xx (controls_buffer.data + Mouse_Y).(*u32).*;
-	info.mouse_wheel = xx (controls_buffer.data + Mouse_Wheel).(*float32).*;
+	info.mouse_wheel = xx (controls_buffer.data + Mouse_Wheel).(*s32).* / 1000;
 
 	dim: [4] u32;
 	ww := dim[2];
@@ -115,25 +115,26 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	}
 }
 
-// audio_table: Table(int, *Sound.Sound_Data);
-// audio_counter := 0;
 
+audio_generation := 0;
 load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_ref {
-	print("Loading audio in wasm is not supported yet!\n");
-	// Params :: struct {
-	// 	data: *u8;
-	// 	count: s64;
-	// 	id: *s64;
-	// 	compressed: u64;
-	// }
-	// js_load_audio :: (params: *Params) -> Platform.extern_ref #foreign;
-	// params: Params;
-	// params.data = cast(*u8) data.data;
-	// params.count = xx data.count;
-	// params.compressed = xx compressed;
-	// params.id = *out.id;
+	audio_generation += 1;
 
-	// return js_load_audio(*params);
+	Params :: struct {
+		data: *u8;
+		count: s64;
+		id: s64;
+		compressed: u64;
+	}
+	js_load_audio :: (params: *Params) -> Platform.extern_ref #foreign;
+	params: Params;
+	params.data = cast(*u8) data.data;
+	params.count = xx data.count;
+	params.compressed = xx compressed;
+	params.id = audio_generation;
+
+	out.id = audio_generation;
+	return js_load_audio(*params);
 }
 
 wasm_wait :: (promise: Platform.extern_ref) {
@@ -141,82 +142,51 @@ wasm_wait :: (promise: Platform.extern_ref) {
 	js_wait(promise);
 }
 
+sound_generation := 0;
 play_audio :: (audio: Audio, position: V3f) -> Sound {
-	return .{};
-	// Params :: struct {
-	// 	id: s64;
-	// 	x: float32;
-	// 	y: float32;
-	// 	z: float32;
-	// 	volume: float32;
-	// 	pitch: float32;
-	// 	repeating: u32;
-	// 	kind: s32;
-	// 	fade_in: s32;
-	// 	exponent: float32;
+	Params :: struct {
+		id: s64;
+		x: float32;
+		y: float32;
+		z: float32;
+		volume: float32;
+		pitch: float32;
+		repeating: u32;
+		kind: s32;
+		fade_in: s32;
+		exponent: float32;
 
-	// 	sound_id: *s64;
+		sound_id: s64;
 
-	// 	delay: float32;
-	// }
+		delay: float32;
+	}
 
-	// js_play_audio :: (params: *Params) #foreign;
-	// sound: Sound;
-	// params: Params;
-	// params.id = xx audio.id;
-	// params.x = xx position.x;
-	// params.y = xx position.y;
-	// params.z = xx position.z;
-	// params.volume = xx audio.volume;
-	// params.pitch = xx audio.pitch;
-	// params.repeating = xx audio.repeating;
-	// params.kind = xx audio.kind;
-	// params.fade_in = xx audio.fade_in;
-	// params.sound_id = *sound.id;
-	// params.exponent = xx audio.exponent;
-	// params.delay = xx audio.delay;
-	// js_play_audio(*params);
+	sound_generation += 1;
+	js_play_audio :: (params: *Params) #foreign;
+	sound: Sound;
+	params: Params;
+	params.id = xx audio.id;
+	params.x = xx position.x;
+	params.y = xx position.y;
+	params.z = xx position.z;
+	params.volume = xx audio.volume;
+	params.pitch = xx audio.pitch;
+	params.repeating = xx audio.repeating;
+	params.kind = xx audio.kind;
+	params.fade_in = xx audio.fade_in;
+	params.sound_id = xx sound_generation;
+	params.exponent = xx audio.exponent;
+	params.delay = xx audio.delay;
+	js_play_audio(*params);
 
-	// sound.audio_id = audio.id;
-	// sound.playing = true;
-	// sound.position = position;
-	// sound.loop = audio.repeating || audio.kind == .Music;
-	// return sound;
-}
-query_sound :: (sound_id: int) -> Sound {
-	return .{};
-	// Params :: struct {
-	// 	sound_id: s64;
-	// 	id: *s64;
-	// 	x: *float32;
-	// 	y: *float32;
-	// 	z: *float32;
-	// 	volume: *float32;
-	// 	pitch: *float32;
-	// 	playing: *u32;
-	// 	looping: *u32;
-	// }
-	// js_query_sound :: (params: *Params) #foreign;
-	// params: Params;
-	// sound: Sound;
-	// params.sound_id = xx sound_id;
-	// params.id = *sound.id;
-	// params.x = *sound.position.x;
-	// params.y = *sound.position.y;
-	// params.z = *sound.position.z;
-	// params.volume = *sound.volume;
-	// params.pitch = *sound.pitch;
-	// u32_looping : u32 = 0;
-	// params.looping = *u32_looping;
-	// u32_playing : u32 = 0;
-	// params.playing = *u32_playing;
-	// js_query_sound(*params);
-	// sound.playing = u32_playing != 0;
-	// sound.loop = u32_looping != 0;
-	// return sound;
+	sound.audio_id = audio.id;
+	sound.id = sound_generation;
+	sound.playing = true;
+	sound.position = position;
+	sound.loop = audio.repeating || audio.kind == .Music;
+	return sound;
 }
 set_sound :: (sound: Sound) {
-	return;
 	Params :: struct {
 		sound_id: s64;
 		x: float32;
@@ -238,10 +208,8 @@ set_sound :: (sound: Sound) {
 	params.playing = xx sound.playing;
 	params.looping = xx sound.loop;
 	js_set_sound(*params);
-	// Sound.update();
 }
 set_listener_info :: (listener: Listener) {
-	return;
 	Params :: struct {
 		x: float32;
 		y: float32;
@@ -322,7 +290,6 @@ init_platform :: () -> Platform {
 	platform.load_audio = load_audio;
 	platform.wait = wasm_wait;
 	platform.play_audio = play_audio;
-	platform.query_sound = query_sound;
 	platform.set_sound = set_sound;
 	platform.set_listener_info = set_listener_info;
 	platform.volume_audio = (x: float) -> float {

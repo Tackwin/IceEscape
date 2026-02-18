@@ -1631,6 +1631,7 @@ Escape_Menu_Args :: struct {
 
 	// Render settings
 	shadows_enabled := true;
+	lighting_enabled := true;
 	shadow_samples_index := 1; // 0=4, 1=9, 2=25
 	aa_mode_index := 0; // 0=FXAA, 1=MSAA 2x, 2=MSAA 4x, 3=No AA
 	particles_enabled := true;
@@ -1646,6 +1647,8 @@ Escape_Menu_Ret :: struct {
 	layout_changed := false;
 
 	// Render settings
+	lighting_enabled := true;
+	lighting_changed := false;
 	shadows_enabled := true;
 	shadows_changed := false;
 	shadow_samples_index := 1;
@@ -1770,65 +1773,83 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 	cursor.y += widget_height(state, "shadows_checkbox") + 4;
 	popup_size.* = grow(popup_size, pos, cursor);
 
+	// Lighting checkbox
+	// lighting_checkbox := labeled_checkbox(
+	// 	state,
+	// 	"Lighting",
+	// 	cursor,
+	// 	popup_size.x - 28,
+	// 	16,
+	// 	z = 12,
+	// 	"lighting_checkbox",
+	// 	align = .Bottom_Left,
+	// 	padding = 0,
+	// 	default = args.lighting_enabled
+	// );
+	// ret.lighting_enabled = lighting_checkbox.checked;
+	// ret.lighting_changed = lighting_checkbox.just_checked;
+	// cursor.y += widget_height(state, "lighting_checkbox") + 4;
+	// popup_size.* = grow(popup_size, pos, cursor);
+
 	// // Shadow samples dropdown
-	shadow_samples_options :: string.[ "4", "9", "25" ];
-	shadow_samples_dropdown := labeled_dropdown(
-		state,
-		"Shadow Samples",
-		shadow_samples_options,
-		cursor,
-		popup_size.x - 28,
-		24,
-		z = 12,
-		"shadow_samples_dropdown",
-		align = .Bottom_Left,
-		padding = 0,
-		default_index = args.shadow_samples_index
-	);
-	ret.shadow_samples_index = shadow_samples_dropdown.selected_index;
-	ret.shadow_samples_changed = shadow_samples_dropdown.changed;
-	cursor.y += widget_height(state, "shadow_samples_dropdown") + 4;
-	popup_size.* = grow(popup_size, pos, cursor);
+	// shadow_samples_options :: string.[ "4", "9", "25" ];
+	// shadow_samples_dropdown := labeled_dropdown(
+	// 	state,
+	// 	"Shadow Samples",
+	// 	shadow_samples_options,
+	// 	cursor,
+	// 	popup_size.x - 28,
+	// 	24,
+	// 	z = 12,
+	// 	"shadow_samples_dropdown",
+	// 	align = .Bottom_Left,
+	// 	padding = 0,
+	// 	default_index = args.shadow_samples_index
+	// );
+	// ret.shadow_samples_index = shadow_samples_dropdown.selected_index;
+	// ret.shadow_samples_changed = shadow_samples_dropdown.changed;
+	// cursor.y += widget_height(state, "shadow_samples_dropdown") + 4;
+	// popup_size.* = grow(popup_size, pos, cursor);
 
 	// // Shadow map size dropdown
-	shadow_map_size_options :: string.[ "1024", "2048", "4096" ];
-	shadow_map_size_dropdown := labeled_dropdown(
-		state,
-		"Shadow Map",
-		shadow_map_size_options,
-		cursor,
-		popup_size.x - 28,
-		24,
-		z = 12,
-		"shadow_map_size_dropdown",
-		align = .Bottom_Left,
-		padding = 0,
-		default_index = args.shadow_map_size_index
-	);
-	ret.shadow_map_size_index = shadow_map_size_dropdown.selected_index;
-	ret.shadow_map_size_changed = shadow_map_size_dropdown.changed;
-	cursor.y += widget_height(state, "shadow_map_size_dropdown") + 4;
-	popup_size.* = grow(popup_size, pos, cursor);
+	// shadow_map_size_options :: string.[ "1024", "2048", "4096" ];
+	// shadow_map_size_dropdown := labeled_dropdown(
+	// 	state,
+	// 	"Shadow Map",
+	// 	shadow_map_size_options,
+	// 	cursor,
+	// 	popup_size.x - 28,
+	// 	24,
+	// 	z = 12,
+	// 	"shadow_map_size_dropdown",
+	// 	align = .Bottom_Left,
+	// 	padding = 0,
+	// 	default_index = args.shadow_map_size_index
+	// );
+	// ret.shadow_map_size_index = shadow_map_size_dropdown.selected_index;
+	// ret.shadow_map_size_changed = shadow_map_size_dropdown.changed;
+	// cursor.y += widget_height(state, "shadow_map_size_dropdown") + 4;
+	// popup_size.* = grow(popup_size, pos, cursor);
 
 	// // Anti-aliasing dropdown
-	aa_mode_options :: string.[ "FXAA", "MSAA 2x", "MSAA 4x", "No AA" ];
-	aa_mode_dropdown := labeled_dropdown(
-		state,
-		"Anti-Aliasing",
-		aa_mode_options,
-		cursor,
-		popup_size.x - 28,
-		24,
-		z = 12,
-		"aa_mode_dropdown",
-		align = .Bottom_Left,
-		padding = 0,
-		default_index = args.aa_mode_index
-	);
-	ret.aa_mode_index = aa_mode_dropdown.selected_index;
-	ret.aa_mode_changed = aa_mode_dropdown.changed;
-	cursor.y += widget_height(state, "aa_mode_dropdown") + 4;
-	popup_size.* = grow(popup_size, pos, cursor);
+	// aa_mode_options :: string.[ "FXAA", "MSAA 2x", "MSAA 4x", "No AA" ];
+	// aa_mode_dropdown := labeled_dropdown(
+	// 	state,
+	// 	"Anti-Aliasing",
+	// 	aa_mode_options,
+	// 	cursor,
+	// 	popup_size.x - 28,
+	// 	24,
+	// 	z = 12,
+	// 	"aa_mode_dropdown",
+	// 	align = .Bottom_Left,
+	// 	padding = 0,
+	// 	default_index = args.aa_mode_index
+	// );
+	// ret.aa_mode_index = aa_mode_dropdown.selected_index;
+	// ret.aa_mode_changed = aa_mode_dropdown.changed;
+	// cursor.y += widget_height(state, "aa_mode_dropdown") + 4;
+	// popup_size.* = grow(popup_size, pos, cursor);
 
 	// // Particles checkbox
 	particles_checkbox := labeled_checkbox(
@@ -2243,6 +2264,21 @@ _atom_label :: (
 	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
 	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
 	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
+		}
+	}
+
 	return atom_label(
 		gui,
 		text,
@@ -2540,11 +2576,18 @@ atom_input_text :: (
 	if comp.keyboard_focused {
 		state.cursor = clamp(state.cursor, 0, ret.count);
 		cursor_aabb := AABBf.{
-			label.aabb_min + v2(label.offsets[state.cursor], 0),
-			V2f.{ 2.0, label.aabb_max.y - label.aabb_min.y }
+			comp.aabb.min + v2(3.0, 5.0),
+			V2f.{ 2.0, scale * 0.6 }
 		};
+		if text.count > 0 {
+			cursor_aabb = .{
+				label.aabb_min + v2(label.offsets[state.cursor], 0),
+				V2f.{ 2.0, label.aabb_max.y - label.aabb_min.y}
+			};
+		}
 		cursor_aabb.max += cursor_aabb.min;
-		push_quad_screen(gui, cursor_aabb, v3(GRAY_00), z + 0.04);
+		if placeholder.count == 0 || text.count > 0
+			push_quad_screen(gui, cursor_aabb, v3(GRAY_00), z + 0.04);
 
 		handle_add :: (key: int, to_add: string) #expand {
 			if gui.controls.just_pressed[key] {
@@ -2992,6 +3035,7 @@ checkbox :: (
 	}
 
 	widget.aabb = pos_size(lower_left, v2(size));
+	widget.physical = .Mouse;
 	state.just_checked = false;
 	if point_aabb(gui.controls.mouse_pos, widget.aabb) {
 		if gui.controls.just_pressed[Key.MouseLeft] {
@@ -3013,7 +3057,8 @@ _labeled_checkbox :: (
 	_z := FLOAT32_MAX,
 	_align := Align.Undefined,
 	padding := 4.0,
-	default := false
+	default := false,
+	label_color := GRAY_00
 ) -> Checkbox {
 	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
 	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
@@ -3029,7 +3074,8 @@ _labeled_checkbox :: (
 		id,
 		align,
 		padding,
-		default
+		default,
+		label_color = label_color
 	);
 }
 labeled_checkbox :: (
@@ -3042,7 +3088,8 @@ labeled_checkbox :: (
 	id := "labeled_checkbox",
 	align := Align.Center,
 	padding := 4.0,
-	default := false
+	default := false,
+	label_color := GRAY_00
 ) -> Checkbox {
 	_, w := widget(gui, id, struct {});
 
@@ -3074,7 +3121,7 @@ labeled_checkbox :: (
 		size,
 		z,
 		align = vertical(align) | Align.Left,
-		color = v4(0.0, 0, 0, 1),
+		color = label_color,
 		id = xx string_id("label")
 	);
 
@@ -3246,6 +3293,55 @@ dropdown :: (
 	return ret;
 }
 
+_labeled_dropdown :: (
+	gui: *GUI_State,
+	label: string,
+	options: [] string,
+	width: float,
+	height: float,
+	_pos: V2f = .{ FLOAT32_MAX, FLOAT32_MAX },
+	_z := FLOAT32_MAX,
+	id := "labeled_dropdown",
+	_align := Align.Undefined,
+	label_color := GRAY_00,
+	padding := 4.0,
+	default_index := 0
+) -> Dropdown {
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
+		}
+	}
+
+	return labeled_dropdown(
+		gui,
+		label,
+		options,
+		pos,
+		width,
+		height,
+		z,
+		id,
+		align,
+		padding,
+		default_index,
+		label_color=label_color
+	);
+}
+
 labeled_dropdown :: (
 	gui: *GUI_State,
 	label: string,
@@ -3257,23 +3353,30 @@ labeled_dropdown :: (
 	id := "labeled_dropdown",
 	align := Align.Bottom_Left,
 	padding := 4.0,
-	default_index := 0
+	default_index := 0,
+	label_color := GRAY_00
 ) -> Dropdown {
 	_, w := widget(gui, id, struct {});
 
 	push_id(gui, id);
 	defer pop_id(gui);
 
+	row_aabb := AABBf.{ pos, pos + v2(width, height) };
+	row_aabb = align_aabb(row_aabb, align);
+
 	lower_left := align_pos(pos, .{ width, height }, horizontal(align));
+
+	align_label := vertical(align) | Align.Left;
+	align_input := vertical(align) | Align.Right;
 
 	label_comp := atom_label(
 		gui,
 		label,
-		lower_left + v2(padding, height / 2),
+		anchor_aabb(row_aabb, .Center_Left) + v2(padding, 0.0),
 		16,
 		z,
 		align = Align.Center_Left,
-		color = v4(0.0, 0, 0, 1),
+		color = label_color,
 		id = xx string_id("label")
 	);
 
@@ -3281,11 +3384,11 @@ labeled_dropdown :: (
 	dropdown_comp := dropdown(
 		gui,
 		options,
-		lower_left + v2(width - padding, 0),
+		anchor_aabb(row_aabb, .Center_Right) - v2(padding, 0.0),
 		dropdown_width,
 		height,
 		z,
-		align = vertical(align) | Align.Right,
+		align = Align.Center_Right,
 		id = "dropdown",
 		default_index = default_index
 	);
@@ -3306,6 +3409,7 @@ labeled_input_text :: (
 	max_input_width := 128.0,
 	_z := FLOAT32_MAX,
 	_align := Align.Undefined,
+	label_color := GRAY_00,
 	max_chars := -1,
 	padding := 4.0,
 	placeholder := ""
@@ -3348,7 +3452,7 @@ labeled_input_text :: (
 		_pos = anchor_aabb(row_aabb, .Center_Left) + v2(padding, 0.0),
 		_z = z,
 		_align = .Center_Left,
-		color = v4(0.0, 0, 0, 1),
+		color = label_color,
 		id = "label"
 	);
 	
@@ -3365,7 +3469,7 @@ labeled_input_text :: (
 		placeholder = placeholder
 	);
 
-	w.aabb = widgets_aabb(gui, string.[ "label", "input_text" ]);
+	w.aabb = row_aabb;
 	return input_comp;
 }
 
@@ -4396,27 +4500,45 @@ V2_Input :: struct {
 
 v2_input :: (
 	gui: *GUI_State,
-	pos: V2f,
 	width: float,
 	height: float,
-	default_value := V2f.{},
+	value: V2f,
 	min_value := V2f.{ -FLOAT32_MAX, -FLOAT32_MAX },
 	max_value := V2f.{ FLOAT32_MAX, FLOAT32_MAX },
 	drag_speed := 0.01,
 	precision := 3,
-	z := 0.0,
+	_z := FLOAT32_MAX,
+	_pos: V2f = .{ FLOAT32_MAX, FLOAT32_MAX },
+	_align := Align.Undefined,
 	id := "v2_input",
-	align := Align.Center,
-	labels := string.[ "X", "Y" ]
+	labels := string.[ "X", "Y" ],
+	label_color := GRAY_00
 ) -> V2_Input {
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
+		}
+	}
+
 	state, w := widget(gui, id, V2_Input);
 
 	push_id(gui, id);
 	defer pop_id(gui);
 
-	if w.age == 0 {
-		state.value = default_value;
-	}
+	state.value = value;
 
 	lower_left := align_pos(pos, .{ width, height }, align);
 
@@ -4429,19 +4551,21 @@ v2_input :: (
 	state.y_changed = false;
 
 	// X component
-	atom_label(gui, labels[0], lower_left + v2(2.0, height / 2), height * 0.5, z, align = .Center_Left, color = GRAY_00, id = xx 0);
+	atom_label(
+		gui, labels[0], lower_left + v2(2.0, height / 2), height * 0.5, z, align = .Center_Left, color = label_color, id = xx 0
+	);
 	x_input := float_input(
 		gui,
-		lower_left + v2(label_width + 2.0, height / 2),
 		input_width,
 		height - 4,
-		default_value = state.value.x,
+		value = state.value.x,
 		min_value = min_value.x,
 		max_value = max_value.x,
 		drag_speed = drag_speed,
 		precision = precision,
-		z = z,
-		align = .Center_Left,
+		_pos = lower_left + v2(label_width + 2.0, height / 2),
+		_z = z,
+		_align = .Center_Left,
 		id = "x"
 	);
 	if x_input.changed {
@@ -4452,19 +4576,21 @@ v2_input :: (
 
 	// Y component
 	x_offset := component_width + 4.0;
-	atom_label(gui, labels[1], lower_left + v2(x_offset + 2.0, height / 2), height * 0.5, z, align = .Center_Left, color = GRAY_00, id = xx 1);
+	atom_label(
+		gui, labels[1], lower_left + v2(x_offset + 2.0, height / 2), height * 0.5, z, align = .Center_Left, color = label_color, id = xx 1
+	);
 	y_input := float_input(
 		gui,
-		lower_left + v2(x_offset + label_width + 2.0, height / 2),
 		input_width,
 		height - 4,
-		default_value = state.value.y,
+		value = state.value.y,
 		min_value = min_value.y,
 		max_value = max_value.y,
 		drag_speed = drag_speed,
 		precision = precision,
-		z = z,
-		align = .Center_Left,
+		_pos = lower_left + v2(x_offset + label_width + 2.0, height / 2),
+		_z = z,
+		_align = .Center_Left,
 		id = "y"
 	);
 	if y_input.changed {
@@ -4476,6 +4602,82 @@ v2_input :: (
 	w.aabb = pos_size(lower_left, v2(width, height));
 	return state.*;
 }
+labeled_v2_input :: (
+	gui: *GUI_State,
+	label: string,
+	width: float,
+	height: float,
+	value: V2f,
+	min_value := V2f.{ -FLOAT32_MAX, -FLOAT32_MAX },
+	max_value := V2f.{ FLOAT32_MAX, FLOAT32_MAX },
+	drag_speed := 0.01,
+	precision := 3,
+	_pos := V2f.{ FLOAT32_MAX, FLOAT32_MAX },
+	_z := FLOAT32_MAX,
+	id := "labeled_v2_input",
+	_align := Align.Undefined,
+	padding := 4.0,
+	labels := string.[ "X", "Y" ],
+	label_color := GRAY_00
+) -> V2_Input {
+	_, w := widget(gui, id, struct {});
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		if dir == {
+			case .Right;
+				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
+			case .Down;
+				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
+			case .Left;
+				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
+			case .Up;
+				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
+		}
+	}
+
+	push_id(gui, id);
+	defer pop_id(gui);
+
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	lower_left := align_pos(pos, .{ width, height }, align);
+
+	label_comp := atom_label(
+		gui,
+		label,
+		lower_left + v2(padding, 0.0),
+		height * 0.6,
+		z,
+		align = Align.Center_Left,
+		color = label_color,
+		id = xx string_id("label")
+	);
+
+	input_width := width - widget_width(gui, "label") - padding * 3;
+	input_comp := v2_input(
+		gui,
+		input_width,
+		height,
+		value = value,
+		min_value = min_value,
+		max_value = max_value,
+		drag_speed = drag_speed,
+		precision = precision,
+		_pos = lower_left + v2(width - padding, 0.0),
+		_z = z,
+		_align = Align.Center_Right,
+		id = "input",
+		labels = labels,
+		label_color = label_color
+	);
+
+	w.aabb = widgets_aabb(gui, string.[ "label", "input" ]);
+	return input_comp;
+}
+
 
 V3_Input :: struct {
 	value: V3f;

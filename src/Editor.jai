@@ -7,10 +7,6 @@ GUI :: #import "GUI";
 #import "Math";
 
 #scope_export
-Editor_Mode :: enum {
-	Tiles;
-	Entities;
-}
 
 // A Array of every types that can be placed in the editor.
 editable_entities_type :: Type.[
@@ -23,7 +19,11 @@ editable_entities_type :: Type.[
 	Scene.Skull,
 	Scene.Spawn,
 	Scene.Bomb_Spawner,
-	Scene.Block_Rock
+	Scene.Block_Rock,
+	Scene.Present,
+	Scene.PressButton,
+	Scene.Lantern,
+	Scene.Turn_Table
 ];
 
 Editor :: struct {
@@ -32,14 +32,11 @@ Editor :: struct {
 
 	clock_running := true;
 
-	// Editor mode
-	mode: Editor_Mode = .Tiles;
-
 	selected_tile_kind: Scene.Tile.Kind = .Ice;
-	selected_entity_type_index := -1;
 
-	selected_entity_ptr: *void = null;
-	selected_entity_type: Type_Info_Struct;
+	// selected_entity_type_index := -1;
+	// selected_entity_ptr: *void = null;
+	// selected_entity_type: Type_Info_Struct;
 
 	// Camera control
 	camera_drag_start: V2f;
@@ -51,13 +48,9 @@ Editor :: struct {
 	terrain_height := 30;
 
 	// UI state
-	show_save_dialog := false;
-	save_filename: [256] u8;
-	save_filename_cursor := 0;
-
 	initialized := false;
 
-	grid_snapping := 0.05;
+	grid_snapping := 0.25;
 }
 
 update :: (editor: *Editor) {

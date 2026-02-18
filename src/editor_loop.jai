@@ -1,8 +1,48 @@
 #import "Reflect";
 #import "Editor";
+#import "Pool";
+#import "Terrain";
+
+Editor_Mode :: enum {
+	Tiles;
+	Entities;
+	Scene;
+}
+
+Editor_Page :: struct {
+	show_load_dialog := false;
+	load_filter: string;
+	load_result_page := 0;
+
+	Terrain_Entry :: struct {
+		name: string;
+		id: int;
+	}
+	terrain_list: [..] Terrain_Entry;
+	terrain_list_pool: Pool;
+
+	show_save_dialog := false;
+	save_dialog_input: string;
+
+	mode: Editor_Mode = .Tiles;
+
+	rectangle_dragging_start: V2f;
+	rectangle_dragging := false;
+	was_rectangle_dragging := false;
+
+	Selection :: struct {
+		ptr: *void;
+		type: Type_Info_Struct;
+	}
+	selected: [..] Selection;
+	placing_entity_type: *Type_Info_Struct = null;
+
+	multiple_posititon_offset: V3f;
+}
 
 process_editor :: (app_user: *App_User, command: Command) -> bool {
 	editor := *app_user.state.editor;
+	page := *app_user.state.editor_page;
 
 	ans_enter_custom_instance := isa(command.payload, Command.Ans_Enter_Custom_Instance);
 	if ans_enter_custom_instance {
@@ -15,6 +55,34 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 		return false;
 	}
 
+	load_terrain := isa(command.payload, Command.Load_Terrain);
+	if load_terrain {
+		if load_terrain.terrain_id < 0 {
+			print("Failed to load terrain: invalid ID %\n", load_terrain.terrain_id);
+		} else {
+			reset_entity_selection(editor, page);
+			Scene.clear_scene_run(*editor.scene);
+			parse_terrain(load_terrain.ascii, *editor.scene, generate_props = false);
+		}
+		return true;
+	}
+
+	ans_list_terrain := isa(command.payload, Command.Ans_List_Terrain);
+	if ans_list_terrain {
+		for page.terrain_list
+			free(it.name.data,, page.terrain_list.allocator);
+		page.terrain_list.allocator = .{ pool_allocator_proc, *page.terrain_list_pool };
+		array_resize(*page.terrain_list, ans_list_terrain.terrains_id.count);
+		for * page.terrain_list {
+			it.id = ans_list_terrain.terrains_id[it_index];
+			it.name = sprint(
+				ans_list_terrain.terrains_name[it_index],, page.terrain_list.allocator
+			);
+			print("Loaded terrain entry: % (ID=%)\n", ans_list_terrain.terrains_name[it_index], it.id);
+		}
+		return true;
+	}
+
 	return false;
 }
 
@@ -22,6 +90,7 @@ enter_editor :: (app_user: *App_User) {
 	app_user.state.screen_state = .Editor;
 	editor := *app_user.state.editor;
 
+	set_allocators(*app_user.state.editor_page.terrain_list_pool);
 	if !editor.initialized {
 		GUI.gui_state_init(*editor.gui_state, *app_user.store);
 		// Initialize with empty terrain
@@ -51,6 +120,8 @@ init_empty_terrain :: (editor: *Editor, width: int, height: int) {
 	editor.scene.terrain.tiles_count = V2i.{ width, height };
 	editor.scene.terrain.tile_size = V2f.{ 1.0, 1.0 };
 	editor.scene.spawn.position = v3(width / 2.0, height / 2.0, 0.0);
+	editor.scene.camera_min = V2f.{ 0.0, 0.0 };
+	editor.scene.camera_max = V2f.{ cast(float32)(width), cast(float32)(height) };
 
 	array_resize(*editor.scene.terrain.tiles, width * height);
 
@@ -58,6 +129,11 @@ init_empty_terrain :: (editor: *Editor, width: int, height: int) {
 	for * editor.scene.terrain.tiles {
 		it.kind = .Dirt;
 	}
+}
+
+reset_entity_selection :: (editor: *Editor, page: *Editor_Page) {
+	page.placing_entity_type = null;
+	page.selected.count = 0;
 }
 
 resize_terrain :: (editor: *Editor, new_width: int, new_height: int) {
@@ -69,7 +145,7 @@ resize_terrain :: (editor: *Editor, new_width: int, new_height: int) {
 	// Save old tiles
 	old_tiles: [..] Scene.Tile;
 	array_resize(*old_tiles, old_width * old_height);
-	for i: 0..old_tiles.count - 1 {
+	for i: 0..min(old_tiles.count, editor.scene.terrain.tiles.count) - 1 {
 		old_tiles[i] = editor.scene.terrain.tiles[i];
 	}
 	defer array_free(old_tiles);
@@ -96,6 +172,7 @@ resize_terrain :: (editor: *Editor, new_width: int, new_height: int) {
 
 editor_loop :: (app_user: *App_User) -> bool {
 	editor := *app_user.state.editor;
+	editor_page := *app_user.state.editor_page;
 	gui := *editor.gui_state;
 	info := app_user.allocated_frame_info;
 
@@ -103,25 +180,38 @@ editor_loop :: (app_user: *App_User) -> bool {
 		enter_editor(app_user);
 	}
 
-	editor.scene.camera_min.x = 0;
-	editor.scene.camera_min.y = 0;
-	editor.scene.camera_max.x = editor.terrain_width * 1.0;
-	editor.scene.camera_max.y = editor.terrain_height * 1.0;
 	update(editor);
 
 	// Begin GUI frame
 	controls: Controls.State;
 	GUI.begin_frame(gui, info, *controls, app_user.state.keyboard_layout);
 
-	// Draw UI panels
-	draw_mode_picker(editor, gui);
-	draw_editor_toolbar(editor, gui, *app_user.state);
+	if editor_page.rectangle_dragging {
+		// Draw selection rectangle
+		GUI.push_quad_screen(
+			gui,
+			vmin(editor_page.rectangle_dragging_start, gui.controls.mouse_pos),
+			abs(gui.controls.mouse_pos - editor_page.rectangle_dragging_start),
+			V3f.{ 1.0, 191/255.0, 0.0 },
+			z = 3,
+			a = 0.3
+		);
+	}
 
-	if editor.show_save_dialog {
-		draw_save_dialog(editor, gui, app_user.app.platform);
+	// Draw UI panels
+	draw_mode_picker(editor, editor_page, gui);
+	draw_editor_toolbar(editor, editor_page, gui, *app_user.state);
+
+	if editor_page.show_save_dialog {
+		draw_save_dialog(editor, editor_page, gui, app_user.app.platform);
+	}
+
+	if editor_page.show_load_dialog {
+		draw_load_dialog(editor, editor_page, gui, app_user.app.platform);
 	}
 
 	if !gui.controls.captured_mouse && !gui.controls.captured_keyboard {
+		editor_page.was_rectangle_dragging = editor_page.rectangle_dragging;
 		// Handle keyboard shortcuts
 		if gui.controls.just_pressed[Key.Escape] {
 			app_user.state.screen_state = .Menu;
@@ -130,19 +220,22 @@ editor_loop :: (app_user: *App_User) -> bool {
 
 		// F5 key to save
 		if gui.controls.just_pressed[Key.F5] {
-			editor.show_save_dialog = true;
+			editor_page.show_save_dialog = true;
 		}
 
 		// Handle camera controls (right mouse drag to pan)
 		handle_editor_camera_controls(editor, gui);
 
 		// Handle input based on mode
-		if editor.mode == .Tiles {
+		if editor_page.mode == .Tiles {
 			handle_tile_painting(editor, gui);
 		} else {
-			if !handle_entity_picking(editor, gui)
-				handle_entity_placing(editor, gui);
+			if !handle_entity_picking(editor, editor_page, gui)
+				handle_entity_placing(editor, editor_page, gui);
 		}
+	}
+	if gui.controls.just_released[Key.MouseLeft] {
+		editor_page.rectangle_dragging = false;
 	}
 
 	// Render the editor
@@ -205,9 +298,11 @@ handle_tile_painting :: (editor: *Editor, gui: *GUI.GUI_State) {
 		// Convert screen position to world position
 		world_pos := screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
 
+		tile := Scene.position_to_tile(editor.scene, world_pos);
+
 		// Convert world position to tile coordinates
-		tile_x := cast(int) floor(world_pos.x / editor.scene.terrain.tile_size.x);
-		tile_y := cast(int) floor(world_pos.y / editor.scene.terrain.tile_size.y);
+		tile_x := tile.x;
+		tile_y := tile.y;
 
 		// Check bounds
 		if tile_x >= 0 && tile_x < editor.scene.terrain.tiles_count.x &&
@@ -219,27 +314,42 @@ handle_tile_painting :: (editor: *Editor, gui: *GUI.GUI_State) {
 	}
 }
 
-handle_entity_placing :: (editor: *Editor, gui: *GUI.GUI_State) {
-	if editor.selected_entity_type_index < 0
+handle_entity_placing :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
+	if !page.placing_entity_type
 		return;
 	// Don't paint if GUI captured the mouse
 	if gui.controls.captured_mouse {
+		print("Mouse captured by GUI, not placing entity\n");
 		return;
 	}
 
 	// Left mouse to paint
-	if gui.controls.just_pressed[Key.MouseLeft] {
+	if gui.controls.just_released[Key.MouseLeft] && !page.was_rectangle_dragging {
 		// Convert screen position to world position
 		world_pos := screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
 
-		placing_type := editable_entities_type[editor.selected_entity_type_index].(*Type_Info);
+		placing_type := page.placing_entity_type;
 
 		if placing_type == type_info(Scene.Spawn) {
 			editor.scene.spawn.position = world_pos;
 		}
 
 		if placing_type == type_info(Scene.Path) {
-			if editor.selected_entity_type.name != type_info(Scene.Path).name {
+			a_path_is_already_selected := false;
+			if page.selected.count == 1 {
+				if page.selected[0].type.name == type_info(Scene.Path).name {
+					a_path_is_already_selected = true;
+				}
+			}
+			if a_path_is_already_selected {
+				path := page.selected[0].ptr.(*Scene.Path);
+				checkpoint: Scene.Checkpoint;
+				checkpoint.position = world_pos;
+				
+				path.checkpoints.index = editor.scene.checkpoints.count;
+				path.checkpoints.count += 1;
+				array_add(*editor.scene.checkpoints, checkpoint);
+			} else {
 				checkpoint: Scene.Checkpoint;
 				checkpoint.position = world_pos;
 				
@@ -295,26 +405,43 @@ handle_entity_placing :: (editor: *Editor, gui: *GUI.GUI_State) {
 		}
 	}
 }
-handle_entity_picking :: (editor: *Editor, gui: *GUI.GUI_State) -> bool {
+handle_entity_picking :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) -> bool {
 	if gui.controls.captured_mouse {
 		return false;
 	}
-
-	// Left mouse to paint
 	if gui.controls.just_pressed[Key.MouseLeft] {
+		page.rectangle_dragging = false;
+		page.rectangle_dragging_start = gui.controls.mouse_pos;
+	}
+
+	current_pos := gui.controls.mouse_pos;
+	if gui.controls.pressed[Key.MouseLeft] && norm(current_pos - page.rectangle_dragging_start) > 5.0 {
+		page.rectangle_dragging = true;
+	}
+
+	if gui.controls.just_released[Key.MouseLeft] {
+		page.selected.count = 0;
+		page.multiple_posititon_offset = V3f.{ 0, 0, 0 };
+		page.rectangle_dragging = false;
+
 		// Convert screen position to world position
-		world_pos := screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
+		a3 := screen_to_world(editor, page.rectangle_dragging_start, gui.controls.window_size);
+		a3 -= V3f.{ 0.1, 0.1, 0 };
+		b3 := screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
+		b3 += V3f.{ 0.1, 0.1, 0 };
+
+		aabb := AABBf.{ v2(vmin(a3, b3)), v2(vmax(a3, b3)) };
 
 		entities := get_scene_placeable_entities();
 		for entity: entities {
 			for 0..get_count(*editor.scene, entity)-1 {
 				pos := get_position(*editor.scene, entity, it);
 
-				r := norm(pos - world_pos);
-				if r < 0.2 {
-					editor.selected_entity_ptr = get_pointer(*editor.scene, entity, it);
-					editor.selected_entity_type = entity.type;
-					return true;
+				if in(aabb, v2(pos)) {
+					print("Selected entity of type % at position %\n", entity.type.name, pos);
+					array_add(
+						*page.selected, .{ get_pointer(*editor.scene, entity, it), entity.type }
+					);
 				}
 			}
 		}
@@ -328,32 +455,31 @@ handle_entity_picking :: (editor: *Editor, gui: *GUI.GUI_State) -> bool {
 				a := editor.scene.checkpoints[beg + (it + 0) % cnt];
 				pos := a.position;
 
-				r := norm(pos - world_pos);
-				if r < 0.2 {
-					editor.selected_entity_ptr = path;
-					editor.selected_entity_type = type_info(Scene.Path);
-					return true;
+				if in(aabb, v2(pos)) {
+					array_add(*page.selected, .{ path, type_info(Scene.Path) });
 				}
 			}
 		}
 
 		for * skull: editor.scene.skulls {
 			pos := Scene.compute_skull_pos(editor.scene, skull);
-			r := norm(pos - world_pos);
-			if r < 0.5 {
-				editor.selected_entity_ptr = skull;
-				editor.selected_entity_type = type_info(Scene.Skull);
-				return true;
+			if in(aabb, v2(pos)) {
+				array_add(*page.selected, .{ skull, type_info(Scene.Skull) });
 			}
+		}
+
+		if page.selected.count > 0 {
+			gui.controls.captured_mouse = true;
+			return true;
 		}
 	}
 	return false;
 }
 
-draw_mode_picker :: (editor: *Editor, gui: *GUI.GUI_State) {
+draw_mode_picker :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
 	// Draw panel background
-	panel_width := 150.0;
-	panel_height := ifx editor.mode == .Tiles then 320.0 else 500.0;
+	panel_width := ifx page.mode == .Scene then 300.0 else 180.0;
+	panel_height := ifx page.mode == .Tiles then 320.0 else 500.0;
 	panel_x := 10.0;
 	panel_y := gui.controls.window_size.y - 64 - panel_height;
 
@@ -362,41 +488,55 @@ draw_mode_picker :: (editor: *Editor, gui: *GUI.GUI_State) {
 
 	// Mode tabs at top
 	tab_y := panel_y + panel_height - 30;
-	tab_width := (panel_width - 20) / 2;
+	tab_width := (panel_width - 20) / 3;
 
 	// Tiles tab
-	tiles_selected := editor.mode == .Tiles;
+	tiles_selected := page.mode == .Tiles;
 	tiles_color := ifx tiles_selected then V3f.{ 0.3, 0.5, 0.7 } else V3f.{ 0.25, 0.25, 0.25 };
 	tiles_pos := V2f.{ panel_x + 5, tab_y };
 	GUI.push_quad_screen(gui, tiles_pos, V2f.{ tab_width, 25 }, tiles_color, z = 52);
-	GUI.atom_label(gui, "Tiles", tiles_pos + V2f.{ 15, 6 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 });
+	GUI.atom_label(gui, "Tiles", tiles_pos + V2f.{ 7, 6 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 });
 	if point_aabb(gui.controls.mouse_pos, tiles_pos, tiles_pos + V2f.{ tab_width, 25 }) {
 		if gui.controls.just_pressed[Key.MouseLeft] {
-			editor.mode = .Tiles;
+			page.mode = .Tiles;
 			gui.controls.captured_mouse = true;
 		}
 	}
 
 	// Entities tab
-	entities_selected := editor.mode == .Entities;
+	entities_selected := page.mode == .Entities;
 	entities_color := ifx entities_selected then V3f.{ 0.3, 0.5, 0.7 } else V3f.{ 0.25, 0.25, 0.25 };
 	entities_pos := V2f.{ panel_x + 5 + tab_width + 5, tab_y };
 	GUI.push_quad_screen(gui, entities_pos, V2f.{ tab_width, 25 }, entities_color, z = 52);
-	GUI.atom_label(gui, "Entities", entities_pos + V2f.{ 8, 6 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 });
+	GUI.atom_label(gui, "Entities", entities_pos + V2f.{ 2, 6 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 });
 	if point_aabb(gui.controls.mouse_pos, entities_pos, entities_pos + V2f.{ tab_width, 25 }) {
 		if gui.controls.just_pressed[Key.MouseLeft] {
-			editor.mode = .Entities;
+			page.mode = .Entities;
+			gui.controls.captured_mouse = true;
+		}
+	}
+
+	// Scene tab
+	scene_selected := page.mode == .Scene;
+	scene_color := ifx scene_selected then V3f.{ 0.3, 0.5, 0.7 } else V3f.{ 0.25, 0.25, 0.25 };
+	scene_pos := V2f.{ panel_x + 5 + (tab_width + 5) * 2, tab_y };
+	GUI.push_quad_screen(gui, scene_pos, V2f.{ tab_width, 25 }, scene_color, z = 52);
+	GUI.atom_label(gui, "Scene", scene_pos + V2f.{ 2, 6 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 });
+	if point_aabb(gui.controls.mouse_pos, scene_pos, scene_pos + V2f.{ tab_width, 25 }) {
+		if gui.controls.just_pressed[Key.MouseLeft] {
+			page.mode = .Scene;
 			gui.controls.captured_mouse = true;
 		}
 	}
 
 	// Content based on mode
-	if editor.mode == .Tiles {
+	if page.mode == .Tiles {
 		draw_tile_picker_content(editor, gui, panel_x, panel_y, panel_width, panel_height);
-	} else {
-		draw_entity_picker_content(editor, gui, panel_x, panel_y, panel_width, panel_height);
+	} else if page.mode == .Entities {
+		draw_entity_picker_content(editor, page, gui, panel_x, panel_y, panel_width, panel_height);
 		draw_entity_type_content(
 			editor,
+			page,
 			gui,
 			pos_size(
 				gui.controls.window_size.x - 256 - 64 - 4,
@@ -404,6 +544,10 @@ draw_mode_picker :: (editor: *Editor, gui: *GUI.GUI_State) {
 				256 + 64,
 				512
 			)
+		);
+	} else if page.mode == .Scene {
+		draw_scene_edit_content(
+			editor, page, gui, pos_size(panel_x, panel_y, panel_width, panel_height)
 		);
 	}
 
@@ -457,7 +601,137 @@ draw_tile_picker_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_x: floa
 	}
 }
 
-draw_entity_picker_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_x: float, panel_y: float, panel_width: float, panel_height: float) {
+draw_scene_edit_content :: (
+	editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, content_aabb: AABBf
+) {
+	GUI.default_params(gui).direction = .Down;
+	GUI.default_params(gui).cursor.x = content_aabb.min.x + 8.0;
+	GUI.default_params(gui).cursor.y = content_aabb.max.y - 24.0;
+	GUI.default_params(gui).align = .Top_Left;
+	GUI.default_params(gui).z = 52;
+
+
+	v2_result := GUI.labeled_v2_input(
+		gui,
+		"Camera",
+		width(content_aabb) - 16.0,
+		24,
+		value = editor.scene.camera_min,
+		drag_speed = editor.grid_snapping,
+		precision = 2,
+		id = "camera_min",
+		label_color = GUI.GRAY_80
+	);
+	if v2_result.changed {
+		print("Camera Min changed to %\n", v2_result.value);
+		editor.scene.camera_min = v2_result.value;
+		editor.scene.camera_max.x = max(editor.scene.camera_max.x, editor.scene.camera_min.x + 1.0);
+		editor.scene.camera_max.y = max(editor.scene.camera_max.y, editor.scene.camera_min.y + 1.0);
+	}
+
+	v2_result = GUI.labeled_v2_input(
+		gui,
+		"Camera Max",
+		width(content_aabb) - 16.0,
+		24,
+		value = editor.scene.camera_max,
+		drag_speed = editor.grid_snapping,
+		precision = 2,
+		id = "camera_max",
+		label_color = GUI.GRAY_80
+	);
+	if v2_result.changed {
+		editor.scene.camera_max = v2_result.value;
+		editor.scene.camera_min.x = min(editor.scene.camera_min.x, editor.scene.camera_max.x - 1.0);
+		editor.scene.camera_min.y = min(editor.scene.camera_min.y, editor.scene.camera_max.y - 1.0);
+	}
+
+	v2_result = GUI.labeled_v2_input(
+		gui,
+		"Origin",
+		width(content_aabb) - 16.0,
+		24,
+		value = v2(editor.scene.origin_tile_space),
+		drag_speed = editor.grid_snapping,
+		precision = 2,
+		id = "origin",
+		label_color = GUI.GRAY_80
+	);
+	if v2_result.changed {
+		editor.scene.origin_tile_space = v2_result.value;
+	}
+
+	v2_result = GUI.labeled_v2_input(
+		gui,
+		"Spawn point",
+		width(content_aabb) - 16.0,
+		24,
+		value = v2(editor.scene.spawn.position),
+		drag_speed = 0.1,
+		precision = 2,
+		id = "spawn_point",
+		label_color = GUI.GRAY_80
+	);
+	if v2_result.changed {
+		editor.scene.spawn.position = v3(v2_result.value, editor.scene.spawn.position.z);
+	}
+
+	checked := GUI._labeled_checkbox(
+		gui,
+		"Night",
+		width(content_aabb) - 16.0,
+		24,
+		id = "night_checkbox",
+		label_color = GUI.GRAY_80
+	);
+	if checked.just_checked {
+		editor.scene.night = checked.checked;
+	}
+
+	{
+		GUI.push_default_params(gui, GUI.default_params(gui));
+		defer GUI.pop_default_params(gui);
+
+		GUI.default_params(gui).direction = .Right;
+		GUI.default_params(gui).align = .Center_Left;
+
+		GUI._atom_label(gui, "Grow", id = "resize_label");
+		clicked := GUI._text_button(gui, "left", id = "grow_left");
+		if clicked {
+			resize_terrain(editor, editor.terrain_width + 1, editor.terrain_height);
+			for y: 0..editor.terrain_height - 1 {
+				for < x: editor.terrain_width - 1..1 {
+					editor.scene.terrain.tiles[x + y * editor.terrain_width] =
+						editor.scene.terrain.tiles[(x - 1) + y * editor.terrain_width];
+				}
+			}
+			editor.scene.origin_tile_space.x += 1.0;
+		}
+		clicked = GUI._text_button(gui, "right", id = "grow_right");
+		if clicked {
+			resize_terrain(editor, editor.terrain_width + 1, editor.terrain_height);
+		}
+		clicked = GUI._text_button(gui, "up", id = "grow_up");
+		if clicked {
+			resize_terrain(editor, editor.terrain_width, editor.terrain_height + 1);
+			for x: 0..editor.terrain_width - 1 {
+				for < y: editor.terrain_height - 1..1 {
+					editor.scene.terrain.tiles[x + y * editor.terrain_width] =
+						editor.scene.terrain.tiles[x + (y - 1) * editor.terrain_width];
+				}
+			}
+		}
+		clicked = GUI._text_button(gui, "down", id = "grow_down");
+		if clicked {
+			resize_terrain(editor, editor.terrain_width, editor.terrain_height + 1);
+			editor.scene.origin_tile_space.y += 1.0;
+		}
+
+	}
+
+}
+
+draw_entity_picker_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, panel_x: float, panel_y: float, panel_width: float, panel_height: float) {
 	// Tile type buttons
 	button_y := panel_y + panel_height - 65;
 	for i: 0..editable_entities_type.count - 1 {
@@ -468,7 +742,7 @@ draw_entity_picker_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_x: fl
 		button_size := V2f.{ panel_width - 20, 20 };
 
 		// Highlight selected
-		is_selected := editor.selected_entity_type_index == i;
+		is_selected := page.placing_entity_type == info;
 		bg_color := ifx is_selected then V3f.{ 0.4, 0.6, 0.8 } else V3f.{ 0.3, 0.3, 0.3 };
 
 		GUI.push_quad_screen(gui, button_pos, button_size, bg_color, z = 52);
@@ -481,15 +755,42 @@ draw_entity_picker_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_x: fl
 		// Check for click
 		if point_aabb(gui.controls.mouse_pos, button_pos, button_pos + button_size) {
 			if gui.controls.just_pressed[Key.MouseLeft] {
-				editor.selected_entity_type_index = i;
+				page.placing_entity_type = info;
 				gui.controls.captured_mouse = true;
 			}
 		}
 	}
 }
 
-draw_entity_type_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_aabb: AABBf) {
-	if editor.selected_entity_ptr == null
+get_intersection_name :: (page: *Editor_Page) -> string {
+	if page.selected.count == 0
+		return "None";
+	else if page.selected.count == 1
+		return page.selected[0].type.name;
+	else
+		return "Multiple";
+}
+
+entity_is_selected :: (page: *Editor_Page, ptr: *void) -> bool {
+	for selection: page.selected {
+		if selection.ptr == ptr {
+			return true;
+		}
+	}
+	return false;
+}
+remove_from_selection :: (page: *Editor_Page, ptr: *void) {
+	for i: 0..page.selected.count - 1 {
+		if page.selected[i].ptr == ptr {
+			page.selected[i] = page.selected[page.selected.count - 1];
+			page.selected.count -= 1;
+			return;
+		}
+	}
+}
+
+draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, panel_aabb: AABBf) {
+	if page.selected.count == 0
 		return;
 
 	GUI.push_quad_screen(gui, panel_aabb, V3f.{ 0.15, 0.15, 0.15 }, z = 50);
@@ -498,7 +799,7 @@ draw_entity_type_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_aabb: A
 	cursor := panel_aabb.min + v2(8.0, panel_aabb.max.y - panel_aabb.min.y - 24);
 
 	// Entity type name
-	GUI.atom_label(gui, editor.selected_entity_type.name, cursor, scale = 16, z = 51, id = 1);
+	GUI.atom_label(gui, get_intersection_name(page), cursor, scale = 16, z = 51, id = 1);
 	cursor.x += GUI.widget_width(gui, 1) + 8;
 
 	// Remove button
@@ -507,19 +808,17 @@ draw_entity_type_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_aabb: A
 		// Find and remove the entity from its array
 		entities := get_scene_placeable_entities();
 		for entity: entities {
-			if entity.type.name == editor.selected_entity_type.name {
-				count := get_count(*editor.scene, entity);
-				for i: 0..count-1 {
-					ptr := get_pointer(*editor.scene, entity, i);
-					if ptr == editor.selected_entity_ptr {
-						// Remove entity at index i by calling the appropriate array removal
-						remove_entity_at(*editor.scene, entity, i);
-						editor.selected_entity_ptr = null;
-						return;
-					}
+			count := get_count(*editor.scene, entity);
+			for < i: 0..count-1 {
+				print("Checking entity % at index %\n", entity.type.name, i);
+				ptr := get_pointer(*editor.scene, entity, i);
+				if entity_is_selected(page, ptr) {
+					remove_entity_at(*editor.scene, entity, i);
+					remove_from_selection(page, ptr);
 				}
 			}
 		}
+		return;
 	}
 
 	// Position editing
@@ -531,76 +830,40 @@ draw_entity_type_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_aabb: A
 	GUI.default_params(gui).align = .Center_Left;
 	GUI.default_params(gui).z = 52;
 
-	// Get current position from the entity
-	current_pos := member_pointer_rec(
-		editor.selected_entity_type, editor.selected_entity_ptr, "position", V3f
-	);
-
-	if current_pos {
-		pos_result := GUI.labeled_v3_input(
-			gui,
-			"Position:",
-			panel_width - GUI.default_params(gui).cursor.x + panel_aabb.min.x,
-			24,
-			value = current_pos.*,
-			drag_speed = editor.grid_snapping,
-			precision = 2,
-			id = "entity_position",
+	if page.selected.count == 1 {
+		selected_entity_ptr := page.selected[0].ptr;
+		selected_entity_type := page.selected[0].type;
+		// Get current position from the entity
+		current_pos := member_pointer_rec(
+			selected_entity_type, selected_entity_ptr, "position", V3f
 		);
-		if pos_result.changed {
-			current_pos.* = pos_result.value;
-		}
-	}
-	content_width := panel_width - GUI.default_params(gui).cursor.x + panel_aabb.min.x;
 
-	// Generic
-	edit_fields := get_edit_fields(*editor.selected_entity_type);
-	for field: edit_fields {
-		if field.type.type == .FLOAT {
-			current_value := member_pointer(
-				editor.selected_entity_type, editor.selected_entity_ptr, field.path, float
-			);
-
-			float_result := GUI.labeled_float_input(
+		if current_pos {
+			pos_result := GUI.labeled_v3_input(
 				gui,
-				tprint("%:", field.path),
-				content_width,
+				"Position:",
+				panel_width - GUI.default_params(gui).cursor.x + panel_aabb.min.x,
 				24,
-				value = current_value.*,
-				drag_speed = 0.1,
+				value = current_pos.*,
+				drag_speed = editor.grid_snapping,
 				precision = 2,
-				id = tprint("entity_field_%", field.path),
+				id = "entity_position",
 			);
-			if float_result.changed {
-				current_value.* = float_result.value;
+			if pos_result.changed {
+				current_pos.* = pos_result.value;
 			}
 		}
-		if field.type.type == .INTEGER {
-			current_value := member_pointer(
-				editor.selected_entity_type, editor.selected_entity_ptr, field.path, int
-			);
+		content_width := panel_width - GUI.default_params(gui).cursor.x + panel_aabb.min.x;
 
-			int_result := GUI.labeled_int_input(
-				gui,
-				tprint("%:", field.path),
-				content_width,
-				24,
-				value = current_value.*,
-				min_value = 0,
-				id = tprint("entity_field_%", field.path),
-			);
-			if int_result.changed {
-				current_value.* = int_result.value;
-			}
-		}
-		if field.type.type == .STRUCT {
-			struct_info := field.type.(*Type_Info_Struct);
-			if struct_info.name == "V3f" {
+		// Generic
+		edit_fields := get_edit_fields(*selected_entity_type);
+		for field: edit_fields {
+			if field.type.type == .FLOAT {
 				current_value := member_pointer(
-					editor.selected_entity_type, editor.selected_entity_ptr, field.path, V3f
+					selected_entity_type, selected_entity_ptr, field.path, float
 				);
 
-				v3_result := GUI.labeled_v3_input(
+				float_result := GUI.labeled_float_input(
 					gui,
 					tprint("%:", field.path),
 					content_width,
@@ -610,141 +873,289 @@ draw_entity_type_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_aabb: A
 					precision = 2,
 					id = tprint("entity_field_%", field.path),
 				);
-				if v3_result.changed {
-					current_value.* = v3_result.value;
+				if float_result.changed {
+					current_value.* = float_result.value;
+				}
+			}
+			if field.type.type == .INTEGER {
+				current_value := member_pointer(
+					selected_entity_type, selected_entity_ptr, field.path, int
+				);
+
+				int_result := GUI.labeled_int_input(
+					gui,
+					tprint("%:", field.path),
+					content_width,
+					24,
+					value = current_value.*,
+					min_value = 0,
+					id = tprint("entity_field_%", field.path),
+				);
+				if int_result.changed {
+					current_value.* = int_result.value;
+				}
+			}
+			if field.type.type == .ENUM {
+				enum_info := field.type.(*Type_Info_Enum);
+				
+				dropdown := GUI._labeled_dropdown(
+					gui,
+					tprint("%:", field.path),
+					enum_info.names,
+					content_width,
+					24,
+					id = tprint("entity_field_%", field.path),
+					label_color = GUI.GRAY_80
+				);
+				if dropdown.changed {
+					current_value := member_pointer(
+						selected_entity_type, selected_entity_ptr, field.path, int
+					);
+					current_value.* = enum_info.values[dropdown.selected_index];
+				}
+			}
+			if field.type.type == .STRUCT {
+				struct_info := field.type.(*Type_Info_Struct);
+				if struct_info.name == "V3f" {
+					current_value := member_pointer(
+						selected_entity_type, selected_entity_ptr, field.path, V3f
+					);
+
+					v3_result := GUI.labeled_v3_input(
+						gui,
+						tprint("%:", field.path),
+						content_width,
+						24,
+						value = current_value.*,
+						drag_speed = 0.1,
+						precision = 2,
+						id = tprint("entity_field_%", field.path),
+					);
+					if v3_result.changed {
+						current_value.* = v3_result.value;
+					}
+				}
+				if struct_info.name == "AABB" {
+					pos := member_pointer(
+						selected_entity_type, selected_entity_ptr, tprint("%.min", field.path), V3f
+					);
+					size := member_pointer(
+						selected_entity_type, selected_entity_ptr, tprint("%.max", field.path), V3f
+					);
+
+					pos_result := GUI.labeled_v2_input(
+						gui,
+						tprint("%: Position", field.path),
+						content_width,
+						24,
+						value = v2(pos.*),
+						drag_speed = editor.grid_snapping,
+						precision = 2,
+						id = tprint("entity_field_%_pos", field.path),
+						label_color = GUI.GRAY_80
+					);
+					if pos_result.changed {
+						sized := size.* - pos.*;
+						pos.* = v3(pos_result.value, pos.*.z);
+						size.* = pos.* + sized;
+					}
+
+					size_result := GUI.labeled_v2_input(
+						gui,
+						tprint("%: Size", field.path),
+						content_width,
+						24,
+						value = v2(size.*) - v2(pos.*),
+						drag_speed = editor.grid_snapping,
+						precision = 2,
+						id = tprint("entity_field_%_size", field.path),
+						label_color = GUI.GRAY_80
+					);
+					if size_result.changed {
+						size.* = v3(
+							pos.*.x + size_result.value.x, pos.*.y + size_result.value.y, size.*.z
+						);
+					}
+				}
+			}
+			if field.type.type == .BOOL {
+				current_value := member_pointer(
+					selected_entity_type, selected_entity_ptr, field.path, bool
+				);
+
+				checkbox := GUI._labeled_checkbox(
+					gui,
+					tprint("%:", field.path),
+					content_width,
+					24,
+					id = tprint("entity_field_%", field.path),
+					label_color = GUI.GRAY_80
+				);
+				if checkbox.just_checked {
+					current_value.* = checkbox.checked;
 				}
 			}
 		}
-	}
 
-	// GATE
-	if compare(editor.selected_entity_type.name, "Gate") == 0 {
-		
-		current_dir := member_pointer(
-			editor.selected_entity_type, editor.selected_entity_ptr, "direction", V3f
-		);
-
-		dir_result := GUI.labeled_v3_input(
-			gui,
-			"Direction:",
-			content_width,
-			24,
-			value = current_dir.*,
-			drag_speed = 0.1,
-			precision = 2,
-			id = "entity_direction",
-		);
-		if dir_result.changed {
-			current_dir.* = normalize(dir_result.value);
-		}
-
-		wait_for_key := member_pointer(
-			editor.selected_entity_type, editor.selected_entity_ptr, "wait_for_key_id", int
-		);
-
-		key_result := GUI.labeled_int_input(
-			gui,
-			"Wait For Key ID:",
-			content_width,
-			24,
-			value = wait_for_key.*,
-			min_value = -1,
-			id = "wait_for_key_id",
-		);
-		if key_result.changed {
-			wait_for_key.* = key_result.value;
-		}
-	}
-	
-	// FLAG
-	if compare(editor.selected_entity_type.name, "Flag") == 0 {
-		current_index := member_pointer(
-			editor.selected_entity_type, editor.selected_entity_ptr, "index", int
-		);
-
-		index_result := GUI.labeled_int_input(
-			gui,
-			"Index:",
-			content_width,
-			24,
-			value = current_index.*,
-			min_value = 0,
-			id = "flag_index"
-		);
-		if index_result.changed {
-			current_index.* = index_result.value;
-		}
-	}
-
-	// Path
-	if compare(editor.selected_entity_type.name, "Path") == 0 {
-		beg := member_pointer(
-			editor.selected_entity_type, editor.selected_entity_ptr, "checkpoints.index", int
-		);
-		cnt := member_pointer(
-			editor.selected_entity_type, editor.selected_entity_ptr, "checkpoints.count", int
-		);
-
-		closed_checkbox := GUI._labeled_checkbox(
-			gui,
-			"Closed Path",
-			content_width,
-			24,
-			id = "path_closed_checkbox"
-		);
-		if closed_checkbox.just_checked {
-			closed := member_pointer(
-				editor.selected_entity_type, editor.selected_entity_ptr, "closed", bool
+		// GATE
+		if compare(selected_entity_type.name, "Gate") == 0 {
+			
+			current_dir := member_pointer(
+				selected_entity_type, selected_entity_ptr, "direction", V3f
 			);
-			closed.* = closed_checkbox.checked;
-		}
 
-		add_checkpoint_clicked, _, _ := GUI.labeled_text_button(
-			gui, "Checkpoints", "Add", content_width, 24, id = "add_checkpoint_button"
-		);
-		if add_checkpoint_clicked {
-			// Add new checkpoint at the end
-			checkpoint: Scene.Checkpoint;
-			checkpoint.position = V3f.{ 0, 0, 0 };
-			if cnt.* > 0 {
-				last_cp_idx := beg.* + cnt.* - 1;
-				last_cp := *editor.scene.checkpoints[last_cp_idx];
-				checkpoint.position = last_cp.position + V3f.{ 1, 0, 0 };
-			}
-			array_add(*editor.scene.checkpoints, checkpoint);
-
-			cnt.* += 1;
-		}
-		add_skull_clicked, _, _ := GUI.labeled_text_button(
-			gui, "Skulls", "Add", content_width, 24, id = "add_skull_button"
-		);
-		if add_skull_clicked {
-			skull: Scene.Skull;
-			skull.id = editor.scene.skulls.count;
-			skull.path_id = member_pointer(
-				editor.selected_entity_type, editor.selected_entity_ptr, "id", int
-			).*;
-			array_add(*editor.scene.skulls, skull);
-		}
-
-		for 0..cnt.* - 1 {
-			cp_idx := beg.* + it;
-			checkpoint := *editor.scene.checkpoints[cp_idx];
-
-			cursor.y += 32;
-
-			pos_result := GUI.labeled_v3_input(
+			dir_result := GUI.labeled_v3_input(
 				gui,
-				tprint("Checkpoint %:", it),
+				"Direction:",
 				content_width,
 				24,
-				value = checkpoint.position,
-				drag_speed = editor.grid_snapping,
+				value = current_dir.*,
+				drag_speed = 0.1,
 				precision = 2,
-				id = tprint("checkpoint_position_%", it),
+				id = "entity_direction",
 			);
-			if pos_result.changed {
-				checkpoint.position = pos_result.value;
+			if dir_result.changed {
+				current_dir.* = normalize(dir_result.value);
+			}
+
+			wait_for_key := member_pointer(
+				selected_entity_type, selected_entity_ptr, "wait_for_key_id", int
+			);
+
+			key_result := GUI.labeled_int_input(
+				gui,
+				"Wait For Key ID:",
+				content_width,
+				24,
+				value = wait_for_key.*,
+				min_value = -1,
+				id = "wait_for_key_id",
+			);
+			if key_result.changed {
+				wait_for_key.* = key_result.value;
+			}
+		}
+		
+		// FLAG
+		if compare(selected_entity_type.name, "Flag") == 0 {
+			current_index := member_pointer(
+				selected_entity_type, selected_entity_ptr, "index", int
+			);
+
+			index_result := GUI.labeled_int_input(
+				gui,
+				"Index:",
+				content_width,
+				24,
+				value = current_index.*,
+				min_value = 0,
+				id = "flag_index"
+			);
+			if index_result.changed {
+				current_index.* = index_result.value;
+			}
+		}
+
+		// Present
+		if compare(selected_entity_type.name, "Present") == 0 {
+
+		}
+
+		// Path
+		if compare(selected_entity_type.name, "Path") == 0 {
+			beg := member_pointer(
+				selected_entity_type, selected_entity_ptr, "checkpoints.index", int
+			);
+			cnt := member_pointer(
+				selected_entity_type, selected_entity_ptr, "checkpoints.count", int
+			);
+
+			closed_checkbox := GUI._labeled_checkbox(
+				gui,
+				"Closed Path",
+				content_width,
+				24,
+				id = "path_closed_checkbox"
+			);
+			if closed_checkbox.just_checked {
+				closed := member_pointer(
+					selected_entity_type, selected_entity_ptr, "closed", bool
+				);
+				closed.* = closed_checkbox.checked;
+			}
+
+			add_checkpoint_clicked, _, _ := GUI.labeled_text_button(
+				gui, "Checkpoints", "Add", content_width, 24, id = "add_checkpoint_button"
+			);
+			if add_checkpoint_clicked {
+				// Add new checkpoint at the end
+				checkpoint: Scene.Checkpoint;
+				checkpoint.position = V3f.{ 0, 0, 0 };
+				if cnt.* > 0 {
+					last_cp_idx := beg.* + cnt.* - 1;
+					last_cp := *editor.scene.checkpoints[last_cp_idx];
+					checkpoint.position = last_cp.position + V3f.{ 1, 0, 0 };
+				}
+				array_add(*editor.scene.checkpoints, checkpoint);
+
+				cnt.* += 1;
+			}
+			add_skull_clicked, _, _ := GUI.labeled_text_button(
+				gui, "Skulls", "Add", content_width, 24, id = "add_skull_button"
+			);
+			if add_skull_clicked {
+				skull: Scene.Skull;
+				skull.id = editor.scene.skulls.count;
+				skull.path_id = member_pointer(
+					selected_entity_type, selected_entity_ptr, "id", int
+				).*;
+				array_add(*editor.scene.skulls, skull);
+			}
+
+			for 0..cnt.* - 1 {
+				cp_idx := beg.* + it;
+				checkpoint := *editor.scene.checkpoints[cp_idx];
+
+				cursor.y += 32;
+
+				pos_result := GUI.labeled_v3_input(
+					gui,
+					tprint("Checkpoint %:", it),
+					content_width,
+					24,
+					value = checkpoint.position,
+					drag_speed = editor.grid_snapping,
+					precision = 2,
+					id = tprint("checkpoint_position_%", it),
+				);
+				if pos_result.changed {
+					checkpoint.position = pos_result.value;
+				}
+			}
+		}
+	} else {
+		// Multiple selection - We only allow position editing for now, via an offset
+		multiple_pos_offset := GUI.labeled_v3_input(
+			gui,
+			"Position Offset:",
+			panel_width - 16.0,
+			24,
+			value = page.multiple_posititon_offset,
+			drag_speed = editor.grid_snapping,
+			precision = 2,
+			id = "multiple_position_offset",
+		);
+		if multiple_pos_offset.changed {
+			delta := multiple_pos_offset.value - page.multiple_posititon_offset;
+			page.multiple_posititon_offset = multiple_pos_offset.value;
+			// Apply offset to all selected entities
+			for selection: page.selected {
+				current_pos := member_pointer_rec(
+					selection.type, selection.ptr, "position", V3f
+				);
+				if current_pos {
+					current_pos.* += delta;
+				}
 			}
 		}
 	}
@@ -773,15 +1184,20 @@ remove_entity_at :: (scene: *Scene.Scene, entity: Scene_Placeable_Entity, index:
 	count_ptr.* = count - 1;
 }
 
-draw_editor_toolbar :: (editor: *Editor, gui: *GUI.GUI_State, state: *State) {
+draw_editor_toolbar :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, state: *State) {
 	// Top toolbar
 	toolbar_height := 40.0;
 	toolbar_y := gui.controls.window_size.y - toolbar_height;
 
 	GUI.push_quad_screen(gui, V2f.{ 0, toolbar_y }, V2f.{ gui.controls.window_size.x, toolbar_height }, V3f.{ 0.15, 0.15, 0.15 }, z = 50);
 
+	GUI.default_params(gui).cursor = V2f.{ 8, toolbar_y + toolbar_height / 2 };
+	GUI.default_params(gui).z = 51;
+	GUI.default_params(gui).align = .Center_Left;
+	GUI.default_params(gui).direction = .Right;
+
 	// Save button
-	play_clicked, _, _ := GUI.text_button(gui, "Play", V2f.{ 64, toolbar_y + 10 }, z = 51, id = "play_btn");
+	play_clicked, _, _ := GUI._text_button(gui, "Play", id = "play_btn");
 	if play_clicked {
 		ask_enter_custom_instance: Command.Ask_Enter_Custom_Instance;
 		content := Scene.serialize(editor.scene,, temp);
@@ -792,20 +1208,28 @@ draw_editor_toolbar :: (editor: *Editor, gui: *GUI.GUI_State, state: *State) {
 	}
 
 	// Save button
-	save_clicked, _, _ := GUI.text_button(gui, "Save", V2f.{ 180, toolbar_y + 10 }, z = 51, id = "save_btn");
+	save_clicked, _, _ := GUI._text_button(gui, "Save", id = "save_btn");
 	if save_clicked {
-		editor.show_save_dialog = true;
+		page.show_save_dialog = true;
+	}
+	load_clicked, _, _ := GUI._text_button(gui, "Load", id = "load_btn");
+	if load_clicked {
+		page.show_load_dialog = true;
 	}
 
-	// Clear button
-	clear_clicked, _, _ := GUI.text_button(gui, "Clear", V2f.{ 250, toolbar_y + 10 }, z = 51, id = "clear_btn");
+	clear_clicked, _, _ := GUI._text_button(gui, "Clear", id = "clear_btn");
 	if clear_clicked {
 		init_empty_terrain(editor, editor.terrain_width, editor.terrain_height);
 		Scene.clear_scene(*editor.scene);
 	}
+	reset_camera_clicked, _, _ := GUI._text_button(gui, "Reset Camera", id = "reset_camera_btn");
+	if reset_camera_clicked {
+		editor.camera_offset = v3(0.0, -4, 8);
+		Scene.reset_camera_zoom(*editor.scene.camera);
+	}
 
 	// Back button
-	back_clicked, _, _ := GUI.text_button(gui, "Back to Menu", V2f.{ 350, toolbar_y + 10 }, z = 51, id = "back_btn");
+	back_clicked, _, _ := GUI._text_button(gui, "Back to Menu", id = "back_btn");
 	if back_clicked {
 		state.screen_state = .Menu;
 	}
@@ -815,34 +1239,30 @@ draw_editor_toolbar :: (editor: *Editor, gui: *GUI.GUI_State, state: *State) {
 
 	// Width controls
 	GUI.atom_label(gui, "W:", V2f.{ size_x, toolbar_y + 12 }, scale = 14, z = 51, color = V4f.{ 0.8, 0.8, 0.8, 1 });
-	w_minus_clicked, _, _ := GUI.text_button(gui, "-", V2f.{ size_x + 25, toolbar_y + 10 }, z = 51, id = "w_minus");
+	w_minus_clicked, _, _ := GUI._text_button(gui, tprint("W: %-", editor.terrain_width), id = "w_minus");
 	if w_minus_clicked && editor.terrain_width > 10 {
 		resize_terrain(editor, editor.terrain_width - 5, editor.terrain_height);
 	}
 	GUI.atom_label(gui, tprint("%", editor.terrain_width), V2f.{ size_x + 50, toolbar_y + 12 }, scale = 14, z = 51, color = V4f.{ 1, 1, 1, 1 });
-	w_plus_clicked, _, _ := GUI.text_button(gui, "+", V2f.{ size_x + 80, toolbar_y + 10 }, z = 51, id = "w_plus");
+	w_plus_clicked, _, _ := GUI._text_button(gui, tprint("W: %+", editor.terrain_width), id = "w_plus");
 	if w_plus_clicked && editor.terrain_width < 200 {
 		resize_terrain(editor, editor.terrain_width + 5, editor.terrain_height);
 	}
 
 	// Height controls
-	GUI.atom_label(gui, "H:", V2f.{ size_x + 120, toolbar_y + 12 }, scale = 14, z = 51, color = V4f.{ 0.8, 0.8, 0.8, 1 });
-	h_minus_clicked, _, _ := GUI.text_button(gui, "-", V2f.{ size_x + 145, toolbar_y + 10 }, z = 51, id = "h_minus");
+	h_minus_clicked, _, _ := GUI._text_button(gui, tprint("H: %-", editor.terrain_height), id = "h_minus");
 	if h_minus_clicked && editor.terrain_height > 10 {
 		resize_terrain(editor, editor.terrain_width, editor.terrain_height - 5);
 	}
-	GUI.atom_label(gui, tprint("%", editor.terrain_height), V2f.{ size_x + 170, toolbar_y + 12 }, scale = 14, z = 51, color = V4f.{ 1, 1, 1, 1 });
-	h_plus_clicked, _, _ := GUI.text_button(gui, "+", V2f.{ size_x + 200, toolbar_y + 10 }, z = 51, id = "h_plus");
+	h_plus_clicked, _, _ := GUI._text_button(gui, tprint("H: %+", editor.terrain_height), id = "h_plus");
 	if h_plus_clicked && editor.terrain_height < 200 {
 		resize_terrain(editor, editor.terrain_width, editor.terrain_height + 5);
 	}
 
 	// Current terrain info
-	snap_clicked, _, _ := GUI.text_button(
+	snap_clicked, _, _ := GUI._text_button(
 		gui,
 		tprint("Snap %", editor.grid_snapping),
-		V2f.{ gui.controls.window_size.x - 150, toolbar_y + 12 },
-		z = 51,
 		id = "snap_btn"
 	);
 	if snap_clicked {
@@ -855,11 +1275,9 @@ draw_editor_toolbar :: (editor: *Editor, gui: *GUI.GUI_State, state: *State) {
 		}
 	}
 	
-	clock_clicked, _, _ := GUI.text_button(
+	clock_clicked, _, _ := GUI._text_button(
 		gui,
 		tprint("Clock %", editor.clock_running),
-		V2f.{ gui.controls.window_size.x - 300, toolbar_y + 12 },
-		z = 51,
 		id = "clock_btn"
 	);
 	if clock_clicked {
@@ -872,7 +1290,105 @@ draw_editor_toolbar :: (editor: *Editor, gui: *GUI.GUI_State, state: *State) {
 	}
 }
 
-draw_save_dialog :: (editor: *Editor, gui: *GUI.GUI_State, platform: *Platform) {
+draw_load_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, platform: *Platform) {
+	dialog_width := 400.0;
+	dialog_height := 400.0;
+	dialog_x := (gui.controls.window_size.x - dialog_width) / 2;
+	dialog_y := (gui.controls.window_size.y - dialog_height) / 2;
+
+	GUI.push_quad_screen(
+		gui, V2f.{ 0, 0 }, gui.controls.window_size, V3f.{ 0, 0, 0 }, z = 98, a = 0.5
+	);
+	// Dialog box
+	GUI.push_quad_screen(
+		gui, v2(dialog_x, dialog_y), v2(dialog_width, dialog_height), V3f.{ 0.2, 0.2, 0.2 }, z = 99
+	);
+	GUI.push_quad_screen(
+		gui, v2(dialog_x + 2, dialog_y + 2), v2(dialog_width - 4, dialog_height - 4), V3f.{ 0.1, 0.1, 0.1 }, z = 100
+	);
+
+	GUI.default_params(gui).cursor = v2(dialog_x + 8, dialog_y + dialog_height - 8);
+	GUI.default_params(gui).direction = .Down;
+	GUI.default_params(gui).align = .Top_Left;
+	GUI.default_params(gui).z = 101;
+
+	GUI._atom_label(gui, "Load Terrain", scale = 18, color = V4f.{ 1, 1, 1, 1 });
+
+	// Input for filter
+	new_load_filter := GUI.labeled_input_text(
+		gui, "Filter", page.load_filter, dialog_width - 16, 24, label_color = GUI.GRAY_80, placeholder = "<filter>"
+	);
+	if new_load_filter != page.load_filter {
+		free(page.load_filter.data);
+		page.load_filter = sprint("%", new_load_filter);
+
+		// Refresh file list
+		ask_list_terrain: Command.Ask_List_Terrain;
+		ask_list_terrain.filter = page.load_filter;
+		send_web_message(platform, gui.controls.time, make_command(ask_list_terrain));
+	}
+
+	// List of files
+
+	PAGE_SIZE := 10;
+	page_count := max((page.terrain_list.count + PAGE_SIZE - 1) / PAGE_SIZE, 1);
+	page.load_result_page = clamp(
+		page.load_result_page,
+		0,
+		max((page.terrain_list.count + PAGE_SIZE - 1) / PAGE_SIZE - 1, 0)
+	);
+
+	beg := page.load_result_page * PAGE_SIZE;
+	end := beg + PAGE_SIZE;
+	end = min(end, page.terrain_list.count);
+	terrain_list_view: []Editor_Page.Terrain_Entry;
+	terrain_list_view.count = end - beg;
+	terrain_list_view.data = page.terrain_list.data + beg;
+
+	for terrain_list_view {
+		GUI.push_id(gui, it_index);
+		defer GUI.pop_id(gui);
+
+		// GUI.move_cursor(gui, v2(4.0, 0.0));
+		file_clicked, _, _ := GUI.labeled_text_button(
+			gui,
+			tprint("File: %", it.name),
+			"Load",
+			dialog_width - 16,
+			24,
+			id = "load_file",
+			_z = 103,
+		);
+
+		if file_clicked {
+			load_terrain_cmd: Command.Load_Terrain;
+			load_terrain_cmd.terrain_id = it.id;
+			send_web_message(
+				platform, gui.controls.time, make_command(load_terrain_cmd)
+			);
+			page.show_load_dialog = false;
+		}
+	}
+
+	GUI.default_params(gui).cursor = v2(dialog_x + dialog_width - 8, dialog_y + 8);
+	GUI.default_params(gui).direction = .Left;
+	GUI.default_params(gui).align = .Bottom_Right;
+
+	clicked := GUI._text_button(gui, "Cancel", id = "load_dialog_cancel");
+	if clicked {
+		page.show_load_dialog = false;
+	}
+
+	clicked = GUI._text_button(gui, ">", id = "load_dialog_next_page");
+	if clicked {
+		page.load_result_page = (page.load_result_page + 1) % page_count;
+	}
+	clicked = GUI._text_button(gui, "<", id = "load_dialog_prev_page");
+	if clicked {
+		page.load_result_page = (page.load_result_page + page_count - 1) % page_count;
+	}
+}
+draw_save_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, platform: *Platform) {
 	// Dialog background
 	dialog_width := 400.0;
 	dialog_height := 150.0;
@@ -905,21 +1421,20 @@ draw_save_dialog :: (editor: *Editor, gui: *GUI.GUI_State, platform: *Platform) 
 	GUI.push_quad_screen(gui, V2f.{ input_x, input_y }, V2f.{ input_width, input_height }, V3f.{ 0.3, 0.3, 0.3 }, z = 101);
 
 	// Show current filename
-	filename_str: string;
-	filename_str.data = editor.save_filename.data;
-	filename_str.count = editor.save_filename_cursor;
-	if filename_str.count == 0 {
-		filename_str = "my_level";
-	}
-	GUI.atom_input_text(
+	new_save_dialog_input := GUI.atom_input_text(
 		gui,
-		filename_str,
+		page.save_dialog_input,
 		input_height,
 		input_width,
 		_z = 102,
 		_pos = .{ input_x, input_y },
 		_align = .Bottom_Left,
+		id = GUI.string_id("save_dialog_input")
 	);
+	if new_save_dialog_input != page.save_dialog_input {
+		free(page.save_dialog_input);
+		page.save_dialog_input = sprint("%", new_save_dialog_input);
+	}
 
 	// Hint
 	GUI.atom_label(gui, "(saves to assets/Terrain/<name>.terrain)", V2f.{ dialog_x + 20, input_y - 20 }, scale = 12, z = 101, color = V4f.{ 0.6, 0.6, 0.6, 1 });
@@ -932,18 +1447,18 @@ draw_save_dialog :: (editor: *Editor, gui: *GUI.GUI_State, platform: *Platform) 
 		save: Command.Save_Terrain;
 		save.ascii = content;
 		memset(save.info.name.data, 0, save.info.name.count);
-		memcpy(save.info.name.data, filename_str.data, filename_str.count);
+		memcpy(save.info.name.data, page.save_dialog_input.data, page.save_dialog_input.count);
 		send_web_message(
 			platform, gui.controls.time, make_command(save)
 		);
-		save_terrain_to_file(editor, filename_str);
-		editor.show_save_dialog = false;
+		save_terrain_to_file(editor, page.save_dialog_input);
+		page.show_save_dialog = false;
 	}
 
 	// Cancel button
 	cancel_clicked, _, _ := GUI.text_button(gui, "Cancel", V2f.{ dialog_x + dialog_width - 70, dialog_y + 20 }, z = 101, id = "dialog_cancel");
 	if cancel_clicked || gui.controls.just_pressed[Key.Escape] {
-		editor.show_save_dialog = false;
+		page.show_save_dialog = false;
 	}
 
 	// Capture mouse clicks on dialog
@@ -972,7 +1487,7 @@ editor_render :: (app_user: *App_User) {
 	frame := WRender.begin_frame(framegraph, app_user.state.current_time);
 
 	// Render the scene (terrain)
-	WRender.render_scene(frame, framegraph, editor.scene, store);
+	WRender.render_scene(frame, framegraph, editor.scene, store, in_editor = true);
 	WRender.render_editor(frame, framegraph, editor, store);
 
 	// Render the GUI

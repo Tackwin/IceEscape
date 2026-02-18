@@ -466,6 +466,8 @@ Frame :: struct {
 	cpu: [..] u8;
 	cpu_cursor := 0;
 
+
+
 	current_time: Apollo_Time;
 }
 
@@ -479,6 +481,7 @@ WFramegraph :: struct {
 		render_particles := true;
 		render_props := true;
 		render_shadows := true;
+		light_enabled := true;
 	}
 
 	settings: Settings;
@@ -549,11 +552,18 @@ WFramegraph :: struct {
 		shadow_pcf_count: u32 = 3;
 		sun_color: V3f;
 		sun_strength: float32;
-
 		use_shadow_map := 1.0;
-		padding3: float32;
-		padding4: float32;
-		padding5: float32;
+		use_lighting := 1.0;
+		light_bin_offset: u32;
+		light_bin_count_x: u32;
+		light_bin_count_y: u32;
+		light_bin_min_x: float32;
+		light_bin_min_y: float32;
+		light_bin_max_x: float32;
+		light_bin_max_y: float32;
+		padding0: u32;
+		padding1: u32;
+		padding2: u32;
 	}
 
 	Vertex :: struct {
@@ -577,7 +587,27 @@ WFramegraph :: struct {
 		padding1: u32 = 0;
 		color: V4f = .{ 1, 1, 1, 1 };
 		overlay_color: V4f = .{ 1, 1, 1, 1 };
+		light_count: u32 = 0;
+		light_index: u32 = 0;
+		padding2: u32 = 0;
+		padding3: u32 = 0;
 	};
+
+	Light :: struct {
+		position: V3f;
+		padding0: u32;
+		direction: V3f;
+		padding1: u32;
+		color: V3f;
+		kind: u32; // 0 = directional, 1 = point, 2 = cone
+		range: float32; // for point and cone
+		angle: float32; // for cone
+		intensity: float32;
+		padding3: u32;
+	};
+	Light_Bin :: struct {
+		indices: [16] u32;
+	}
 
 	frames: [3] Frame;
 
@@ -591,7 +621,7 @@ WFramegraph :: struct {
 init_bindgroup_layout :: (framegraph: *WFramegraph) {
 	{
 		layout: WGPUBindGroupLayoutDescriptor = .{};
-		entries: [2] WGPUBindGroupLayoutEntry;
+		entries: [4] WGPUBindGroupLayoutEntry;
 			entries[0].binding = 0;
 			entries[0].visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
 			entries[0].buffer.type = .Uniform;
@@ -602,6 +632,16 @@ init_bindgroup_layout :: (framegraph: *WFramegraph) {
 			entries[1].buffer.type = .ReadOnlyStorage;
 			entries[1].buffer.hasDynamicOffset = 0;
 			entries[1].buffer.minBindingSize = 0;
+			entries[2].binding = 2;
+			entries[2].visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+			entries[2].buffer.type = .ReadOnlyStorage;
+			entries[2].buffer.hasDynamicOffset = 0;
+			entries[2].buffer.minBindingSize = 0;
+			entries[3].binding = 3;
+			entries[3].visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+			entries[3].buffer.type = .ReadOnlyStorage;
+			entries[3].buffer.hasDynamicOffset = 0;
+			entries[3].buffer.minBindingSize = 0;
 		layout.entryCount = entries.count;
 		layout.entries = entries.data;
 		layout.label = toWGPUStringView("Instance Bind Group Layout");
@@ -1251,7 +1291,7 @@ instance_bind_group :: (
 	desc: WGPUBindGroupDescriptor = .{};
 	desc.label = toWGPUStringView(tprint("% Instance Bind Group", name));
 	desc.layout = framegraph.instanceBindGroupLayout;
-	entries: [2] WGPUBindGroupEntry;
+	entries: [4] WGPUBindGroupEntry;
 	entries[0].binding = 0;
 	entries[0].buffer = framegraph.frame_buffer;
 	entries[0].offset = xx frame.cpu_cursor;
@@ -1260,6 +1300,14 @@ instance_bind_group :: (
 	entries[1].buffer = framegraph.frame_buffer;
 	entries[1].offset = 0;
 	entries[1].size = xx frame.cpu.count;
+	entries[2].binding = 2;
+	entries[2].buffer = framegraph.frame_buffer;
+	entries[2].offset = 0;
+	entries[2].size = xx frame.cpu.count;
+	entries[3].binding = 3;
+	entries[3].buffer = framegraph.frame_buffer;
+	entries[3].offset = 0;
+	entries[3].size = xx frame.cpu.count;
 	desc.entryCount = entries.count;
 	desc.entries = entries.data;
 	
@@ -1311,6 +1359,36 @@ texture_bind_group :: (
 	desc.entryCount = entries.count;
 	desc.entries = entries.data;
 	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
+}
+
+append_light_buffer :: (frame: *Frame) -> [] WFramegraph.Light {
+	align_up(*frame.cpu_cursor, size_of(WFramegraph.Light));
+	
+	data: [] WFramegraph.Light;
+	data.data = (frame.cpu.data + frame.cpu_cursor).(*WFramegraph.Light);
+	data.count = 0;
+	return data;
+}
+commit_lights :: (frame: *Frame, count: int) {
+	if count <= 0
+		return;
+
+	stride := size_of(WFramegraph.Light);
+	frame.cpu_cursor += xx (count * stride);
+}
+append_light_bin_buffer :: (frame: *Frame) -> [] WFramegraph.Light_Bin {
+	align_up(*frame.cpu_cursor, size_of(WFramegraph.Light_Bin));
+	
+	data: [] WFramegraph.Light_Bin;
+	data.data = (frame.cpu.data + frame.cpu_cursor).(*WFramegraph.Light_Bin);
+	data.count = 0;
+	return data;
+}
+commit_light_bins :: (frame: *Frame, count: int) {
+	if count <= 0
+		return;
+	stride := size_of(WFramegraph.Light_Bin);
+	frame.cpu_cursor += xx (count * stride);
 }
 
 append_instance_buffer :: (frame: *Frame) -> [] WFramegraph.Instance {
@@ -1464,9 +1542,7 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 
 	// swap the ready and rendering frame idx
 	{
-		old := framegraph.ready_frame_idx;
-		framegraph.ready_frame_idx = framegraph.rendering_frame_idx;
-		framegraph.rendering_frame_idx = old;
+		framegraph.rendering_frame_idx = framegraph.ready_frame_idx;
 	}
 
 	compare_and_swap(*framegraph.frame_lock, 1, 0);
@@ -1757,6 +1833,15 @@ render_editor :: (
 	extra: Extra;
 	picking_place := Editor.screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
 	add_debug_sphere(*extra, picking_place, scale=0.1);
+	add_debug_sphere(*extra, v3(0.0, 0.0, 0.0), scale=0.2, color=V4f.{ 1.0, 0.0, 0.0, 1.0 });
+	{
+		a := editor.scene.camera_min;
+		b := editor.scene.camera_max;
+		add_debug_cylinder(*extra, v3(a.x, a.y, 0.25), v3(b.x, a.y, 0.25), color=V3f.{ 1.0, 1.0, 1.0 });
+		add_debug_cylinder(*extra, v3(b.x, a.y, 0.25), v3(b.x, b.y, 0.25), color=V3f.{ 1.0, 1.0, 1.0 });
+		add_debug_cylinder(*extra, v3(b.x, b.y, 0.25), v3(a.x, b.y, 0.25), color=V3f.{ 1.0, 1.0, 1.0 });
+		add_debug_cylinder(*extra, v3(a.x, b.y, 0.25), v3(a.x, a.y, 0.25), color=V3f.{ 1.0, 1.0, 1.0 });
+	}
 
 	{ // SPAWN
 		center := editor.scene.spawn.position;
@@ -1788,6 +1873,46 @@ render_editor :: (
 
 			add_debug_cylinder(*extra, a, b, color=V3f.{ 1.0, 1.0, 0.0 });
 		}
+
+		for 0..gate.pressbutton_ids.count - 1 {
+			btn_id := editor.scene.indices[gate.pressbutton_ids.index + it];
+			btn := Scene.find_by_pressbutton_id(editor.scene, btn_id);
+			if btn {
+				a := gate.position;
+				b := btn.position;
+
+				add_debug_cylinder(*extra, a, b, color=V3f.{ 1.0, 1.0, 0.0 });
+			}
+		}
+	}
+
+	for editor.scene.lanterns {
+		p := it.position;
+
+		btn := Scene.find_by_pressbutton_id(editor.scene, it.button_id);
+		if btn {
+			a := p;
+			b := btn.position;
+
+			add_debug_cylinder(*extra, a, b, color=V3f.{ 1.0, 1.0, 0.0 });
+		}
+
+		a := it.light_aabb.min;
+		b := it.light_aabb.max;
+		c := (a + b) / 2;
+		add_debug_cylinder(
+			*extra, v3(a.x, a.y, 0.25), v3(b.x, a.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
+		);
+		add_debug_cylinder(
+			*extra, v3(b.x, a.y, 0.25), v3(b.x, b.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
+		);
+		add_debug_cylinder(
+			*extra, v3(b.x, b.y, 0.25), v3(a.x, b.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
+		);
+		add_debug_cylinder(
+			*extra, v3(a.x, b.y, 0.25), v3(a.x, a.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
+		);
+
 	}
 
 	for path: editor.scene.paths {
@@ -1816,7 +1941,11 @@ render_editor :: (
 }
 
 render_scene :: (
-	frame: *Frame, framegraph: *WFramegraph, scene: Scene.Scene, store: Store.Store
+	frame: *Frame,
+	framegraph: *WFramegraph,
+	scene: Scene.Scene,
+	store: Store.Store,
+	in_editor: bool = false
 ) {
 	frame.geometry.uniforms = .{};
 	frame.geometry.uniforms.V =
@@ -1843,17 +1972,33 @@ render_scene :: (
 	frame.geometry.uniforms.sun_dir = normalize(V3f.{ -1, -1, -1 });
 	frame.geometry.uniforms.sun_color = V3f.{ 1, 1, 1 };
 	frame.geometry.uniforms.sun_strength = 0.5;
+	if scene.night {
+		if in_editor
+			frame.geometry.uniforms.sun_strength = 0.15;
+		else
+			frame.geometry.uniforms.sun_strength = 0.005;
+	}
 	frame.geometry.uniforms.use_shadow_map = 0.0;
 	frame.geometry.uniforms.shadow_pcf_count = xx framegraph.settings.shadow_samples;
 	if framegraph.settings.render_shadows
 		frame.geometry.uniforms.use_shadow_map = 1.0;
-	frame.shadow.uniforms = frame.geometry.uniforms;
+	frame.geometry.uniforms.use_lighting = 0.0;
+	if framegraph.settings.light_enabled
+		frame.geometry.uniforms.use_lighting = 1.0;
+	frame.geometry.uniforms.light_bin_count_x = 50;
+	frame.geometry.uniforms.light_bin_count_y = 50;
+	frame.geometry.uniforms.light_bin_min_x = scene.camera.target.x - 10;
+	frame.geometry.uniforms.light_bin_min_y = scene.camera.target.y - 6;
+	frame.geometry.uniforms.light_bin_max_x = scene.camera.target.x + 10;
+	frame.geometry.uniforms.light_bin_max_y = scene.camera.target.y + 9;
+	defer frame.shadow.uniforms = frame.geometry.uniforms;
 	
 	extra: Extra;
 	reserve(*extra, 16);
 	defer {
 		free(*extra);
 	}
+
 	if framegraph.settings.render_shadows {
 		clear(*extra);
 
@@ -1876,6 +2021,7 @@ render_scene :: (
 		render_antiairs(frame, *frame.shadow, scene, store, *extra);
 		render_flags(frame, *frame.shadow, scene, store, *extra);
 		render_block_rocks(frame, *frame.shadow, scene, store, *extra);
+		render_lanterns(frame, *frame.shadow, scene, store, *extra);
 		render_turn_tables(frame, *frame.shadow, scene, store, *extra);
 		render_bombs(frame, *frame.shadow, scene, store, *extra);
 		render_pressbuttons(frame, *frame.shadow, scene, store, *extra);
@@ -1884,12 +2030,262 @@ render_scene :: (
 		render_extra(frame, *frame.shadow, store, *extra);
 		//render_mark(framegraph, encoder, shadowPass, scene, store);
 	}
+	if scene.night {
+		light_bins_count := frame.geometry.uniforms.light_bin_count_x;
+		light_bins_count *= frame.geometry.uniforms.light_bin_count_y;
+		light_bins := append_light_bin_buffer(frame);
+		light_bins.count = light_bins_count;
+		frame.geometry.uniforms.light_bin_offset =
+			(frame.cpu_cursor / size_of(WFramegraph.Light_Bin)).(u32);
+		memset(light_bins.data, 0, xx (light_bins.count * size_of(WFramegraph.Light_Bin)));
+		commit_light_bins(frame, light_bins.count);
+
+		append_to_bin :: (bin: *WFramegraph.Light_Bin, light_index: int) {
+			for * bin.indices
+				if it.* == 0
+					it.* = xx light_index;
+		};
+
+		lights := append_light_buffer(frame);
+		light_offset := (frame.cpu_cursor / size_of(WFramegraph.Light)).(u32);
+		for scene.tombstones {
+			lights.count += 1;
+			light := *lights[lights.count - 1];
+			light.kind = 1;
+			light.position = it.position;
+			light.position.z += 0.2;
+			light.range = 0.5;
+			light.color = V3f.{ 1.0, 0.8, 0.6 };
+			light.intensity = 0.75;
+		}
+		for scene.keys {
+			lights.count += 1;
+			light := *lights[lights.count - 1];
+			light.kind = 1;
+			light.position = it.client.position;
+			light.position.z += 0.3;
+			light.range = 0.5;
+			light.color = V3f.{ 1.0, 0.8, 0.6 };
+			light.intensity = 0.25;
+		}
+		for scene.bombs {
+			if it.holder >= 0
+				continue;
+			lights.count += 1;
+			light := *lights[lights.count - 1];
+			light.kind = 1;
+			light.position = it.client.position;
+			light.position.z += 0.2;
+			light.range = 0.5;
+			light.color = V3f.{ 1.0, 0.8, 0.6 };
+			light.intensity = 0.5;
+		}
+		for scene.players {
+			lights.count += 1;
+			light := *lights[lights.count - 1];
+			light.kind = 2;
+			light.position = it.client.position;
+			light.position.z += 0.5;
+			light.range = 6.25;
+			light.color = V3f.{ 1.0, 0.8, 0.6 };
+			light.angle = 25;
+			light.intensity = 0.75;
+			light.direction = it.client.direction;
+			
+			lights.count += 1;
+			light = *lights[lights.count - 1];
+			light.kind = 1;
+			light.position = it.client.position;
+			light.position.z += 0.4;
+			light.intensity = 0.5;
+			light.range = 0.707;
+			light.color = V3f.{ 1.0, 0.8, 0.6 };
+		}
+		for scene.lanterns {
+			lights.count += 1;
+			light := *lights[lights.count - 1];
+			light.kind = 3;
+			light.position = it.position;
+			light.position.z += 1.5;
+			light.range = 0.5;
+			light.angle = 0.5;
+			light.intensity = ifx it.turned_on then 0.75 else 0.2;
+			light.intensity *= it.intensity;
+			if it.turned_on {
+				lights.count += 1;
+				light := *lights[lights.count - 1];
+				light.kind = 3;
+				light.position.x = (it.light_aabb.min.x + it.light_aabb.max.x) / 2;
+				light.position.y = (it.light_aabb.min.y + it.light_aabb.max.y) / 2;
+				light.position.z = 0.25;
+				light.intensity = 0.6;
+				light.intensity *= it.intensity;
+				light.range = width(it.light_aabb) / 2;
+				light.angle = height(it.light_aabb) / 2;
+				light.color = V3f.{ 1.0, 0.8, 0.6 };
+			}
+		}
+		commit_lights(frame, lights.count);
+
+		bin_count := NewArray(light_bins.count, u32,, temp);
+		range_x := frame.geometry.uniforms.light_bin_max_x;
+		range_x -= frame.geometry.uniforms.light_bin_min_x;
+		range_y := frame.geometry.uniforms.light_bin_max_y;
+		range_y -= frame.geometry.uniforms.light_bin_min_y;
+		for lights {
+			if it.kind == 1 {
+				min_x := it.position.x - it.range - frame.geometry.uniforms.light_bin_min_x;
+				min_x /= range_x;
+				min_x *= frame.geometry.uniforms.light_bin_count_x;
+				min_x -= 0.5;
+
+				max_x := it.position.x + it.range - frame.geometry.uniforms.light_bin_min_x;
+				max_x /= range_x;
+				max_x *= frame.geometry.uniforms.light_bin_count_x;
+				max_x += 0.5;
+
+				min_y := it.position.y - it.range - frame.geometry.uniforms.light_bin_min_y;
+				min_y /= range_y;
+				min_y *= frame.geometry.uniforms.light_bin_count_y;
+				min_y -= 0.5;
+
+				max_y := it.position.y + it.range - frame.geometry.uniforms.light_bin_min_y;
+				max_y /= range_y;
+				max_y *= frame.geometry.uniforms.light_bin_count_y;
+				max_y += 0.5;
+
+				min_x = clamp(min_x, 0, frame.geometry.uniforms.light_bin_count_x - 1.0);
+				max_x = clamp(max_x, 0, frame.geometry.uniforms.light_bin_count_x - 1.0);
+				min_y = clamp(min_y, 0, frame.geometry.uniforms.light_bin_count_y - 1.0);
+				max_y = clamp(max_y, 0, frame.geometry.uniforms.light_bin_count_y - 1.0);
+
+				for x: min_x.(u32)..max_x.(u32) {
+					for y: min_y.(u32)..max_y.(u32) {
+						bin_index := y.(u32) * frame.geometry.uniforms.light_bin_count_x + x.(u32);
+
+						cx := (x + 0.5) * range_x;
+						cx /= frame.geometry.uniforms.light_bin_count_x;
+						cx += frame.geometry.uniforms.light_bin_min_x;
+						
+						cy := (y + 0.5) * range_y;
+						cy /= frame.geometry.uniforms.light_bin_count_y;
+						cy += frame.geometry.uniforms.light_bin_min_y;
+						
+						dx := cx - it.position.x;
+						dy := cy - it.position.y;
+						dist := sqrt(dx * dx + dy * dy);
+
+						if dist > it.range + 0.707
+							continue;
+
+						if bin_count[bin_index] < light_bins[bin_index].indices.count
+							light_bins[bin_index].indices[bin_count[bin_index]] =
+								(light_offset + it_index + 1).(u32);
+						bin_count[bin_index] += 1;
+					}
+				}
+			}
+			if it.kind == 2 {
+				min_x := it.position.x - it.range - frame.geometry.uniforms.light_bin_min_x;
+				min_x /= range_x;
+				min_x *= frame.geometry.uniforms.light_bin_count_x;
+				min_x -= 0.5;
+
+				max_x := it.position.x + it.range - frame.geometry.uniforms.light_bin_min_x;
+				max_x /= range_x;
+				max_x *= frame.geometry.uniforms.light_bin_count_x;
+				max_x += 0.5;
+
+				min_y := it.position.y - it.range - frame.geometry.uniforms.light_bin_min_y;
+				min_y /= range_y;
+				min_y *= frame.geometry.uniforms.light_bin_count_y;
+				min_y -= 0.5;
+
+				max_y := it.position.y + it.range - frame.geometry.uniforms.light_bin_min_y;
+				max_y /= range_y;
+				max_y *= frame.geometry.uniforms.light_bin_count_y;
+				max_y += 0.5;
+
+				min_x = clamp(min_x, 0, frame.geometry.uniforms.light_bin_count_x - 1.0);
+				max_x = clamp(max_x, 0, frame.geometry.uniforms.light_bin_count_x - 1.0);
+				min_y = clamp(min_y, 0, frame.geometry.uniforms.light_bin_count_y - 1.0);
+				max_y = clamp(max_y, 0, frame.geometry.uniforms.light_bin_count_y - 1.0);
+
+				for x: min_x.(u32)..max_x.(u32) {
+					for y: min_y.(u32)..max_y.(u32) {
+						bin_index := y.(u32) * frame.geometry.uniforms.light_bin_count_x + x.(u32);
+
+						cx := (x + 0.5) * range_x;
+						cx /= frame.geometry.uniforms.light_bin_count_x;
+						cx += frame.geometry.uniforms.light_bin_min_x;
+						
+						cy := (y + 0.5) * range_y;
+						cy /= frame.geometry.uniforms.light_bin_count_y;
+						cy += frame.geometry.uniforms.light_bin_min_y;
+						
+						dx := cx - it.position.x + it.direction.x * 1;
+						dy := cy - it.position.y + it.direction.y * 1;
+						dist := sqrt(dx * dx + dy * dy);
+						dx /= dist;
+						dy /= dist;
+
+						d := dx * it.direction.x + dy * it.direction.y;
+						if d < cos(it.angle * 3.1415926 / 180.0)
+							continue;
+
+						if bin_count[bin_index] < light_bins[bin_index].indices.count
+							light_bins[bin_index].indices[bin_count[bin_index]] =
+								(light_offset + it_index + 1).(u32);
+						bin_count[bin_index] += 1;
+					}
+				}
+			}
+			if it.kind == 3 {
+				min_x := it.position.x - it.range - frame.geometry.uniforms.light_bin_min_x;
+				min_x /= range_x;
+				min_x *= frame.geometry.uniforms.light_bin_count_x;
+				min_x -= 0.5;
+
+				max_x := it.position.x + it.range - frame.geometry.uniforms.light_bin_min_x;
+				max_x /= range_x;
+				max_x *= frame.geometry.uniforms.light_bin_count_x;
+				max_x += 0.5;
+
+				min_y := it.position.y - it.angle - frame.geometry.uniforms.light_bin_min_y;
+				min_y /= range_y;
+				min_y *= frame.geometry.uniforms.light_bin_count_y;
+				min_y -= 0.5;
+
+				max_y := it.position.y + it.angle - frame.geometry.uniforms.light_bin_min_y;
+				max_y /= range_y;
+				max_y *= frame.geometry.uniforms.light_bin_count_y;
+				max_y += 0.5;
+
+				min_x = clamp(min_x, 0, frame.geometry.uniforms.light_bin_count_x - 1.0);
+				max_x = clamp(max_x, 0, frame.geometry.uniforms.light_bin_count_x - 1.0);
+				min_y = clamp(min_y, 0, frame.geometry.uniforms.light_bin_count_y - 1.0);
+				max_y = clamp(max_y, 0, frame.geometry.uniforms.light_bin_count_y - 1.0);
+
+				for x: min_x.(u32)..max_x.(u32) {
+					for y: min_y.(u32)..max_y.(u32) {
+						bin_index := y.(u32) * frame.geometry.uniforms.light_bin_count_x + x.(u32);
+
+						if bin_count[bin_index] < light_bins[bin_index].indices.count
+							light_bins[bin_index].indices[bin_count[bin_index]] =
+								(light_offset + it_index + 1).(u32);
+						bin_count[bin_index] += 1;
+					}
+				}
+
+			}
+		}
+	}
 
 	if true {
 		clear(*extra);
 
 		frame.geometry.current_bind_group = *framegraph.textureBindGroup;
-		render_terrain(frame, *frame.geometry, scene, store, *extra);
+		render_terrain(frame, *frame.geometry, scene, store, *extra, early_culling = !in_editor);
 
 		frame.geometry.current_bind_group = *framegraph.geometryBindGroup;
 		render_players(frame, *frame.geometry, scene, store, *extra);
@@ -1907,6 +2303,7 @@ render_scene :: (
 		render_antiairs(frame, *frame.geometry, scene, store, *extra);
 		render_hooks(frame, *frame.geometry, scene, store, *extra);
 		render_flags(frame, *frame.geometry, scene, store, *extra);
+		render_lanterns(frame, *frame.geometry, scene, store, *extra);
 		render_presents(frame, *frame.geometry, scene, store, *extra);
 		render_turn_tables(frame, *frame.geometry, scene, store, *extra);
 		render_pressbuttons(frame, *frame.geometry, scene, store, *extra);
@@ -2137,8 +2534,8 @@ render_particles :: (
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
 		instance.M = R;
+		instance.M *= axis_angle_matrix(V3f.{ 0, 0, 1 }, it.rotation);
 		M4f.translate(*instance.M, it.position);
-		instance.M *= to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, it.rotation));
 		M4f.scale(*instance.M, .{ it.size, it.size, it.size });
 		M4f.translate(*instance.M, V3f.{ -0.5, -0.5, 0 });
 		instance.texture_rect = .{
@@ -2432,6 +2829,21 @@ render_antiairs :: (
 		particle.color = V4f.{ 1.0, 1.0, 1.0, 0.5 };
 		array_add(*extra.quads, particle);
 	}
+}
+
+render_lanterns :: (
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+) {
+	instanced := append_instance_buffer(frame);
+	for scene.lanterns {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0
+		commit_geometry(frame, pass, *store.lantern_model, instanced.count);
 }
 
 render_turn_tables :: (
@@ -3246,29 +3658,55 @@ set_normal_map_idx :: (instance: *WFramegraph.Instance, idx: int) {
 }
 
 render_terrain :: (
-	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+	frame: *Frame,
+	pass: *Frame.Pass,
+	scene: Scene.Scene,
+	store: Store.Store,
+	extra: *Extra,
+	early_culling := true
 ) {
 	terrain := *scene.terrain;
 
 	instanced := append_instance_buffer(frame);
 	VP := pass.uniforms.P * pass.uniforms.V;
-	for terrain.tiles {
-		x := it_index % terrain.tiles_count.x;
-		y := it_index / terrain.tiles_count.x;
-		pos := Scene.tile_bottom_left(scene, V2i.{ x, y });
-		if cull(VP, M4f.translate(pos + v3(0.5, 0.5, 0.0)), safety = 1.5)
-			continue;
 
-		instanced.count += 1;
-		instance := *instanced[instanced.count - 1];
-		instance.* = .{};
-		instance.M = M4f.translate(pos) * scale_matrix(v3(terrain.tile_size, 1.0));
-		set_normal_map_idx(instance, Store.get_tile_idx(it.kind));
-		set_albedo_map_idx(instance, Store.get_tile_idx(it.kind));
-		instance.texture_rect.x = xx x;
-		instance.texture_rect.y = xx y;
+	min_x := scene.camera.target.x - 15;
+	max_x := scene.camera.target.x + 15;
+	min_y := scene.camera.target.y - 15;
+	max_y := scene.camera.target.y + 15;
+
+	min_tiles := Scene.position_to_tile(scene, v3(min_x, min_y, 0));
+	max_tiles := Scene.position_to_tile(scene, v3(max_x, max_y, 0)) + V2i.{ 1, 1 };
+
+	min_tiles.x = max(min_tiles.x, 0);
+	min_tiles.y = max(min_tiles.y, 0);
+	max_tiles.x = min(max_tiles.x, terrain.tiles_count.x);
+	max_tiles.y = min(max_tiles.y, terrain.tiles_count.y);
+	if !early_culling {
+		min_tiles = V2i.{ 0, 0 };
+		max_tiles = terrain.tiles_count;
+	}
+
+	for y: min_tiles.y .. max_tiles.y - 1 {
+		for x: min_tiles.x .. max_tiles.x - 1 {
+			it_index := y * terrain.tiles_count.x + x;
+			it := terrain.tiles[it_index];
+			pos := Scene.tile_bottom_left(scene, V2i.{ x, y });
+			if cull(VP, pos + v3(0.5, 0.5, 0.0), safety = 1.5)
+				continue;
+
+			instanced.count += 1;
+			instance := *instanced[instanced.count - 1];
+			instance.* = .{};
+			instance.M = M4f.translate(pos);
+			M4f.scale(*instance.M, v3(terrain.tile_size, 1.0));
+			set_normal_map_idx(instance, Store.get_tile_idx(it.kind));
+			set_albedo_map_idx(instance, Store.get_tile_idx(it.kind));
+			instance.texture_rect.x = xx x;
+			instance.texture_rect.y = xx y;
 		// if it.kind != .Grass
 		// 	instance.flags = instance.UV_NO_TILE;
+		}
 	}
 	if instanced.count == 0 {
 		return;
@@ -3312,7 +3750,10 @@ render_props :: (
 
 cull :: (VP: M4f, M: M4f, safety := 1.0) -> bool {
 	pos := M4f.col(M, 3);
-	pos = VP * pos;
+	return cull(VP, v3(pos), safety);
+}
+cull :: (VP: M4f, _pos: V3f, safety := 1.0) -> bool {
+	pos := VP * v4(_pos, 1.0);
 
 	if pos.x < -pos.w - safety || +pos.w + safety < pos.x
 		return true;

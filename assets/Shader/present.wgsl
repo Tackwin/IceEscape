@@ -154,7 +154,7 @@ fn sampleTexture(uv: vec2f) -> vec4f {
 	if uuv.y > 10 {
 		color = fxaa(vec2u(uuv * uniforms.size));
 	}
-	let mapped = CommerceToneMapping(color.rgb);
+	let mapped = CommerceToneMapping(uniforms.exposure * color.rgb);
 	let gamma_corrected = pow(mapped, vec3f(1.0 / uniforms.gamma));
 
 	let ui_color = textureLoad(uiMap, vec2<u32>(uuv * uniforms.size), 0);

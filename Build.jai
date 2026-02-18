@@ -517,7 +517,7 @@ build_server_platform_2 :: (os: Operating_System_Tag) {
 					array_add(*args, "zig");
 					array_add(*args, "cc");
 					array_add(*args, "-target");
-					array_add(*args, "x86_64-linux-gnu");
+					array_add(*args, "x86_64-linux-gnu.2.28");
 					array_add(*args, "src/c/wsserver.linux");
 					for msg.compiler_generated_object_files
 						array_add(*args, it);
@@ -553,7 +553,7 @@ build_wasm_2 :: () {
 	opts.backtrace_on_crash                  = .OFF; // Runtime_Support_Crash_Handler doesn’t support WASM (yet?)
 	opts.output_path                         = "web/";
 	opts.output_executable_name              = "IceEscape";
-	opts.llvm_options.target_system_features = "+bulk-memory,+atomics"; // "This options is needed so that "memcpy" and "memset" are mapped to "memory.copy" and "memory.fill" instructions in WASM.
+	opts.llvm_options.target_system_features = "+bulk-memory,+atomics,+simd128"; // "This options is needed so that "memcpy" and "memset" are mapped to "memory.copy" and "memory.fill" instructions in WASM.
 	opts.llvm_options.enable_split_modules   = false;
 	opts.llvm_options.function_sections      = true; // To get around "LLVM ERROR: section already has a defining function: .text"
 
@@ -711,6 +711,14 @@ build_2 :: () {
 			"-o",
 			"./bin/LinuxServer.exe",
 			"bin/LinuxServer"
+		);
+		run_command(
+			"sftpc",
+			"-profile=tools/ssh.tlp",
+			"put",
+			"-o",
+			"./bin/IceEscapeServer.db",
+			"bin/IceEscapeServerDev.db"
 		);
 		run_command(
 			"sftpc",

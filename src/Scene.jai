@@ -138,6 +138,7 @@ Scene :: struct {
 	client: struct {
 		clock: float64 = 0.0;
 		end_level: Command.End_Level;
+		render_particles := false;
 	}
 
 	id := 1;
@@ -146,6 +147,8 @@ Scene :: struct {
 	is_server := false;
 	camera: Camera;
 	controlled_player_id := 0;
+
+	night := false; @edit
 
 	// >TODO put all allocation relating to the map in the same pool.
 	players: [..] Player; @allocate("lifetime")
@@ -165,6 +168,7 @@ Scene :: struct {
 	stand_in: [..] Stand_In; @allocate("lifetime") @clear("run")
 	trigger_zones: [..] Trigger_Zone; @allocate("lifetime") @clear("run")
 	within_zones: [..] Within_Zone; @allocate("lifetime") @clear("run")
+	lanterns: [..] Lantern; @allocate("lifetime") @clear("run")
 	flags: [..] Flag; @allocate("lifetime") @clear("run")
 	props: [..] Prop; @allocate("lifetime") @clear("run")
 	bombs: [..] Bomb; @allocate("lifetime") @clear("run");
@@ -184,7 +188,7 @@ Scene :: struct {
 	news: [..] string; @allocate("lifetime") @clear("run")
 	sound_triggers: [..] Sound_Trigger; @allocate("lifetime") @clear("run")
 	jukeboxes: [..] Jukebox; @allocate("lifetime") @clear("run")
-	gate_indices: [..] int; @allocate("lifetime") @clear("run")
+	indices: [..] int; @allocate("lifetime") @clear("run")
 	trigger_activated: Table(int, bool); @allocate("lifetime") @clear("run")
 
 	terrain: Terrain;
@@ -192,6 +196,7 @@ Scene :: struct {
 
 	camera_min: V2f;
 	camera_max: V2f;
+	origin_tile_space: V2f;
 
 	coin_generation := 0;
 	generation := 0;
@@ -274,7 +279,12 @@ clear_string :: (info: Type_Info_Struct) -> string {
 
 clear_scene :: (scene: *Scene) {
 	clear_scene_run(scene);
+	scene.night = false;
 	scene.players.count = 0;
+	scene.camera_min.x = 0.0;
+	scene.camera_min.y = 0.0;
+	scene.camera_max.x = 0.0;
+	scene.camera_max.y = 0.0;
 }
 
 rellocate_string :: (value_info: Type_Info_Struct, parent_info: Type_Info_Struct) -> string {
@@ -549,6 +559,7 @@ Frame_Result :: struct {
 	died_player_id: [..] int; @allocate("lifetime") @clear("frame")
 	revived_someone_player_id: [..] int; @allocate("lifetime") @clear("frame")
 
+	to_server: [..] Command; @allocate("lifetime") @clear("frame")
 	died: [..] Command.Die; @clear("frame")
 	respawn: [..] Command.Respawn; @clear("frame")
 	sync_gate: [..] Command.Sync_Gate; @clear("frame")
@@ -689,7 +700,7 @@ Block_Rock :: struct {
 PressButton :: struct {
 	id: int;
 
-	is_radio := false;
+	is_radio := false; @edit
 
 	position: V3f;
 	
@@ -708,8 +719,8 @@ Turn_Table :: struct {
 	id: int;
 
 	position: V3f;
-	turning_speed := 1.0;
-	turning_offset := 0.0;
+	turning_speed := 1.0; @edit
+	turning_offset := 0.0; @edit
 
 	Mark :: struct {
 		player_id: int;
@@ -732,13 +743,13 @@ Present :: struct {
 		A :: 0;
 		B :: 1;
 	};
-	kind: Kind;
+	kind: Kind; @edit
 
 	server: struct {
-		refresh_cooldown: float = 10.0;
+		refresh_cooldown: float = 10.0; @edit
 		time_since_taken := 0.0;
 		available := false;
-		depends_on_flag_id := -1;
+		depends_on_flag_id := -1; @edit
 	};
 }
 
@@ -1002,6 +1013,9 @@ Camera :: struct {
 	target_target: V3f;
 	wanted_target_to_position: V3f;
 
+	nominal_distance := 8.0;
+	locked_nominal_distance := 8.0;
+
 	locked_drag_anchor: V3f;
 	locked_drag_anchor_last_drag_pos: V3f;
 	locked_drag_anchor_last_delta: V3f;
@@ -1037,8 +1051,21 @@ init_camera :: (scene: *Scene) {
 	scene.camera.target = .{ 0, 0, 0 };
 	scene.camera.target_target = scene.camera.target;
 	scene.camera.wanted_target_to_position = scene.camera.position - scene.camera.target;
+	scene.camera.nominal_distance = norm(scene.camera.wanted_target_to_position);
+	scene.camera.locked_nominal_distance = scene.camera.nominal_distance * 1.05;
 	scene.camera.fov = 55;
 	scene.camera.max_distance = norm(scene.camera.wanted_target_to_position);
+}
+
+reset_camera_zoom :: (camera: *Camera) {
+	pos := camera.target;
+	camera.position = pos - V3f.{ 0, -4, 8 };
+	camera.target_target = pos;
+	camera.wanted_target_to_position = camera.position - camera.target;
+	camera.max_distance = norm(camera.wanted_target_to_position);
+	camera.nominal_distance = norm(camera.wanted_target_to_position);
+	camera.locked_nominal_distance = camera.nominal_distance * 1.05;
+	camera.fov = 55;
 }
 
 perspective :: (camera: Camera) -> M4f {
@@ -1169,6 +1196,15 @@ unproject_ndc :: (ndc: V2f, V: M4f, P: M4f) -> V3f {
 
 Trigger :: enum {
 	Move_To_Play_World :: 0;
+}
+
+Lantern :: struct {
+	id: int;
+	position: V3f;
+	light_aabb: AABBf; @edit
+	turned_on := false;
+	button_id: int; @edit
+	intensity := 1.0; @edit
 }
 
 Flag :: struct {
@@ -1345,7 +1381,7 @@ Gate :: struct {
 	wait_for_key_id := -1;
 	wait_for_trigger_id := -1;
 
-	is_end := false;
+	is_end := false; @edit
 } @editable
 
 Hook :: struct {
@@ -1856,8 +1892,22 @@ update :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result)
 	}
 }
 
+update :: (scene: *Scene, lantern: *Lantern, dt: float32) {
+	lantern.turned_on = false;
+	button := find_by_pressbutton_id(scene, lantern.button_id);
+	if button && button.activated {
+		lantern.turned_on = true;
+		return;
+	}
+	if !button && lantern.intensity > 0 {
+		lantern.turned_on = true;
+		return;
+	}
+}
+
 update_client :: (scene: *Scene, dt: float32, result: *Frame_Result) {
-	add_snow(scene, dt);
+	if scene.client.render_particles
+		add_snow(scene, dt);
 
 	for * scene.safe_zones {
 		it.client.time += dt;
@@ -2032,6 +2082,10 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		}
 	}
 
+	for * scene.lanterns {
+		update(scene, it, dt);
+	}
+
 	for * scene.keys {
 		interpolate_to_server(it, dt);
 
@@ -2076,7 +2130,8 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		}
 	}
 
-	update_particles(scene, dt);
+	if scene.client.render_particles
+		update_particles(scene, dt);
 
 	if scene.is_server
 		update_server(scene, time, dt, result);
@@ -2214,7 +2269,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 					bomb.server.time = 0;
 					bomb.client.time = 0;
 				} else {
-					treshold := bomb.server.dropped_clock + bomb.server.explosion_time * 0.75;
+					treshold := bomb.server.dropped_clock + bomb.server.explosion_time * 0.6;
 					if treshold >= scene.server.clock {
 						can_pickup = false;
 					}
@@ -2520,7 +2575,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	for *gate: scene.gates {
 		if gate.is_closed && gate.pressbutton_ids.count > 0 {
 			any_unpressed := false;
-			for iterator(gate.pressbutton_ids, scene.gate_indices) {
+			for iterator(gate.pressbutton_ids, scene.indices) {
 				pressbutton := find_by_pressbutton_id(scene, it);
 				if pressbutton
 					any_unpressed |= !pressbutton.activated;
@@ -2787,6 +2842,7 @@ win_level :: (scene: *Scene, player_id: int, time: Apollo_Time, result: *Frame_R
 			}
 		}
 
+		scene.client.end_level = winner;
 		array_add(*result.end_level, winner);
 	}
 
@@ -3093,6 +3149,37 @@ update :: (scene: Scene, button: *PressButton, dt: float32, result: *Frame_Resul
 		button.last_player_count = count;
 	}
 
+	if button.is_radio {
+		p := v2(button.position);
+
+		count := 0;
+		for scene.players {
+			if it.server.dead
+				continue;
+
+			q := v2(it.server.position);
+			if p.x - 0.5 <= q.x && q.x <= p.x + 0.5
+			if p.y - 0.5 <= q.y && q.y <= p.y + 0.5 {
+				count += 1;
+				break;
+			}
+		}
+
+		if count > 0 {
+			if !button.activated {
+				button.activated = true;
+				button.activated_juice_t = 1.0;
+				
+				sound: Sound_Trigger;
+				sound.position = button.position;
+				sound.kind = .Checkpoint_Ok;
+				array_add(*scene.sound_triggers, sound);
+			}
+		} else {
+			button.activated = false;
+		}
+	}
+
 }
 
 update :: (scene: Scene, flag: *Flag, dt: float32, result: *Frame_Result) {
@@ -3265,6 +3352,9 @@ update_camera_locked :: (scene: Scene, camera: *Camera, player_locked: *Player, 
 		} else {
 			// No rails, fall back to following player directly
 			camera.target_target = player_pos;
+
+
+
 			return;
 		}
 	}
@@ -3330,9 +3420,18 @@ update_camera_locked :: (scene: Scene, camera: *Camera, player_locked: *Player, 
 
 update :: (scene: Scene, camera: *Camera, dt: float32) {
 	player_locked := find_by_player_id(scene, camera.locked_to);
+
+	distance_to_target := norm(camera.wanted_target_to_position);
+	target_distance_to_target := camera.nominal_distance;
 	if player_locked && camera.locked {
 		update_camera_locked(scene, camera, player_locked, dt);
+
+		target_distance_to_target = camera.locked_nominal_distance;
 	}
+
+	distance_to_target = damp(distance_to_target, target_distance_to_target, 5.0, dt);
+	camera.wanted_target_to_position =
+		normalize(camera.wanted_target_to_position) * distance_to_target;
 
 	camera.target = damp(camera.target, camera.target_target, 50.0, dt);
 	camera.position = camera.target + camera.wanted_target_to_position;
@@ -3685,7 +3784,7 @@ process_server_only :: (
 					tile := position_to_tile(scene, player.server.position);
 					sz.position = tile_center(scene, tile);
 					sz.radius = sqrt(2) / 2;
-					sz.expire = 1;
+					sz.expire = 3;
 					array_add(*scene.safe_zones, sz);
 
 					player.server.has_safe_present = false;
@@ -3983,6 +4082,10 @@ process_client_only :: (
 		scene.end_scene_countdown_started = true;
 		scene.next_id = end_level.next_scene_id;
 		scene.client.end_level = end_level;
+
+		get_leaderboard: Command.Get_Terrain_Leaderboard;
+		get_leaderboard.terrain_id = scene.id;
+
 		return true;
 	}
 
@@ -4550,22 +4653,22 @@ terrain_size :: (scene: Scene) -> V2f {
 
 tile_center :: (scene: Scene, tile: V2i) -> V3f {
 	return V3f.{
-		xx (tile.x + 0.5) * scene.terrain.tile_size.x - scene.camera_min.x,
-		xx (tile.y + 0.5) * scene.terrain.tile_size.y - scene.camera_min.y,
+		xx (tile.x + 0.5) * scene.terrain.tile_size.x - scene.origin_tile_space.x,
+		xx (tile.y + 0.5) * scene.terrain.tile_size.y - scene.origin_tile_space.y,
 		0
 	};
 }
 tile_bottom_left :: (scene: Scene, tile: V2i) -> V3f {
 	return V3f.{
-		xx (tile.x + 0.0) * scene.terrain.tile_size.x - scene.camera_min.x,
-		xx (tile.y + 0.0) * scene.terrain.tile_size.y - scene.camera_min.y,
+		xx (tile.x + 0.0) * scene.terrain.tile_size.x - scene.origin_tile_space.x,
+		xx (tile.y + 0.0) * scene.terrain.tile_size.y - scene.origin_tile_space.y,
 		0
 	};
 }
 position_to_tile :: (scene: Scene, pos: V3f) -> V2i {
 	return V2i.{
-		cast(int) floor((pos.x + scene.camera_min.x) / scene.terrain.tile_size.x),
-		cast(int) floor((pos.y + scene.camera_min.y) / scene.terrain.tile_size.y)
+		cast(int) floor((pos.x + scene.origin_tile_space.x) / scene.terrain.tile_size.x),
+		cast(int) floor((pos.y + scene.origin_tile_space.y) / scene.terrain.tile_size.y)
 	};
 }
 
@@ -4608,6 +4711,25 @@ serialize :: (scene: Scene) -> string {
 	// Add empty line separator
 	append(*sb, "\n");
 
+	if scene.night {
+		print_to_builder(*sb, "- night\n");
+	}
+
+	for scene.paths {
+		print_to_builder(*sb, "path\n");
+		for i: 0..it.checkpoints.count - 1 {
+			checkpoint := scene.checkpoints[it.checkpoints.index + i];
+			print_to_builder(
+				*sb,
+				"- checkpoint: % % %\n",
+				checkpoint.position.x, checkpoint.position.y, checkpoint.position.z
+			);
+		}
+		if it.closed {
+			print_to_builder(*sb, "- closed\n");
+		}
+	}
+
 	print_to_builder(
 		*sb,
 		#string SPAWN
@@ -4625,9 +4747,11 @@ spawn
 frame
 - position: % %
 - size: % %
+- origin: % %
 		TROPHY,
 		scene.camera_min.x, scene.camera_min.y,
-		scene.camera_max.x - scene.camera_min.x, scene.camera_max.y - scene.camera_min.y
+		scene.camera_max.x - scene.camera_min.x, scene.camera_max.y - scene.camera_min.y,
+		scene.origin_tile_space.x, scene.origin_tile_space.y
 	);
 	
 	for * scene.flags {
@@ -4643,6 +4767,23 @@ flag
 		);
 	}
 	
+	for * scene.presents {
+		print_to_builder(
+			*sb,
+			#string PRESENT
+present
+- position: % % %
+- kind: %
+- refresh_cooldown: %
+- depends_on_flag_id: %
+			PRESENT,
+			it.position.x, it.position.y, it.position.z,
+			it.kind,
+			it.server.refresh_cooldown,
+			it.server.depends_on_flag_id
+		);
+	}
+
 	for * scene.traps {
 		print_to_builder(
 			*sb,
@@ -4726,10 +4867,67 @@ gate
 			it.wait_for_trigger_id,
 		);
 		for idx: 0..it.pressbutton_ids.count - 1 {
-			id := scene.gate_indices[idx + it.pressbutton_ids.index];
-			print_to_builder(*sb, "	- wait_for_pressbutton_id: %\n", id);
+			id := scene.indices[idx + it.pressbutton_ids.index];
+			print_to_builder(*sb, "- wait_for_pressbutton_id: %\n", id);
 		}
 	}
 
+	for * scene.keys {
+		print_to_builder(
+			*sb,
+			#string KEY
+key
+- position: % % %
+KEY,
+			it.server.position.x, it.server.position.y, it.server.position.z
+		);
+	}
+
+	for * scene.lanterns {
+		print_to_builder(
+			*sb,
+			#string LANTERN
+lantern
+- position: % % %
+- light_aabb: % % % %
+- button_id: %
+- intensity: %
+LANTERN,
+			it.position.x, it.position.y, it.position.z,
+			it.light_aabb.min.x, it.light_aabb.min.y, it.light_aabb.max.x, it.light_aabb.max.y,
+			it.button_id,
+			it.intensity
+		);
+	}
+
+	for * scene.pressbuttons {
+		print_to_builder(
+			*sb,
+			#string PRESSBUTTON
+pressbutton
+- position: % % %
+PRESSBUTTON,
+			it.position.x, it.position.y, it.position.z
+		);
+		if it.is_radio {
+			print_to_builder(*sb, "- radio\n");
+		}
+	}
+
+	for * scene.turn_tables {
+		print_to_builder(
+			*sb,
+			#string TURN_TABLE
+turn_table
+- position: % % %
+- turning_speed: %
+- turning_offset: %
+TURN_TABLE,
+			it.position.x, it.position.y, it.position.z,
+			it.turning_speed,
+			it.turning_offset
+		);
+	}
+	
 	return builder_to_string(*sb);
 }

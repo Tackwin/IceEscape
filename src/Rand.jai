@@ -14,6 +14,10 @@ seed :: (seed: u64) -> XORState {
 	return state;
 }
 
+seed :: (s: s64) -> XORState {
+	return seed(s.(u64));
+}
+
 xor_shift_next :: (state: *XORState) -> u64 {
 	s1 := state.s[0];
 	s0 := state.s[1];

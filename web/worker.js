@@ -237,47 +237,72 @@ jai_imports.js_set_token = (token) => {
 	postMessage({ set_token: token });
 }
 
-// jai_imports.js_get_key_state = (key_map_ptr, key_map_count) => {
-// 	const view = getControlsBufferSpan();
-// 	for (let i = 0; i < key_map_count; i++) {
-// 		setU8(key_map_ptr, i, view.getUint8(i));
-// 	}
-// }
-
-// jai_imports.js_get_mouse_pointer = (x_ptr, y_ptr) => {
-// 	setU32(x_ptr, 0, getControlsBufferSpan().getUint32(Mouse_X));
-// 	setU32(y_ptr, 0, getControlsBufferSpan().getUint32(Mouse_Y));
-// }
-
-// jai_imports.js_get_mouse_wheel_delta = (delta_ptr) => {
-// 	setF32(delta_ptr, 0, getControlsBufferSpan().getFloat32(Mouse_Wheel));
-// 	getControlsBufferSpan().setFloat32(Mouse_Wheel, 0)
-// }
-
-// jai_imports.js_get_dimemsions = (dim_ptr) => {
-// 	setU32(dim_ptr, 0, 0);
-// 	setU32(dim_ptr, 4, 0);
-// 	setU32(dim_ptr, 8, getControlsBufferSpan().getUint32(Window_W));
-// 	setU32(dim_ptr, 12, getControlsBufferSpan().getUint32(Window_H));
-// }
-
 jai_imports.js_load_audio = async (params_ptr) => {
+	const data = getU64(params_ptr, 0);
+	const size = getU64(params_ptr, 8);
+	const id = getU64(params_ptr, 16);
+	const compressed = getU64(params_ptr, 24) != 0;
+
+	const src = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(size));
+	const dst = new Uint8Array(src); // copy the data to a new buffer so that it doesn't get modified by the wasm module while we're using it
+	const buffer = await new Blob([dst]).arrayBuffer();
+
+	postMessage({ load_audio: {
+		buffer,
+		audio_id: id
+	} });
 }
 
 jai_imports.js_play_audio = (params_ptr) => {
+	const id = getU64(params_ptr, 0);
+	const x = getF32(params_ptr, 8);
+	const y = getF32(params_ptr, 12);
+	const z = getF32(params_ptr, 16);
+	const volume = getF32(params_ptr, 20);
+	const pitch = getF32(params_ptr, 24);
+	let loop = getU32(params_ptr, 28) != 0;
+	const kind = getS32(params_ptr, 32);
+	const fade_in = getS32(params_ptr, 36);
+	const exponent = getF32(params_ptr, 40);
+	const sound_id = getU64(params_ptr, 48);
+	const delay = getF32(params_ptr, 56);
+
+	postMessage({ play_audio: {
+		audio_id: id, x, y, z, volume, pitch, loop, kind, fade_in, exponent, delay, sound_id
+	} });
 }
 
 jai_imports.js_volume_audio = (params_ptr) => {
-}
-
-jai_imports.js_query_sound = (params_ptr) => {
+	const volume = getF32(params_ptr, 0);
+	postMessage({ volume_audio: volume });
 }
 
 jai_imports.js_set_sound = (params_ptr) => {
+	const sound_idx = getU64(params_ptr, 0);
+	const x = getF32(params_ptr, 8);
+	const y = getF32(params_ptr, 12);
+	const z = getF32(params_ptr, 16);
+	const volume = getF32(params_ptr, 20);
+	const pitch = getF32(params_ptr, 24);
+	const playing = getU32(params_ptr, 28);
+	const looping = getU32(params_ptr, 32);
 
+	postMessage({ set_sound: {
+		sound_idx, x, y, z, volume, pitch, playing, looping
+	} });
 }
 
 jai_imports.js_set_listener_info = (params_ptr) => {
+	const x = getF32(params_ptr, 0);
+	const y = getF32(params_ptr, 4);
+	const z = getF32(params_ptr, 8);
+	const forward_x = getF32(params_ptr, 12);
+	const forward_y = getF32(params_ptr, 16);
+	const forward_z = getF32(params_ptr, 20);
+
+	postMessage({ set_listener_info: {
+		x, y, z, forward_x, forward_y, forward_z
+	} });
 }
 
 jai_imports.memcmp = (a, b, count) => {

@@ -2,8 +2,10 @@
 #import "Platform";
 #import "File_Watcher";
 #import "File";
+#import "File_Utilities";
 #import "Hash_Table";
 #import "sqlite";
+#import "String";
 #if OS == .WINDOWS
 	Win32 :: #import "Windows";
 
@@ -18,6 +20,8 @@ init_platform :: () -> Platform {
 	platform.send_web_message = win32_send_web_message;
 	platform.gather_web_messages = win32_gather_web_messages;
 	platform.db_query = win32_db_query;
+	platform.read_entire_file = std_read_entire_file;
+	platform.list_files = str_list_files;
 
 	return platform;
 }
@@ -45,9 +49,9 @@ win32_db_query :: (query: *DB_query) {
 				integer = value_ptr.(*s64).*;
 			}
 			if info.runtime_size == 8 {
-				sqlite3_bind_int64(stmt, (index + 1).(s32), integer.(s64));
+				return sqlite3_bind_int64(stmt, (index + 1).(s32), integer.(s64)) == SQLITE_OK;
 			} else {
-				sqlite3_bind_int(stmt, (index + 1).(s32), integer.(s32));
+				return sqlite3_bind_int(stmt, (index + 1).(s32), integer.(s32)) == SQLITE_OK;
 			}
 		} else if tag == .FLOAT {
 			double: float64;
@@ -56,21 +60,60 @@ win32_db_query :: (query: *DB_query) {
 			} else {
 				double = value_ptr.(*float64).*;
 			}
-			sqlite3_bind_double(stmt, (index + 1).(s32), double);
+			return sqlite3_bind_double(stmt, (index + 1).(s32), double) == SQLITE_OK;
 		} else if tag == .STRING {
 			str_ptr := value_ptr.(*string);
-			sqlite3_bind_text(
+			return sqlite3_bind_text(
 				stmt, (index + 1).(s32), str_ptr.data, xx str_ptr.count, SQLITE_STATIC
-			);
+			) == SQLITE_OK;
 		} else if tag == .BOOL {
-			sqlite3_bind_int(stmt, (index + 1).(s32), (ifx value_ptr.(*bool).* then 1 else 0).(s32));
+			return sqlite3_bind_int(
+				stmt, (index + 1).(s32), (ifx value_ptr.(*bool).* then 1 else 0).(s32)
+			) == SQLITE_OK;
 		} else {
 			return false;
 		}
 		return true;
 	}
 
-	read_type :: (stmt: *sqlite3_stmt, info: *Type_Info, value_ptr: *void, index: int) #expand {
+	Field_Flag :: enum {
+		NONE :: 0;
+		JSON_ARRAY :: 1;
+	}
+
+	parse_json_int_array :: (json_text: string, output: *[] int) -> bool {
+		if json_text.count < 2
+			return false;
+		if json_text.data[0] != #char "[" || json_text.data[json_text.count - 1] != #char "]"
+			return false;
+
+		csv := json_text;
+		csv.data += 1;
+		csv.count -= 2;
+
+		splitted := split(csv, ",");
+		output.* = NewArray(splitted.count, int,, temp);
+		for splitted {
+			trimmed := trim(it);
+			if trimmed.count == 0
+				continue;
+			
+			i: int;
+			if !scan2(trimmed, "%", i)
+				continue;
+			output.data[it_index] = i;
+		}
+		return true;
+	}
+
+	read_type :: (
+		stmt: *sqlite3_stmt,
+		info: *Type_Info,
+		value_ptr: *void,
+		index: int,
+		flags := Field_Flag.NONE
+	) #expand {
+		parsed := false;
 		tag := info.type;
 		if tag == .INTEGER {
 			if info.runtime_size == 1 {
@@ -86,6 +129,7 @@ win32_db_query :: (query: *DB_query) {
 				integer := sqlite3_column_int64(stmt, index.(s32));
 				value_ptr.(*s64).* = integer.(s64);
 			}
+			parsed = true;
 		} else if tag == .FLOAT {
 			double := sqlite3_column_double(stmt, index.(s32));
 			if info.runtime_size == 4 {
@@ -93,15 +137,36 @@ win32_db_query :: (query: *DB_query) {
 			} else {
 				value_ptr.(*float64).* = double.(float64);
 			}
+			parsed = true;
 		} else if tag == .STRING {
 			text := sqlite3_column_text(stmt, index.(s32));
 			length := sqlite3_column_bytes(stmt, index.(s32));
-			value_ptr.(*string).data = text;
-			value_ptr.(*string).count = length;
+			sqlite_text: string;
+			sqlite_text.data = text;
+			sqlite_text.count = length;
+
+			value_ptr.(*string).* = tprint("%", sqlite_text);
+			parsed = true;
 		} else if tag == .BOOL {
 			bool_value := sqlite3_column_int(stmt, index.(s32));
 			value_ptr.(*bool).* = bool_value != 0;
-		} else {
+			parsed = true;
+		} else if tag == .ARRAY && info.(*Type_Info_Array).array_type == .VIEW {
+			if flags & Field_Flag.JSON_ARRAY {
+				text := sqlite3_column_text(stmt, index.(s32));
+				length := sqlite3_column_bytes(stmt, index.(s32));
+				sqlite_text: string;
+				sqlite_text.data = text;
+				sqlite_text.count = length;
+
+				if parse_json_int_array(sqlite_text, value_ptr.(*[] int))
+					parsed = true;
+				else
+					print("Failed to parse JSON array: %\n", sqlite_text);
+			}
+		}
+
+		if !parsed {
 			print(
 				"Unsupported type for reading from database\n"
 			);
@@ -193,16 +258,18 @@ win32_db_query :: (query: *DB_query) {
 						field := struct_info.members[field_idx];
 						value_ptr := (input.(int) + field.offset_in_bytes).(*void);
 						if !bind_type(stmt, field.type, value_ptr, field_idx) {
-							print(
-								"Unsupported field (%::%) type for binding\n",
-								struct_info.name,
-								field.name
+							print_sqliterror(
+								db, tprint(
+									"Unsupported field (%::%) type for binding\n",
+									struct_info.name,
+									field.name
+								)
 							);
 						}
 					}
 				} else {
 					if !bind_type(stmt, query.type, input, 0) {
-						print("Unsupported type for binding %\n", query.type);
+						print_sqliterror(db, tprint("Unsupported type for binding %\n", query.type));
 					}
 				}
 
@@ -246,8 +313,14 @@ win32_db_query :: (query: *DB_query) {
 					struct_info := query.type.(*Type_Info_Struct);
 					for field_idx: 0..struct_info.members.count - 1 {
 						field := struct_info.members[field_idx];
+
+						flag: Field_Flag = Field_Flag.NONE;
+						for field.notes
+							if it == "json_array"
+								flag = .JSON_ARRAY;
+
 						value_ptr := (output_ptr.(int) + field.offset_in_bytes).(*void);
-						read_type(stmt, field.type, value_ptr, field_idx);
+						read_type(stmt, field.type, value_ptr, field_idx, flag);
 					}
 				} else {
 					read_type(stmt, query.type, output_ptr, 0);
@@ -298,6 +371,40 @@ win32_gather_web_messages :: () -> [] Web_Message {
 	}
 	
 	return msgs;
+}
+
+std_read_entire_file :: (file: string, data: [] u8) -> int {
+	if data.count == 0 {
+		file, ok := file_open(file, for_writing=false);
+		if !ok {
+			print("Failed to open file: %\n", file);
+			return 0;
+		}
+		defer file_close(*file);
+		length:, ok = file_length(file);
+		if !ok {
+			print("Failed to get file length: %\n", file);
+			return 0;
+		}
+
+		return length;
+	}
+	str, ok := read_entire_file(file,, temp);
+	if !ok {
+		print("Failed to read file: %\n", file);
+		return 0;
+	}
+	memcpy(data.data, str.data, xx min(data.count, str.count));
+	return min(data.count, str.count);
+}
+
+str_list_files :: (path: string, rec: bool) -> [] string {
+	list: [..] string;
+	list.allocator = temp;
+	visit_files(path, rec, *list, (info: *File_Visit_Info, list: *[..] string) {
+		array_add(list, tprint("%", info.full_name));
+	});
+	return list;
 }
 
 app: App;

@@ -75,6 +75,9 @@ move :: (_aabb: AABB($T), delta: V2(T)) -> AABB(T) {
 	aabb.max += delta;
 	return aabb;
 }
+center :: (aabb: AABB($T)) -> V2(T) {
+	return (aabb.min + aabb.max) * 0.5;
+}
 width :: (aabb: AABB($T)) -> T {
 	s := size(aabb);
 	return s.x;
@@ -127,6 +130,25 @@ shrink :: (_aabb: AABB($T), amount: V2(T)) -> AABB(T) {
 in :: (aabb: AABB($T), point: V2(T)) -> bool {
 	return point.x >= aabb.min.x && point.x <= aabb.max.x &&
 		   point.y >= aabb.min.y && point.y <= aabb.max.y;
+}
+
+abs :: (v: V3($T)) -> V3(T) {
+	return .{ abs(v.x), abs(v.y), abs(v.z) };
+}
+abs :: (v: V2($T)) -> V2(T) {
+	return .{ abs(v.x), abs(v.y) };
+}
+vmin :: (a: V3($T), b: V3(T)) -> V3(T) {
+	return .{ min(a.x, b.x), min(a.y, b.y), min(a.z, b.z) };
+}
+vmax :: (a: V3($T), b: V3(T)) -> V3(T) {
+	return .{ max(a.x, b.x), max(a.y, b.y), max(a.z, b.z) };
+}
+vmin :: (a: V2($T), b: V2(T)) -> V2(T) {
+	return .{ min(a.x, b.x), min(a.y, b.y) };
+}
+vmax :: (a: V2($T), b: V2(T)) -> V2(T) {
+	return .{ max(a.x, b.x), max(a.y, b.y) };
 }
 
 // Column major
@@ -267,6 +289,23 @@ axis_angle :: (axis: V3($T), angle: T) -> Q(T) {
 		axis.z * s,
 		cos(angle / 2)
 	};
+}
+axis_angle_matrix :: (axis: V3($T), angle: T) -> M4(T) {
+	M: M4(T);
+	s := sin(angle);
+	c := cos(angle);
+	c1 := 1 - c;
+	M.data[0 + 0 * 4] = axis.x * axis.x * c1 + c;
+	M.data[0 + 1 * 4] = axis.x * axis.y * c1 - axis.z * s;
+	M.data[0 + 2 * 4] = axis.x * axis.z * c1 + axis.y * s;
+	M.data[1 + 0 * 4] = axis.y * axis.x * c1 + axis.z * s;
+	M.data[1 + 1 * 4] = axis.y * axis.y * c1 + c;
+	M.data[1 + 2 * 4] = axis.y * axis.z * c1 - axis.x * s;
+	M.data[2 + 0 * 4] = axis.z * axis.x * c1 - axis.y * s;
+	M.data[2 + 1 * 4] = axis.z * axis.y * c1 + axis.x * s;
+	M.data[2 + 2 * 4] = axis.z * axis.z * c1 + c;
+	M.data[3 + 3 * 4] = 1;
+	return M;
 }
 to_axis_angle :: (q: Q($T)) -> V3(T), T {
 	angle := 2 * acos(clamp(q.w, -1.0, 1.0));
@@ -463,6 +502,9 @@ v2 :: (v: float32) -> V2(float32) {
 }
 v2 :: (v: float64) -> V2(float64) {
 	return .{ v, v };
+}
+v2 :: (v: V2($T)) -> V2(T) {
+	return v;
 }
 v2 :: (a: $T, b: T) -> V2(T) {
 	return .{ a, b };
@@ -710,6 +752,18 @@ line_aabb :: (a1: V2($T), b: V2(T), low: V2(T), high: V2(T)) -> bool {
 		a1, a1 + b,
 		V2(T).{ high.x, low.y }, low
 	);
+}
+
+cone_square :: (
+	cone_center: V2($T), cone_dir: V2(T), cone_angle: T, square_center: V2(T), square_size: T
+) -> bool {
+	to_square := square_center - cone_center;
+	to_square_len := norm(to_square);
+	if to_square_len == 0
+		return true;
+	to_square_dir := to_square / to_square_len;
+	angle_to_square := acos(dot(cone_dir, to_square_dir));
+	return angle_to_square < cone_angle && to_square_len < square_size * sqrt(2.0);
 }
 
 point_aabb :: (p: V2($T), low: V2(T), high: V2(T)) -> bool {

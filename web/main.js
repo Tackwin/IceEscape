@@ -1,102 +1,5 @@
 "use strict";
 
-// These are all the functions that we declared as "#foreign" in our Jai code.
-// They let you interact with the JS and DOM world from within Jai.
-const jai_imports = {};
-
-// TODO: Thinking about the compiling a library, we would need a lot of the same jmp_buf logic, but instead of calling main
-//       we are calling something from jai_exports. The only difference is that instead of simply returning when the wasm
-//       is paused, we have to do something like return a Promise that gets resolve()ed when we exit normally (maybe listening
-//       for wasm_exit would be enough.....). TLDR; I still don't know how to factor this out yet
-
-// TODO: document why this is not inline and the whole pause/resume thing
-
-// TODO: we should expose a helper that genetrates thesew definitions, or just generates the read/write code
-//       from jai that you can paste in where needed
-const source_code_location_struct_info = {
-    type: "struct",
-    members: [
-        { name: "fully_pathed_filename", offset:   0, type: "string" },
-        { name: "line_number",           offset:  16, type: "s64" },
-        { name: "character_number",      offset:  24, type: "s64" },
-    ],
-};
-
-const stack_trace_procedure_info_struct_info = {
-    type: "struct",
-    members: [
-        { name: "name",              offset:  0, type: "string" },
-        { name: "location",          offset: 16, ...source_code_location_struct_info },
-        { name: "procedure_address", offset: 48, type: "u64" },
-    ]
-};
-
-const stack_trace_node_struct_info = {
-    type: "struct",
-    members: [
-        { name: "next",        offset:  0, type: "pointer_to_this" },
-        { name: "info",        offset:  8, type: "pointer", pointing_to: stack_trace_procedure_info_struct_info },
-        { name: "hash",        offset: 16, type: "u64" },
-        { name: "call_depth",  offset: 24, type: "u32" },
-        { name: "line_number", offset: 28, type: "u32" },
-    ]
-};
-   
-const copy_any_to_js = (address, type_info, view = undefined) => {
-    view ??= new DataView(jai_exports.memory.buffer);
-    
-    if (address === 0n) return null;
-    try {
-        switch (type_info.type) {
-        case "pointer": {
-            const next_address = view.getBigUint64(Number(address), true);
-            return copy_any_to_js(next_address, type_info.pointing_to, view);
-        }
-        case "struct": {
-            const struct = {};
-            for (const it of type_info.members) {
-                const info = (it.type === "pointer_to_this") ? { type: "pointer", pointing_to: type_info } : it;
-                const result = copy_any_to_js(Number(address) + it.offset, info, view);
-                struct[it.name] = result;
-            }
-            return struct;
-        }
-        case "string": {
-            const count = view.getBigUint64(Number(address) + 0, true);
-            const data  = view.getBigUint64(Number(address) + 8, true);
-            return getStringX(count, data);
-        }
-        case "float": return view.getFloat32(Number(address), true);
-        case "u64":   return view.getBigUint64(Number(address), true);
-        case "s64":   return view.getBigInt64(Number(address), true);
-        case "u32":   return view.getUint32(Number(address), true);
-        case "s32":   return view.getInt32(Number(address), true);
-        case "u16":   return view.getUint16(Number(address), true);
-        case "s16":   return view.getInt16(Number(address), true);
-        case "u8":    return view.getUint8(Number(address), true);
-        case "s8":    return view.getInt8(Number(address), true);
-        default: {
-            throw "Unimplemented data type " + definition.type
-        }
-        }
-    } catch (e) {
-        // If an address is out of bounds of the memory we return
-        // undefined instead of crashing. So if you get an object
-        // whose fields are all undefined, it means that the pointer
-        // was somehow corrupted and we tried to read memory out of bounds. 
-        return undefined;
-    }
-};
-
-
-const log_context_stack_trace = (ident) => {
-    const view = new DataView(jai_exports.memory.buffer);
-    const context_stack_trace_address = Number(jai_context+72n); // **Stack_Trace_Node or *context.stack_trace
-    const stack_trace_address = view.getBigInt64(context_stack_trace_address, true);
-    const stack_trace = copy_any_to_js(stack_trace_address, stack_trace_node_struct_info, view);
-    console.log(`[${ident}] context.stack_trace = 0x${stack_trace_address.toString(16)}`, stack_trace);
-}
-
 let audio_context = null;
 
 window.addEventListener("load", async () => {
@@ -131,15 +34,11 @@ const create_fullscreen_canvas = (text) => {
 };
 
 
-/*
 
-Module Runtime_Support platform layer inserted from C:/Users/Tackwin/Documents/Code/jai/modules/Toolchains/Web/libjs/Runtime_Support.js
+const jai_imports = {};
+let jai_exports; // contains procedures and globals from the loaded wasm module
+let jai_context; // *Runtime_Support.first_thread_context
 
-*/
-
-// Runtime_Support does not schedule for the wasm application to be loaded. We do this so that 
-// See Toolchains/Web/Progressive_Web_App.jai (and PWA_JS_HEADER in particular) for example usage.
-// There currently isn't support for loading multiple wasm modules on a single page.
 const initialize_wasm_module = async (module_path, initial_pages = 0) => {
     // If you forget to implement something jai_imports expects, the Proxy below will log a nice error.
 	jai_imports.memory = new WebAssembly.Memory({
@@ -182,7 +81,7 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 	
 	const worker = new Worker("worker.js", { type: "module" });
 
-	worker.onmessage = e => {
+	worker.onmessage = async e => {
 		if (e.data.ready) {
 			worker.postMessage({ start: true });
 
@@ -198,40 +97,27 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 		if (e.data.set_token) {
 			jai_imports.js_set_token(e.data.set_token);
 		}
+		if (e.data.load_audio) {
+			await js_load_audio(e.data.load_audio);
+		}
+		if (e.data.play_audio) {
+			js_play_audio(e.data.play_audio);
+		}
+		if (e.data.volume_audio) {
+			js_volume_audio(e.data.volume_audio);
+		}
+		if (e.data.set_sound) {
+			js_set_sound(e.data.set_sound);
+		}
+		if (e.data.set_listener_info) {
+			js_set_listener_info(e.data.set_listener_info);
+		}
 	}
 	worker.postMessage({ module, memory: jai_imports.memory });
 
 	// const worker_loop = WebAssembly.promising(jai_exports.wasm_worker_loop);
 }
 
-let jai_exports; // contains procedures and globals from the loaded wasm module
-let jai_context; // *Runtime_Support.first_thread_context
-
-/*
-
-Exports needed for Runtime_Support.jai and the C code included with the Jai distribution
-
-*/
-
-// TODO: this should not be necesarry, but it is.....
-
-/*
-
-Helper functions used by the runtime
-
-*/
-
-// If you run a jai program "to completion" (i.e. you call a procedure and it returns normally)
-// context.stack_trace is still set to a pointer on the stack. So if you want to restart from another
-// procedure you have to clear this to null yourself. You do not have to do this if you are calling jai
-// code from within a js import procedure.
-// :WasmNullStackTrace
-const null_context_stack_trace = () => {
-    const view = new DataView(jai_exports.memory.buffer);
-    const context_stack_trace_offset  = 72; // @Volatile
-    const context_stack_trace_address = Number(jai_context) + context_stack_trace_offset;
-    view.setBigInt64(context_stack_trace_address, 0n, true);
-};
 
 jai_imports.js_get_token = () => {
     if (sessionStorage.getItem("token")) {
@@ -376,13 +262,17 @@ const Key_MouseRight = 50;
 const Key_MouseMiddle = 51;
 const Key_Tab = 52;
 const Key_Escape = 53;
-const Key_LShift = 54;
-const Key_RShift = 55;
-const Key_Period = 56;
-const Key_Backspace = 57;
-const Key_Left = 58;
-const Key_Right = 59;
-const Key_Count = 60;
+const Key_Shift = 54;
+const Key_Period = 55;
+const Key_Backspace = 56;
+const Key_Left = 57;
+const Key_Right = 58;
+const Key_Up = 59;
+const Key_Down = 60;
+const Key_Enter = 61;
+const Key_Control = 62;
+const Key_Minus = 63;
+const Key_Count = 64;
 const Mouse_X = 128;
 const Mouse_Y = 132;
 const Mouse_Wheel = 136;
@@ -396,6 +286,9 @@ const getControlsBufferU8 = () => {
 }
 const getControlsBufferU32 = () => {
 	return new Uint32Array(jai_exports.memory.buffer, controls_buffer_data, 256);
+}
+const getControlsBufferS32 = () => {
+	return new Int32Array(jai_exports.memory.buffer, controls_buffer_data, 256);
 }
 const getControlsBufferF32 = () => {
 	return new Float32Array(jai_exports.memory.buffer, controls_buffer_data, 256);
@@ -460,13 +353,16 @@ const mapKeyNameToKeyIndex = (e) => {
 		case "backspace": return Key_Backspace;
 		case "arrowleft": return Key_Left;
 		case "arrowright": return Key_Right;
+		case "arrowup": return Key_Up;
+		case "arrowdown": return Key_Down;
+		case "enter": return Key_Enter;
+		case "control": return Key_Control;
+		case "-": return Key_Minus;
 		default: return -1;
 	}
-
 };
 
 document.addEventListener("keydown", (e) => {
-	console.log("Key down", performance.now());
 	const keyIndex = mapKeyNameToKeyIndex(e.key);
 	if (0 <= keyIndex && keyIndex < Key_Count) {
 		Atomics.store(getControlsBufferU8(), keyIndex, 1);
@@ -520,54 +416,22 @@ document.addEventListener("mousemove", (e) => {
 document.addEventListener("wheel", (e) => {
 	// Prevent scrolling the page
 	e.preventDefault();
-	let w = Atomics.load(getControlsBufferF32(), Mouse_Wheel / 4);
-	w -= e.deltaY;
-	Atomics.store(getControlsBufferF32(), Mouse_Wheel / 4, w);
+	let w = Atomics.load(getControlsBufferS32(), Mouse_Wheel / 4);
+	w -= e.deltaY * 1000;
+	Atomics.store(getControlsBufferS32(), Mouse_Wheel / 4, w);
 });
-
-// jai_imports.js_get_key_state = (key_map_ptr, key_map_count) => {
-// 	for (let i = 0; i < key_map_count; i++) {
-// 		setU8(key_map_ptr, i, getControlsBufferSpan().getUint8(i));
-// 	}
-// }
-
-// jai_imports.js_get_mouse_pointer = (x_ptr, y_ptr) => {
-// 	setU32(x_ptr, 0, getControlsBufferSpan().getUint32(Mouse_X));
-// 	setU32(y_ptr, 0, getControlsBufferSpan().getUint32(Mouse_Y));
-// }
-
-// jai_imports.js_get_mouse_wheel_delta = (delta_ptr) => {
-// 	setF32(delta_ptr, 0, getControlsBufferSpan().getFloat32(Mouse_Wheel));
-// 	getControlsBufferSpan().setFloat32(Mouse_Wheel, 0)
-// }
-
-// jai_imports.js_get_dimemsions = (dim_ptr) => {
-// 	const canvas = document.getElementById("webgpu-canvas");
-// 	if (!canvas) {
-// 		setU32(dim_ptr, 0, 0);
-// 		setU32(dim_ptr, 4, 0);
-// 		setU32(dim_ptr, 8, 0);
-// 		setU32(dim_ptr, 12, 0);
-// 		return;
-// 	}
-// 	setU32(dim_ptr, 0, 0);
-// 	setU32(dim_ptr, 4, 0);
-// 	setU32(dim_ptr, 8, getControlsBufferSpan().getUint32(Window_W));
-// 	setU32(dim_ptr, 12, getControlsBufferSpan().getUint32(Window_H));
-// }
 
 jai_imports.js_get_token = () => {
     if (sessionStorage.getItem("token")) {
         return parseInt(sessionStorage.getItem("token"), 10);
     }
-    return Math.random() * 1024 * 1024;
+    return crypto.getRandomValues(new BigUint32Array(1))[0];
 }
 
 jai_imports.js_set_token = (token) => {
     sessionStorage.setItem("token", token);
 	Atomics.store(getControlsBufferU32(), Control_Token / 4, token);
 };
-
 
 //SOUND
 let audio_id_to_buffer = {};
@@ -592,37 +456,39 @@ jai_imports.js_wait = new WebAssembly.Suspending(x => x);
 jai_imports.js_load_audio = async (params_ptr) => {
 	const data = getU64(params_ptr, 0);
 	const size = getU64(params_ptr, 8);
-	const id_ptr = getU64(params_ptr, 16);
+	const id = getU64(params_ptr, 16);
 	const compressed = getU64(params_ptr, 24) != 0;
 
-	const array = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(size));
-	const buffer = await blobToAudioBuffer(new Blob([array]));
-
-	audio_id_counter += 1;
-	const audio_id = audio_id_counter;
-	audio_id_to_buffer[audio_id] = buffer;
-
-	setU64(id_ptr, 0, audio_id);
+	const src = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(size));
+	const dst = new Uint8Array(src); // copy the data to a new buffer so that it doesn't get modified by the wasm module while we're using it
+	const buffer = await new Blob([dst]).arrayBuffer();
+	await js_load_audio({ buffer, audio_id: id });
+}
+const js_load_audio = async (params) => {
+	var buffer = await audio_context.decodeAudioData(params.buffer);
+	audio_id_to_buffer[params.audio_id] = buffer;
 }
 
 jai_imports.js_play_audio = (params_ptr) => {
-	const id = getU64(params_ptr, 0);
-	const x = getF32(params_ptr, 8);
-	const y = getF32(params_ptr, 12);
-	const z = getF32(params_ptr, 16);
-	const volume = getF32(params_ptr, 20);
-	const pitch = getF32(params_ptr, 24);
-	let loop = getU32(params_ptr, 28) != 0;
-	const kind = getS32(params_ptr, 32);
-	const fade_in = getS32(params_ptr, 36);
-	const exponent = getF32(params_ptr, 40);
-	const sound_id_ptr = getU64(params_ptr, 48);
-	const delay = getF32(params_ptr, 56);
-
+	console.error("js_play_audio is only implemented in the worker, not in the main thread!");
+}
+const js_play_audio = (params) => {
+	const id = params.audio_id;
+	const x = params.x;
+	const y = params.y;
+	const z = params.z;
+	const volume = params.volume;
+	const pitch = params.pitch;
+	let loop = params.loop;
+	const kind = params.kind;
+	const fade_in = params.fade_in;
+	const exponent = params.exponent;
+	const delay = params.delay;
+	const sound_id = params.sound_id;
+	
 	const buffer = audio_id_to_buffer[id];
 	if (!buffer) {
 		console.error(`Audio buffer with id ${id} not found`);
-		setU64(sound_id_ptr, 0, 0);
 		return;
 	}
 
@@ -665,8 +531,6 @@ jai_imports.js_play_audio = (params_ptr) => {
 	
 	source.start(delay / 1000);
 	
-	sound_id_counter += 1;
-	const sound_id = sound_id_counter;
 	sound_id_to_sound[sound_id] = {
 		source,
 		gainNode,
@@ -679,13 +543,12 @@ jai_imports.js_play_audio = (params_ptr) => {
 		delete sound_id_to_sound[sound_id];
 		sound_id_to_state[sound_id] = SOUND_STOPPED;
 	};
-
-	setU64(sound_id_ptr, 0, sound_id);
 }
 
 jai_imports.js_volume_audio = (params_ptr) => {
-	const volume = getF32(params_ptr, 0);
-
+	console.error("js_volume_audio is only implemented in the worker, not in the main thread!");
+}
+const js_volume_audio = (volume) => {
 	if (master_gain === null) {
 		master_gain = audio_context.createGain();
 		master_gain.connect(audio_context.destination);
@@ -693,67 +556,11 @@ jai_imports.js_volume_audio = (params_ptr) => {
 	master_gain.gain.value = volume;
 }
 
-jai_imports.js_query_sound = (params_ptr) => {
-	const sound_idx = getU64(params_ptr, 0);
-	const audio_id_ptr = getU64(params_ptr, 8);
-	const x_ptr = getU64(params_ptr, 16);
-	const y_ptr = getU64(params_ptr, 24);
-	const z_ptr = getU64(params_ptr, 32);
-	const volume_ptr = getU64(params_ptr, 40);
-	const pitch_ptr = getU64(params_ptr, 48);
-	const playing_ptr = getU64(params_ptr, 56);
-	const looping_ptr = getU64(params_ptr, 64);
-
-	const sound = sound_id_to_sound[sound_idx];
-	if (!sound) {
-		setU64(audio_id_ptr, 0, 0);
-		setF32(x_ptr, 0, 0);
-		setF32(y_ptr, 0, 0);
-		setF32(z_ptr, 0, 0);
-		setF32(volume_ptr, 0, 0);
-		setF32(pitch_ptr, 0, 0);
-		setU32(playing_ptr, 0, 0);
-		setU32(looping_ptr, 0, 0);
-		return;
-	}
-
-	let source = sound.source;
-	let gainNode = sound.gainNode;
-	let panner = sound.panner;
-	const audio_id = sound.audio_id;
-
-	const pos = [0, 0, 0];
-	if (panner) {
-		pos[0] = panner.positionX.value;
-		pos[1] = panner.positionY.value;
-		pos[2] = panner.positionZ.value;
-	}
-	const volume = gainNode.gain.value;
-	const rate = source.playbackRate.value;
-	const playing = sound_id_to_state[sound_id] === SOUND_PLAYING ? 1 : 0;
-	const looping = source.loop ? 1 : 0;
-
-	setU64(audio_id_ptr, 0, audio_id);
-	setF32(x_ptr, 0, pos[0]);
-	setF32(y_ptr, 0, pos[1]);
-	setF32(z_ptr, 0, pos[2]);
-	setF32(volume_ptr, 0, volume);
-	setF32(pitch_ptr, 0, rate);
-	setU32(playing_ptr, 0, playing);
-	setU32(looping_ptr, 0, looping);
-}
-
 jai_imports.js_set_sound = (params_ptr) => {
-	const sound_idx = getU64(params_ptr, 0);
-	const x = getF32(params_ptr, 8);
-	const y = getF32(params_ptr, 12);
-	const z = getF32(params_ptr, 16);
-	const volume = getF32(params_ptr, 20);
-	const pitch = getF32(params_ptr, 24);
-	const playing = getU32(params_ptr, 28);
-	const looping = getU32(params_ptr, 32);
-
-	const sound = sound_id_to_sound[sound_idx];
+	console.error("js_set_sound is only implemented in the worker, not in the main thread!");
+}
+const js_set_sound = (params) => {
+	const sound = sound_id_to_sound[params.sound_idx];
 	if (!sound) {
 		return;
 	}
@@ -763,39 +570,36 @@ jai_imports.js_set_sound = (params_ptr) => {
 	let panner = sound.panner;
 	
 	if (panner) {
-		panner.positionX.value = x;
-		panner.positionY.value = y;
-		panner.positionZ.value = z;
+		panner.positionX.value = params.x;
+		panner.positionY.value = params.y;
+		panner.positionZ.value = params.z;
 	}
-	gainNode.gain.value = volume;
-	// source.playbackRate.value = pitch;
+	gainNode.gain.value = params.volume;
+	// source.playbackRate.value = params.pitch;
 
-	const is_sound_playing = sound_id_to_state[sound_idx] === SOUND_PLAYING;
-	if (playing) {
+	const is_sound_playing = sound_id_to_state[params.sound_idx] === SOUND_PLAYING;
+	if (params.playing) {
 		if (!is_sound_playing) {
 			source.start(0);
-			sound_id_to_state[sound_idx] = SOUND_PLAYING;
+			sound_id_to_state[params.sound_idx] = SOUND_PLAYING;
 		}
 	} else {
 		if (is_sound_playing) {
 			source.stop(0);
-			sound_id_to_state[sound_idx] = SOUND_STOPPED;
+			sound_id_to_state[params.sound_idx] = SOUND_STOPPED;
 		}
 	}
-	source.loop = looping != 0;
-
+	source.loop = params.looping != 0;
 }
 
 jai_imports.js_set_listener_info = (params_ptr) => {
-	const x = getF32(params_ptr, 0);
-	const y = getF32(params_ptr, 4);
-	const z = getF32(params_ptr, 8);
-	const forward_x = getF32(params_ptr, 12);
-	const forward_y = getF32(params_ptr, 16);
-	const forward_z = getF32(params_ptr, 20);
-
-	audio_context.listener.setPosition(x, y, z);
-	audio_context.listener.setOrientation(forward_x, forward_y, forward_z, 0, 0, 1);
+	console.error("js_set_listener_info is only implemented in the worker, not in the main thread!");
+}
+const js_set_listener_info = (params) => {
+	audio_context.listener.setPosition(params.x, params.y, params.z);
+	audio_context.listener.setOrientation(
+		params.forward_x, params.forward_y, params.forward_z, 0, 0, 1
+	);
 }
 
 //WEBGPU

@@ -16,14 +16,30 @@ struct UniformData {
 struct InstanceData {
 	M: mat4x4<f32>,
 	texture_rect: vec4f, // x, y, width, height
-	useAlbedoMap: u32,
-	useNormalMap: u32,
+	albedo16normal16indices: u32,
 	useShadowMap: u32,
+	fadeout_z: f32,
 	flags: u32,
 	uv_offset: vec2f,
 	color: vec4f,
 	color_overlay: vec4f,
+	light_count: u32,
+	light_index: u32,
+	padding0: u32,
+	padding1: u32,
 };
+struct Light {
+	position: vec3f,
+	padding0: u32,
+	direction: vec3f,
+	padding1: u32,
+	color: vec3f,
+	kind: u32, // 0 = directional, 1 = point, 2 = cone
+	range: f32, // for point and cone
+	angle: f32, // for cone
+	padding2: u32,
+};
+
 
 struct VertexOutput {
 	@builtin(position) Position : vec4f,
@@ -31,6 +47,7 @@ struct VertexOutput {
 
 @group(0) @binding(0) var<uniform> uniforms: UniformData;
 @group(0) @binding(1) var<storage, read> instanceData: array<InstanceData>;
+@group(0) @binding(2) var<storage, read> lights: array<Light>;
 
 @vertex fn vs(
 	@builtin(vertex_index) vertexIndex : u32,

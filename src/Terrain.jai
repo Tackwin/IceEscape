@@ -16,7 +16,7 @@ Config :: struct {
 	antiair_offset_std := 0.0;
 }
 
-parse_terrain :: (text: string, scene: *Scene) {
+parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 	rng := Rand.seed(123456789);
 
 	ascii_tiles: string;
@@ -56,12 +56,16 @@ parse_terrain :: (text: string, scene: *Scene) {
 	if ascii_tiles.count > 0 && ascii_tiles[ascii_tiles.count - 1] == #char "\n"
 		ascii_tiles.count -= 1;
 
+	scene.camera_min = v2(0.0);
+	scene.camera_max = v2(0.0);
+
 	new_terrain := load_terrain_from_ascii(ascii_tiles);
 	new_terrain.text = alloc_string(text.count);
 	memcpy(new_terrain.text.data, text.data, text.count);
 	free(*scene.terrain);
 	scene.terrain = new_terrain;
-	scene.spawn.position = tile_center(scene, scene.terrain.spawn_tile_);
+	spawn_set := false;
+	scene.night = false;
 	scene.spawn.size = .{ 0.05, 0.05 };
 
 	while cursor < lines.count {
@@ -75,6 +79,11 @@ parse_terrain :: (text: string, scene: *Scene) {
 
 		if scan2(line, "- autorevive") {
 			scene.auto_revive = true;
+			continue;
+		}
+
+		if scan2(line, "- night") {
+			scene.night = true;
 			continue;
 		}
 
@@ -397,11 +406,17 @@ parse_terrain :: (text: string, scene: *Scene) {
 					break;
 				}
 
-				if scan2(line, "- position: % %", *scene.camera_min.x, *scene.camera_min.y)
+				if scan2(line, "- position: % %", *scene.camera_min.x, *scene.camera_min.y) {
+					scene.origin_tile_space = scene.camera_min;
 					continue;
+				}
 
 				if scan2(line, "- size: % %", *scene.camera_max.x, *scene.camera_max.y) {
 					scene.camera_max += scene.camera_min;
+					continue;
+				}
+
+				if scan2(line, "- origin: % %", *scene.origin_tile_space.x, *scene.origin_tile_space.y) {
 					continue;
 				}
 
@@ -697,8 +712,10 @@ parse_terrain :: (text: string, scene: *Scene) {
 				}
 
 				pos := *spawn.position;
-				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z) {
+					spawn_set = true;
 					continue;
+				}
 				size := *spawn.size;
 				if scan2(line, "- size: % %", *size.x, *size.y)
 					continue;
@@ -744,12 +761,57 @@ parse_terrain :: (text: string, scene: *Scene) {
 			cursor -= 1;
 		}
 
+		if scan2(line, "lantern") {
+			lantern: Lantern;
+			lantern.id = scene.lanterns.count + 1;
+			defer {
+				array_add(*scene.lanterns, lantern);
+			}
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *lantern.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+
+				box := *lantern.light_aabb;
+				if scan2(
+					line, "- light_aabb: % % % %", *box.min.x, *box.min.y, *box.max.x, *box.max.y
+				)
+					continue;
+
+				if scan2(line, "- intensity: %", *lantern.intensity)
+					continue;
+				id: int;
+				if scan2(line, "- button_id: %", *id) {
+					lantern.button_id = id;
+					continue;
+				}
+
+				print("Error reading lantern, unrecognized line: % (L%)\n", line, cursor);
+			}
+
+			cursor -= 1;
+		}
+
 		if scan2(line, "gate") {
 			gate: Gate;
 			gate.id = scene.gates.count + 1;
-			gate.pressbutton_ids.index = scene.gate_indices.count;
+			gate.pressbutton_ids.index = scene.indices.count;
 			defer {
-				gate.pressbutton_ids.count = scene.gate_indices.count - gate.pressbutton_ids.index;
+				gate.pressbutton_ids.count = scene.indices.count - gate.pressbutton_ids.index;
 				array_add(*scene.gates, gate);
 			}
 
@@ -783,7 +845,7 @@ parse_terrain :: (text: string, scene: *Scene) {
 
 				id: int;
 				if scan2(line, "- wait_for_pressbutton_id: %", *id) {
-					array_add(*scene.gate_indices, id);
+					array_add(*scene.indices, id);
 					continue;
 				}
 
@@ -1106,6 +1168,10 @@ parse_terrain :: (text: string, scene: *Scene) {
 		}
 	}
 
+	if !spawn_set {
+		scene.spawn.position = tile_center(scene, scene.terrain.spawn_tile_);
+	}
+
 	get_probability :: (id: Assets.Prop_Id) -> float {
 		if #complete id == {
 			case .TERRAIN_TREE_SNOW_A;
@@ -1137,7 +1203,7 @@ parse_terrain :: (text: string, scene: *Scene) {
 		return 0.0;
 	}
 	// Populate props
-	for y: 0..scene.terrain.tiles_count.y-1 {
+	if generate_props for y: 0..scene.terrain.tiles_count.y-1 {
 		for x: 0..scene.terrain.tiles_count.x-1 {
 			tile : Tile = scene.terrain.tiles[x + y * scene.terrain.tiles_count.x];
 			if tile.kind == .Dirt {

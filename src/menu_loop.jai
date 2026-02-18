@@ -9,33 +9,79 @@ Menu :: struct {
 
 	passcode: u64 = 0;
 	passstring: string = "";
+
+	profile: Profile;
 }
 
 push_left_main_menu :: (
 	gui: *GUI.GUI_State,
-	menu: *Menu
+	menu: *Menu,
+	platform: *Platform
 ) {
 	cursor := v2(8.0, gui.controls.window_size.y - 8);
 	GUI.default_params(gui).cursor = cursor;
+	GUI.default_params(gui).direction = .Down;
 	GUI.default_params(gui).align = .Top_Left;
 	GUI.default_params(gui).z = 2;
 
 	passcode_label := tprint("Passcode: %", menu.passstring);
-	GUI._atom_label(gui, passcode_label, id = "passcode_label");
+	GUI._atom_label(gui, passcode_label, id = "passcode_label", color = GUI.GRAY_00);
+
+	new_username := GUI.labeled_input_text(
+		gui, "Username:", menu.profile.username, 256, 24, id = "username_input"
+	);
+	if new_username != menu.profile.username {
+		if menu.profile.username.count > 0 && menu.profile.username.data
+			free(menu.profile.username);
+		menu.profile.username = sprint("%", new_username);
+
+		set_username: Command.Set_Username;
+		set_username.profile_id = menu.profile.id;
+		set_username.username = tprint("%", menu.profile.username);
+		send_web_message(platform, gui.controls.time, make_command(set_username));
+	}
+
+	cursor.x = 8.0;
+	cursor.y = gui.controls.window_size.y - 16.0 - 64.0;
+	GUI.default_params(gui).cursor = cursor;
+	GUI._atom_label(gui, "Stats", id = "stats_label", color = GUI.GRAY_00);
+	GUI._atom_label(
+		gui,
+		tprint("     Death count: %", menu.profile.stats.death_count),
+		id = "death_label",
+		color = GUI.GRAY_00
+	);
+	GUI._atom_label(
+		gui,
+		tprint("     Win count: %", menu.profile.stats.win_count),
+		id = "win_label",
+		color = GUI.GRAY_00
+	);
+	GUI._atom_label(
+		gui,
+		tprint("     Revive count: %", menu.profile.stats.revive_count),
+		id = "revive_label",
+		color = GUI.GRAY_00
+	);
 }
 
 code_to_string :: (code: u64) -> string {
-	unit :: "123456789ABCDEFGHJKMNPQRSTUVWXYZ";
+	unit :: "123456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnopqrstuvwxyz!@#$&*()";
 	_code := code;
-	str8 := NewArray(16, u8,, temp);
-	for 0..15 {
-		str8[it] = unit[(_code % 32).(int)];
-		_code /= 32;
+	str8 := NewArray(8, u8,, temp);
+
+	for 0..7 {
+		str8[it] = unit[(_code % unit.count).(int)];
+		_code /= unit.count;
 	}
-	str: string;
-	str.count = 16;
-	str.data = str8.data;
-	return sprint("%", str);
+	left: string;
+	left.count = 4;
+	left.data = str8.data;
+
+	right: string;
+	right.count = 4;
+	right.data = str8.data + 4;
+	return sprint("% %", left, right);
 }
 
 process_menu :: (state: *State, command: Command) -> bool {
@@ -45,6 +91,30 @@ process_menu :: (state: *State, command: Command) -> bool {
 		state.menu.passcode = connect.passcode;
 		state.menu.passstring = code_to_string(connect.passcode);
 		state.platform.set_token(connect.token);
+
+		ask_instance: Command.Ask_Instance_List;
+		send_web_message(state.platform, state.current_time, make_command(ask_instance));
+
+		get_profile_stats: Command.Get_Profile_Stats;
+		send_web_message(state.platform, state.current_time, make_command(get_profile_stats));
+
+		get_username: Command.Get_Username;
+		send_web_message(state.platform, state.current_time, make_command(get_username));
+
+		return true;
+	}
+
+	get_profile_stats := isa(command.payload, Command.Get_Profile_Stats);
+	if get_profile_stats {
+		state.menu.profile.stats = get_profile_stats.stats;
+		return true;
+	}
+
+	get_username := isa(command.payload, Command.Get_Username);
+	if get_username {
+		free(state.menu.profile.username);
+		print("Got username: %\n", get_username.username);
+		state.menu.profile.username = sprint("%", get_username.username);
 		return true;
 	}
 
@@ -185,7 +255,7 @@ menu_loop :: (_app: *App) -> bool {
 			state.menu.create_instance_popup_open = !state.menu.create_instance_popup_open;
 		}
 
-		push_left_main_menu(*app_user.gui_state, *state.menu);
+		push_left_main_menu(*app_user.gui_state, *state.menu, _app.platform);
 	}
 
 	// Editor button (always visible)

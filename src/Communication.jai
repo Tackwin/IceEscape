@@ -108,6 +108,10 @@ Command :: struct {
 	Quit :: struct {
 		player_id: int;
 	}
+	List_Terrain :: struct {
+		filter: string;
+		results: [] string;
+	}
 	New_Terrain :: struct {
 		ascii: [] u8;
 	}
@@ -372,10 +376,17 @@ Command :: struct {
 		info: Scene_Info;
 		ascii: string;
 	}
+	Load_Terrain :: struct {
+		terrain_id: int;
+		info: Scene_Info;
+		ascii: string;
+	}
 	Ask_List_Terrain :: struct {
+		filter: string;
 	}
 	Ans_List_Terrain :: struct {
-		terrains: [] string;
+		terrains_id: [] int;
+		terrains_name: [] string;
 	}
 
 	Create_Instance :: struct {
@@ -391,6 +402,14 @@ Command :: struct {
 			Rejected;
 		}
 		created_id: int;
+	}
+
+	Set_Username :: struct {
+		profile_id: int;
+		username: string;
+	}
+	Get_Username :: struct {
+		username: string;
 	}
 
 	Leave_Instance :: struct {
@@ -409,7 +428,14 @@ Command :: struct {
 		from_coin_id: int;
 	}
 
-	payload: Sum_Type(
+	Get_Terrain_Leaderboard :: struct {
+		terrain_id: int;
+
+		wr_time_ms: int;
+		wr_username: string;
+	}
+
+	Payload_t :: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
 		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot, Klaxon, Drop,
@@ -418,9 +444,11 @@ Command :: struct {
 		Sync_Stand_In, Ask_Respawn, Ask_Instance_List, Ans_Instance_List, Ask_Enter_Instance,
 		Ans_Enter_Instance, Leave_Instance, Create_Instance, Ans_Create_Instance, Version_Info,
 		Sync_Stats, Sync_Clock, Note_Played, Sync_Bomb_Spawner, Sync_Bomb, Sync_Score,
-		Ask_Enter_Custom_Instance, Ans_Enter_Custom_Instance, Save_Terrain, Ask_List_Terrain,
-		Ans_List_Terrain, Login, Set_Passcode, Get_Profile_Stats
+		Ask_Enter_Custom_Instance, Ans_Enter_Custom_Instance, Save_Terrain, Load_Terrain,
+		Ask_List_Terrain, Ans_List_Terrain, Login, Set_Passcode, Get_Profile_Stats, Set_Username,
+		Get_Username, Get_Terrain_Leaderboard
 	);
+	payload: Payload_t;
 	sent_timestamp: float64;
 }
 
@@ -458,6 +486,120 @@ make_command :: (cmd: $T) -> Command {
 	return made;
 }
 
+serialize_generic :: (payload: *$T, data: [] u8) -> int {
+	info :: type_info(T);
+	if data.data == null {
+		// Compute size needed to serialize
+
+		#if info.type == .STRING {
+			return payload.count;
+		} else #if info.type == .STRUCT {
+			size := 0;
+
+			#insert #run -> string {
+				sb: String_Builder;
+				for info.members {
+					print_to_builder(
+						*sb,
+						"size += serialize_generic(*payload.%, .[]);\n",
+						it.name
+					);
+				}
+				return builder_to_string(*sb);
+			};
+
+			return size;
+		} else #if info.type == .ARRAY {
+			if info.array_type == .FIXED
+				return 0;
+			if info.array_type == .VIEW
+				return payload.count * serialize_generic(payload.data, .[]);
+			assert(false, "Don't know how to serialize an array of type%\n", T);
+		} else #if info.type == .INTEGER {
+			return 0;
+		} else #if info.type == .FLOAT {
+			return 0;
+		} else #if info.type == .BOOL {
+			return 0;
+		} else #if info.type == .ENUM {
+			return 0;
+		} else #if info.type == .POINTER {
+			assert(false, "Don't know how to serialize a pointer of type%\n", T);
+		}
+		else {
+			assert(false, "Don't know how to serialize type %\n", T);
+		}
+		return 0;
+	}
+
+	cursor := 0;
+	subdata :: () -> [] u8 #expand {
+		out: [] u8;
+		out.data = data.data + cursor;
+		out.count = data.count - cursor;
+		return out;
+	}
+	#if info.type == .STRING {
+		memcpy(data.data, payload.data, payload.count);
+		cursor += payload.count;
+	}
+	#if info.type == .STRUCT {
+
+		#insert #run -> string {
+			sb: String_Builder;
+			for info.members
+				print_to_builder(
+					*sb, "cursor += serialize_generic(*payload.%, subdata());\n", it.name
+				);
+			return builder_to_string(*sb);
+		};
+	}
+	#if info.type == .ARRAY {
+		if info.array_type == .VIEW {
+			for 0..payload.count - 1 {
+				cursor += serialize_generic(payload.data + it, subdata());
+			}
+		}
+	}
+	return cursor;
+}
+
+deserialize_generic :: (data: [] u8, out: *$T) -> int {
+	info :: type_info(T);
+	cursor := 0;
+	subdata :: () -> [] u8 #expand {
+		out: [] u8;
+		out.data = data.data + cursor;
+		out.count = data.count - cursor;
+		return out;
+	}
+	#if info.type == .STRING {
+		out.data = data.data;
+		cursor += out.count;
+	}
+	#if info.type == .STRUCT {
+		#insert #run -> string {
+			sb: String_Builder;
+			for info.members {
+				print_to_builder(
+					*sb,
+					"cursor += deserialize_generic(subdata(), *out.%);\n",
+					it.name
+				);
+			}
+			return builder_to_string(*sb);
+		};
+	}
+	#if info.type == .ARRAY {
+		if info.array_type == .VIEW {
+			for 0..out.count - 1 {
+				cursor += deserialize_generic(subdata(), out.data + it);
+			}
+		}
+	}
+	return cursor;
+}
+
 serialize :: (cmd: Command, buffer: *[..] u8) {
 	// Serialize the command into the buffer
 	dry_size := size_of(type_of(cmd)) + 8;
@@ -466,6 +608,23 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 	buffer.count = dry_size;
 	defer {
 		buffer.data.(*s64).* = buffer.count;
+	}
+
+	generic_case :: (T: $Type) #expand {
+		typed := isa(cmd.payload, T);
+		if !typed {
+			print("Weirdge\n");
+			break `label;
+		}
+
+		additional_data_size := serialize_generic(typed, .[]);
+		array_reserve(buffer, dry_size + additional_data_size);
+		cursor := dry_size;
+		subdata: [] u8;
+		subdata.data = buffer.data + cursor;
+		subdata.count = additional_data_size;
+		cursor += serialize_generic(typed, subdata);
+		buffer.count = cursor;
 	}
 
 	for label: 0.. 0 if #complete cmd.payload.kind == {
@@ -501,7 +660,6 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Create_Instance; #through;
 		case .Ans_Create_Instance; #through;
 		case .Version_Info; #through;
-		case .Ask_List_Terrain; #through;
 		case .Sync_Stats; #through;
 		case .Sync_Clock; #through;
 		case .AntiAir_Shoot; #through;
@@ -525,6 +683,43 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Ask_Enter_Instance; #through;
 		case .Move_To_Play_World;
 			// Nothing
+		case .Get_Terrain_Leaderboard;
+			generic_case(Command.Get_Terrain_Leaderboard);
+		case .Set_Username;
+			generic_case(Command.Set_Username);
+		case .Get_Username;
+			get_username := isa(cmd.payload, Command.Get_Username);
+			if !get_username {
+				print("Weirdge\n");
+				break label;
+			}
+
+			additional_data_size := serialize_generic(get_username, .[]);
+			array_reserve(buffer, dry_size + additional_data_size);
+			cursor := dry_size;
+			subdata: [] u8;
+			subdata.data = buffer.data + cursor;
+			subdata.count = additional_data_size;
+			cursor += serialize_generic(get_username, subdata);
+			buffer.count = cursor;
+		case .Load_Terrain;
+			load_terrain := isa(cmd.payload, Command.Load_Terrain);
+			if !load_terrain {
+				print("Weirdge\n");
+				break label;
+			}
+
+			additional_data_size := load_terrain.ascii.count;
+			array_reserve(buffer, dry_size + additional_data_size);
+
+			cursor := dry_size;
+			memcpy(
+				buffer.data + cursor,
+				load_terrain.ascii.data,
+				load_terrain.ascii.count
+			);
+			cursor += load_terrain.ascii.count;
+			buffer.count = cursor;
 		case .Save_Terrain;
 			save_terrain := isa(cmd.payload, Command.Save_Terrain);
 			if !save_terrain {
@@ -543,6 +738,22 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 			);
 			cursor += save_terrain.ascii.count;
 			buffer.count = cursor;
+		case .Ask_List_Terrain;
+			ask_list_terrain := isa(cmd.payload, Command.Ask_List_Terrain);
+			if !ask_list_terrain {
+				print("Weirdge\n");
+				break label;
+			}
+
+			additional_data_size := ask_list_terrain.filter.count;
+			array_reserve(buffer, dry_size + additional_data_size);
+
+			cursor := dry_size;
+			memcpy(
+				buffer.data + cursor, ask_list_terrain.filter.data, ask_list_terrain.filter.count
+			);
+			cursor += ask_list_terrain.filter.count;
+			buffer.count = cursor;
 		case .Ans_List_Terrain;
 			ans_list_terrain := isa(cmd.payload, Command.Ans_List_Terrain);
 			if !ans_list_terrain {
@@ -551,14 +762,21 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 			}
 
 			additional_data_size := 0;
-			for ans_list_terrain.terrains {
+			additional_data_size += ans_list_terrain.terrains_id.count * size_of(int);
+			for ans_list_terrain.terrains_name {
 				additional_data_size += size_of(u64); // Size prefix
 				additional_data_size += it.count;
 			}
 			array_reserve(buffer, dry_size + additional_data_size);
 
 			cursor := dry_size;
-			for ans_list_terrain.terrains {
+			memcpy(
+				buffer.data + cursor,
+				ans_list_terrain.terrains_id.data,
+				ans_list_terrain.terrains_id.count * size_of(int)
+			);
+			cursor += ans_list_terrain.terrains_id.count * size_of(int);
+			for ans_list_terrain.terrains_name {
 				// Write size prefix
 				size_prefix := it.count.(u64);
 				memcpy(buffer.data + cursor, *size_prefix, size_of(u64));
@@ -732,7 +950,22 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 	memcpy(*cmd, buffer.data + 8, size_of(type_of(cmd)));
 	cursor := 8 + size_of(type_of(cmd));
 
-	if #complete cmd.payload.kind == {
+	generic_case :: (T: $Type) #expand {
+		typed := isa(cmd.payload, T);
+		if !typed {
+			print("Weirdge\n");
+			break `label;
+		}
+
+		remaining_size := expected_size - cursor;
+		subdata: [] u8;
+		subdata.data = buffer.data + cursor;
+		subdata.count = remaining_size;
+
+		cursor += deserialize_generic(subdata, typed);
+	}
+
+	for label: 0..0 if #complete cmd.payload.kind == {
 		case .Active_Item; #through;
 		case .Wipe_Scene; #through;
 		case .Move; #through;
@@ -786,8 +1019,29 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Ask_Enter_Instance; #through;
 		case .Ans_Enter_Instance; #through;
 		case .Ask_Instance_List; #through;
-		case .Ask_List_Terrain; #through;
 		case .Move_To_Play_World;
+			return cmd, true;
+		case .Get_Terrain_Leaderboard;
+			generic_case(Command.Get_Terrain_Leaderboard);
+			return cmd, true;
+		case .Set_Username;
+			generic_case(Command.Set_Username);
+			return cmd, true;
+		case .Get_Username;
+			generic_case(Command.Get_Username);
+			return cmd, true;
+		case .Ask_List_Terrain;
+			ask_list_terrain := isa(cmd.payload, Command.Ask_List_Terrain);
+			if !ask_list_terrain {
+				print("Weirdge\n");
+				return cmd, false;
+			}
+
+			remaining_size := expected_size - cursor;
+			ask_list_terrain.filter.data = (buffer.data + cursor).(*u8);
+			ask_list_terrain.filter.count = remaining_size;
+			cursor += remaining_size;
+
 			return cmd, true;
 		case .Ans_List_Terrain;
 			ans_list_terrain := isa(cmd.payload, Command.Ans_List_Terrain);
@@ -796,10 +1050,12 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 				return cmd, false;
 			}
 
-			terrains: [..] string;
-			terrains.allocator = temp;
-			cursor := 0;
-			while cursor < expected_size {
+			terrains_name: [..] string;
+			terrains_name.allocator = temp;
+			ans_list_terrain.terrains_id.data = (buffer.data + cursor).(*int);
+			cursor += size_of(int) * ans_list_terrain.terrains_id.count;
+
+			for 0..ans_list_terrain.terrains_id.count-1 {
 				size_prefix: u64;
 				memcpy(*size_prefix, buffer.data + cursor, size_of(u64));
 				cursor += size_of(u64);
@@ -809,9 +1065,22 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 				new_terrain.data = (buffer.data + cursor).(*u8);
 				cursor += new_terrain.count;
 
-				array_add(*terrains, new_terrain);
+				array_add(*terrains_name, new_terrain);
 			}
-			ans_list_terrain.terrains = terrains;
+			ans_list_terrain.terrains_name = terrains_name;
+
+			return cmd, true;
+		case .Load_Terrain;
+			load_terrain := isa(cmd.payload, Command.Load_Terrain);
+			if !load_terrain {
+				print("Weirdge\n");
+				return cmd, false;
+			}
+
+			remaining_size := expected_size - cursor;
+			load_terrain.ascii.data = (buffer.data + cursor).(*u8);
+			load_terrain.ascii.count = remaining_size;
+			cursor += remaining_size;
 
 			return cmd, true;
 		case .Save_Terrain;

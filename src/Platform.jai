@@ -259,6 +259,7 @@ load_database :: (
 	print_to_builder(*sb, ";");
 
 	query.query_string = builder_to_string(*sb);
+
 	query.output_allocator = temp;
 
 	platform.db_query(*query);
@@ -381,10 +382,10 @@ Platform :: struct {
 	set_listener_info: #type (listener: Listener) = null;
 	load_audio: #type (data: string, compressed: bool, out: *Audio) -> extern_ref = null;
 	play_audio: #type (audio: Audio, position: V3f) -> Sound = null;
-	query_sound: #type (sound_id: int) -> Sound = null;
 	set_sound: #type (sound: Sound) = null;
 	volume_audio: #type (x: float) -> float = null;
 
+	list_files : #type (path: string, rec: bool) -> [] string = null;
 	read_entire_file: #type (path: string, data: [] u8) -> int = null;
 	load_image: #type (data: [] u8) -> Image = null;
 	free_image: #type (image: *Image) = null;

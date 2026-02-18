@@ -13,5 +13,6 @@ Profile :: struct {
 	id: int;
 
 	stats: Statistics;
+	username: string;
 }
 

@@ -106,6 +106,7 @@ Store :: struct {
 	pressbutton_unpressed: WRender.Model;
 	pressbutton_pressed_radio: WRender.Model;
 	pressbutton_unpressed_radio: WRender.Model;
+	lantern_model: WRender.Model;
 
 	antiair_camion_model: WRender.Model;
 	antiair_canon_model: WRender.Model;
@@ -565,6 +566,7 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.pressbutton_unpressed = WRender.Model.make_from_obj(Assets.PRESSBUTTON_UNPRESSED_OBJ, "pressbutton_unpressed");
 	store.pressbutton_pressed_radio = WRender.Model.make_from_obj(Assets.PRESSBUTTON_PRESSED_RADIO_OBJ, "pressbutton_pressed_radio");
 	store.pressbutton_unpressed_radio = WRender.Model.make_from_obj(Assets.PRESSBUTTON_UNPRESSED_RADIO_OBJ, "pressbutton_unpressed_radio");
+	store.lantern_model = WRender.Model.make_from_obj(Assets.LANTERN_OBJ, "lantern");
 	store.pirateship_model = WRender.Model.make_from_obj(Assets.PIRATE_SHIP_OBJ, "pirateship");
 	store.coin_model = WRender.Model.make_from_obj(Assets.COIN_OBJ, "coin");
 	store.key_model = WRender.Model.make_from_obj(Assets.KEY_OBJ, "key");

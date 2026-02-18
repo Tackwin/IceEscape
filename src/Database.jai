@@ -14,12 +14,22 @@ DB_Profile_Passcode :: struct {
 	passcode: u64;
 }
 
+DB_Profile_Username :: struct {
+	id: int;
+	username: string;
+}
+
+DB_Profile_Token :: struct {
+	id: int;
+	token: u64;
+}
+
 DB_Time_Entry :: struct {
 	id: int;
 	profile_id: int;
 	terrain_id: int;
 	time_ms: int;
-	timestamp: float64;
+	timestamp_ms: int;
 }
 
 DB_Terrain_Id :: struct {
@@ -35,4 +45,10 @@ DB_Terrain_Infos :: struct {
 DB_Terrain_Ascii :: struct {
 	id: int;
 	ascii: string;
+}
+
+DB_Terrain_Roster :: struct {
+	id: int;
+	name: string;
+	terrain_ids: [] int; @json_array
 }

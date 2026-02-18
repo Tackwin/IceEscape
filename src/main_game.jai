@@ -8,13 +8,14 @@ Terrain :: #import "Terrain";
 #import "Platform";
 #import "Communication";
 #import "Utils";
+#import "Common";
 #import "Hash_Table";
+#import "Profile";
 #import "Remap_Context"(false);
 RNG :: #import "Rand";
 Controls :: #import "Controls";
 WRender :: #import "WRender";
 Scene :: #import "Scene";
-Assets :: #import "Assets";
 GUI :: #import "GUI";
 #import "gui_demo";
 
@@ -197,6 +198,7 @@ App_User :: struct {
 	auto_release_temp();
 
 	
+	app_user.framegraph.settings.light_enabled = app_user.state.light_enabled;
 	app_user.framegraph.settings.render_shadows = app_user.state.shadows_enabled;
 	app_user.framegraph.settings.render_props = app_user.state.props_enabled;
 	app_user.framegraph.settings.render_particles = app_user.state.particles_enabled;
@@ -240,6 +242,7 @@ State :: struct {
 	menu: Menu;
 	game: Game_Page;
 	editor: Editor;
+	editor_page: Editor_Page;
 
 	Playing :: struct {
 		escape_menu_open: bool = false;
@@ -282,6 +285,7 @@ State :: struct {
 	keyboard_layout: Layout = .AZERTY;
 
 	// Render settings
+	light_enabled := true;
 	shadows_enabled := true;
 	shadow_samples: enum { _4 :: 0; _9 :: 1; _25 :: 2; } = ._9;
 	aa_mode: enum { FXAA :: 0; MSAA_2x :: 1; MSAA_4x :: 2; No_AA :: 3; } = .FXAA;

@@ -13,6 +13,15 @@ struct UniformData {
 	sun_strength: f32,
 
 	use_shadow_map: f32,
+	use_lighting: f32,
+
+	light_bin_offset: u32,
+	light_bin_count_x: u32,
+	light_bin_count_y: u32,
+	light_bin_min_x: f32,
+	light_bin_min_y: f32,
+	light_bin_max_x: f32,
+	light_bin_max_y: f32,
 };
 
 struct InstanceData {
@@ -25,6 +34,10 @@ struct InstanceData {
 	uv_offset: vec2f,
 	color: vec4f,
 	color_overlay: vec4f,
+	light_count: u32,
+	light_index: u32,
+	padding0: u32,
+	padding1: u32,
 };
 
 struct VertexOutput {
@@ -35,8 +48,27 @@ struct VertexOutput {
 	@interpolate(flat) @location(3) instanceIndex: u32,
 };
 
+struct Light {
+	position: vec3f,
+	padding0: u32,
+	direction: vec3f,
+	padding1: u32,
+	color: vec3f,
+	kind: u32, // 0 = directional, 1 = point, 2 = cone, 3 = square
+	range: f32, // for point and cone, for square it's the width
+	angle: f32, // for cone, for square it's the height
+	intensity: f32,
+	padding3: u32,
+};
+
+struct LightBin {
+	lightIndices: array<u32, 16>, // 1 indexed, 0 means empty
+};
+
 @group(0) @binding(0) var<uniform> uniforms: UniformData;
 @group(0) @binding(1) var<storage, read> instanceData: array<InstanceData>;
+@group(0) @binding(2) var<storage, read> lights: array<Light>;
+@group(0) @binding(3) var<storage, read> lightBins: array<LightBin>;
 
 @group(1) @binding(0) var albedoMap: texture_2d_array<f32>;
 @group(1) @binding(1) var normalMap: texture_2d_array<f32>;
@@ -84,7 +116,7 @@ fn in_shadow(world_pos: vec3f) -> f32 {
 		}
 	}
 	shadow = shadow / f32(uniforms.shadow_pcf_count);
-	return shadow;
+	return max(shadow, 0.4);
 
 	// var uvB = shadowUV + vec2f( offset.x, -offset.y);
 	// var uvC = shadowUV + vec2f(-offset.x,  offset.y);
@@ -116,7 +148,7 @@ fn in_shadow(world_pos: vec3f) -> f32 {
 }
 
 fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
-	var ambient: f32 = 0.4;
+	var ambient: f32 = 0.8;
 
 	var sun_dot: f32 = -dot(uniforms.sun_dir, normalize(world_nor));
 	var sun_intensity: f32 = clamp(sun_dot, 0.0, 1.0) * uniforms.sun_strength;
@@ -126,8 +158,75 @@ fn light_intensity(use_shadow: f32, world_pos: vec3f, world_nor: vec3f) -> f32 {
 	}
 
 	var intensity: f32 = 0;
-	intensity += ambient;
-	intensity += shadow * sun_intensity;
+	intensity += ambient * uniforms.sun_strength + shadow * sun_intensity;
+
+	if (uniforms.use_lighting == 0.0) {
+		return intensity;
+	}
+	var bin_x = u32(
+		(f32(uniforms.light_bin_count_x) * (world_pos.x - uniforms.light_bin_min_x)) /
+		(uniforms.light_bin_max_x - uniforms.light_bin_min_x)
+	);
+	if (bin_x >= uniforms.light_bin_count_x) {
+		bin_x = uniforms.light_bin_count_x - 1;
+	}
+	var bin_y = u32(
+		(f32(uniforms.light_bin_count_y) * (world_pos.y - uniforms.light_bin_min_y)) /
+		(uniforms.light_bin_max_y - uniforms.light_bin_min_y)
+	);
+	if (bin_y >= uniforms.light_bin_count_y) {
+		bin_y = uniforms.light_bin_count_y - 1;
+	}
+	var bin_index = bin_y * uniforms.light_bin_count_x + bin_x;
+	var lightBin = lightBins[uniforms.light_bin_offset + bin_index];
+
+	var maxIntensity: f32 = 0.0;
+	for (var i: u32 = 0; i < 16; i += 1) {
+		if (lightBin.lightIndices[i] == 0) {
+			break;
+		}
+		var light = lights[lightBin.lightIndices[i] - 1];
+
+		{
+			var dt = world_pos - light.position;
+			var dist = length(dt);
+			var ldir = dt / dist;
+			var attenuation = 1.0 - smoothstep(light.range * 0.95, light.range * 1.05, dist);
+
+			if (light.kind == 1) {
+				maxIntensity = max(maxIntensity, light.intensity * attenuation);
+			}
+			if (light.kind == 2) {
+				var spotEffect = dot(ldir, light.direction);
+				let treshold = cos(radians(light.angle));
+				var dot = max(-dot(world_nor, ldir), 0.0) * 0.5 + 0.5;
+				if (spotEffect > treshold) {
+					let t = smoothstep(treshold, cos(radians(light.angle * 0.95)), spotEffect);
+					maxIntensity = max(maxIntensity, light.intensity * dot * attenuation * t);
+				}
+			}
+			if (light.kind == 3) {
+				if (abs(dt.x) < light.range && abs(dt.y) < light.angle) {
+					var dot = max(world_nor.z, 0.0) * 0.5 + 0.5;
+					var tx = 1.0 - smoothstep(light.range - 0.2, light.range, abs(dt.x));
+					var ty = 1.0 - smoothstep(light.angle - 0.2, light.angle, abs(dt.y));
+					var attenuation = tx * ty;
+					maxIntensity = max(maxIntensity, light.intensity * dot * attenuation);
+				}
+			}
+
+			// if (light.kind == 1) {
+			// 	intensity += light.color.x * max(n_dot_l, 0.0) * attenuation;
+			// } else if (light.kind == 2) {
+			// 	var spotEffect = dot(ldir, light.direction);
+			// 	if (spotEffect > cos(radians(light.angle))) {
+			// 		intensity += light.color.x * max(n_dot_l, 0.0) * attenuation * pow(spotEffect, 4.0);
+			// 	}
+			// }
+		}
+	}
+	intensity += maxIntensity;
+
 	return intensity;
 }
 
@@ -204,7 +303,7 @@ fn flaggedSample(
 ) -> vec4f {
 	let UV_NO_TILE = u32(2);
 
-	if (flags & UV_NO_TILE) > 0 {
+	if ((flags & UV_NO_TILE) > 0) {
 		return textureNoTile(map, samp, idx, uv);
 	} else {
 		return textureSample(map, samp, uv, idx);

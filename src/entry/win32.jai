@@ -615,7 +615,6 @@ init_platform :: () -> Platform {
 	platform.sleep = win32_sleep;
 	platform.get_current_time = win32_get_current_time;
 	platform.set_token = win32_set_token;
-	platform.query_sound = query_sound;
 	platform.set_sound = set_sound;
 	platform.load_audio = load_audio;
 	platform.play_audio = play_audio;

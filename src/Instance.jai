@@ -27,6 +27,23 @@ Person :: struct {
 	run_stats: Statistics;
 }
 
+End_Scene_Event :: struct {
+	user_id: int;
+
+	scene_id: int;
+	time_ms: int;
+
+	revive_count: int;
+	death_count: int;
+
+	winner := false;
+}
+
+Terrain_Roster :: struct {
+	id: int;
+	terrain_ids: [128] int;
+}
+
 Instance :: struct {
 	id: int;
 	id_generation := 0;
@@ -36,6 +53,8 @@ Instance :: struct {
 
 	name: [64] u8;
 	password: [64] u8;
+
+	terrain_roster: Terrain_Roster;
 
 	pick_scene_id: int;
 	playing_scene_id: int;
@@ -71,6 +90,8 @@ Instance :: struct {
 	max_inactive_duration := 60.0 * 60.0; // seconds
 
 	names_to_scene_id: Table(string, int);
+
+	end_scene_events: [..] End_Scene_Event;
 }
 
 reload :: (instance: *Instance) {
@@ -250,22 +271,25 @@ init_instance_with_custom_terrain :: (
 init_instance :: (instance: *Instance) {
 	terrains :: string.[
 		"pick",
-		"big_turn", // OK
-		"big_bomb", // OK
-		"pounding", // OK
-		"big_round", // OK
-		"chamber", // OK
-		"buzz", // OK
-		"roundabout", // OK
-		"funny", // OK
+		"good_intro", // OK
+		"good_too", // OK
+		"good_ice", // Ok
+		"good_night", // OK
+		"good_three", // OK
+		"good_pounding", // OK
+		"good_light", // OK
+		"good_bomb", // OK
+		"good_steady", // OK
+		"good_turn", // OK
+		"big_round",
+		"roundabout",
+		"funny",
+		"chamber",
+		"buzz",
 		"right",
 		"frogger",
 		"here_and_there",
 		"volcano",
-		"turn",
-		"intro", // OK
-		"big_intro", // OK
-		"big_ship", // OK
 		"tetris",
 	];
 	
@@ -480,12 +504,25 @@ process :: (
 	return false;
 }
 
-move_playing_scene :: (instance: *Instance, scene_id: int) {
+move_playing_scene :: (instance: *Instance, scene_id: int, should_register := false) {
 	old_scene := find_by_scene_id(instance, instance.playing_scene_id);
 
 	scene := find_by_scene_id(instance, scene_id);
 	if !scene
 		return;
+
+	if should_register {
+		for old_scene.players {
+			event: End_Scene_Event;
+			event.user_id = player_id_to_user_id(instance, it.id);
+			event.scene_id = old_scene.id;
+			event.time_ms = (scene.server.clock * 1000).(int);
+			event.revive_count = it.server.revive_count;
+			event.death_count = it.server.death_count;
+			event.winner = it.id == scene.client.end_level.winner_id;
+			array_add(*instance.end_scene_events, event);
+		}
+	}
 
 	Scene.restart(scene, scene.params);
 	current_time := current_time_monotonic();
@@ -670,7 +707,7 @@ update_instance :: (instance: *Instance, dt: float32) {
 			dt := to_float64_seconds(t - scene.end_scene_countdown_time);
 			if dt >= scene.end_scene_countdown {
 				scene.end_scene_countdown_started = false;
-				move_playing_scene(instance, scene.next_id);
+				move_playing_scene(instance, scene.next_id, should_register=true);
 			}
 		}
 

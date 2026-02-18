@@ -240,6 +240,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		escape_args.sound_enabled = state.volume_on;
 		escape_args.keyboard_layout = state.keyboard_layout;
 		escape_args.shadows_enabled = state.shadows_enabled;
+		escape_args.lighting_enabled = state.light_enabled;
 		escape_args.shadow_samples_index = cast(int) state.shadow_samples;
 		escape_args.aa_mode_index = cast(int) state.aa_mode;
 		escape_args.particles_enabled = state.particles_enabled;
@@ -254,6 +255,9 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		state.render_throttle = ret.slowdown_enabled;
 		if ret.shadows_changed {
 			state.shadows_enabled = ret.shadows_enabled;
+		}
+		if ret.lighting_changed {
+			state.light_enabled = ret.lighting_enabled;
 		}
 		if ret.shadow_samples_changed {
 			state.shadow_samples = cast(type_of(state.shadow_samples)) ret.shadow_samples_index;
@@ -468,6 +472,7 @@ update_game_loop :: (app_user: *App_User) {
 		ntp.t3 = FLOAT64_MAX;
 		Scene.add(*process_response, state.scene.id, ntp);
 	}
+	state.scene.client.render_particles = app_user.state.particles_enabled;
 	Scene.update(*state.scene, controls.time, controls.delta_time, null);
 	update_news(*state.scene, controls.time, *state.news);
 
