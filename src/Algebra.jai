@@ -259,6 +259,28 @@ M4 :: struct(T: Type) {
 		v.w = M.data[idx + 3 * 4];
 		return v;
 	}
+
+	z_rotate :: (M: *M4($T), angle: T) {
+		c := cos(angle);
+		s := sin(angle);
+		for i: 0..3 {
+			x := M.data[i + 0 * 4];
+			y := M.data[i + 1 * 4];
+			M.data[i + 0 * 4] = x * c - y * s;
+			M.data[i + 1 * 4] = x * s + y * c;
+		}
+	}
+
+	z_rotate :: (M: *M4($T), cos_angle: T, sin_angle: T) {
+		c := cos_angle;
+		s := sin_angle;
+		for i: 0..3 {
+			x := M.data[i + 0 * 4];
+			y := M.data[i + 1 * 4];
+			M.data[i + 0 * 4] = x * c - y * s;
+			M.data[i + 1 * 4] = x * s + y * c;
+		}
+	}
 }
 
 M4d :: M4(float64);
@@ -304,6 +326,18 @@ axis_angle_matrix :: (axis: V3($T), angle: T) -> M4(T) {
 	M.data[2 + 0 * 4] = axis.z * axis.x * c1 - axis.y * s;
 	M.data[2 + 1 * 4] = axis.z * axis.y * c1 + axis.x * s;
 	M.data[2 + 2 * 4] = axis.z * axis.z * c1 + c;
+	M.data[3 + 3 * 4] = 1;
+	return M;
+}
+z_angle_matrix :: (angle: $T) -> M4(T) {
+	M: M4(T);
+	s := sin(angle);
+	c := cos(angle);
+	M.data[0 + 0 * 4] = c;
+	M.data[0 + 1 * 4] = -s;
+	M.data[1 + 0 * 4] = s;
+	M.data[1 + 1 * 4] = c;
+	M.data[2 + 2 * 4] = 1;
 	M.data[3 + 3 * 4] = 1;
 	return M;
 }
@@ -495,6 +529,48 @@ operator * :: (M: M4($T), v4: V4(T)) -> V4(T) {
 	v.z = dot(M.row(M, 2), v4);
 	v.w = dot(M.row(M, 3), v4);
 	return v;
+}
+
+compose_rotation :: (A: *M4($T), B: M4(T)) {
+	C: M4(T) = ---;
+
+	at :: (x: int, y: int) -> int {
+		return x + y * 4;
+	}
+
+	C.data[at(0, 0)] = A.data[at(0, 0)] * B.data[at(0, 0)];
+	C.data[at(0, 0)] += A.data[at(1, 0)] * B.data[at(0, 1)];
+	C.data[at(0, 0)] += A.data[at(2, 0)] * B.data[at(0, 2)];
+	C.data[at(0, 1)] = A.data[at(0, 0)] * B.data[at(1, 0)];
+	C.data[at(0, 1)] += A.data[at(1, 0)] * B.data[at(1, 1)];
+	C.data[at(0, 1)] += A.data[at(2, 0)] * B.data[at(1, 2)];
+	C.data[at(0, 2)] = A.data[at(0, 0)] * B.data[at(2, 0)];
+	C.data[at(0, 2)] += A.data[at(1, 0)] * B.data[at(2, 1)];
+	C.data[at(0, 2)] += A.data[at(2, 0)] * B.data[at(2, 2)];
+	C.data[at(1, 0)] = A.data[at(0, 1)] * B.data[at(0, 0)];
+	C.data[at(1, 0)] += A.data[at(1, 1)] * B.data[at(0, 1)];
+	C.data[at(1, 0)] += A.data[at(2, 1)] * B.data[at(0, 2)];
+	C.data[at(1, 1)] = A.data[at(0, 1)] * B.data[at(1, 0)];
+	C.data[at(1, 1)] += A.data[at(1, 1)] * B.data[at(1, 1)];
+	C.data[at(1, 1)] += A.data[at(2, 1)] * B.data[at(1, 2)];
+	C.data[at(1, 2)] = A.data[at(0, 1)] * B.data[at(2, 0)];
+	C.data[at(1, 2)] += A.data[at(1, 1)] * B.data[at(2, 1)];
+	C.data[at(1, 2)] += A.data[at(2, 1)] * B.data[at(2, 2)];
+	C.data[at(2, 0)] = A.data[at(0, 2)] * B.data[at(0, 0)];
+	C.data[at(2, 0)] += A.data[at(1, 2)] * B.data[at(0, 1)];
+	C.data[at(2, 0)] += A.data[at(2, 2)] * B.data[at(0, 2)];
+	C.data[at(2, 1)] = A.data[at(0, 2)] * B.data[at(1, 0)];
+	C.data[at(2, 1)] += A.data[at(1, 2)] * B.data[at(1, 1)];
+	C.data[at(2, 1)] += A.data[at(2, 2)] * B.data[at(1, 2)];
+	C.data[at(2, 2)] = A.data[at(0, 2)] * B.data[at(2, 0)];
+	C.data[at(2, 2)] += A.data[at(1, 2)] * B.data[at(2, 1)];
+	C.data[at(2, 2)] += A.data[at(2, 2)] * B.data[at(2, 2)];
+
+	for y: 0..2 {
+		for x: 0..2 {
+			A.data[at(x, y)] = C.data[at(x, y)];
+		}
+	}
 }
 
 v2 :: (v: float32) -> V2(float32) {
@@ -820,3 +896,49 @@ linear_step :: (x: float, edge0: float, edge1: float) -> float {
 	t := clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
 	return t;
 }
+
+// lut_sin_norm_angle :: (angle: float, $LUT: [N] float) -> float {
+// 	mul := +1;
+
+// 	if angle > PI {
+// 		mul = -1;
+// 		angle -= PI;
+// 	}
+
+// 	flip_idx := false;
+// 	if angle > PI / 2 {
+// 		flip_idx = true;
+// 		angle = PI / 2 - angle;
+// 	}
+
+// 	idx := (angle / (2 * PI)) * (LUT.len - 1);
+// 	low_idx := idx.(int);
+// 	high_idx := low_idx + 1;
+// 	lerp := idx - low_idx;
+
+// 	if flip_idx {
+// 		low_idx = LUT.len - low_idx;
+// 		high_idx = LUT.len - high_idx;
+// 		lerp = 1 - lerp;
+// 	}
+
+// 	s := LUT[low_idx] + (LUT[high_idx] - LUT[low_idx]) * lerp;
+// 	return s * mul;
+// }
+
+// fast_sin_cos_pos_angle :: (angle: float, $LUT_N: int) -> float, float {
+// 	lut :: #run {
+// 		lut: [LUT_N + 1] float;
+// 		for i: 0..LUT_N - 1 {
+// 			a := (PI64 * i / 2) / (LUT_N - 1.0);
+// 			lut[i] = sin(a);
+// 		}
+// 		lut[LUT_N] = 1.0;
+// 		return lut;
+// 	}
+
+// 	fmod_cycling(angle, 2 * PI);
+// 	sin := lut_sin_norm_angle(angle, lut);
+// 	cos := lut_sin_norm_angle(angle + PI / 2, lut);
+// 	return sin, cos;
+// }

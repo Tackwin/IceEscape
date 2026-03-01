@@ -89,11 +89,38 @@ App_User :: struct {
 	app_user.state.is_communication_established = app.platform.is_server_connected();
 	app_user.state.is_connected &= app_user.state.is_communication_established;
 
+
 	app.platform.get_frame_info(*app_user.allocated_frame_info);
 	defer app.platform.end_frame();
 	app_user.state.current_time = app_user.allocated_frame_info.time;
 	if app_user.allocated_frame_info.quit
 		return;
+
+	if app_user.state.is_communication_established {
+		if !app_user.state.is_connected {
+			since_last_try := to_float64_seconds(
+				app_user.state.current_time - app_user.state.last_connect_try
+			);
+			if since_last_try > 1.0 {
+				app_user.state.last_connect_try = app_user.state.current_time;
+				connect: Command.Connect;
+				connect.token = app.platform.get_token();
+				send_web_message(app.platform, app_user.state.current_time, make_command(connect));
+			}
+		}
+	} else {
+		if app.platform.is_released() {
+			since_last_try := to_float64_seconds(
+				app_user.state.current_time - app_user.state.last_establish_try
+			);
+			if since_last_try > 5.0 {
+				app_user.state.last_establish_try = app_user.state.current_time;
+				connection:, app_user.state.is_communication_established = app.platform.connect_server(
+					"tackwin.fr", 443, "wss"
+				);
+			}
+		}
+	}
 
 	GUI.begin_frame(*app_user.gui_state, app_user.allocated_frame_info, *app_user.controls, app_user.state.keyboard_layout);
 
@@ -177,15 +204,6 @@ App_User :: struct {
 	app_user.state.history_app_render_loop_dt[app_user.state.history_app_render_cursor] =
 		to_float64_seconds(start_time - app_user.state.render_loop_timestamp).(float32);
 	defer {
-		if app_user.state.render_throttle {
-			while true {
-				dt := to_float64_seconds(_app.platform.get_current_time() - app_user.state.render_loop_timestamp);
-				if (1000 * dt) > 60
-					break;
-				_app.platform.sleep(2);
-			}
-		}
-
 		app_user.state.render_loop_timestamp = start_time;
 		app_user.state.history_app_render_cursor += 1;
 		app_user.state.history_app_render_cursor %= app_user.state.history_app_render_loop_dt.count;
@@ -267,17 +285,20 @@ State :: struct {
 
 	received_command_history: [..] Command.payload.Kind;
 
-	history_app_update_loop_dt: [100] float;
+	history_app_update_loop_dt: [300] float;
 	history_app_update_cursor := 0;
 	update_loop_timestamp: Apollo_Time;
 
-	history_app_render_loop_dt: [100] float;
+	history_app_render_loop_dt: [300] float;
 	history_app_render_cursor := 0;
 	render_loop_timestamp: Apollo_Time;
 	
 	render_fps := false;
 	render_command_debug := false;
 	filter_command_debug: [#run enum_highest_value(Command.payload.Kind) + 1] bool;
+
+	last_connect_try: Apollo_Time;
+	last_establish_try: Apollo_Time;
 
 	render_throttle := false;
 

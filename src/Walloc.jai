@@ -14,13 +14,14 @@ __builtin_wasm_memory_size :: (index: s64) -> s64 #foreign #intrinsic "llvm.wasm
 __builtin_wasm_memory_grow :: (index: s64, delta: s64) -> s64 #foreign #intrinsic "llvm.wasm.memory.grow.i64";
 
 allocator :: Allocator.{allocator_proc, null};
-
+#add_context allocated_size: s64;
 allocator_proc :: (mode: Allocator_Mode, requested_size: s64, old_size: s64, old_memory: *void, allocator_data: *void) -> *void {
     if #complete mode == {
         case .STARTUP;      #through;
         case .SHUTDOWN;     #through;
         case .THREAD_START; #through;
         case .THREAD_STOP;
+            context.allocated_size = 0;
             return null;
 
         case .ALLOCATE; #through;
@@ -39,13 +40,20 @@ allocator_proc :: (mode: Allocator_Mode, requested_size: s64, old_size: s64, old
             // either (large object splitting/merging, large object decay into granules, granules
             // decay, etc.)
             result := malloc(requested_size);
+            if result {
+                context.allocated_size += requested_size;
+            }
             if mode == .RESIZE {
                 size_to_copy := min(old_size, requested_size);
                 if result && size_to_copy memcpy(result, old_memory, size_to_copy);
+                free(old_memory);
             }
             return result;
 
         case .FREE;
+            if old_memory {
+                context.allocated_size -= old_size;
+            }
             free(old_memory);
             return null;
 

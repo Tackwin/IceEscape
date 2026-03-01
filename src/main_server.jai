@@ -287,7 +287,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 				server.db,
 				"profile_passcodes",
 				DB_Profile_Passcode,
-				tprint("passcode = %", user.profile_id)
+				tprint("passcode = %", login.passcode)
 			);
 			
 			if passes.count == 0 {
@@ -296,10 +296,22 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 				append_queue(server, command, sender);
 			} else {
 				if passes[0].passcode == login.passcode {
+					user.profile_id = passes[0].id;
+					user.token = login.token;
+
+					token_store: DB_Profile_Token;
+					token_store.id = user.profile_id;
+					token_store.token = login.token.(u64);
+					store_database(
+						platform,
+						server.db,
+						"profile_tokens",
+						DB_Profile_Token.[ token_store ]
+					);
+
 					command: Command.Login;
 					command.feedback = .Accepted;
 					append_queue(server, command, sender);
-					user.profile_id = passes[0].id;
 				} else {
 					command: Command.Login;
 					command.feedback = .Wrong_Password;
@@ -407,6 +419,7 @@ WHERE_QUERY;
 			to_save.id = new_id;
 			to_save.author_profile_id = user.profile_id;
 			to_save.name.data = save_terrain.info.name.data;
+			to_save.created_ms = to_milliseconds(current_time_consensus());
 			for 0..save_terrain.info.name.count - 1 {
 				to_save.name.count = it;
 				if save_terrain.info.name.data[it] == 0
@@ -489,22 +502,42 @@ WHERE_QUERY;
 
 	ask_terrain_list := isa(cmd.payload, Command.Ask_List_Terrain);
 	if ask_terrain_list {
-		entries := load_database(
+		Info :: struct {
+			id: int;
+			name: string;
+			author_name: string;
+			created_ms: int;
+		};
+		entries := load_database_custom(
 			platform,
 			server.db,
-			"terrain_infos",
-			DB_Terrain_Infos,
-			ifx ask_terrain_list.filter.count > 0
-				then tprint("name LIKE '%1\%'", ask_terrain_list.filter)
+			Info,
+			tprint(#string SELECT_QUERY
+SELECT
+	ti.id,
+	ti.name,
+	u.username AS author_name,
+	ti.created_ms
+FROM terrain_infos ti
+LEFT JOIN profile_usernames u ON ti.author_profile_id = u.id
+%
+SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
+				then tprint("WHERE ti.name LIKE '%1\%'", ask_terrain_list.filter)
 				else ""
+			)
 		);
 
 		reply: Command.Ans_List_Terrain;
 		reply.terrains_id = NewArray(entries.count, int,, temp);
 		reply.terrains_name = NewArray(entries.count, string,, temp);
+		reply.authors_name = NewArray(entries.count, string,, temp);
+		reply.creation_time_ms = NewArray(entries.count, s64,, temp);
+	
 		for 0..entries.count - 1 {
 			reply.terrains_id[it] = entries[it].id;
 			reply.terrains_name[it] = tprint("%", entries[it].name);
+			reply.authors_name[it] = tprint("%", entries[it].author_name);
+			reply.creation_time_ms[it] = entries[it].created_ms;
 		}
 		append_queue(server, reply, sender);
 		return true;
@@ -656,7 +689,15 @@ WHERE_QUERY;
 			params: Scene.Scene_Parameters;
 			params.auto_revive = create_inst.auto_revive;
 
-			init_instance(*server.instances[server.instance_count]);
+			created := init_instance_with_roster(
+				server, server.instances.data + server.instance_count, 2, platform
+			);
+			if !created {
+				ans_create_instance: Command.Ans_Create_Instance;
+				ans_create_instance.reason = .Bugged;
+				append_queue(server, ans_create_instance, sender);
+				return true;
+			}
 			server.instances[server.instance_count].scene_parameters = params;
 			server.instances[server.instance_count].id = server.instance_generation;
 			memcpy(
@@ -690,13 +731,12 @@ WHERE_QUERY;
 
 init_instance_with_roster :: (
 	server: *Server, instance: *Instance, roster_id: int, platform: *Platform
-) {
+) -> bool {
 	rosters := load_database(
 		platform, server.db, "terrain_rosters", DB_Terrain_Roster, tprint("id = %", roster_id)
 	);
 	if rosters.count == 0 {
-		init_instance(instance);
-		return;
+		return false;
 	}
 
 	roster := rosters[0];
@@ -712,8 +752,23 @@ init_instance_with_roster :: (
 
 		if terrain_ascii.count == 0
 			continue;
+
+		terrain_info := load_database(
+			platform,
+			server.db,
+			"terrain_infos",
+			DB_Terrain_Infos,
+			tprint("id = %", it)
+		);
 		
-		add_scene(instance, terrain_ascii[0].ascii);
+		if terrain_info.count == 0
+			continue;
+
+		info: Scene.Scene_Info;
+		info.id = terrain_info[0].id;
+		info.author_profile_id = terrain_info[0].author_profile_id;
+
+		add_scene(instance, terrain_ascii[0].ascii, info);
 	}
 	if instance.scenes.count > 0 {
 		instance.pick_scene_id = instance.scenes[0].id;
@@ -723,6 +778,7 @@ init_instance_with_roster :: (
 		instance.playing_scene_id = instance.scenes[0].next_id;
 	}
 	instance.last_activity_time = current_time_monotonic();
+	return true;
 }
 
 handle_instance_events :: (server: *Server, instance: *Instance, platform: *Platform) {
@@ -897,13 +953,13 @@ prefill_fixed_instances :: (server: *Server, platform: *Platform) {
 
 	server.instances[0].id = server.instance_generation;
 	string_to_array("Hades", server.instances[0].name);
-	init_instance_with_roster(server, *server.instances[0], 1, platform);
+	init_instance_with_roster(server, *server.instances[0], 2, platform);
 	server.instance_generation += 1;
 
 	server.instances[1].id = server.instance_generation;
 	server.instances[1].scene_parameters.auto_revive = true;
 	string_to_array("Olympus", server.instances[1].name);
-	init_instance_with_roster(server, *server.instances[1], 1, platform);
+	init_instance_with_roster(server, *server.instances[1], 2, platform);
 	server.instance_generation += 1;
 }
 
@@ -1026,6 +1082,7 @@ ensure_database :: (app: *App) {
 				author_profile_id INTEGER,
 				FOREIGN KEY(id) REFERENCES terrain_ids(id) ON DELETE CASCADE
 			);
+			ALTER TABLE terrain_infos ADD COLUMN created_ms INTEGER DEFAULT 0;
 		QUERY
 	);
 	exec_database(
@@ -1067,8 +1124,8 @@ ensure_database :: (app: *App) {
 		QUERY
 	);
 
-	embed_database_default_rosters(app);
 	embed_database_default_terrains(app);
+	embed_database_default_rosters(app);
 }
 
 App_User :: struct {
@@ -1093,6 +1150,7 @@ WATCH_CHANGE :: true;
 	}
 
 	app_user.server.tick_period.last = current_time_monotonic();
+	ensure_database(app);
 	prefill_fixed_instances(*app_user.server, app.platform);
 
 	app_user.server.rng = Rand.seed(to_microseconds(app_user.server.tick_period.last));
@@ -1102,7 +1160,6 @@ WATCH_CHANGE :: true;
 		add_directories(*app_user.server.file_watcher, "../assets/terrain");
 	}
 
-	ensure_database(app);
 }
 
 #program_export "app_reload" app_reload :: (app: *App) {

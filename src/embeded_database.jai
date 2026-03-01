@@ -1,3 +1,5 @@
+#import "String";
+
 embed_database_default_rosters :: (app: *App) {
 	app_user := app.user_data.(*App_User);
 	
@@ -5,9 +7,60 @@ embed_database_default_rosters :: (app: *App) {
 		app.platform,
 		app_user.server.db,
 		#string QUERY
-			INSERT INTO terrain_rosters (name, terrain_ids) VALUES ("Base", "[100, 101, 102, 103, 104, 105, 106]")
+			INSERT INTO terrain_rosters (id, name, terrain_ids) VALUES (
+				1, "Base", "[100, 101, 102, 103, 104, 105, 106]"
+			) ON CONFLICT(id) DO UPDATE SET
+				terrain_ids = excluded.terrain_ids,
+				name = excluded.name
+			;
 		QUERY
 	);
+
+	roster: [] string = .[
+		"pick",
+		"good_intro",
+		"good_too",
+		"good_ice",
+		"good_night",
+		"good_three",
+		"good_pounding",
+		"good_light",
+		"good_bomb",
+		"good_steady",
+		"good_turn",
+		"big_round",
+		"roundabout",
+		"funny",
+		"chamber",
+		"buzz",
+		"right",
+		"frogger",
+		"here_and_there",
+		"volcano",
+		"tetris",
+	];
+
+	sb: String_Builder;
+	print_to_builder(*sb, "INSERT INTO terrain_rosters (id, name, terrain_ids) VALUES (2, \"File\", \"[");
+	sep := "";
+	for roster {
+		info := load_database(
+			app.platform,
+			app_user.server.db,
+			"terrain_infos",
+			DB_Terrain_Infos,
+			tprint("name = \"%\"", it)
+		);
+
+		if info.count == 0
+			continue;
+		
+		print_to_builder(*sb, "%1%2", sep, info[0].id);
+		sep = ", ";
+	}
+	print_to_builder(*sb, "]\") ");
+	print_to_builder(*sb, "ON CONFLICT(id) DO UPDATE SET terrain_ids = excluded.terrain_ids, name = excluded.name;");
+	exec_database(app.platform, app_user.server.db, builder_to_string(*sb));
 }
 
 embed_database_default_terrains :: (app: *App) {
@@ -23,12 +76,8 @@ embed_database_default_terrains :: (app: *App) {
 		to_save := *to_saves[0];
 		to_save.id = new_id;
 		to_save.author_profile_id = -1;
-		to_save.name.data = name.data;
-		for 0..name.count - 1 {
-			to_save.name.count = it;
-			if name.data[it] == 0
-				break;
-		}
+		to_save.name = name;
+		to_save.created_ms = 0;
 
 		store_database(platform, server.db, "terrain_infos", to_saves);
 
@@ -50,6 +99,14 @@ embed_database_default_terrains :: (app: *App) {
 
 	user := 200;
 	for terrains {
+		if !ends_with(it, ".terrain")
+			continue;
+
+		name: string;
+		name.data = it.data + find_index_from_right(it, #char "/") + 1;
+		name.count = it.count - xx (name.data - it.data);
+		name.count = find_index_from_right(name, #char ".");
+
 		length := platform.read_entire_file(it, .[]);
 		data := NewArray(length, u8,, temp);
 		success := platform.read_entire_file(it, data);
@@ -57,7 +114,8 @@ embed_database_default_terrains :: (app: *App) {
 			ascii: string;
 			ascii.data = data.data;
 			ascii.count = data.count;
-			save(user, ascii, it);
+
+			save(user, ascii, name);
 			user += 1;
 		}
 	}

@@ -316,6 +316,17 @@ default_params :: (state: *GUI_State) -> *GUI_State.Default_Params {
 move_cursor :: (state: *GUI_State, delta: V2f) {
 	default_params(state).cursor += delta;
 }
+space :: (state: *GUI_State, amount: float) {
+	if default_params(state).direction == .Right {
+		default_params(state).cursor.x += amount;
+	} else if default_params(state).direction == .Left {
+		default_params(state).cursor.x -= amount;
+	} else if default_params(state).direction == .Down {
+		default_params(state).cursor.y -= amount;
+	} else if default_params(state).direction == .Up {
+		default_params(state).cursor.y += amount;
+	}
+}
 move_cursor :: (state: *GUI_State, delta: float) {
 	if default_params(state).direction == .Right {
 		default_params(state).cursor.x += delta;
@@ -1017,7 +1028,7 @@ push_ms_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, 
 	for data {
 		ms := 1000 * it;
 		h := project(ms);
-		w := size.x / data.count - 1;
+		w := max(size.x / data.count - 1, 1);
 
 		x := (it_index * size.x) / data.count;
 
@@ -1224,9 +1235,30 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 		scale=16,
 		color = GRAY_00
 	);
+
+	wr_string := "WR xx:xx s xx ms";
+	{
+		wr_time_ms := scene.client.leaderboard.wr_time_ms;
+		wr_minutes := wr_time_ms / 60000;
+		wr_seconds := (wr_time_ms / 1000) % 60;
+		wr_milliseconds := wr_time_ms % 1000;
+
+		username := "Anonymous";
+		if scene.client.leaderboard.wr_username.count > 0 {
+			username = scene.client.leaderboard.wr_username;
+		}
+
+		wr_string = tprint(
+			"WR %:%s %ms (%)",
+			formatInt(wr_minutes.(int), minimum_digits = 3, padding = #char "_"),
+			formatInt(wr_seconds.(int), minimum_digits = 2, padding = #char "_"),
+			formatInt(wr_milliseconds.(int), minimum_digits = 3, padding = #char "_"),
+			username
+		);
+	}
 	atom_label(
 		state,
-		"WR xx:xx s xx ms",
+		wr_string,
 		v2(window_aabb.min.x + 3 * width(window_aabb) / 4, top(window_aabb) - 64 - 64 - 64 - 32 - 16),
 		z = 11.0,
 		align=.Center,
@@ -2222,6 +2254,7 @@ begin_window :: (
 	id := "window",
 	z := 0.0
 ) -> Window {
+	push_id(gui, string_id(id));
 
 	state, comp := widget(gui, id, Window);
 	comp.physical = .Solid;
@@ -2235,11 +2268,18 @@ begin_window :: (
 	state.pos = lower_left;
 	state.size = size;
 
+	push_default_params(gui);
+	default_params(gui).cursor = lower_left + v2(8.0, size.y - 8.0);
+	default_params(gui).align = Align.Top_Left;
+	default_params(gui).z = z + 0.02;
+	default_params(gui).direction = .Down;
+
 	return state;
 }
 
 end_window :: (gui: *GUI_State, id := "window") {
-	// Nothing for now
+	pop_default_params(gui);
+	pop_id(gui);
 }
 
 Atom_Label :: struct {
@@ -2259,11 +2299,13 @@ _atom_label :: (
 	_z := FLOAT32_MAX,
 	_align := Align.Undefined,
 	_pos: V2f = .{ FLOAT32_MAX, FLOAT32_MAX },
-	generate_offsets := false
+	generate_offsets := false,
+	offset_pos := V2f.{ 0, 0 }
 ) -> Atom_Label {
 	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
 	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
 	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+	pos += offset_pos;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
@@ -2631,6 +2673,16 @@ atom_input_text :: (
 				return builder_to_string(*sb);
 			};
 		}
+		handle_add(xx Platform.Key._0, "0");
+		handle_add(xx Platform.Key._1, "1");
+		handle_add(xx Platform.Key._2, "2");
+		handle_add(xx Platform.Key._3, "3");
+		handle_add(xx Platform.Key._4, "4");
+		handle_add(xx Platform.Key._5, "5");
+		handle_add(xx Platform.Key._6, "6");
+		handle_add(xx Platform.Key._7, "7");
+		handle_add(xx Platform.Key._8, "8");
+		handle_add(xx Platform.Key._9, "9");
 		handle_add(xx Platform.Key.Space, " ");
 		handle_add(xx Platform.Key.Period, ".");
 
@@ -2664,7 +2716,36 @@ Atom_Table :: struct {
 
 	just_selected_row_index := -1;
 	selected_row_index := -1;
+
+	clicked_row_index := -1;
+	clicked_col_index := -1;
 }
+table :: (
+	gui: *GUI_State,
+	rows: [] $T,
+	size: V2f,
+	id := "table",
+	row_height := 26,
+	_pos := V2f.{ FLOAT32_MAX, FLOAT32_MAX },
+	_z := FLOAT32_MAX,
+	_align := Align.Undefined
+) -> Atom_Table {
+	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
+	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
+	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	return atom_table(
+		gui,
+		pos,
+		size,
+		rows,
+		id,
+		row_height,
+		z,
+		align
+	);
+}
+
 atom_table :: (
 	gui: *GUI_State,
 	pos: V2f,
@@ -2703,6 +2784,8 @@ atom_table :: (
 		size := -1;
 		offset: u64;
 		align_right := false;
+		align_center := false;
+		button := false;
 	}
 	t_info := type_info(T);
 	cols := NewArray(t_info.members.count, Cols,, temp);
@@ -2720,8 +2803,16 @@ atom_table :: (
 				continue;
 			if scan2(note, "size(%)", *it.size)
 				continue;
+			if equal(note, "button") {
+				it.button = true;
+				continue;
+			}
 			if equal(note, "align(Right)") {
 				it.align_right = true;
+				continue;
+			}
+			if equal(note, "align(Center)") {
+				it.align_center = true;
 				continue;
 			}
 		}
@@ -2732,7 +2823,14 @@ atom_table :: (
 	for * cols {
 		cursor.x += 4;
 		label := atom_label(
-			gui, it.name, cursor, 14, align = .Center_Left, z = 0.25, color = GRAY_00, id = xx it_index
+			gui,
+			it.name,
+			cursor,
+			14,
+			align = .Center_Left,
+			z = z + 0.25,
+			color = GRAY_00,
+			id = xx it_index
 		);
 		if it.size < 0 {
 			it.size = (label.aabb_max.x - label.aabb_min.x + 16).(s64);
@@ -2752,8 +2850,8 @@ atom_table :: (
 	pop_id(gui);
 
 	cursor = V2f.{ lower_left.x + 4, lower_left.y + size.y - row_height / 2 - row_height };
-	for row: rows {
-		push_id(gui, it_index);
+	for row, row_index: rows {
+		push_id(gui, row_index);
 		defer pop_id(gui);
 
 		cursor.x = lower_left.x + 4;
@@ -2770,10 +2868,31 @@ atom_table :: (
 				label_pos.x = cursor.x + it.size;
 				align = Align.Center_Right;
 			}
-
-			label := atom_label(
-				gui, str, label_pos, 14, align = align, z = 0.25, color = GRAY_00, id = xx it_index
-			);
+			if it.align_center {
+				label_pos.x = cursor.x + it.size / 2;
+				align = Align.Center;
+			}
+			
+			if it.button {
+				clicked := text_button(
+					gui, str, label_pos, z = z + 0.25, id = tprint("%", it_index), align = align
+				);
+				if clicked {
+					ret.clicked_row_index = row_index;
+					ret.clicked_col_index = it_index;
+				}
+			} else {
+				atom_label(
+					gui,
+					str,
+					label_pos,
+					14,
+					align = align,
+					z = z + 0.25,
+					color = GRAY_00,
+					id = xx it_index
+				);
+			}
 
 			cursor.x += it.size + 4;
 		}
@@ -2786,13 +2905,13 @@ atom_table :: (
 		background_color := V4f.{ 0, 0, 0, 0 };
 		
 
-		if state.selected_row_index == it_index {
+		if state.selected_row_index == row_index {
 			background_color = GRAY_60;
 		}
 		if point_aabb(gui.controls.mouse_pos, row_aabb_min, row_aabb_max) {
 			if gui.controls.just_pressed[Key.MouseLeft] {
-				state.selected_row_index = it_index;
-				ret.just_selected_row_index = it_index;
+				state.selected_row_index = row_index;
+				ret.just_selected_row_index = row_index;
 			} else {
 				background_color = GRAY_30;
 			}
@@ -2848,6 +2967,7 @@ Text_Button :: struct {
 	border_color: V4f = V4f.{ 0, 0, 0, 1 };
 
 	clicked := false;
+	pressed := false;
 }
 
 _text_button :: (
@@ -2931,6 +3051,7 @@ text_button :: (
 
 	state.last_hover = widget.hovered;
 	state.clicked = widget.released;
+	state.pressed = widget.hovered && gui.controls.pressed[Key.MouseLeft];
 
 	return state.clicked, state, widget;
 }

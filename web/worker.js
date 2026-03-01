@@ -18,7 +18,7 @@ let jai_exports; // contains procedures and globals from the loaded wasm module
 
 const jai_imports = {};
 
-self.onmessage = async e => {
+self.onmessage = e => {
 	if (e.data.module && e.data.memory) {
 		jai_imports.memory = e.data.memory;
 		const imports = {
@@ -30,27 +30,21 @@ self.onmessage = async e => {
 				},
 			}),
 		};
-		workerInstance = await WebAssembly.instantiate(e.data.module, imports);
-		jai_exports = workerInstance.exports;
-		controls_buffer_data = Number(jai_exports.wasm_get_controls_buffer());
+		WebAssembly.instantiate(e.data.module, imports).then(instance => {
+			workerInstance = instance;
 
-		postMessage({ ready: true });
+			jai_exports = workerInstance.exports;
+			controls_buffer_data = Number(jai_exports.wasm_get_controls_buffer());
+	
+			postMessage({ ready: true });
+		});
 	}
 	if (e.data.start) {
 		started = true;
-		const worker_loop = WebAssembly.promising(workerInstance.exports.wasm_worker_loop);
 		if (workerInstance)
-			setInterval(async () => {
-				await worker_loop();
-				// await start();
-			}, 0)
+			setInterval(workerInstance.exports.wasm_worker_loop, 0)
 	}
 }
-
-// const start = async () => {
-// 	while (true) {
-// 	}
-// }
 
 
 let web_buffer = new Uint8Array(1024*1024*32);
@@ -65,6 +59,7 @@ jai_imports.js_connect_server = (
 	const uri = `${protocol}://${address}:${port}/ws`;
 	console.log(`Connecting to server at ${uri}...`);
 	websocket = new WebSocket(uri);
+	websocket.binaryType = "arraybuffer";
 	websocket.onopen = () => {
 		console.log("Websocket server opened !");
 	}
@@ -74,12 +69,10 @@ jai_imports.js_connect_server = (
 	websocket.onclose = (e) => {
 		console.log("Websocket close", e);
 	}
-	websocket.onmessage = async (event) => {
+	websocket.onmessage = (event) => {
         // Append event.data to web_buffer at web_buffer_cursor
-        const blob = event.data;
-        const buffer = await blob.arrayBuffer();
+        const buffer = event.data;
         const data = new Uint8Array(buffer);
-        // const data = new Uint8Array(await event.data.arrayBuffer());
         if (web_buffer_cursor + data.length > web_buffer.length) {
             console.error("Web buffer overflow, dropping message");
             return;
@@ -96,6 +89,13 @@ jai_imports.js_is_server_connected = (connected_ptr) => {
 		connected = 1;
 	}
 	setU32(connected_ptr, 0, connected);
+}
+
+jai_imports.js_is_released = (released_ptr) => {
+	if (location.hostname == "tackwin.fr")
+		setU32(released_ptr, 0, 1);
+	else
+		setU32(released_ptr, 0, 0);
 }
 
 const copy_array_to_js = (count, data) => {
@@ -127,9 +127,9 @@ jai_imports.js_send_web_messages = (data, length, data_indices, count_indices) =
 	}
 };
 
-jai_imports.js_sleep = new WebAssembly.Suspending(async (ms) => {
-	await new Promise(r => setTimeout(r, Number(ms)));
-})
+jai_imports.js_sleep = (ms) => {
+	console.warn("js_sleep is not implemented in worker, ignoring");
+}
 
 jai_imports.jsDontOptimize = (count_ptr) => {};
 
@@ -161,6 +161,31 @@ jai_imports.js_get_current_time_monotonic = (low_ptr, high_ptr) => {
 	setU64(low_ptr, 0, low);
 	setU64(high_ptr, 0, high);
 }
+jai_imports.js_to_calendar = (time_low, time_high, out) => {
+	const epoch = new Date("1969-07-20T20:17:40Z").getTime();
+	const fs = (BigInt(time_high) << 64n) | BigInt(time_low);
+	const ms = Number(fs / 1000n / 1000n / 1000n / 1000n);
+	const date = new Date(epoch + ms);
+	// In local time
+	const year = date.getFullYear();
+	const month0Indexed = date.getMonth();
+	const dayMonth = date.getDate();
+	const dayWeek = date.getDay();
+	const hour = date.getHours();
+	const minute = date.getMinutes();
+	const second = date.getSeconds();
+	const millisecond = date.getMilliseconds();
+	
+	setU32(out, 0, year);
+	setU8(out, 4, month0Indexed);
+	setU8(out, 5, dayMonth);
+	setU8(out, 6, dayWeek);
+	setU8(out, 7, hour);
+	setU8(out, 8, minute);
+	setU8(out, 9, second);
+	setU16(out, 10, millisecond);
+}
+
 const Key_A = 0;
 const Key_B = 1;
 const Key_C = 2;
@@ -237,72 +262,8 @@ jai_imports.js_set_token = (token) => {
 	postMessage({ set_token: token });
 }
 
-jai_imports.js_load_audio = async (params_ptr) => {
-	const data = getU64(params_ptr, 0);
-	const size = getU64(params_ptr, 8);
-	const id = getU64(params_ptr, 16);
-	const compressed = getU64(params_ptr, 24) != 0;
-
-	const src = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(size));
-	const dst = new Uint8Array(src); // copy the data to a new buffer so that it doesn't get modified by the wasm module while we're using it
-	const buffer = await new Blob([dst]).arrayBuffer();
-
-	postMessage({ load_audio: {
-		buffer,
-		audio_id: id
-	} });
-}
-
-jai_imports.js_play_audio = (params_ptr) => {
-	const id = getU64(params_ptr, 0);
-	const x = getF32(params_ptr, 8);
-	const y = getF32(params_ptr, 12);
-	const z = getF32(params_ptr, 16);
-	const volume = getF32(params_ptr, 20);
-	const pitch = getF32(params_ptr, 24);
-	let loop = getU32(params_ptr, 28) != 0;
-	const kind = getS32(params_ptr, 32);
-	const fade_in = getS32(params_ptr, 36);
-	const exponent = getF32(params_ptr, 40);
-	const sound_id = getU64(params_ptr, 48);
-	const delay = getF32(params_ptr, 56);
-
-	postMessage({ play_audio: {
-		audio_id: id, x, y, z, volume, pitch, loop, kind, fade_in, exponent, delay, sound_id
-	} });
-}
-
-jai_imports.js_volume_audio = (params_ptr) => {
-	const volume = getF32(params_ptr, 0);
-	postMessage({ volume_audio: volume });
-}
-
-jai_imports.js_set_sound = (params_ptr) => {
-	const sound_idx = getU64(params_ptr, 0);
-	const x = getF32(params_ptr, 8);
-	const y = getF32(params_ptr, 12);
-	const z = getF32(params_ptr, 16);
-	const volume = getF32(params_ptr, 20);
-	const pitch = getF32(params_ptr, 24);
-	const playing = getU32(params_ptr, 28);
-	const looping = getU32(params_ptr, 32);
-
-	postMessage({ set_sound: {
-		sound_idx, x, y, z, volume, pitch, playing, looping
-	} });
-}
-
-jai_imports.js_set_listener_info = (params_ptr) => {
-	const x = getF32(params_ptr, 0);
-	const y = getF32(params_ptr, 4);
-	const z = getF32(params_ptr, 8);
-	const forward_x = getF32(params_ptr, 12);
-	const forward_y = getF32(params_ptr, 16);
-	const forward_z = getF32(params_ptr, 20);
-
-	postMessage({ set_listener_info: {
-		x, y, z, forward_x, forward_y, forward_z
-	} });
+jai_imports.js_load_audio = () => {
+	console.error("js_load_audio not implemented in worker");
 }
 
 jai_imports.memcmp = (a, b, count) => {
@@ -431,6 +392,15 @@ const setU8 = (ptr, offset, value) => {
 		data_view = new DataView(jai_exports.memory.buffer);
 	}
 	data_view.setUint8(Number(ptr) + Number(offset), Number(value));
+}
+
+const setU16 = (ptr, offset, value) => {
+	try {
+		data_view.byteLength;
+	} catch {
+		data_view = new DataView(jai_exports.memory.buffer);
+	}
+	data_view.setUint16(Number(ptr) + Number(offset), Number(value), true);
 }
 
 const setU32 = (ptr, offset, value) => {

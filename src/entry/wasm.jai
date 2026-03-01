@@ -36,6 +36,13 @@ wasm_get_current_time :: () -> Apollo_Time {
 	js_get_current_time_monotonic((*now).(*u64), (*now).(*u64) + 1);
 	return now;
 }
+wasm_to_calendar :: (time: Apollo_Time) -> Calendar_Time {
+	js_to_calendar :: (time_low: u64, time_high: s64, out: *void) #foreign;
+	cal: Calendar_Time;
+	cal.time_zone = .LOCAL;
+	js_to_calendar(time.low, time.high, *cal);
+	return cal;
+}
 
 wasm_sleep :: (ms: int) {
 	js_sleep :: (ms: int) #foreign;
@@ -72,6 +79,7 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	info.mouse_position.x = xx (controls_buffer.data + Mouse_X).(*u32).*;
 	info.mouse_position.y = xx (controls_buffer.data + Mouse_Y).(*u32).*;
 	info.mouse_wheel = xx (controls_buffer.data + Mouse_Wheel).(*s32).* / 1000;
+	(controls_buffer.data + Mouse_Wheel).(*s32).* = 0;
 
 	dim: [4] u32;
 	ww := dim[2];
@@ -115,6 +123,52 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	}
 }
 
+Audio_Command :: struct {
+	kind: enum u64 {
+		Play :: 0;
+		Set  :: 1;
+		Listener :: 2;
+	} // 8
+
+	play: struct {
+		id: s64;
+		sound_id: s64;
+		x: float32;
+		y: float32;
+		z: float32;
+		volume: float32;
+		pitch: float32;
+		repeating: u32;
+		kind: s32;
+		fade_in: s32;
+		exponent: float32;
+		delay: float32;
+	} // 56
+
+	set: struct {
+		sound_id: s64;
+		x: float32;
+		y: float32;
+		z: float32;
+		volume: float32;
+		pitch: float32;
+		playing: u32;
+		looping: u32;
+	} // 36
+
+	listener: struct {
+		x: float32;
+		y: float32;
+		z: float32;
+		dx: float32;
+		dy: float32;
+		dz: float32;
+		volume: float32;
+	} // 28
+} // 128
+
+audio_commands: [] Audio_Command;
+audio_command_cursor: *s64;
 
 audio_generation := 0;
 load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_ref {
@@ -134,7 +188,9 @@ load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_r
 	params.id = audio_generation;
 
 	out.id = audio_generation;
-	return js_load_audio(*params);
+	ret := js_load_audio(*params);
+	print("Loaded audio with id % and got back ref %\n", out.id, ret);
+	return ret;
 }
 
 wasm_wait :: (promise: Platform.extern_ref) {
@@ -144,89 +200,56 @@ wasm_wait :: (promise: Platform.extern_ref) {
 
 sound_generation := 0;
 play_audio :: (audio: Audio, position: V3f) -> Sound {
-	Params :: struct {
-		id: s64;
-		x: float32;
-		y: float32;
-		z: float32;
-		volume: float32;
-		pitch: float32;
-		repeating: u32;
-		kind: s32;
-		fade_in: s32;
-		exponent: float32;
-
-		sound_id: s64;
-
-		delay: float32;
-	}
-
 	sound_generation += 1;
-	js_play_audio :: (params: *Params) #foreign;
 	sound: Sound;
-	params: Params;
-	params.id = xx audio.id;
-	params.x = xx position.x;
-	params.y = xx position.y;
-	params.z = xx position.z;
-	params.volume = xx audio.volume;
-	params.pitch = xx audio.pitch;
-	params.repeating = xx audio.repeating;
-	params.kind = xx audio.kind;
-	params.fade_in = xx audio.fade_in;
-	params.sound_id = xx sound_generation;
-	params.exponent = xx audio.exponent;
-	params.delay = xx audio.delay;
-	js_play_audio(*params);
-
 	sound.audio_id = audio.id;
 	sound.id = sound_generation;
 	sound.playing = true;
 	sound.position = position;
 	sound.loop = audio.repeating || audio.kind == .Music;
+
+	audio_command_cursor.* += 1;
+	cmd := *audio_commands[(audio_command_cursor.* - 1) % audio_commands.count];
+	cmd.kind = .Play;
+	cmd.play.id = xx audio.id;
+	cmd.play.x = sound.position.x;
+	cmd.play.y = sound.position.y;
+	cmd.play.z = sound.position.z;
+	cmd.play.volume = xx audio.volume;
+	cmd.play.pitch = xx audio.pitch;
+	cmd.play.repeating = xx audio.repeating;
+	cmd.play.kind = xx audio.kind;
+	cmd.play.fade_in = xx audio.fade_in;
+	cmd.play.exponent = xx audio.exponent;
+	cmd.play.sound_id = sound.id;
+	cmd.play.delay = xx audio.delay;
+
 	return sound;
 }
 set_sound :: (sound: Sound) {
-	Params :: struct {
-		sound_id: s64;
-		x: float32;
-		y: float32;
-		z: float32;
-		volume: float32;
-		pitch: float32;
-		playing: u32;
-		looping: u32;
-	}
-	js_set_sound :: (params: *Params) #foreign;
-	params: Params;
-	params.sound_id = xx sound.id;
-	params.x = xx sound.position.x;
-	params.y = xx sound.position.y;
-	params.z = xx sound.position.z;
-	params.volume = xx sound.volume;
-	params.pitch = xx sound.pitch;
-	params.playing = xx sound.playing;
-	params.looping = xx sound.loop;
-	js_set_sound(*params);
+	audio_command_cursor.* += 1;
+	cmd := *audio_commands[(audio_command_cursor.* - 1) % audio_commands.count];
+	cmd.kind = .Set;
+	cmd.set.sound_id = sound.id;
+	cmd.set.x = sound.position.x;
+	cmd.set.y = sound.position.y;
+	cmd.set.z = sound.position.z;
+	cmd.set.volume = sound.volume;
+	cmd.set.pitch = sound.pitch;
+	cmd.set.playing = xx sound.playing;
+	cmd.set.looping = xx sound.loop;
 }
 set_listener_info :: (listener: Listener) {
-	Params :: struct {
-		x: float32;
-		y: float32;
-		z: float32;
-		dx: float32;
-		dy: float32;
-		dz: float32;
-	}
-	js_set_listener_info :: (params: *Params) #foreign;
-	params: Params;
-	params.x = xx listener.position.x;
-	params.y = xx listener.position.y;
-	params.z = xx listener.position.z;
-	params.dx = xx listener.direction.x;
-	params.dy = xx listener.direction.y;
-	params.dz = xx listener.direction.z;
-	js_set_listener_info(*params);
+	audio_command_cursor.* += 1;
+	cmd := *audio_commands[(audio_command_cursor.* - 1) % audio_commands.count];
+	cmd.kind = .Listener;
+	cmd.listener.x = listener.position.x;
+	cmd.listener.y = listener.position.y;
+	cmd.listener.z = listener.position.z;
+	cmd.listener.dx = listener.direction.x;
+	cmd.listener.dy = listener.direction.y;
+	cmd.listener.dz = listener.direction.z;
+	cmd.listener.volume = listener.volume;
 }
 
 wasm_end_frame ::  () {
@@ -262,6 +285,13 @@ wasm_is_server_connected :: () -> bool {
 	return connected != 0;
 }
 
+wasm_is_released :: () -> bool {
+	js_is_released :: (success: *s32) #foreign;
+	released: s32;
+	js_is_released(*released);
+	return released != 0;
+}
+
 init_platform :: () -> Platform {
 
 	// window := create_window(1366, 768, "Ice Escape");
@@ -282,6 +312,8 @@ init_platform :: () -> Platform {
 	platform.free_image = wasm_free_image;
 	platform.get_frame_info = wasm_get_frame_info;
 	platform.get_current_time = wasm_get_current_time;
+	platform.is_released = wasm_is_released;
+	platform.to_calendar = wasm_to_calendar;
 	platform.end_frame = wasm_end_frame;
 	platform.sleep = wasm_sleep;
 	platform.send_web_message = send_web_message;
@@ -292,19 +324,6 @@ init_platform :: () -> Platform {
 	platform.play_audio = play_audio;
 	platform.set_sound = set_sound;
 	platform.set_listener_info = set_listener_info;
-	platform.volume_audio = (x: float) -> float {
-		X := x;
-		js_volume_audio :: (volume: *float) #foreign;
-		// Clamp the volume between 0.0 and 1.0
-		if X < 0.0 {
-			X = 0.0;
-		} else if X > 1.0 {
-			X = 1.0;
-		}
-
-		js_volume_audio(*X);
-		return X;
-	};
 
 
 	#insert #run -> string {
@@ -1210,7 +1229,11 @@ update_thread_temporary_storage_data: [TEMPORARY_STORAGE_SIZE] u8 #align 64;
 	app.allocator = context.allocator;
 	app.user_data = null;
 
-	controls_buffer = NewArray(1024 * 4, u8);
+	controls_buffer = NewArray(1024 + 1024 * size_of(Audio_Command), u8);
+	audio_command_cursor = xx (controls_buffer.data + 1024);
+	audio_command_cursor.* = 0;
+	audio_commands.data = xx (controls_buffer.data + 1024 + size_of(Audio_Command));
+	audio_commands.count = 1024;
 }
 #program_export "wasm_init" wasm_init :: () #c_call {
 	push_context, defer_pop main_thread_wasm_context;
@@ -1236,15 +1259,6 @@ update_thread_temporary_storage_data: [TEMPORARY_STORAGE_SIZE] u8 #align 64;
 	app_update_loop(*app);
 }
 
-// main :: () {
-
-// 	while (app_loop(*app)) {
-// 		// Main loop
-// 	}
-
-// 	app_quit(*app);
-// 	exit_platform(platform);
-// }
 // We expose malloc to just use the default allocator with a fresh context so that our c code 
 // has a usable malloc/realloc/free it can use whenever it wants and you can't accidentaly
 // malloc something with temporary storage as that's not something you can do on other platforms (yet?)
@@ -1289,7 +1303,6 @@ jai_default_free :: (memory: *void) #c_call {
 	push_context, defer_pop ctx.*;
     Basic :: #import "Basic";
     ptr := Basic.alloc(size);
-	print("allocated % bytes at %\n", size, ptr);
 	return ptr;
 }
 

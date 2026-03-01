@@ -101,8 +101,10 @@ process_game :: (
 	sync_scene: *Command.Sync_Scene = isa(command.payload, Command.Sync_Scene);
 	if sync_scene {
 		Scene.clear_scene_run(*state.scene);
+		print("Terrain %\n", sync_scene.terrain);
 		Terrain.parse_terrain(sync_scene.terrain, *state.scene);
 		state.scene.id = sync_scene.id;
+		state.scene.info = sync_scene.info;
 		state.scene.end_scene_countdown_started = false;
 		state.scene.params = sync_scene.params;
 		state.scene.auto_revive |= sync_scene.params.auto_revive;
@@ -356,7 +358,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		GUI.push_ms_histogram(
 			*gui_state,
 			.{ 10, 10 },
-			.{ 300, 150 },
+			.{ 600, 150 },
 			state.history_app_render_loop_dt,
 			state.history_app_render_cursor,
 			"Render"
@@ -364,7 +366,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		GUI.push_ms_histogram(
 			*gui_state,
 			.{ 10, 170 },
-			.{ 300, 150 },
+			.{ 600, 150 },
 			state.history_app_update_loop_dt,
 			state.history_app_update_cursor,
 			"Update"
@@ -539,6 +541,12 @@ game_loop :: (app_user: *App_User) -> bool {
 	update_game_loop(app_user);
 	sounding(*state, *state.scene, store, app.platform);
 
+	// Flush the command buffer
+	for * state.scene.client_to_server {
+		send_web_message(app.platform, controls.time, it);
+	}
+	state.scene.client_to_server.count = 0;
+
 	// Rendering
 	frame := WRender.begin_frame(*framegraph, controls.time);
 	WRender.render_scene(frame, *framegraph, state.scene, store);
@@ -626,6 +634,7 @@ sounding :: (
 	listener.direction = scene.camera.target - scene.camera.position;
 	listener.position += listener.direction * 0.65;
 	listener.direction = normalize(listener.direction);
+	listener.volume = ifx state.volume_on then 1.0 else 0.0;
 	platform.set_listener_info(listener);
 	for scene.sound_triggers {
 		for counter: 1..it.count {
@@ -697,10 +706,4 @@ sounding :: (
 		}
 	}
 	scene.sound_triggers.count = 0;
-
-	if state.volume_on {
-		platform.volume_audio(1.0);
-	} else {
-		platform.volume_audio(0.0);
-	}
 }

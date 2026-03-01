@@ -3,6 +3,9 @@ Menu :: struct {
 	create_instance_name: string = "";
 	create_instance_password: string = "";
 
+	login_popup_open: bool = false;
+	login_popup_password: string = "";
+
 	enter_instance_password: string = "";
 
 	instances_list: [..] Command.Ans_Instance_List.Instance_Info;
@@ -24,8 +27,31 @@ push_left_main_menu :: (
 	GUI.default_params(gui).align = .Top_Left;
 	GUI.default_params(gui).z = 2;
 
-	passcode_label := tprint("Passcode: %", menu.passstring);
-	GUI._atom_label(gui, passcode_label, id = "passcode_label", color = GUI.GRAY_00);
+	{
+		GUI.push_default_params(gui, GUI.default_params(gui).*);
+		defer GUI.pop_default_params(gui);
+		GUI.default_params(gui).direction = .Right;
+
+		GUI.space(gui, 8.0);
+		if GUI._text_button(gui, "Login", id = "login_btn") {
+			menu.login_popup_open = true;
+		}
+		GUI.space(gui, 8.0);
+		clicked, state := GUI._text_button(gui, "Reveal", id = "see_passcode_btn");
+		GUI.space(gui, 8.0);
+		passcode_label := "Passcode: ---- --- ----";
+		if state.pressed {
+			passcode_label = tprint("Passcode: %", menu.passstring);
+		}
+		GUI._atom_label(
+			gui,
+			passcode_label,
+			id = "passcode_label",
+			color = GUI.GRAY_00,
+			offset_pos = v2(4.0, 0.0)
+		);
+	}
+	GUI.space(gui, 24.0);
 
 	new_username := GUI.labeled_input_text(
 		gui, "Username:", menu.profile.username, 256, 24, id = "username_input"
@@ -63,14 +89,56 @@ push_left_main_menu :: (
 		id = "revive_label",
 		color = GUI.GRAY_00
 	);
+
+	if menu.login_popup_open {
+		window := GUI.begin_window(
+			gui,
+			gui.controls.window_size / 2,
+			V2f.{ 400, 300 },
+			id = "login_window",
+			z = 10
+		);
+		defer GUI.end_window(gui, id = "login_window");
+
+		new_passcode := GUI.labeled_input_text(
+			gui,
+			"Passcode:",
+			menu.login_popup_password,
+			400 - 16,
+			24,
+			id = "login_passcode_input",
+			placeholder = "0123456789A"
+		);
+		if new_passcode != menu.login_popup_password {
+			if menu.login_popup_password.count > 0 && menu.login_popup_password.data
+				free(menu.login_popup_password);
+			menu.login_popup_password = sprint("%", new_passcode);
+		}
+
+		GUI.space(gui, 64.0);
+		GUI.default_params(gui).cursor = window.pos + v2(window.size.x, 0.0) - v2(8.0, -8.0);
+		GUI.default_params(gui).align = .Bottom_Right;
+		GUI.default_params(gui).direction = .Left;
+
+		if GUI._text_button(gui, "Login", id = "login_confirm_btn") {
+			command: Command.Login;
+			command.passcode = string_to_code(menu.login_popup_password);
+			command.token = platform.get_token();
+			send_web_message(platform, gui.controls.time, make_command(command));
+			menu.login_popup_open = false;
+		}
+		if GUI._text_button(gui, "Cancel", id = "login_cancel_btn") {
+			menu.login_popup_open = false;
+		}
+	}
 }
 
 code_to_string :: (code: u64) -> string {
-	unit :: "123456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnopqrstuvwxyz!@#$&*()";
+	unit :: "0123456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnopqrstuvwxyz";
 	_code := code;
-	str8 := NewArray(8, u8,, temp);
+	str8 := NewArray(11, u8,, temp);
 
-	for 0..7 {
+	for 0..str8.count-1 {
 		str8[it] = unit[(_code % unit.count).(int)];
 		_code /= unit.count;
 	}
@@ -78,10 +146,30 @@ code_to_string :: (code: u64) -> string {
 	left.count = 4;
 	left.data = str8.data;
 
+	mid: string;
+	mid.count = 3;
+	mid.data = str8.data + 4;
+
 	right: string;
 	right.count = 4;
-	right.data = str8.data + 4;
-	return sprint("% %", left, right);
+	right.data = str8.data + 7;
+	return sprint("% % %", left, mid, right);
+}
+string_to_code :: (str: string) -> u64 {
+	unit :: "0123456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnopqrstuvwxyz";
+	lut := NewArray(256, u64,, temp);
+	for unit {
+		lut[it.(u64)] = it_index.(u64);
+	}
+	code : u64 = 0;
+	power : u64 = 1;
+	for c: str {
+		if c == #char " "
+			continue;
+		code += lut[c.(u64)] * power;
+		power *= unit.count;
+	}
+	return code;
 }
 
 process_menu :: (state: *State, command: Command) -> bool {
@@ -113,7 +201,6 @@ process_menu :: (state: *State, command: Command) -> bool {
 	get_username := isa(command.payload, Command.Get_Username);
 	if get_username {
 		free(state.menu.profile.username);
-		print("Got username: %\n", get_username.username);
 		state.menu.profile.username = sprint("%", get_username.username);
 		return true;
 	}

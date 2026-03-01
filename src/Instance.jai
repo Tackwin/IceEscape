@@ -229,7 +229,7 @@ sync :: (instance: *Instance) {
 		}
 	}
 }
-add_scene :: (instance: *Instance, text: string) -> int {
+add_scene :: (instance: *Instance, text: string, info: Scene.Scene_Info) -> int {
 	scene := xar_add(*instance.scenes, .{});
 	Scene.make(scene);
 	scene.id = instance.scenes.count + 1;
@@ -240,6 +240,7 @@ add_scene :: (instance: *Instance, text: string) -> int {
 	Terrain.parse_terrain(text, scene);
 	scene.params = instance.scene_parameters;
 	scene.auto_revive |= scene.params.auto_revive;
+	scene.info = info;
 	return scene.id;
 }
 
@@ -263,7 +264,7 @@ handle_file_change :: (instance: *Instance, path: string) {
 init_instance_with_custom_terrain :: (
 	instance: *Instance, terrain_data: string
 ) {
-	instance.pick_scene_id = add_scene(instance, terrain_data);
+	instance.pick_scene_id = add_scene(instance, terrain_data, .{});
 	instance.playing_scene_id = instance.pick_scene_id;
 	instance.last_activity_time = current_time_monotonic();
 }
@@ -515,7 +516,7 @@ move_playing_scene :: (instance: *Instance, scene_id: int, should_register := fa
 		for old_scene.players {
 			event: End_Scene_Event;
 			event.user_id = player_id_to_user_id(instance, it.id);
-			event.scene_id = old_scene.id;
+			event.scene_id = old_scene.info.id;
 			event.time_ms = (scene.server.clock * 1000).(int);
 			event.revive_count = it.server.revive_count;
 			event.death_count = it.server.death_count;

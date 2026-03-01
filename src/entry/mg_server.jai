@@ -99,7 +99,7 @@ win32_db_query :: (query: *DB_query) {
 				continue;
 			
 			i: int;
-			if !scan2(trimmed, "%", i)
+			if !scan2(trimmed, "%", *i)
 				continue;
 			output.data[it_index] = i;
 		}

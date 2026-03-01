@@ -40,6 +40,7 @@ DB_Terrain_Infos :: struct {
 	id: int;
 	name: string;
 	author_profile_id: int;
+	created_ms: int;
 }
 
 DB_Terrain_Ascii :: struct {

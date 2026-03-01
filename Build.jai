@@ -556,6 +556,8 @@ build_wasm_2 :: () {
 	opts.llvm_options.target_system_features = "+bulk-memory,+atomics,+simd128"; // "This options is needed so that "memcpy" and "memset" are mapped to "memory.copy" and "memory.fill" instructions in WASM.
 	opts.llvm_options.enable_split_modules   = false;
 	opts.llvm_options.function_sections      = true; // To get around "LLVM ERROR: section already has a defining function: .text"
+	opts.llvm_options.enable_loop_vectorization = true;
+	opts.llvm_options.enable_slp_vectorization = true;
 
 	paths: [..] string;
 	paths.allocator = temp;

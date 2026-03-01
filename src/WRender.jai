@@ -1416,12 +1416,13 @@ commit_geometry :: (
 		return;
 
 	stride := size_of(WFramegraph.Instance);
-	draw: Frame.Draw;
+	maybe_grow(xx *pass.draws, size_of(Frame.Draw));
+	pass.draws.count += 1;
+	draw := *pass.draws.data[pass.draws.count - 1];
 	draw.model = model;
 	draw.instance_count = count;
 	draw.instance_start = frame.cpu_cursor / stride;
 	draw.second_bind_group = pass.current_bind_group;
-	array_add(*pass.draws, draw);
 	frame.cpu_cursor += xx (count * stride);
 }
 
@@ -1831,6 +1832,7 @@ render_editor :: (
 	gui := editor.gui_state;
 
 	extra: Extra;
+	defer free(*extra);
 	picking_place := Editor.screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
 	add_debug_sphere(*extra, picking_place, scale=0.1);
 	add_debug_sphere(*extra, v3(0.0, 0.0, 0.0), scale=0.2, color=V4f.{ 1.0, 0.0, 0.0, 1.0 });
@@ -1959,15 +1961,17 @@ render_scene :: (
 	iV := Scene.look_at_inverse(
 		center + V3f.{ 100, 100, 100 }, center, V3f.{ 0, 1, 0 }
 	);
-	frame.geometry.uniforms.shadowP = Scene.orthographic(-9, 9, -9, 9, 0.1, 500);
-	iP := Scene.orthographic_inverse(-9, 9, -9, 9, 0.1, 500);
+
+	SW := 10.5;
+	frame.geometry.uniforms.shadowP = Scene.orthographic(-SW, SW, -SW, SW, 0.1, 500);
+	iP := Scene.orthographic_inverse(-SW, SW, -SW, SW, 0.1, 500);
 	VP := frame.geometry.uniforms.shadowP * frame.geometry.uniforms.shadowV;
 	iVP := iV * iP;
-	center = snap_shadow_center(VP, iVP, center, 1024);
+	center = snap_shadow_center(VP, iVP, center, xx framegraph.settings.shadow_size);
 	frame.geometry.uniforms.shadowV = Scene.look_at(
 		center + V3f.{ 100, 100, 100 }, center, V3f.{ 0, 1, 0 }
 	);
-	frame.geometry.uniforms.shadowP = Scene.orthographic(-9, 9, -9, 9, 0.1, 500);
+	frame.geometry.uniforms.shadowP = Scene.orthographic(-SW, SW, -SW, SW, 0.1, 500);
 	
 	frame.geometry.uniforms.sun_dir = normalize(V3f.{ -1, -1, -1 });
 	frame.geometry.uniforms.sun_color = V3f.{ 1, 1, 1 };
@@ -2534,10 +2538,9 @@ render_particles :: (
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
 		instance.M = R;
-		instance.M *= axis_angle_matrix(V3f.{ 0, 0, 1 }, it.rotation);
-		M4f.translate(*instance.M, it.position);
+		M4f.z_rotate(*instance.M, it.rotation);
+		M4f.translate(*instance.M, it.position + v3(-0.5, -0.5, 0));
 		M4f.scale(*instance.M, .{ it.size, it.size, it.size });
-		M4f.translate(*instance.M, V3f.{ -0.5, -0.5, 0 });
 		instance.texture_rect = .{
 			it.texture_rec.x, it.texture_rec.y, it.texture_rec.z, it.texture_rec.w
 		};
@@ -3727,30 +3730,49 @@ render_props :: (
 		max_id = max(max_id, it.id);
 
 	VP := pass.uniforms.P * pass.uniforms.V;
-	for prop_id: 0..max_id {
-		instanced := append_instance_buffer(frame);
-		for scene.props {
-			if it.id != prop_id
-				continue;
-			if cull(VP, it.M)
-				continue;
 
-			instanced.count += 1;
-			instance := *instanced[instanced.count - 1];
-			instance.* = .{};
-			instance.M = it.M;
-			instance.texture_rect = Store.Colormaps_Rect.prop;
+	curr_prop_id := 0;
+	instanced := append_instance_buffer(frame);
+
+	for scene.props {
+		if it.id != curr_prop_id {
+			if instanced.count > 0 {
+				commit_geometry(
+					frame, pass, Store.get_wprop(store, xx curr_prop_id), instanced.count
+				);
+				instanced = append_instance_buffer(frame);
+			}
+			curr_prop_id = it.id;
 		}
-		if instanced.count == 0
+		pos := v3(M4f.col(it.M, 3));
+
+		if cull_rough(scene.camera.target, pos)
+			continue;
+		if cull(VP, pos)
 			continue;
 
-		commit_geometry(frame, pass, Store.get_wprop(store, xx prop_id), instanced.count);
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = it.M;
+		instance.texture_rect = Store.Colormaps_Rect.prop;
 	}
+
+	if instanced.count > 0
+		commit_geometry(frame, pass, Store.get_wprop(store, xx curr_prop_id), instanced.count);
+
 }
 
 cull :: (VP: M4f, M: M4f, safety := 1.0) -> bool {
 	pos := M4f.col(M, 3);
 	return cull(VP, v3(pos), safety);
+}
+cull_rough :: (target: V3f, _pos: V3f, safety := 12) -> bool {
+	if target.x < _pos.x - safety || target.x > _pos.x + safety
+		return true;
+	if target.y < _pos.y - safety || target.y > _pos.y + safety
+		return true;
+	return false;
 }
 cull :: (VP: M4f, _pos: V3f, safety := 1.0) -> bool {
 	pos := VP * v4(_pos, 1.0);

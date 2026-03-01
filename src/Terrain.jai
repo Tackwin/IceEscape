@@ -1203,12 +1203,11 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 		return 0.0;
 	}
 	// Populate props
-	if generate_props for y: 0..scene.terrain.tiles_count.y-1 {
-		for x: 0..scene.terrain.tiles_count.x-1 {
-			tile : Tile = scene.terrain.tiles[x + y * scene.terrain.tiles_count.x];
-			if tile.kind == .Dirt {
-
-				for id: 0..16 {
+	for id: 0..16 {
+		if generate_props for y: 0..scene.terrain.tiles_count.y-1 {
+			for x: 0..scene.terrain.tiles_count.x-1 {
+				tile : Tile = scene.terrain.tiles[x + y * scene.terrain.tiles_count.x];
+				if tile.kind == .Dirt {
 					r := Rand.random_uniform(*rng);
 					if r < get_probability(xx id) * 1.25 {
 						prop: Prop;
@@ -1236,7 +1235,6 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 
 						array_add(*scene.props, prop);
 					}
-
 				}
 			}
 		}

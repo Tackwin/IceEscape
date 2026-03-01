@@ -89,7 +89,7 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 
 			const frame = async () => {
 				await main_loop();
-		
+				flush_audio_commands();
 				requestAnimationFrame(frame);
 			}
 			requestAnimationFrame(frame);
@@ -102,9 +102,6 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 		}
 		if (e.data.play_audio) {
 			js_play_audio(e.data.play_audio);
-		}
-		if (e.data.volume_audio) {
-			js_volume_audio(e.data.volume_audio);
 		}
 		if (e.data.set_sound) {
 			js_set_sound(e.data.set_sound);
@@ -206,6 +203,30 @@ jai_imports.js_get_current_time_monotonic = (low_ptr, high_ptr) => {
 	setU64(low_ptr, 0, low);
 	setU64(high_ptr, 0, high);
 }
+jai_imports.js_to_calendar = (time_low, time_high, out) => {
+	const epoch = new Date("1969-07-20T20:17:40Z").getTime();
+	const fs = (BigInt(time_high) << 64n) | BigInt(time_low);
+	const ms = Number(fs / 1000n / 1000n / 1000n / 1000n);
+	const date = new Date(epoch + ms);
+	// In local time
+	const year = date.getFullYear();
+	const month0Indexed = date.getMonth();
+	const dayMonth = date.getDate();
+	const dayWeek = date.getDay();
+	const hour = date.getHours();
+	const minute = date.getMinutes();
+	const second = date.getSeconds();
+	const millisecond = date.getMilliseconds();
+	
+	setU32(out, 0, year);
+	setU8(out, 4, month0Indexed);
+	setU8(out, 5, dayMonth);
+	setU8(out, 6, dayWeek);
+	setU8(out, 7, hour);
+	setU8(out, 8, minute);
+	setU8(out, 9, second);
+	setU16(out, 10, millisecond);
+}
 
 //IO
 const Key_A = 0;
@@ -279,6 +300,8 @@ const Mouse_Wheel = 136;
 const Window_W = 140;
 const Window_H = 144;
 const Control_Token = 148;
+const Control_Audio_Command_Cursor = 1024;
+const Control_Audio_Command_Buffer = 1024;
 
 let controls_buffer_data = 0;
 const getControlsBufferU8 = () => {
@@ -292,6 +315,66 @@ const getControlsBufferS32 = () => {
 }
 const getControlsBufferF32 = () => {
 	return new Float32Array(jai_exports.memory.buffer, controls_buffer_data, 256);
+}
+
+const flush_audio_command = (idx) => {
+	const base = controls_buffer_data + Number(Control_Audio_Command_Buffer) + (1 + idx) * 136;
+	const kind = getU64(base, 0);
+
+	if (kind == 0) {
+		const id = getU64(base, 8);
+		const sound_id = getU64(base, 16);
+		const x = getF32(base, 24);
+		const y = getF32(base, 28);
+		const z = getF32(base, 32);
+		const volume = getF32(base, 36);
+		const pitch = getF32(base, 40);
+		const loop = getU32(base, 44) != 0;
+		const kind = getS32(base, 48);
+		const fade_in = getS32(base, 52);
+		const exponent = getF32(base, 56);
+		const delay = getF32(base, 60);
+
+		js_play_audio({
+			audio_id: id, x, y, z, volume, pitch, loop, kind, fade_in, exponent, delay, sound_id
+		});
+	}
+	else if (kind == 1) {
+		const sound_id = getU64(base, 64);
+		const x = getF32(base, 72);
+		const y = getF32(base, 76);
+		const z = getF32(base, 80);
+		const volume = getF32(base, 84);
+		const pitch = getF32(base, 88);
+		const playing = getU32(base, 92) != 0;
+		const looping = getU32(base, 96) != 0;
+
+		js_set_sound({
+			sound_idx: sound_id, x, y, z, volume, pitch, playing, looping
+		});
+	}
+	else if (kind == 2) {
+		const x = getF32(base, 104);
+		const y = getF32(base, 108);
+		const z = getF32(base, 112);
+		const forward_x = getF32(base, 116);
+		const forward_y = getF32(base, 120);
+		const forward_z = getF32(base, 124);
+		const volume = getF32(base, 128);
+
+		js_set_listener_info({
+			x, y, z, forward_x, forward_y, forward_z, volume
+		});
+	}
+}
+
+let flushed_command_cusror = 0;
+const flush_audio_commands = () => {
+	const current_command_cursor = getU64(controls_buffer_data, Control_Audio_Command_Cursor);
+	for (let i = flushed_command_cusror; i < current_command_cursor; i++) {
+		flush_audio_command(Number(i) % 1024);
+	}
+	flushed_command_cusror = current_command_cursor;
 }
 
 const mapKeyNameToKeyIndex = (e) => {
@@ -348,7 +431,7 @@ const mapKeyNameToKeyIndex = (e) => {
 		case "f12": return Key_F12;
 		case "tab": return Key_Tab;
 		case "escape": return Key_Escape;
-		case "shift": return Key_LShift; // treat both shifts as left shift
+		case "shift": return Key_Shift; // treat both shifts as left shift
 		case ".": return Key_Period;
 		case "backspace": return Key_Backspace;
 		case "arrowleft": return Key_Left;
@@ -414,12 +497,17 @@ document.addEventListener("mousemove", (e) => {
 });
 
 document.addEventListener("wheel", (e) => {
-	// Prevent scrolling the page
-	e.preventDefault();
 	let w = Atomics.load(getControlsBufferS32(), Mouse_Wheel / 4);
-	w -= e.deltaY * 1000;
+	w = (-e.deltaY * 0.01) * 1000;
 	Atomics.store(getControlsBufferS32(), Mouse_Wheel / 4, w);
 });
+
+jai_imports.js_is_released = (released_ptr) => {
+	if (location.hostname == "tackwin.fr")
+		setU32(released_ptr, 0, 1);
+	else
+		setU32(released_ptr, 0, 0);
+}
 
 jai_imports.js_get_token = () => {
     if (sessionStorage.getItem("token")) {
@@ -451,27 +539,43 @@ const blobToAudioBuffer = async (blob) => {
 	return await audio_context.decodeAudioData(buffer);
 }
 
-jai_imports.js_wait = new WebAssembly.Suspending(x => x);
+let promise_ticket_counter = 0;
+const promise_tickets = new Map();
 
-jai_imports.js_load_audio = async (params_ptr) => {
+jai_imports.js_wait = new WebAssembly.Suspending(ticket => {
+	const promise = promise_tickets.get(Number(ticket));
+	if (!promise) {
+		throw new Error("Invalid promise ticket: " + ticket);
+	}
+	promise.finally(() => {
+		promise_tickets.delete(Number(ticket));
+	});
+	return promise;
+});
+
+jai_imports.js_load_audio = (params_ptr) => {
 	const data = getU64(params_ptr, 0);
 	const size = getU64(params_ptr, 8);
 	const id = getU64(params_ptr, 16);
 	const compressed = getU64(params_ptr, 24) != 0;
 
 	const src = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(size));
-	const dst = new Uint8Array(src); // copy the data to a new buffer so that it doesn't get modified by the wasm module while we're using it
-	const buffer = await new Blob([dst]).arrayBuffer();
-	await js_load_audio({ buffer, audio_id: id });
+	const buffer = new Uint8Array(src); // copy the data to a new buffer so that it doesn't get modified by the wasm module while we're using it
+
+	const promise = (async () => {
+		await js_load_audio({ buffer, audio_id: id });
+	})();
+
+	promise_tickets.set(promise_ticket_counter, promise);
+	promise_ticket_counter += 1;
+	return Number(promise_ticket_counter - 1);
 }
 const js_load_audio = async (params) => {
-	var buffer = await audio_context.decodeAudioData(params.buffer);
+	var buffer = await new Blob([params.buffer]).arrayBuffer();
+	buffer = await audio_context.decodeAudioData(buffer);
 	audio_id_to_buffer[params.audio_id] = buffer;
 }
 
-jai_imports.js_play_audio = (params_ptr) => {
-	console.error("js_play_audio is only implemented in the worker, not in the main thread!");
-}
 const js_play_audio = (params) => {
 	const id = params.audio_id;
 	const x = params.x;
@@ -545,20 +649,6 @@ const js_play_audio = (params) => {
 	};
 }
 
-jai_imports.js_volume_audio = (params_ptr) => {
-	console.error("js_volume_audio is only implemented in the worker, not in the main thread!");
-}
-const js_volume_audio = (volume) => {
-	if (master_gain === null) {
-		master_gain = audio_context.createGain();
-		master_gain.connect(audio_context.destination);
-	}
-	master_gain.gain.value = volume;
-}
-
-jai_imports.js_set_sound = (params_ptr) => {
-	console.error("js_set_sound is only implemented in the worker, not in the main thread!");
-}
 const js_set_sound = (params) => {
 	const sound = sound_id_to_sound[params.sound_idx];
 	if (!sound) {
@@ -592,14 +682,16 @@ const js_set_sound = (params) => {
 	source.loop = params.looping != 0;
 }
 
-jai_imports.js_set_listener_info = (params_ptr) => {
-	console.error("js_set_listener_info is only implemented in the worker, not in the main thread!");
-}
 const js_set_listener_info = (params) => {
 	audio_context.listener.setPosition(params.x, params.y, params.z);
 	audio_context.listener.setOrientation(
 		params.forward_x, params.forward_y, params.forward_z, 0, 0, 1
 	);
+	if (master_gain === null) {
+		master_gain = audio_context.createGain();
+		master_gain.connect(audio_context.destination);
+	}
+	master_gain.gain.value = params.volume;
 }
 
 //WEBGPU
@@ -1215,6 +1307,14 @@ const setU8 = (ptr, offset, value) => {
 		data_view = new DataView(jai_exports.memory.buffer);
 	}
 	data_view.setUint8(Number(ptr) + Number(offset), Number(value));
+}
+const setU16 = (ptr, offset, value) => {
+	try {
+		data_view.byteLength;
+	} catch {
+		data_view = new DataView(jai_exports.memory.buffer);
+	}
+	data_view.setUint16(Number(ptr) + Number(offset), Number(value), true);
 }
 
 const setU32 = (ptr, offset, value) => {

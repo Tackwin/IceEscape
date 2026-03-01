@@ -62,6 +62,26 @@ map_sdl_to_key :: (key: SDL_Keycode) -> Key {
 		case SDLK_n; return Key.N;
 		case SDLK_SPACE; return Key.Space;
 		case SDLK_ESCAPE; return Key.Escape;
+		case SDLK_0; return Key._0;
+		case SDLK_KP_0; return Key._0;
+		case SDLK_1; return Key._1;
+		case SDLK_KP_1; return Key._1;
+		case SDLK_2; return Key._2;
+		case SDLK_KP_2; return Key._2;
+		case SDLK_3; return Key._3;
+		case SDLK_KP_3; return Key._3;
+		case SDLK_4; return Key._4;
+		case SDLK_KP_4; return Key._4;
+		case SDLK_5; return Key._5;
+		case SDLK_KP_5; return Key._5;
+		case SDLK_6; return Key._6;
+		case SDLK_KP_6; return Key._6;
+		case SDLK_7; return Key._7;
+		case SDLK_KP_7; return Key._7;
+		case SDLK_8; return Key._8;
+		case SDLK_KP_8; return Key._8;
+		case SDLK_9; return Key._9;
+		case SDLK_KP_9; return Key._9;
 		case SDLK_F1; return Key.F1;
 		case SDLK_F2; return Key.F2;
 		case SDLK_F3; return Key.F3;
@@ -204,6 +224,9 @@ win32_send_web_messages :: (msg_pool: [] u8, msg_indices: [] int, connection: Co
 
 win32_get_current_time :: () -> Apollo_Time {
 	return current_time_monotonic();
+}
+win32_to_calendar :: (time: Apollo_Time) -> Calendar_Time {
+	return to_calendar(time, .LOCAL);
 }
 
 win32_get_token :: () -> int {
@@ -370,7 +393,6 @@ audio_counter := 0;
 sound_counter := 0;
 
 load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_ref {
-	return 0;
 	push_context,defer_pop launcher_context;
 	audio_counter += 1;
 
@@ -387,7 +409,6 @@ load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_r
 
 
 play_audio :: (audio: Audio, position: V3f) -> Sound {
-	return .{};
 	push_context,defer_pop launcher_context;
 	ok, data := table_find(*audio_id_to_data, audio.id);
 	
@@ -443,8 +464,6 @@ play_audio :: (audio: Audio, position: V3f) -> Sound {
 	return sound;
 }
 set_listener_info :: (listener: Listener) {
-	return;
-	
 	push_context,defer_pop launcher_context;
 	ma_engine_listener_set_position(
 		*audio_engine, 0, listener.position.x, listener.position.y, listener.position.z
@@ -454,9 +473,9 @@ set_listener_info :: (listener: Listener) {
 	);
 	ma_engine_listener_set_world_up(*audio_engine, 0, 0.0, 0.0, 1.0);
 	ma_engine_listener_set_enabled(*audio_engine, 0, xx true);
+	ma_engine_set_volume(*audio_engine, listener.volume);
 }
 query_sound :: (sound_id: int) -> Sound {
-	return .{};
 	push_context,defer_pop launcher_context;
 	sound: Sound;
 	sound.id = -1;
@@ -481,7 +500,6 @@ query_sound :: (sound_id: int) -> Sound {
 	return sound;
 }
 set_sound :: (sound: Sound) {
-	return;
 	ok, win32_sound := table_find(*sound_id_to_sound, sound.id);
 	if ok && win32_sound.sound {
 		ma_sound_set_position(
@@ -497,18 +515,6 @@ set_sound :: (sound: Sound) {
 		// ma_sound_set_pitch(win32_sound.sound, sound.pitch);
 	}
 }
-
-master_volume := 1.0;
-volume_audio :: (x: float) -> float {
-	return 0;
-	push_context,defer_pop launcher_context;
-	if x < 0
-		return master_volume;
-	master_volume = x;
-	ma_engine_set_volume(*audio_engine, master_volume);
-	return master_volume;
-}
-
 
 P_Thread :: struct {
 	thread: Thread;
@@ -614,11 +620,14 @@ init_platform :: () -> Platform {
 	platform.get_token = win32_get_token;
 	platform.sleep = win32_sleep;
 	platform.get_current_time = win32_get_current_time;
+	platform.to_calendar = win32_to_calendar;
 	platform.set_token = win32_set_token;
+	platform.is_released = () -> bool {
+		return false;
+	};
 	platform.set_sound = set_sound;
 	platform.load_audio = load_audio;
 	platform.play_audio = play_audio;
-	platform.volume_audio = volume_audio;
 	platform.set_listener_info = set_listener_info;
 
 	wgpuCreateInstance :: (

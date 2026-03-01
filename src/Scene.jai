@@ -139,6 +139,9 @@ Scene :: struct {
 		clock: float64 = 0.0;
 		end_level: Command.End_Level;
 		render_particles := false;
+
+		leaderboard: Command.Get_Terrain_Leaderboard;
+		leaderboard_run_counter := 0;
 	}
 
 	id := 1;
@@ -191,6 +194,8 @@ Scene :: struct {
 	indices: [..] int; @allocate("lifetime") @clear("run")
 	trigger_activated: Table(int, bool); @allocate("lifetime") @clear("run")
 
+	client_to_server: [..] Command; @allocate("lifetime")
+
 	terrain: Terrain;
 	spawn: Spawn;
 
@@ -230,19 +235,32 @@ Scene :: struct {
 	lifetime_pool: Pool;
 	frame_pool: Pool;
 	run_pool: Pool; @clear("run")
+	run_generation := 0; @increment("run")
 }
 
 clear_string :: (info: Type_Info_Struct) -> string {
 	sb: String_Builder;
 
 	categories: Table(string, [..] string);
+	increments: Table(string, [..] string);
 	for member: info.members {
 		clears: [..] string;
 		clears.allocator = temp;
+
 		for note: member.notes {
 			clear: string;
+			increment: string;
 			if scan2(note, "clear(%)", *clear) {
 				array_add(*clears, clear);
+			}
+			if scan2(note, "increment(%)", *increment) {
+				fields := table_find_pointer(*increments, increment);
+				if !fields {
+					empty: [..] string;
+					empty.allocator = temp;
+					fields = table_add(*increments, increment, empty);
+				}
+				array_add(fields, member.name);
 			}
 		}
 
@@ -259,10 +277,18 @@ clear_string :: (info: Type_Info_Struct) -> string {
 
 	snake_case_type := to_lower_copy(info.name,, temp);
 	for fields, clear: categories {
+		increment := table_find_pointer(*increments, clear);
+
 		print_to_builder(*sb, "clear_%_% :: (object: *%) {\n", snake_case_type, clear, info.name);
 
 		for field: fields {
 			print_to_builder(*sb, "\treset(*object.%);\n", field);
+		}
+
+		if increment {
+			for field: increment.* {
+				print_to_builder(*sb, "\tobject.% += 1;\n", field);
+			}
 		}
 
 		print_to_builder(*sb, "}\n");
@@ -401,6 +427,7 @@ free :: (scene: *Scene) {
 make_sync :: (scene: *Scene, params: Scene_Parameters) -> Command.Sync_Scene {
 	sync_scene: Command.Sync_Scene;
 	sync_scene.id = scene.id;
+	sync_scene.info = scene.info;
 	sync_scene.clock = scene.server.clock;
 	sync_scene.params = params;
 	sync_scene.terrain = scene.terrain.text;
@@ -1342,15 +1369,18 @@ Skull :: struct {
 
 Path :: struct {
 	id: int;
-	checkpoints: ISpan(Checkpoint);
 	closed := false;
 	theta_dir := false;
+
+	checkpoints: ISpan(Checkpoint);
 }
 
 Checkpoint :: struct {
 	position: V3f;
 	theta: float = 0;
 	speed: float = 1.0;
+
+	next: int = -1;
 }
 
 Camera_Rail :: struct {
@@ -3842,6 +3872,18 @@ process_client_only :: (
 		return true;
 	}
 	
+	get_terrain_leaderboard := isa(command.payload, Command.Get_Terrain_Leaderboard);
+	if get_terrain_leaderboard {
+		scene.client.leaderboard = get_terrain_leaderboard.*;
+		scene.client.leaderboard.wr_username = sprint(
+			"%",
+			scene.client.leaderboard.wr_username,,
+			Allocator.{ pool_allocator_proc, *scene.run_pool }
+		);
+		scene.client.leaderboard_run_counter = scene.run_generation;
+		return true;
+	}
+
 	wipe_scene: *Command.Wipe_Scene = isa(command.payload, Command.Wipe_Scene);
 	if wipe_scene {
 		scene.fade_screen.start = time;
@@ -4084,7 +4126,8 @@ process_client_only :: (
 		scene.client.end_level = end_level;
 
 		get_leaderboard: Command.Get_Terrain_Leaderboard;
-		get_leaderboard.terrain_id = scene.id;
+		get_leaderboard.terrain_id = scene.info.id;
+		array_add(*scene.client_to_server, make_command(get_leaderboard));
 
 		return true;
 	}

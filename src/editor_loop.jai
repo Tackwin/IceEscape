@@ -16,6 +16,8 @@ Editor_Page :: struct {
 
 	Terrain_Entry :: struct {
 		name: string;
+		author: string;
+		created_ms: s64;
 		id: int;
 	}
 	terrain_list: [..] Terrain_Entry;
@@ -78,7 +80,10 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 			it.name = sprint(
 				ans_list_terrain.terrains_name[it_index],, page.terrain_list.allocator
 			);
-			print("Loaded terrain entry: % (ID=%)\n", ans_list_terrain.terrains_name[it_index], it.id);
+			it.author = sprint(
+				ans_list_terrain.authors_name[it_index],, page.terrain_list.allocator
+			);
+			it.created_ms = ans_list_terrain.creation_time_ms[it_index];
 		}
 		return true;
 	}
@@ -324,7 +329,7 @@ handle_entity_placing :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_Sta
 	}
 
 	// Left mouse to paint
-	if gui.controls.just_released[Key.MouseLeft] && !page.was_rectangle_dragging {
+	if gui.controls.pressed[Key.MouseLeft] && !page.was_rectangle_dragging {
 		// Convert screen position to world position
 		world_pos := screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
 
@@ -438,7 +443,6 @@ handle_entity_picking :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_Sta
 				pos := get_position(*editor.scene, entity, it);
 
 				if in(aabb, v2(pos)) {
-					print("Selected entity of type % at position %\n", entity.type.name, pos);
 					array_add(
 						*page.selected, .{ get_pointer(*editor.scene, entity, it), entity.type }
 					);
@@ -560,17 +564,16 @@ draw_mode_picker :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
 draw_tile_picker_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_x: float, panel_y: float, panel_width: float, panel_height: float) {
 	// Tile type buttons
 	tile_kinds :: Scene.Tile.Kind.[
-		.None, .Ice, .Grass, .Slippy_Ice, .Dirt, .Funny_Ice
+		.Ice, .Grass, .Slippy_Ice, .Dirt, .Funny_Ice
 	];
 	tile_names :: string.[
-		"None (X)", "Ice (I)", "Grass (G)", "Slippy (i)", "Dirt", "Funny (R)"
+		"Ice", "Grass", "Slippy", "Snow", "Funny"
 	];
 	tile_colors :: V3f.[
-		.{ 0.3, 0.2, 0.1 },   // None/Dirt
-		.{ 0.7, 0.9, 1.0 },   // Ice
+		.{ 0.5, 0.7, 1.0 },   // Ice
 		.{ 0.3, 0.7, 0.3 },   // Grass
-		.{ 0.5, 0.8, 1.0 },   // Slippy Ice
-		.{ 0.4, 0.3, 0.2 },   // Dirt
+		.{ 0.2, 0.5, 0.7 },   // Slippy Ice
+		.{ 0.9, 0.9, 0.9 },   // Dirt
 		.{ 0.9, 0.7, 1.0 }    // Funny Ice
 	];
 
@@ -623,7 +626,6 @@ draw_scene_edit_content :: (
 		label_color = GUI.GRAY_80
 	);
 	if v2_result.changed {
-		print("Camera Min changed to %\n", v2_result.value);
 		editor.scene.camera_min = v2_result.value;
 		editor.scene.camera_max.x = max(editor.scene.camera_max.x, editor.scene.camera_min.x + 1.0);
 		editor.scene.camera_max.y = max(editor.scene.camera_max.y, editor.scene.camera_min.y + 1.0);
@@ -810,7 +812,6 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 		for entity: entities {
 			count := get_count(*editor.scene, entity);
 			for < i: 0..count-1 {
-				print("Checking entity % at index %\n", entity.type.name, i);
 				ptr := get_pointer(*editor.scene, entity, i);
 				if entity_is_selected(page, ptr) {
 					remove_entity_at(*editor.scene, entity, i);
@@ -1214,6 +1215,10 @@ draw_editor_toolbar :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State
 	}
 	load_clicked, _, _ := GUI._text_button(gui, "Load", id = "load_btn");
 	if load_clicked {
+		// Refresh file list
+		ask_list_terrain: Command.Ask_List_Terrain;
+		ask_list_terrain.filter = page.load_filter;
+		send_web_message(state.platform, gui.controls.time, make_command(ask_list_terrain));
 		page.show_load_dialog = true;
 	}
 
@@ -1291,7 +1296,7 @@ draw_editor_toolbar :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State
 }
 
 draw_load_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, platform: *Platform) {
-	dialog_width := 400.0;
+	dialog_width := 500.0;
 	dialog_height := 400.0;
 	dialog_x := (gui.controls.window_size.x - dialog_width) / 2;
 	dialog_y := (gui.controls.window_size.y - dialog_height) / 2;
@@ -1345,32 +1350,72 @@ draw_load_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 	terrain_list_view.count = end - beg;
 	terrain_list_view.data = page.terrain_list.data + beg;
 
+	List_Row :: struct {
+		name: string; @name("Name") @size(160)
+		author: string; @name("Author") @size(130) @align(Right)
+		date: string; @name("Created") @align(Right) @size(115)
+		load: string; @name("Load") @button  @size(55) @align(Center)
+	}
+	rows := NewArray(terrain_list_view.count, List_Row,, temp);
 	for terrain_list_view {
-		GUI.push_id(gui, it_index);
-		defer GUI.pop_id(gui);
-
-		// GUI.move_cursor(gui, v2(4.0, 0.0));
-		file_clicked, _, _ := GUI.labeled_text_button(
-			gui,
-			tprint("File: %", it.name),
-			"Load",
-			dialog_width - 16,
-			24,
-			id = "load_file",
-			_z = 103,
-		);
-
-		if file_clicked {
-			load_terrain_cmd: Command.Load_Terrain;
-			load_terrain_cmd.terrain_id = it.id;
-			send_web_message(
-				platform, gui.controls.time, make_command(load_terrain_cmd)
-			);
-			page.show_load_dialog = false;
+		rows[it_index].name = it.name;
+		rows[it_index].author = it.author;
+		if rows[it_index].author == "" {
+			rows[it_index].author = "Anonymous";
 		}
+		if it.created_ms > 0 {
+			cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
+			rows[it_index].date = tprint(
+				"%/% %:%",
+				cal.day_of_month_starting_at_0 + 1,
+				cal.month_starting_at_0 + 1,
+				cal.hour,
+				cal.minute
+			);
+		} else {
+			rows[it_index].date = "Immemorial";
+		}
+		rows[it_index].load = "Load";
 	}
 
-	GUI.default_params(gui).cursor = v2(dialog_x + dialog_width - 8, dialog_y + 8);
+	table := GUI.table(
+		gui, rows, v2(dialog_width - 20, 24 * 12 - 2), id = "terrain_list_table", _z = 101
+	);
+	if table.clicked_row_index != -1 {
+		load_terrain_cmd: Command.Load_Terrain;
+		load_terrain_cmd.terrain_id = terrain_list_view[table.clicked_row_index].id;
+		send_web_message(
+			platform, gui.controls.time, make_command(load_terrain_cmd)
+		);
+		page.show_load_dialog = false;
+	}
+
+	// for terrain_list_view {
+	// 	GUI.push_id(gui, it_index);
+	// 	defer GUI.pop_id(gui);
+
+	// 	// GUI.move_cursor(gui, v2(4.0, 0.0));
+	// 	// file_clicked, _, _ := GUI.labeled_text_button(
+	// 	// 	gui,
+	// 	// 	tprint("File: %", it.name),
+	// 	// 	"Load",
+	// 	// 	dialog_width - 16,
+	// 	// 	24,
+	// 	// 	id = "load_file",
+	// 	// 	_z = 103,
+	// 	// );
+
+	// 	// if file_clicked {
+	// 	// 	load_terrain_cmd: Command.Load_Terrain;
+	// 	// 	load_terrain_cmd.terrain_id = it.id;
+	// 	// 	send_web_message(
+	// 	// 		platform, gui.controls.time, make_command(load_terrain_cmd)
+	// 	// 	);
+	// 	// 	page.show_load_dialog = false;
+	// 	// }
+	// }
+
+	GUI.default_params(gui).cursor = v2(dialog_x + dialog_width - 14, dialog_y + 12);
 	GUI.default_params(gui).direction = .Left;
 	GUI.default_params(gui).align = .Bottom_Right;
 

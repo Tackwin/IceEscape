@@ -151,6 +151,7 @@ Sound :: struct {
 Listener :: struct {
 	position: V3f;
 	direction: V3f;
+	volume: float;
 }
 
 Image :: struct {
@@ -233,6 +234,27 @@ DB_query :: struct {
 
 	success := false;
 }
+load_database_custom :: (
+	platform: *Platform, db: DB_query.Handle, $T: Type, query_string: string
+) -> [] *T {
+	query := DB_query.{};
+	query.kind = .LOAD;
+	query.handle = db;
+	query.type = type_info(T);
+	info := query.type.(*Type_Info_Struct);
+	assert(query.type.type == .STRUCT);
+
+	query.query_string = query_string;
+	query.output_allocator = temp;
+
+	platform.db_query(*query);
+
+	output: [] *T;
+	output.data = query.output.data.(**T);
+	output.count = query.output.count;
+	return output;
+}
+
 
 load_database :: (
 	platform: *Platform, db: DB_query.Handle, table: string, $T: Type, where: string = ""
@@ -364,6 +386,7 @@ Platform :: struct {
 	open_server: #type (port: int) -> bool = null;
 	connect_server: #type (address: string, port: int, protocol: string) -> Connection, bool = null;
 	is_server_connected: #type () -> bool = null;
+	is_released: #type () -> bool = null;
 
 	send_web_message   : #type (msg: [] u8, target: Connection) = null;
 	send_web_messages  : #type (msg_pool: [] u8, msg_indices: [] int, target: Connection) = null;
@@ -376,6 +399,7 @@ Platform :: struct {
 	end_frame:        #type ()               = null;
 
 	get_current_time: #type () -> Apollo_Time = null;
+	to_calendar: #type (time: Apollo_Time) -> Calendar_Time = null;
 
 	sleep: #type (ms: int) =null;
 
@@ -383,7 +407,6 @@ Platform :: struct {
 	load_audio: #type (data: string, compressed: bool, out: *Audio) -> extern_ref = null;
 	play_audio: #type (audio: Audio, position: V3f) -> Sound = null;
 	set_sound: #type (sound: Sound) = null;
-	volume_audio: #type (x: float) -> float = null;
 
 	list_files : #type (path: string, rec: bool) -> [] string = null;
 	read_entire_file: #type (path: string, data: [] u8) -> int = null;

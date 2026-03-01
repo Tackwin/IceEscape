@@ -3,6 +3,7 @@
 #import "String";
 #import "Algebra";
 #import "Profile";
+#import "Compiler";
 #import "Math";
 #import "Tagged_Union";
 Rand :: #import "Rand";
@@ -55,6 +56,7 @@ Command :: struct {
 	}
 	Login :: struct {
 		passcode: u64;
+		token: int;
 
 		feedback: enum {
 			Accepted;
@@ -229,6 +231,7 @@ Command :: struct {
 	}
 	Sync_Scene :: struct {
 		id: int;
+		info: Scene_Info;
 		params: Scene_Parameters;
 		terrain: string;
 		rng: Rand.State;
@@ -387,6 +390,8 @@ Command :: struct {
 	Ans_List_Terrain :: struct {
 		terrains_id: [] int;
 		terrains_name: [] string;
+		authors_name: [] string;
+		creation_time_ms: [] s64;
 	}
 
 	Create_Instance :: struct {
@@ -400,6 +405,7 @@ Command :: struct {
 			Created;
 			Server_Full;
 			Rejected;
+			Bugged;
 		}
 		created_id: int;
 	}
@@ -488,6 +494,9 @@ make_command :: (cmd: $T) -> Command {
 
 serialize_generic :: (payload: *$T, data: [] u8) -> int {
 	info :: type_info(T);
+	if !payload {
+		return 0;
+	}
 	if data.data == null {
 		// Compute size needed to serialize
 
@@ -523,7 +532,14 @@ serialize_generic :: (payload: *$T, data: [] u8) -> int {
 			return 0;
 		} else #if info.type == .ENUM {
 			return 0;
-		} else #if info.type == .POINTER {
+		} else #if info.type == .VARIANT {
+			varT :: #run -> Type {
+				return get_type(type_info(T).variant_of);
+			};
+			variant: *varT = xx payload;
+			return serialize_generic(variant, data);
+		}
+		else #if info.type == .POINTER {
 			assert(false, "Don't know how to serialize a pointer of type%\n", T);
 		}
 		else {
@@ -542,6 +558,13 @@ serialize_generic :: (payload: *$T, data: [] u8) -> int {
 	#if info.type == .STRING {
 		memcpy(data.data, payload.data, payload.count);
 		cursor += payload.count;
+	}
+	#if info.type == .VARIANT {
+		varT :: #run -> Type {
+			return get_type(type_info(T).variant_of);
+		};
+		variant: *varT = xx payload;
+		cursor += serialize_generic(variant, data);
 	}
 	#if info.type == .STRUCT {
 
@@ -577,6 +600,13 @@ deserialize_generic :: (data: [] u8, out: *$T) -> int {
 		out.data = data.data;
 		cursor += out.count;
 	}
+	#if info.type == .VARIANT {
+		varT :: #run -> Type {
+			return get_type(type_info(T).variant_of);
+		};
+		variant: *varT = xx out;
+		cursor += deserialize_generic(data, variant);
+	}
 	#if info.type == .STRUCT {
 		#insert #run -> string {
 			sb: String_Builder;
@@ -593,7 +623,8 @@ deserialize_generic :: (data: [] u8, out: *$T) -> int {
 	#if info.type == .ARRAY {
 		if info.array_type == .VIEW {
 			for 0..out.count - 1 {
-				cursor += deserialize_generic(subdata(), out.data + it);
+				sub := subdata();
+				cursor += deserialize_generic(sub, out.data + it);
 			}
 		}
 	}
@@ -763,7 +794,12 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 
 			additional_data_size := 0;
 			additional_data_size += ans_list_terrain.terrains_id.count * size_of(int);
+			additional_data_size += ans_list_terrain.creation_time_ms.count * size_of(int);
 			for ans_list_terrain.terrains_name {
+				additional_data_size += size_of(u64); // Size prefix
+				additional_data_size += it.count;
+			}
+			for ans_list_terrain.authors_name {
 				additional_data_size += size_of(u64); // Size prefix
 				additional_data_size += it.count;
 			}
@@ -776,7 +812,23 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 				ans_list_terrain.terrains_id.count * size_of(int)
 			);
 			cursor += ans_list_terrain.terrains_id.count * size_of(int);
+			memcpy(
+				buffer.data + cursor,
+				ans_list_terrain.creation_time_ms.data,
+				ans_list_terrain.creation_time_ms.count * size_of(int)
+			);
+			cursor += ans_list_terrain.creation_time_ms.count * size_of(int);
 			for ans_list_terrain.terrains_name {
+				// Write size prefix
+				size_prefix := it.count.(u64);
+				memcpy(buffer.data + cursor, *size_prefix, size_of(u64));
+				cursor += size_of(u64);
+
+				// Write data
+				memcpy(buffer.data + cursor, it.data, it.count);
+				cursor += it.count;
+			}
+			for ans_list_terrain.authors_name {
 				// Write size prefix
 				size_prefix := it.count.(u64);
 				memcpy(buffer.data + cursor, *size_prefix, size_of(u64));
@@ -1050,11 +1102,13 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 				return cmd, false;
 			}
 
-			terrains_name: [..] string;
-			terrains_name.allocator = temp;
 			ans_list_terrain.terrains_id.data = (buffer.data + cursor).(*int);
 			cursor += size_of(int) * ans_list_terrain.terrains_id.count;
+			ans_list_terrain.creation_time_ms.data = (buffer.data + cursor).(*int);
+			cursor += size_of(int) * ans_list_terrain.creation_time_ms.count;
 
+			terrains_name: [..] string;
+			terrains_name.allocator = temp;
 			for 0..ans_list_terrain.terrains_id.count-1 {
 				size_prefix: u64;
 				memcpy(*size_prefix, buffer.data + cursor, size_of(u64));
@@ -1068,6 +1122,22 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 				array_add(*terrains_name, new_terrain);
 			}
 			ans_list_terrain.terrains_name = terrains_name;
+
+			authors_name: [..] string;
+			authors_name.allocator = temp;
+			for 0..ans_list_terrain.terrains_id.count-1 {
+				size_prefix: u64;
+				memcpy(*size_prefix, buffer.data + cursor, size_of(u64));
+				cursor += size_of(u64);
+
+				new_author: string;
+				new_author.count = size_prefix.(int);
+				new_author.data = (buffer.data + cursor).(*u8);
+				cursor += new_author.count;
+
+				array_add(*authors_name, new_author);
+			}
+			ans_list_terrain.authors_name = authors_name;
 
 			return cmd, true;
 		case .Load_Terrain;
