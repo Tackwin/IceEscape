@@ -173,14 +173,15 @@ GUI_State :: struct {
 
 	main_font: *Platform.Font;
 
+	Direction :: enum {
+		Right :: 0;
+		Down :: 1;
+		Left :: 2;
+		Up :: 3;
+	}
 	Default_Params :: struct {
 		z := 0.0;
-		direction: enum {
-			Right :: 0;
-			Down :: 1;
-			Left :: 2;
-			Up :: 3;
-		} = .Down;
+		direction : Direction = .Down;
 		align: Align = .Top_Left;
 		cursor := V2f.{ 0, 0 };
 		padding: V2f = V2f.{ 8, 8 };
@@ -338,6 +339,20 @@ move_cursor :: (state: *GUI_State, delta: float) {
 		default_params(state).cursor.y += delta;
 	}
 }
+advance_cursor :: (gui: *GUI_State, origin: V2f, dir: GUI_State.Direction, aabb: AABBf) {
+	default_params(gui).cursor = origin;
+	if dir == {
+		case .Right;
+			default_params(gui).cursor.x += aabb_width(aabb) + default_params(gui).padding.x;
+		case .Down;
+			default_params(gui).cursor.y -= aabb_height(aabb) + default_params(gui).padding.y;
+		case .Left;
+			default_params(gui).cursor.x -= aabb_width(aabb) + default_params(gui).padding.x;
+		case .Up;
+			default_params(gui).cursor.y += aabb_height(aabb) + default_params(gui).padding.y;
+	}
+}
+
 push_default_params :: (state: *GUI_State, params: GUI_State.Default_Params = .{}) {
 	array_add(*state.default_params_stack, params);
 }
@@ -2288,6 +2303,7 @@ Atom_Label :: struct {
 	offsets: [] float;
 	gui_char_start_index: int;
 	gui_char_count: int;
+	baseline_y_from_bottom: float;
 }
 _atom_label :: (
 	gui: *GUI_State,
@@ -2306,21 +2322,13 @@ _atom_label :: (
 	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
 	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
 	pos += offset_pos;
+
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
-
 	return atom_label(
 		gui,
 		text,
@@ -2353,6 +2361,7 @@ atom_label :: (
 	defer pop_id(gui);
 
 	ret: Atom_Label;
+	ret.baseline_y_from_bottom = 0;
 
 	aabb_min := V2f.{ +FLOAT32_MAX, +FLOAT32_MAX };
 	aabb_max := V2f.{ -FLOAT32_MAX, -FLOAT32_MAX };
@@ -2388,7 +2397,7 @@ atom_label :: (
 		aabb_min.y = min(aabb_min.y, char.pos.y);
 		aabb_max.x = max(aabb_max.x, char.pos.x + char.size.x);
 		aabb_max.y = max(aabb_max.y, char.pos.y + char.size.y);
-
+		ret.baseline_y_from_bottom = min(ret.baseline_y_from_bottom, glyph.planey * scale);
 		array_add(*gui.chars, char);
 	}
 	ret.gui_char_count = gui.chars.count - ret.gui_char_start_index;
@@ -2434,6 +2443,7 @@ atom_label :: (
 	ret.aabb_min = aabb_min;
 	ret.aabb_max = aabb_max;
 	w.aabb = .{ ret.aabb_min, ret.aabb_max };
+	ret.baseline_y_from_bottom = -ret.baseline_y_from_bottom;
 	return ret;
 }
 
@@ -2984,19 +2994,11 @@ _text_button :: (
 	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
 	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
 
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
 
 	a, b, c := text_button(gui, text, pos, z, id, align, size);
@@ -3030,20 +3032,23 @@ text_button :: (
 		background_color = V4f.{ 0, 0, 0, 1 };
 	}
 
-	scale := 16.0;
+	scale := 20.0;
 	if size == .Medium {
-		scale = 20.0;
-		state.aabb_padding = .{ 6, 6 };
-		state.border = .{ 1.5, 1.5 };
-	} else if size == .Large {
 		scale = 24.0;
-		state.aabb_padding = .{ 8, 8 };
-		state.border = .{ 2, 2 };
+	} else if size == .Large {
+		scale = 28.0;
 	}
+	text_scale := scale * 0.75;
 
 	label := atom_label(
-		gui, text, pos, scale = scale, z = z + 1.0, align = align, color = label_color
+		gui, text, pos, scale = text_scale, z = z + 1.0, align = align, color = label_color
 	);
+	// The text could have variable height, so we will make sur that the space between the baseline
+	// and the bottom of the button is always the same
+	// After adjusting the bottom, we will need to 
+	if label.baseline_y_from_bottom < state.aabb_padding.y {
+		label.aabb_min.y -= state.aabb_padding.y - label.baseline_y_from_bottom;
+	}
 	widget.aabb.min = label.aabb_min - state.aabb_padding;
 	widget.aabb.max = label.aabb_max + state.aabb_padding;
 	push_quad_screen(gui, widget.aabb, v3(state.border_color), z);
@@ -3075,19 +3080,11 @@ labeled_text_button :: (
 	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
 	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
 
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
 
 	push_id(gui, id);
@@ -3215,19 +3212,11 @@ labeled_checkbox :: (
 	_, w := widget(gui, id, struct {});
 
 
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
 
 	push_id(gui, id);
@@ -3239,7 +3228,7 @@ labeled_checkbox :: (
 		gui,
 		label,
 		lower_left + v2(padding, 0.0),
-		size,
+		size * 0.6,
 		z,
 		align = vertical(align) | Align.Left,
 		color = label_color,
@@ -3432,19 +3421,11 @@ _labeled_dropdown :: (
 	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
 	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
 
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
 
 	return labeled_dropdown(
@@ -3537,19 +3518,11 @@ labeled_input_text :: (
 ) -> string {
 	_, w := widget(gui, id, struct {});
 
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
 
 	push_id(gui, id);
@@ -3669,6 +3642,13 @@ labeled_integer_input :: (
 	padding := 4.0
 ) -> Integer_Input {
 	_, w := widget(gui, id, struct {});
+
+	origin := default_params(gui).cursor;
+	defer {
+		aabb := widget_aabb(gui, id);
+		dir := default_params(gui).direction;
+		advance_cursor(gui, origin, dir, aabb);
+	}
 
 	push_id(gui, id);
 	defer pop_id(gui);
@@ -4031,19 +4011,12 @@ float_input :: (
 	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
 	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
 	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
 
 	push_id(gui, id);
@@ -4258,19 +4231,12 @@ int_input :: (
 	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
 	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
 	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
+
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
 
 	push_id(gui, id);
@@ -4486,19 +4452,11 @@ labeled_float_input :: (
 	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
 	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
 
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
 
 	push_id(gui, id);
@@ -4554,19 +4512,11 @@ labeled_int_input :: (
 ) -> Int_Input {
 	_, w := widget(gui, id, struct {});
 
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
 
 	push_id(gui, id);
@@ -4639,21 +4589,12 @@ v2_input :: (
 	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
 	align := ifx _align == Align.Undefined then default_params(gui).align else _align;
 
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
-
 	state, w := widget(gui, id, V2_Input);
 
 	push_id(gui, id);
@@ -4742,19 +4683,12 @@ labeled_v2_input :: (
 	label_color := GRAY_00
 ) -> V2_Input {
 	_, w := widget(gui, id, struct {});
+
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
 
 	push_id(gui, id);
@@ -4937,21 +4871,13 @@ labeled_v3_input :: (
 	labels := string.[ "X", "Y", "Z" ]
 ) -> V3_Input {
 	_, w := widget(gui, id, struct {});
+
+	origin := default_params(gui).cursor;
 	defer {
 		aabb := widget_aabb(gui, id);
 		dir := default_params(gui).direction;
-		if dir == {
-			case .Right;
-				default_params(gui).cursor.x = aabb.max.x + default_params(gui).padding.x;
-			case .Down;
-				default_params(gui).cursor.y = aabb.min.y - default_params(gui).padding.y;
-			case .Left;
-				default_params(gui).cursor.x = aabb.min.x - default_params(gui).padding.x;
-			case .Up;
-				default_params(gui).cursor.y = aabb.max.y + default_params(gui).padding.y;
-		}
+		advance_cursor(gui, origin, dir, aabb);
 	}
-
 	push_id(gui, id);
 	defer pop_id(gui);
 

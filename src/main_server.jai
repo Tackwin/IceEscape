@@ -327,12 +327,15 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 	if load_terrain {
 		user := find_user_by_connection(server, sender);
 		if user {
-			terrain_ascii := load_database(
+			query := tprint(
+				"SELECT * FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1",
+				load_terrain.terrain_id
+			);
+			terrain_ascii := load_database_custom(
 				platform,
 				server.db,
-				"terrain_asciis",
 				DB_Terrain_Ascii,
-				tprint("id = %", load_terrain.terrain_id)
+				query
 			);
 
 			terrain_info := load_database(
@@ -408,6 +411,45 @@ WHERE_QUERY;
 	if save_terrain {
 		user := find_user_by_connection(server, sender);
 		if user {
+			if user.profile_id >= 0 {
+
+				// First if the user has a terrain with the same name
+				Loaded :: struct {
+					id: int;
+				}
+
+				name: string;
+				name.data = save_terrain.info.name.data;
+				name.count = 0;
+				for 0..save_terrain.info.name.count - 1 {
+					name.count = it;
+					if save_terrain.info.name.data[it] == 0
+						break;
+				}
+				query := tprint(
+					"SELECT id FROM terrain_infos WHERE name = '%1' AND author_profile_id = %2",
+					name, user.profile_id
+				);
+				loaded := load_database_custom(platform, server.db, Loaded, query);
+
+				if loaded.count > 0 {
+					// We will add a new row to terrain_asciis with the same id, with a newer
+					// timestamp.
+
+					to_asciis: [1] DB_Terrain_Ascii;
+					to_ascii := *to_asciis[0];
+					to_ascii.id = loaded[0].id;
+					to_ascii.ascii = save_terrain.ascii;
+					to_ascii.created_ms = to_milliseconds(current_time_consensus());
+
+					store_database(platform, server.db, "terrain_asciis", to_asciis, false);
+					return true;
+				}
+			}
+
+
+			// Otherwise we create a new terrain with a new id,
+			// and store the ascii and the info with this id
 			new_id := Rand.random_positive_int(*server.rng);
 
 			ids: [1] DB_Terrain_Id;
@@ -432,8 +474,10 @@ WHERE_QUERY;
 			to_ascii := *to_asciis[0];
 			to_ascii.id = new_id;
 			to_ascii.ascii = save_terrain.ascii;
+			to_ascii.created_ms = to_milliseconds(current_time_consensus());
 
-			store_database(platform, server.db, "terrain_asciis", to_asciis);
+			store_database(platform, server.db, "terrain_asciis", to_asciis, false);
+			return true;
 		}
 	}
 
@@ -742,12 +786,11 @@ init_instance_with_roster :: (
 	roster := rosters[0];
 
 	for roster.terrain_ids {
-		terrain_ascii := load_database(
+		terrain_ascii := load_database_custom(
 			platform,
 			server.db,
-			"terrain_asciis",
 			DB_Terrain_Ascii,
-			tprint("id = %", it)
+			tprint("SELECT * FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1", it)
 		);
 
 		if terrain_ascii.count == 0
@@ -1090,8 +1133,9 @@ ensure_database :: (app: *App) {
 		app_user.server.db,
 		#string QUERY
 			CREATE TABLE IF NOT EXISTS terrain_asciis (
-				id INTEGER PRIMARY KEY,
+				id INTEGER,
 				ascii TEXT,
+				created_ms INTEGER,
 				FOREIGN KEY(id) REFERENCES terrain_ids(id) ON DELETE CASCADE
 			);
 		QUERY

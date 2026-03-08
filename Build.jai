@@ -364,6 +364,11 @@ build_game_dll_2 :: () {
 	set_build_options(opts, w);
 	compiler_begin_intercept(w);
 	add_build_file("src/main_game.jai", w);
+	date := to_calendar(current_time_consensus());
+	version_string := tprint(
+		"version_string :: \"0.0.1 (%)\";", calendar_to_string(date)
+	);
+	add_build_string(version_string, w);
 	while true {
 		message := compiler_wait_for_message();
 
@@ -585,6 +590,11 @@ build_wasm_2 :: () {
 
 	set_build_options(opts, w);
 	compiler_begin_intercept(w);
+	date := to_calendar(current_time_consensus());
+	version_string := tprint(
+		"version_string :: \"0.0.1 (%)\"; ", calendar_to_string(date)
+	);
+	add_build_string(version_string, w);
 	add_build_file("src/entry/wasm.jai", w);
 	while true {
 		message := compiler_wait_for_message();

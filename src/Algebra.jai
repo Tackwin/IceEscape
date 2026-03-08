@@ -82,10 +82,12 @@ width :: (aabb: AABB($T)) -> T {
 	s := size(aabb);
 	return s.x;
 }
+aabb_width :: width;
 height :: (aabb: AABB($T)) -> T {
 	s := size(aabb);
 	return s.y;
 }
+aabb_height :: height;
 top :: (aabb: AABB($T)) -> T {
 	return aabb.max.y;
 }
@@ -895,6 +897,11 @@ ease_in_out_bounce :: (x: float) -> float {
 linear_step :: (x: float, edge0: float, edge1: float) -> float {
 	t := clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
 	return t;
+}
+
+smoothstep :: (x: float, edge0: float, edge1: float) -> float {
+	t := clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+	return t * t * (3 - 2 * t);
 }
 
 // lut_sin_norm_angle :: (angle: float, $LUT: [N] float) -> float {

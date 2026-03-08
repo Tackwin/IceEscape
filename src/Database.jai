@@ -46,6 +46,7 @@ DB_Terrain_Infos :: struct {
 DB_Terrain_Ascii :: struct {
 	id: int;
 	ascii: string;
+	created_ms: int;
 }
 
 DB_Terrain_Roster :: struct {

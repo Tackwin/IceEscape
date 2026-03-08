@@ -124,19 +124,30 @@ find_closest_path :: (editor: *Editor, position: V3f, cutoff := 5.0) -> *Scene.P
 	closest_dist := FLOAT32_MAX;
 
 	for * path: editor.scene.paths {
-		beg := path.checkpoints.index;
-		cnt := path.checkpoints.count;
-		off := ifx path.closed then +1 else 0;
 
-		for i: 0..cnt - 1 + off {
-			cp_a := editor.scene.checkpoints[(beg + i) % cnt];
-			cp_b := editor.scene.checkpoints[(beg + (i + 1) % cnt)];
+		prev_idx := path.checkpoint_head;
+		if prev_idx < 0 continue;
+		curr_idx := editor.scene.checkpoints[prev_idx].next;
+
+		break_next := false;
+		while curr_idx >= 0 {
+			cp_a := editor.scene.checkpoints[prev_idx];
+			cp_b := editor.scene.checkpoints[curr_idx];
 
 			seg_closest := closest_point_on_line_segment(cp_a.position, cp_b.position, position);
 			dist := norm(seg_closest - position);
 			if dist < closest_dist {
 				closest_dist = dist;
 				closest_path = path;
+			}
+
+			if break_next break;
+
+			prev_idx = curr_idx;
+			curr_idx = editor.scene.checkpoints[curr_idx].next;
+			if curr_idx < 0 && path.closed {
+				curr_idx = path.checkpoint_head;
+				break_next = true;
 			}
 		}
 	}

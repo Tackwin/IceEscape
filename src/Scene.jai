@@ -683,7 +683,7 @@ AntiAir :: struct {
 Bomb_Spawner :: struct {
 	id: int;
 
-	position: V3f;
+	position: V3f; @edit
 
 	spawned_id := -1;
 	explosion_time := 10.0; @edit
@@ -721,20 +721,19 @@ Block_Rock :: struct {
 
 	id: int;
 	exploded := false;
-	position: V3f;
+	position: V3f; @edit
 }
 
 PressButton :: struct {
 	id: int;
+	position: V3f; @edit
 
 	is_radio := false; @edit
-
-	position: V3f;
 	
 	count_changed_juice_t := 0.0;
 	activated_juice_t := 0.0;
 
-	index := 0;
+	index := 0; @edit
 	activated := false;
 
 	n_present := 0;
@@ -745,7 +744,7 @@ PressButton :: struct {
 Turn_Table :: struct {
 	id: int;
 
-	position: V3f;
+	position: V3f; @edit
 	turning_speed := 1.0; @edit
 	turning_offset := 0.0; @edit
 
@@ -758,13 +757,20 @@ Turn_Table :: struct {
 
 Trap :: struct {
 	id: int;
-	position: V3f;
+	position: V3f; @edit
 	radius_hitbox := 0.5;
+
+	activable := false; @edit
+	stay_activated_time := 1.0; @edit
+
+	activated := false;
+	activated_clock := 0.0;
+	activator_id := -1;
 } @editable
 
 Present :: struct {
 	id: int;
-	position: V3f;
+	position: V3f; @edit
 
 	Kind :: enum {
 		A :: 0;
@@ -794,7 +800,7 @@ Prop :: struct {
 
 Trophy :: struct {
 	id: int;
-	position: V3f;
+	position: V3f; @edit
 }
 
 Particle :: struct {
@@ -1227,7 +1233,7 @@ Trigger :: enum {
 
 Lantern :: struct {
 	id: int;
-	position: V3f;
+	position: V3f; @edit
 	light_aabb: AABBf; @edit
 	turned_on := false;
 	button_id: int; @edit
@@ -1242,7 +1248,7 @@ Flag :: struct {
 	count_changed_juice_t := 0.0;
 	activated_juice_t := 0.0;
 
-	index := 0;
+	index := 0; @edit
 	activated := false;
 
 	n_present := 0;
@@ -1345,7 +1351,7 @@ Key :: struct {
 	holder: int = -1;
 	server: struct {
 		home: V3f;
-		position: V3f;
+		position: V3f; @edit @display_name(position)
 		radius_hitbox := 0.25;
 		last_hold_clock : float64 = 0.0;
 	}
@@ -1369,10 +1375,10 @@ Skull :: struct {
 
 Path :: struct {
 	id: int;
-	closed := false;
+	closed := false; @edit
 	theta_dir := false;
 
-	checkpoints: ISpan(Checkpoint);
+	checkpoint_head: int = -1;
 }
 
 Checkpoint :: struct {
@@ -1402,14 +1408,14 @@ Tombstone :: struct {
 
 Gate :: struct {
 	id: int;
-	position: V3f;
-	direction: V3f;
+	position: V3f; @edit
+	direction: V3f; @edit @normalize
 	is_closed := true;
 
 	pressbutton_ids: ISpan(int);
 
-	wait_for_key_id := -1;
-	wait_for_trigger_id := -1;
+	wait_for_key_id := -1; @edit
+	wait_for_trigger_id := -1; @edit
 
 	is_end := false; @edit
 } @editable
@@ -1694,11 +1700,27 @@ restart :: (scene: *Scene, params: Scene_Parameters) {
 	scene.succeed = false;
 }
 
+add_checkpoint_to_path :: (scene: *Scene, path: *Path, checkpoint: Checkpoint) {
+	if path.checkpoint_head == -1 {
+		array_add(*scene.checkpoints, checkpoint);
+		path.checkpoint_head = scene.checkpoints.count - 1;
+		return;
+	}
+
+	idx := path.checkpoint_head;
+	while scene.checkpoints[idx].next != -1 {
+		idx = scene.checkpoints[idx].next;
+	}
+
+	array_add(*scene.checkpoints, checkpoint);
+	scene.checkpoints[idx].next = scene.checkpoints.count - 1;
+}
+
 add_snow :: (scene: *Scene, dt: float32) {
 	// Add snow particles
 	n_snow :=
 		dt * (scene.camera_max.x - scene.camera_min.x) * (scene.camera_max.y - scene.camera_min.y);
-	n_snow *= 0.35;
+	n_snow *= 0.45;
 	while n_snow > 0.0 {
 		r := Rand.random_uniform(*scene.client_rng, 0.0, 1.0);
 		if r > n_snow
@@ -1952,6 +1974,30 @@ update_client :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 			if flag && !flag.activated {
 				it.server.available = false;
 			}
+		}
+	}
+
+	// Springs the trap, only for visuals
+	for * scene.traps if it.activable && !it.activated {
+		for * player, player_idx: scene.players {
+			if player.server.dead
+				continue;
+
+			p := player.server.position;
+			q := it.position;
+
+			d := norm(p - q);
+			if d < it.radius_hitbox {
+				it.activated_clock = xx scene.client.clock;
+				it.activated = true;
+				break;
+			}
+		}
+	}
+	// Unspring the trap, only for visuals
+	for * scene.traps if it.activable && it.activated {
+		if scene.client.clock >= it.activated_clock + it.stay_activated_time {
+			it.activated = false;
 		}
 	}
 }
@@ -2265,11 +2311,19 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	// 	}
 	// }
 
+	// >RULE Trap unspring after a short while, allowing players to step on it again
+	for * scene.traps if it.activable && it.activated {
+		if scene.server.clock > it.activated_clock + it.stay_activated_time {
+			it.activated = false;
+		}
+	}
+
 	// >RULE Player die on contact with trap
 	for * scene.traps {
 		p := it.position;
 
-		for * player, player_idx: scene.players {
+		// unconditionnaly if the traps are not of the activatable kind
+		if !it.activable for * player, player_idx: scene.players {
 			if !player.server.dead {
 				q := player.server.position;
 
@@ -2277,6 +2331,31 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				if d < it.radius_hitbox {
 					should_die[player_idx].soft_die = true;
 					continue;
+				}
+			}
+		}
+
+		// Otherwise we need to check if the trap is already activated or not
+		// and if the player is the one who activated it or not.
+		if it.activable for * player, player_idx: scene.players if !player.server.dead {
+			q := player.server.position;
+
+			d := max(abs((p - q).x), abs((p - q).y));
+			if d < it.radius_hitbox {
+				if it.activated {
+					if it.activator_id == player.id {
+						if scene.server.clock > it.activated_clock + 0.5 {
+							should_die[player_idx].soft_die = true;
+							continue;
+						}
+					} else {
+						should_die[player_idx].soft_die = true;
+						continue;
+					}
+				} else {
+					it.activated = true;
+					it.activator_id = player.id;
+					it.activated_clock = xx scene.server.clock;
 				}
 			}
 		}
@@ -4435,19 +4514,28 @@ touch_a_tile :: (scene: Scene, spot: V3f, radius: float, kind: Tile.Kind) -> boo
 }
 
 compute_path_matrix :: (scene: Scene, path: Path, t: float, offset := 0.0) -> M4f {
-	if path.checkpoints.count == 0
+	if path.checkpoint_head < 0
 		return M4f.identity();
 
-	beg := path.checkpoints.index + 0;
-	cnt := path.checkpoints.count;
-	off := ifx path.closed then 1 else 0;
-
 	total_t := 0.0;
-	for 1..cnt + off - 1 {
-		a := scene.checkpoints[beg + (it - 1) % cnt];
-		b := scene.checkpoints[beg + (it + 0) % cnt];
-		d := norm(b.position - a.position) / b.speed;
-		total_t += d;
+	prev := path.checkpoint_head;
+	if scene.checkpoints[prev].next >= 0 {
+		idx := scene.checkpoints[prev].next;
+		while idx >= 0 {
+			a := scene.checkpoints[prev];
+			b := scene.checkpoints[idx];
+			d := norm(b.position - a.position) / b.speed;
+			total_t += d;
+
+			if idx == path.checkpoint_head {
+				break;
+			}
+			prev = idx;
+			idx = scene.checkpoints[idx].next;
+			if idx < 0 && path.closed {
+				idx = path.checkpoint_head;
+			}
+		}
 	}
 
 	t += offset * total_t;
@@ -4455,27 +4543,40 @@ compute_path_matrix :: (scene: Scene, path: Path, t: float, offset := 0.0) -> M4
 	t = fmod_cycling(t, total_t);
 
 	theta_sum := 0.0;
-	for 1..cnt + off - 1 {
-		a := scene.checkpoints[beg + (it - 1) % cnt];
-		b := scene.checkpoints[beg + (it + 0) % cnt];
-		d := norm(b.position - a.position) / b.speed;
-		if t <= d {
-			pos := a.position + (b.position - a.position) * (t / d);
-			M := M4f.translate(pos);
+	prev = path.checkpoint_head;
+	if scene.checkpoints[prev].next >= 0 {
+		idx := scene.checkpoints[prev].next;
+		while idx >= 0 {
+			a := scene.checkpoints[prev];
+			b := scene.checkpoints[idx];
+			d := norm(b.position - a.position) / b.speed;
+			if t <= d {
+				pos := a.position + (b.position - a.position) * (t / d);
+				M := M4f.translate(pos);
 
-			if path.theta_dir {
-				theta := theta_sum + b.theta * (t / d);
-				M = M * to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, theta));
-			} else {
-				dir := normalize(b.position - a.position);
-				M = M * to_rotation_matrix(
-					from_unit_vectors(V3f.{ 1, 0, 0 }, dir)
-				);
+				if path.theta_dir {
+					theta := theta_sum + b.theta * (t / d);
+					M = M * to_rotation_matrix(axis_angle(V3f.{ 0, 0, 1 }, theta));
+				} else {
+					dir := normalize(b.position - a.position);
+					M = M * to_rotation_matrix(
+						from_unit_vectors(V3f.{ 1, 0, 0 }, dir)
+					);
+				}
+				return M;
 			}
-			return M;
+			theta_sum += a.theta;
+			t -= d;
+
+			if idx == path.checkpoint_head
+				break;
+
+			prev = idx;
+			idx = scene.checkpoints[idx].next;
+			if idx < 0 && path.closed {
+				idx = path.checkpoint_head;
+			}
 		}
-		theta_sum += a.theta;
-		t -= d;
 	}
 
 	return M4f.identity();
@@ -4760,13 +4861,16 @@ serialize :: (scene: Scene) -> string {
 
 	for scene.paths {
 		print_to_builder(*sb, "path\n");
-		for i: 0..it.checkpoints.count - 1 {
-			checkpoint := scene.checkpoints[it.checkpoints.index + i];
+
+		checkpoint_idx := it.checkpoint_head;
+		while checkpoint_idx >= 0 {
+			checkpoint := scene.checkpoints[checkpoint_idx];
 			print_to_builder(
 				*sb,
 				"- checkpoint: % % %\n",
 				checkpoint.position.x, checkpoint.position.y, checkpoint.position.z
 			);
+			checkpoint_idx = checkpoint.next;
 		}
 		if it.closed {
 			print_to_builder(*sb, "- closed\n");
@@ -4834,9 +4938,13 @@ present
 trap
 - position: % % %
 - radius_hitbox: %
+- stay_activated_time: %
+%
 			TRAP,
 			it.position.x, it.position.y, it.position.z,
-			it.radius_hitbox
+			it.radius_hitbox,
+			it.stay_activated_time,
+			ifx it.activable then "- activable" else ""
 		);
 	}
 

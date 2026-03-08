@@ -66,11 +66,13 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 
 	{
 		var token = 0;
-		if (sessionStorage.getItem("token")) {
-			token = parseInt(sessionStorage.getItem("token"), 10);
+		if (localStorage.getItem("token")) {
+			token = parseInt(localStorage.getItem("token"), 10);
 		}
-		else
+		else {
 			token = Math.random() * 1024 * 1024;
+			localStorage.setItem("token", token);
+		}
 		Atomics.store(getControlsBufferU32(), Control_Token, token);
 	}
 
@@ -117,20 +119,20 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 
 
 jai_imports.js_get_token = () => {
-    if (sessionStorage.getItem("token")) {
-        return parseInt(sessionStorage.getItem("token"), 10);
+    if (localStorage.getItem("token")) {
+        return parseInt(localStorage.getItem("token"), 10);
     }
     return Math.random() * 1024 * 1024;
 }
 
+jai_imports.js_set_token = (token) => {
+	Atomics.store(getControlsBufferU32(), Control_Token, token);
+	localStorage.setItem("token", token);
+};
+
 jai_imports.js_sleep = new WebAssembly.Suspending(async (ms) => {
 	await new Promise(r => setTimeout(r, Number(ms)));
 })
-
-jai_imports.js_set_token = (token) => {
-	Atomics.store(getControlsBufferU32(), Control_Token, token);
-	sessionStorage.setItem("token", token);
-};
 
 jai_imports.memcmp = (a, b, count) => {
 	const [na, nb, nc] = [Number(a), Number(b), Number(count)];
@@ -510,14 +512,14 @@ jai_imports.js_is_released = (released_ptr) => {
 }
 
 jai_imports.js_get_token = () => {
-    if (sessionStorage.getItem("token")) {
-        return parseInt(sessionStorage.getItem("token"), 10);
+    if (localStorage.getItem("token")) {
+        return parseInt(localStorage.getItem("token"), 10);
     }
     return crypto.getRandomValues(new BigUint32Array(1))[0];
 }
 
 jai_imports.js_set_token = (token) => {
-    sessionStorage.setItem("token", token);
+    localStorage.setItem("token", token);
 	Atomics.store(getControlsBufferU32(), Control_Token / 4, token);
 };
 

@@ -1187,7 +1187,8 @@ entries :: Entry.[
 
 // Main
 
-#import "main_game";
+using Main_Game :: #import "main_game";
+#poke_name Main_Game version_string;
 
 app: App;
 platform: Platform;

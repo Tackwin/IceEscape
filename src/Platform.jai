@@ -257,7 +257,11 @@ load_database_custom :: (
 
 
 load_database :: (
-	platform: *Platform, db: DB_query.Handle, table: string, $T: Type, where: string = ""
+	platform: *Platform,
+	db: DB_query.Handle,
+	table: string,
+	$T: Type,
+	where: string = ""
 ) -> [] *T {
 	query := DB_query.{};
 	query.kind = .LOAD;
@@ -292,7 +296,13 @@ load_database :: (
 	return output;
 }
 
-store_database :: (platform: *Platform, db: DB_query.Handle, table: string, inputs: [] $T) {
+store_database :: (
+	platform: *Platform,
+	db: DB_query.Handle,
+	table: string,
+	inputs: [] $T,
+	on_conflict_update: bool = true
+) {
 	query := DB_query.{};
 	query.kind = .STORE;
 	query.handle = db;
@@ -318,25 +328,27 @@ store_database :: (platform: *Platform, db: DB_query.Handle, table: string, inpu
 		print_to_builder(*sb, "%1?", sep);
 		sep = ", ";
 	}
-
-	any_to_update := false;
-	for info.members {
-		if it.name != "id" {
-			any_to_update = true;
-			break;
-		}
-	}
-
 	print_to_builder(*sb, ")");
-	if any_to_update {
-		print_to_builder(*sb, " ON CONFLICT(id) DO UPDATE SET ");
-		sep = "";
+
+	if on_conflict_update {
+		any_to_update := false;
 		for info.members {
-			if it.name == "id" {
-				continue;
+			if it.name != "id" {
+				any_to_update = true;
+				break;
 			}
-			print_to_builder(*sb, "%1%2 = excluded.%2", sep, to_lower_copy(it.name,, temp));
-			sep = ", ";
+		}
+
+		if any_to_update {
+			print_to_builder(*sb, " ON CONFLICT(id) DO UPDATE SET ");
+			sep = "";
+			for info.members {
+				if it.name == "id" {
+					continue;
+				}
+				print_to_builder(*sb, "%1%2 = excluded.%2", sep, to_lower_copy(it.name,, temp));
+				sep = ", ";
+			}
 		}
 	}
 	print_to_builder(*sb, ";");

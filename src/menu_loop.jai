@@ -16,6 +16,7 @@ Menu :: struct {
 	profile: Profile;
 }
 
+
 push_left_main_menu :: (
 	gui: *GUI.GUI_State,
 	menu: *Menu,
@@ -225,6 +226,21 @@ process_menu :: (state: *State, command: Command) -> bool {
 		return false;
 	}
 
+	login := isa(command.payload, Command.Login);
+	if login {
+		if login.feedback == .Accepted {
+			if state.menu.passstring
+				free(state.menu.passstring);
+			state.menu.passstring = sprint(
+				"% % %",
+				slice(state.menu.login_popup_password, 0, 4),
+				slice(state.menu.login_popup_password, 4, 7),
+				slice(state.menu.login_popup_password, 7, 11)
+			);
+		}
+		state.platform.set_token(login.token);
+	}
+
 	return false;
 }
 
@@ -343,6 +359,20 @@ menu_loop :: (_app: *App) -> bool {
 		}
 
 		push_left_main_menu(*app_user.gui_state, *state.menu, _app.platform);
+		// #if OS == .WASM {
+		// 	version_string :: "0.0.1 (1 March 2026, 23:13:10)";
+		// }
+		GUI.default_params(*app_user.gui_state).cursor.x = controls.window_size.x - 12.0;
+		GUI.default_params(*app_user.gui_state).cursor.y = controls.window_size.y - 8.0;
+		GUI.default_params(*app_user.gui_state).align = .Top_Right;
+		GUI._atom_label(
+			*app_user.gui_state,
+			tprint("Version: %", version_string),
+			id = "version_label",
+			color = GUI.GRAY_00,
+			offset_pos = v2(-4.0, 0.0),
+			scale = 10
+		);
 	}
 
 	// Editor button (always visible)

@@ -118,7 +118,6 @@ FORMAT;
 #insert #run embed_data("MISSILE_OBJ", "missile.obj", #filepath);
 #insert #run embed_data("DRONE_OBJ", "drone.obj", #filepath);
 #insert #run embed_data("DRONE_BLADE_OBJ", "drone_blade.obj", #filepath);
-#insert #run embed_data("TRAP_SPIKE_OBJ", "trap_spike.obj", #filepath);
 #insert #run embed_data("PRESSBUTTON_UNPRESSED_OBJ", "Mesh/PressButton_Unpressed.obj", #filepath);
 #insert #run embed_data("PRESSBUTTON_PRESSED_OBJ", "Mesh/PressButton_Pressed.obj", #filepath);
 #insert #run embed_data("PRESSBUTTON_UNPRESSED_RADIO_OBJ", "Mesh/PressButton_Unpressed_radio.obj", #filepath);
@@ -196,24 +195,26 @@ FORMAT;
 #insert #run embed_data("INDICATOR_OUTLINE_OBJ", "indicator_outline.obj", #filepath);
 #insert #run embed_data("INDICATOR_STROKE_OBJ", "indicator_stroke.obj", #filepath);
 
+#insert #run embed_data("TRAP_SPIKE_OBJ", "Mesh/Trap_Spike.obj", #filepath);
+#insert #run embed_data("TRAP_BASE_OBJ", "Mesh/Trap_Base.obj", #filepath);
 #insert #run embed_data("LANTERN_OBJ", "Mesh/Lantern.obj", #filepath);
 #insert #run embed_data("TERRAIN_TREE_SNOW_A", "Mesh/tree_snow_a.obj", #filepath);
 #insert #run embed_data("TERRAIN_TREE_SNOW_B", "Mesh/tree_snow_b.obj", #filepath);
 #insert #run embed_data("TERRAIN_TREE_SNOW_C", "Mesh/tree_snow_c.obj", #filepath);
-#insert #run embed_data("TERRAIN_SNOWMAN", "Terrain/snowman.obj", #filepath);
-#insert #run embed_data("TERRAIN_SNOWMAN_HAT", "Terrain/snowman_hat.obj", #filepath);
-#insert #run embed_data("TERRAIN_SNOW_FLAT", "Terrain/snow_flat.obj", #filepath);
-#insert #run embed_data("TERRAIN_SNOW_FLAT_LARGE", "Terrain/snow_flat_large.obj", #filepath);
-#insert #run embed_data("TERRAIN_SNOW_PILE", "Terrain/snow_pile.obj", #filepath);
-#insert #run embed_data("TERRAIN_SNOWFLAKE_A", "Terrain/snowflake_a.obj", #filepath);
-#insert #run embed_data("TERRAIN_SNOWFLAKE_B", "Terrain/snowflake_b.obj", #filepath);
-#insert #run embed_data("TERRAIN_SNOWFLAKE_C", "Terrain/snowflake_c.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOWMAN", "Mesh/snowman.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOWMAN_HAT", "Mesh/snowman_hat.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOW_FLAT", "Mesh/snow_flat.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOW_FLAT_LARGE", "Mesh/snow_flat_large.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOW_PILE", "Mesh/snow_pile.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOWFLAKE_A", "Mesh/snowflake_a.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOWFLAKE_B", "Mesh/snowflake_b.obj", #filepath);
+#insert #run embed_data("TERRAIN_SNOWFLAKE_C", "Mesh/snowflake_c.obj", #filepath);
 #insert #run embed_data("BLOCK_ROCK_OBJ", "Mesh/Block_Rock.obj", #filepath);
 #insert #run embed_data("NO_BLOCK_ROCK_OBJ", "Mesh/No_Block_Rock.obj", #filepath);
-#insert #run embed_data("ROCK_SMALL", "Terrain/rock_small.obj", #filepath);
-#insert #run embed_data("ROCK_MEDIUM", "Terrain/rock_medium.obj", #filepath);
-#insert #run embed_data("ROCK_LARGE", "Terrain/rock_large.obj", #filepath);
-#insert #run embed_data("PROP_COLORMAP", "Terrain/prop_colormap.png", #filepath);
+#insert #run embed_data("ROCK_SMALL", "Mesh/rock_small.obj", #filepath);
+#insert #run embed_data("ROCK_MEDIUM", "Mesh/rock_medium.obj", #filepath);
+#insert #run embed_data("ROCK_LARGE", "Mesh/rock_large.obj", #filepath);
+#insert #run embed_data("PROP_COLORMAP", "Images/prop_colormap.png", #filepath);
 #insert #run embed_data("SKYBOX_SKI_PNG", "skybox_ski.png", #filepath);
 #insert #run embed_data("SKYBOX_OBJ", "skybox.obj", #filepath);
 #insert #run embed_data("END_HOOK_OBJ", "end_hook.obj", #filepath);
@@ -402,6 +403,7 @@ load_everything :: (platform: Platform) {
 			"MISSILE_OBJ",
 			"DRONE_OBJ",
 			"TRAP_SPIKE_OBJ",
+			"TRAP_BASE_OBJ",
 			"PRESSBUTTON_UNPRESSED_OBJ",
 			"PRESSBUTTON_PRESSED_OBJ",
 			"PRESSBUTTON_UNPRESSED_RADIO_OBJ",

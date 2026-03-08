@@ -864,10 +864,7 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 		if scan2(line, "path") {
 			path: Path;
 			path.id = scene.paths.count;
-			path.checkpoints.count = 0;
-			path.checkpoints.index = scene.checkpoints.count;
 			defer {
-				path.checkpoints.count = scene.checkpoints.count - path.checkpoints.index;
 				array_add(*scene.paths, path);
 			}
 
@@ -897,7 +894,7 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 				if scan2(line, "- checkpoint: % % %", *pos.x, *pos.y, *pos.z) {
 					checkpoint: Checkpoint;
 					checkpoint.position = pos;
-					array_add(*scene.checkpoints, checkpoint);
+					add_checkpoint_to_path(scene, *path, checkpoint);
 					continue;
 				}
 				theta: float;
@@ -905,7 +902,7 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 					checkpoint: Checkpoint;
 					checkpoint.position = pos;
 					checkpoint.theta = theta;
-					array_add(*scene.checkpoints, checkpoint);
+					add_checkpoint_to_path(scene, *path, checkpoint);
 					continue;
 				}
 				speed: float;
@@ -913,7 +910,7 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 					checkpoint: Checkpoint;
 					checkpoint.position = pos;
 					checkpoint.speed = speed;
-					array_add(*scene.checkpoints, checkpoint);
+					add_checkpoint_to_path(scene, *path, checkpoint);
 					continue;
 				}
 				if scan2(
@@ -929,7 +926,7 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 					checkpoint.position = pos;
 					checkpoint.theta = theta;
 					checkpoint.speed = speed;
-					array_add(*scene.checkpoints, checkpoint);
+					add_checkpoint_to_path(scene, *path, checkpoint);
 					continue;
 				}
 				if scene.checkpoints.count > 0 && scan2(
@@ -942,7 +939,7 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 					checkpoint.position = scene.checkpoints[scene.checkpoints.count - 1].position;
 					checkpoint.theta = theta;
 					checkpoint.speed = speed;
-					array_add(*scene.checkpoints, checkpoint);
+					add_checkpoint_to_path(scene, *path, checkpoint);
 					continue;
 				}
 
@@ -1160,6 +1157,15 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 
 				if scan2(line, "- radius_hitbox: %", *trap.radius_hitbox)
 					continue;
+
+				if scan2(line, "- stay_activated_time: %", *trap.stay_activated_time)
+					continue;
+
+				if line == "- activable" {
+					trap.activable = true;
+					continue;
+				}
+				
 
 				print("Error reading trap, unrecognized line: % (L%)\n", line, cursor);
 			}

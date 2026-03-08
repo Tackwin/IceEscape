@@ -58,6 +58,8 @@ parse_web_message :: (state: *State, frame_info: Frame_Info) -> [] Command {
 }
 
 #scope_export
+#placeholder version_string;
+
 App_User :: struct {
 	app: *App;
 	store: Store;

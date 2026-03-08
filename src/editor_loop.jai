@@ -65,11 +65,24 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 			reset_entity_selection(editor, page);
 			Scene.clear_scene_run(*editor.scene);
 			parse_terrain(load_terrain.ascii, *editor.scene, generate_props = false);
+
+			new_save_dialog_input: string;
+			new_save_dialog_input.data = load_terrain.info.name.data;
+			new_save_dialog_input.count = 0;
+			for i: 0..load_terrain.info.name.count - 1 {
+				if load_terrain.info.name.data[i] == 0 {
+					break;
+				}
+				new_save_dialog_input.count += 1;
+			}
+
+			free(page.save_dialog_input);
+			page.save_dialog_input = sprint("%", new_save_dialog_input);
 		}
 		return true;
 	}
-
 	ans_list_terrain := isa(command.payload, Command.Ans_List_Terrain);
+
 	if ans_list_terrain {
 		for page.terrain_list
 			free(it.name.data,, page.terrain_list.allocator);
@@ -329,7 +342,7 @@ handle_entity_placing :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_Sta
 	}
 
 	// Left mouse to paint
-	if gui.controls.pressed[Key.MouseLeft] && !page.was_rectangle_dragging {
+	if gui.controls.just_released[Key.MouseLeft] && !page.was_rectangle_dragging {
 		// Convert screen position to world position
 		world_pos := screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
 
@@ -351,19 +364,18 @@ handle_entity_placing :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_Sta
 				checkpoint: Scene.Checkpoint;
 				checkpoint.position = world_pos;
 				
-				path.checkpoints.index = editor.scene.checkpoints.count;
-				path.checkpoints.count += 1;
-				array_add(*editor.scene.checkpoints, checkpoint);
+				Scene.add_checkpoint_to_path(*editor.scene, path, checkpoint);
 			} else {
 				checkpoint: Scene.Checkpoint;
 				checkpoint.position = world_pos;
 				
 				path: Scene.Path;
 				path.id = editor.scene.paths.count;
-				path.checkpoints.index = editor.scene.checkpoints.count;
-				path.checkpoints.count = 1;
 				array_add(*editor.scene.paths, path);
-				array_add(*editor.scene.checkpoints, checkpoint);
+
+				Scene.add_checkpoint_to_path(
+					*editor.scene, *editor.scene.paths[editor.scene.paths.count - 1], checkpoint
+				);
 			}
 		}
 
@@ -452,16 +464,15 @@ handle_entity_picking :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_Sta
 
 		// Handle paths
 		for * path: editor.scene.paths {
-			beg := path.checkpoints.index;
-			cnt := path.checkpoints.count;
-
-			for 0..cnt-1 {
-				a := editor.scene.checkpoints[beg + (it + 0) % cnt];
+			idx := path.checkpoint_head;
+			while idx >= 0 {
+				a := editor.scene.checkpoints[idx];
 				pos := a.position;
-
 				if in(aabb, v2(pos)) {
 					array_add(*page.selected, .{ path, type_info(Scene.Path) });
+					break;
 				}
+				idx = a.next;
 			}
 		}
 
@@ -690,6 +701,8 @@ draw_scene_edit_content :: (
 		editor.scene.night = checked.checked;
 	}
 
+	GUI.move_cursor(gui, 8);
+
 	{
 		GUI.push_default_params(gui, GUI.default_params(gui));
 		defer GUI.pop_default_params(gui);
@@ -790,7 +803,7 @@ remove_from_selection :: (page: *Editor_Page, ptr: *void) {
 		}
 	}
 }
-
+#import "Basic";
 draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, panel_aabb: AABBf) {
 	if page.selected.count == 0
 		return;
@@ -831,30 +844,45 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 	GUI.default_params(gui).align = .Center_Left;
 	GUI.default_params(gui).z = 52;
 
+	field_collecteds: Table(string, [..] Edit_Field);
+	field_collecteds.allocator = temp;
+
+	field_count: Table(string, int);
+	field_count.allocator = temp;
+
+	for selected: page.selected {
+		selected_entity_ptr := selected.ptr;
+		selected_entity_type := selected.type;
+		edit_fields := get_edit_fields(*selected_entity_type);
+		for field: edit_fields {
+			if table_find_pointer(*field_count, field.display_name) == null {
+				table_set(*field_count, field.display_name, 1);
+			} else {
+				table_find_pointer(*field_count, field.display_name).* += 1;
+			}
+
+			collected := table_find_pointer(*field_collecteds, field.display_name);
+			if !collected {
+				arr: [..] Edit_Field;
+				arr.allocator = temp;
+				array_add(*arr, field);
+				table_add(*field_collecteds, field.display_name, arr);
+			} else {
+				array_add(collected, field);
+			}
+		}
+	}
+
+	// for count, path: field_count {
+	// 	print("Field % appears in % entities\n", path, count);
+	// }
+	// print("\n");
+	// sleep_milliseconds(1000);
+
+	content_width := panel_width - GUI.default_params(gui).cursor.x + panel_aabb.min.x;
 	if page.selected.count == 1 {
 		selected_entity_ptr := page.selected[0].ptr;
 		selected_entity_type := page.selected[0].type;
-		// Get current position from the entity
-		current_pos := member_pointer_rec(
-			selected_entity_type, selected_entity_ptr, "position", V3f
-		);
-
-		if current_pos {
-			pos_result := GUI.labeled_v3_input(
-				gui,
-				"Position:",
-				panel_width - GUI.default_params(gui).cursor.x + panel_aabb.min.x,
-				24,
-				value = current_pos.*,
-				drag_speed = editor.grid_snapping,
-				precision = 2,
-				id = "entity_position",
-			);
-			if pos_result.changed {
-				current_pos.* = pos_result.value;
-			}
-		}
-		content_width := panel_width - GUI.default_params(gui).cursor.x + panel_aabb.min.x;
 
 		// Generic
 		edit_fields := get_edit_fields(*selected_entity_type);
@@ -917,7 +945,7 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 			}
 			if field.type.type == .STRUCT {
 				struct_info := field.type.(*Type_Info_Struct);
-				if struct_info.name == "V3f" {
+				if struct_info.name == "V3" {
 					current_value := member_pointer(
 						selected_entity_type, selected_entity_ptr, field.path, V3f
 					);
@@ -934,6 +962,9 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 					);
 					if v3_result.changed {
 						current_value.* = v3_result.value;
+						if has_note(field.member, "normalize") {
+							current_value.* = normalize(current_value.*);
+						}
 					}
 				}
 				if struct_info.name == "AABB" {
@@ -998,85 +1029,16 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 			}
 		}
 
-		// GATE
-		if compare(selected_entity_type.name, "Gate") == 0 {
-			
-			current_dir := member_pointer(
-				selected_entity_type, selected_entity_ptr, "direction", V3f
-			);
-
-			dir_result := GUI.labeled_v3_input(
-				gui,
-				"Direction:",
-				content_width,
-				24,
-				value = current_dir.*,
-				drag_speed = 0.1,
-				precision = 2,
-				id = "entity_direction",
-			);
-			if dir_result.changed {
-				current_dir.* = normalize(dir_result.value);
-			}
-
-			wait_for_key := member_pointer(
-				selected_entity_type, selected_entity_ptr, "wait_for_key_id", int
-			);
-
-			key_result := GUI.labeled_int_input(
-				gui,
-				"Wait For Key ID:",
-				content_width,
-				24,
-				value = wait_for_key.*,
-				min_value = -1,
-				id = "wait_for_key_id",
-			);
-			if key_result.changed {
-				wait_for_key.* = key_result.value;
-			}
-		}
-		
-		// FLAG
-		if compare(selected_entity_type.name, "Flag") == 0 {
-			current_index := member_pointer(
-				selected_entity_type, selected_entity_ptr, "index", int
-			);
-
-			index_result := GUI.labeled_int_input(
-				gui,
-				"Index:",
-				content_width,
-				24,
-				value = current_index.*,
-				min_value = 0,
-				id = "flag_index"
-			);
-			if index_result.changed {
-				current_index.* = index_result.value;
-			}
-		}
-
-		// Present
-		if compare(selected_entity_type.name, "Present") == 0 {
-
-		}
-
 		// Path
 		if compare(selected_entity_type.name, "Path") == 0 {
-			beg := member_pointer(
-				selected_entity_type, selected_entity_ptr, "checkpoints.index", int
-			);
-			cnt := member_pointer(
-				selected_entity_type, selected_entity_ptr, "checkpoints.count", int
-			);
-
+			path := selected_entity_ptr.(*Scene.Path);
 			closed_checkbox := GUI._labeled_checkbox(
 				gui,
 				"Closed Path",
 				content_width,
 				24,
-				id = "path_closed_checkbox"
+				id = "path_closed_checkbox",
+				label_color = GUI.GRAY_80
 			);
 			if closed_checkbox.just_checked {
 				closed := member_pointer(
@@ -1092,14 +1054,12 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 				// Add new checkpoint at the end
 				checkpoint: Scene.Checkpoint;
 				checkpoint.position = V3f.{ 0, 0, 0 };
-				if cnt.* > 0 {
-					last_cp_idx := beg.* + cnt.* - 1;
-					last_cp := *editor.scene.checkpoints[last_cp_idx];
-					checkpoint.position = last_cp.position + V3f.{ 1, 0, 0 };
+				idx := path.checkpoint_head;
+				while idx >= 0 {
+					checkpoint.position = editor.scene.checkpoints[idx].position + V3f.{ 1, 0, 0 };
+					idx = editor.scene.checkpoints[idx].next;
 				}
-				array_add(*editor.scene.checkpoints, checkpoint);
-
-				cnt.* += 1;
+				Scene.add_checkpoint_to_path(*editor.scene, path, checkpoint);
 			}
 			add_skull_clicked, _, _ := GUI.labeled_text_button(
 				gui, "Skulls", "Add", content_width, 24, id = "add_skull_button"
@@ -1113,49 +1073,229 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 				array_add(*editor.scene.skulls, skull);
 			}
 
-			for 0..cnt.* - 1 {
-				cp_idx := beg.* + it;
-				checkpoint := *editor.scene.checkpoints[cp_idx];
+			idx := path.checkpoint_head;
+			while idx >= 0 {
+				checkpoint := *editor.scene.checkpoints[idx];
 
 				cursor.y += 32;
 
 				pos_result := GUI.labeled_v3_input(
 					gui,
-					tprint("Checkpoint %:", it),
+					tprint("Checkpoint %:", idx),
 					content_width,
 					24,
 					value = checkpoint.position,
 					drag_speed = editor.grid_snapping,
 					precision = 2,
-					id = tprint("checkpoint_position_%", it),
+					id = tprint("checkpoint_position_%", idx),
 				);
 				if pos_result.changed {
 					checkpoint.position = pos_result.value;
 				}
+				idx = checkpoint.next;
 			}
 		}
 	} else {
-		// Multiple selection - We only allow position editing for now, via an offset
-		multiple_pos_offset := GUI.labeled_v3_input(
-			gui,
-			"Position Offset:",
-			panel_width - 16.0,
-			24,
-			value = page.multiple_posititon_offset,
-			drag_speed = editor.grid_snapping,
-			precision = 2,
-			id = "multiple_position_offset",
-		);
-		if multiple_pos_offset.changed {
-			delta := multiple_pos_offset.value - page.multiple_posititon_offset;
-			page.multiple_posititon_offset = multiple_pos_offset.value;
-			// Apply offset to all selected entities
-			for selection: page.selected {
-				current_pos := member_pointer_rec(
-					selection.type, selection.ptr, "position", V3f
-				);
-				if current_pos {
-					current_pos.* += delta;
+
+		for count, display_name: field_count {
+			if count != page.selected.count {
+				continue; // Only show fields that are common to all selected entities
+			}
+			selected_entity_ptr := page.selected[0].ptr;
+			selected_entity_type := page.selected[0].type;
+
+			edits := table_find_pointer(*field_collecteds, display_name);
+			if edits {
+				field := edits.*[0]; // All edits in the array have the same path and type, so we can just look at the first one
+				if field.type.type == .FLOAT {
+					current_value := member_pointer(
+						selected_entity_type, selected_entity_ptr, field.path, float
+					);
+
+					float_result := GUI.labeled_float_input(
+						gui,
+						tprint("%:", field.display_name),
+						content_width,
+						24,
+						value = current_value.*,
+						drag_speed = 0.1,
+						precision = 2,
+						id = tprint("entity_field_%", field.display_name),
+					);
+					if float_result.changed {
+						dt := float_result.value - current_value.*;
+						// Apply the same delta to all selected entities
+						for selection: page.selected {
+							current_value := member_pointer(
+								selection.type, selection.ptr, edits.*[it_index].path, float
+							);
+							current_value.* += dt;
+						}
+					}
+				}
+				if field.type.type == .INTEGER {
+					current_value := member_pointer(
+						selected_entity_type, selected_entity_ptr, field.path, int
+					);
+
+					int_result := GUI.labeled_int_input(
+						gui,
+						tprint("%:", field.display_name),
+						content_width,
+						24,
+						value = current_value.*,
+						min_value = 0,
+						id = tprint("entity_field_%", field.display_name),
+					);
+					if int_result.changed {
+						dt := int_result.value - current_value.*;
+						// Apply the same delta to all selected entities
+						for selection: page.selected {
+							current_value := member_pointer(
+								selection.type, selection.ptr, edits.*[it_index].path, int
+							);
+							current_value.* += dt;
+						}
+					}
+				}
+				if field.type.type == .ENUM {
+					enum_info := field.type.(*Type_Info_Enum);
+					
+					dropdown := GUI._labeled_dropdown(
+						gui,
+						tprint("%:", field.display_name),
+						enum_info.names,
+						content_width,
+						24,
+						id = tprint("entity_field_%", field.display_name),
+						label_color = GUI.GRAY_80
+					);
+					if dropdown.changed {
+						for selection: page.selected {
+							current_value := member_pointer(
+								selection.type, selection.ptr, edits.*[it_index].path, int
+							);
+							current_value.* = enum_info.values[dropdown.selected_index];
+						}
+					}
+				}
+				if field.type.type == .STRUCT {
+					struct_info := field.type.(*Type_Info_Struct);
+					if struct_info.name == "V3" {
+						current_value := member_pointer(
+							selected_entity_type, selected_entity_ptr, field.path, V3f
+						);
+
+						v3_result := GUI.labeled_v3_input(
+							gui,
+							tprint("%:", field.display_name),
+							content_width,
+							24,
+							value = current_value.*,
+							drag_speed = 0.1,
+							precision = 2,
+							id = tprint("entity_field_%", field.display_name),
+						);
+						if v3_result.changed {
+							dt := v3_result.value - current_value.*;
+							// Apply the same delta to all selected entities
+							for selection: page.selected {
+								current_value := member_pointer(
+									selection.type, selection.ptr, edits.*[it_index].path, V3f
+								);
+								current_value.* += dt;
+								if has_note(edits.*[it_index].member, "normalize") {
+									current_value.* = normalize(current_value.*);
+								}
+							}
+						}
+					}
+					if struct_info.name == "AABB" {
+						pos := member_pointer(
+							selected_entity_type, selected_entity_ptr, tprint("%.min", field.path), V3f
+						);
+						size := member_pointer(
+							selected_entity_type, selected_entity_ptr, tprint("%.max", field.path), V3f
+						);
+
+						pos_result := GUI.labeled_v2_input(
+							gui,
+							tprint("%: Position", field.display_name),
+							content_width,
+							24,
+							value = v2(pos.*),
+							drag_speed = editor.grid_snapping,
+							precision = 2,
+							id = tprint("entity_field_%_pos", field.display_name),
+							label_color = GUI.GRAY_80
+						);
+						if pos_result.changed {
+							sized := size.* - pos.*;
+							dt_pos := v2(pos_result.value) - v2(pos.*);
+							// Apply the same delta to all selected entities
+							for selection: page.selected {
+								pos := member_pointer(
+									selection.type, selection.ptr, tprint("%.min", edits.*[it_index].path), V3f
+								);
+								size := member_pointer(
+									selection.type, selection.ptr, tprint("%.max", edits.*[it_index].path), V3f
+								);
+								pos.* += v3(dt_pos, 0);
+								size.* += v3(dt_pos, 0);
+							}
+						}
+
+						size_result := GUI.labeled_v2_input(
+							gui,
+							tprint("%: Size", field.display_name),
+							content_width,
+							24,
+							value = v2(size.*) - v2(pos.*),
+							drag_speed = editor.grid_snapping,
+							precision = 2,
+							id = tprint("entity_field_%_size", field.display_name),
+							label_color = GUI.GRAY_80
+						);
+						if size_result.changed {
+							// Apply the same delta to all selected entities
+							for selection: page.selected {
+								pos := member_pointer(
+									selection.type, selection.ptr, tprint("%.min", edits.*[it_index].path), V3f
+								);
+								size := member_pointer(
+									selection.type, selection.ptr, tprint("%.max", edits.*[it_index].path), V3f
+								);
+								dt_size := size_result.value - (v2(size.*) - v2(pos.*));
+								size.* = v3(
+									pos.*.x + size_result.value.x,
+									pos.*.y + size_result.value.y,
+									size.*.z
+								) + v3(dt_size, 0);
+							}
+						}
+					}
+				}
+				if field.type.type == .BOOL {
+					current_value := member_pointer(
+						selected_entity_type, selected_entity_ptr, field.path, bool
+					);
+
+					checkbox := GUI._labeled_checkbox(
+						gui,
+						tprint("%:", field.display_name),
+						content_width,
+						24,
+						id = tprint("entity_field_%", field.display_name),
+						label_color = GUI.GRAY_80
+					);
+					if checkbox.just_checked {
+						for selection: page.selected {
+							current_value := member_pointer(
+								selection.type, selection.ptr, edits.*[it_index].path, bool
+							);
+							current_value.* = checkbox.checked;
+						}
+					}
 				}
 			}
 		}
@@ -1450,7 +1590,7 @@ draw_save_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 	// Title
 	GUI.atom_label(
 		gui,
-		"Save Terrain (No file save for now, check out the console you will need to copy the content)",
+		"Save Terrain",
 		V2f.{ dialog_x + 20, dialog_y + dialog_height - 30 },
 		scale = 18,
 		z = 101,
@@ -1480,9 +1620,6 @@ draw_save_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 		free(page.save_dialog_input);
 		page.save_dialog_input = sprint("%", new_save_dialog_input);
 	}
-
-	// Hint
-	GUI.atom_label(gui, "(saves to assets/Terrain/<name>.terrain)", V2f.{ dialog_x + 20, input_y - 20 }, scale = 12, z = 101, color = V4f.{ 0.6, 0.6, 0.6, 1 });
 
 	// Save button
 	save_clicked, _, _ := GUI.text_button(gui, "Save", V2f.{ dialog_x + dialog_width - 140, dialog_y + 20 }, z = 101, id = "dialog_save");

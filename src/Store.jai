@@ -101,6 +101,7 @@ Store :: struct {
 	drone_model: WRender.Model;
 	drone_blade_model: WRender.Model;
 	trap_spike_model: WRender.Model;
+	trap_base_model: WRender.Model;
 	end_hook_model: WRender.Model;
 	pressbutton_pressed: WRender.Model;
 	pressbutton_unpressed: WRender.Model;
@@ -585,6 +586,7 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.drone_model = WRender.Model.make_from_obj(Assets.DRONE_OBJ, "drone");
 	store.drone_blade_model = WRender.Model.make_from_obj(Assets.DRONE_BLADE_OBJ, "drone_blade");
 	store.trap_spike_model = WRender.Model.make_from_obj(Assets.TRAP_SPIKE_OBJ, "trap_spike");
+	store.trap_base_model = WRender.Model.make_from_obj(Assets.TRAP_BASE_OBJ, "trap_base");
 	store.antiair_camion_model = WRender.Model.make_from_obj(Assets.ANTIAIR_CAMION_OBJ, "antiair_camion");
 	store.antiair_canon_model = WRender.Model.make_from_obj(Assets.ANTIAIR_CANON_OBJ, "antiair_canon");
 	store.missile_model = WRender.Model.make_from_obj(Assets.MISSILE_OBJ, "missile");

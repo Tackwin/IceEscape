@@ -236,10 +236,20 @@ has_note :: (ti: Type_Info_Struct_Member, note: string) -> bool {
 	return false;
 }
 
+has_note_starts_with :: (ti: Type_Info_Struct_Member, note: string) -> *string {
+	for member_note: ti.notes {
+		if begins_with(member_note, note)
+			return *member_note;
+	}
+	return null;
+}
+
 Edit_Field :: struct {
 	path: string;
 	type: *Type_Info;
 	offset: int;
+	member: Type_Info_Struct_Member;
+	display_name: string;
 }
 
 get_edit_fields :: (ti: *Type_Info_Struct) -> [] Edit_Field {
@@ -257,6 +267,15 @@ get_edit_fields :: (
 			field.path = tprint("%1%2", path_prefix, member.name);
 			field.type = member.type;
 			field.offset = member.offset_in_bytes + offset;
+			field.member = member;
+			field.display_name = field.path;
+			display_note := has_note_starts_with(member, "display_name");
+			if display_note {
+				// Pattern is "display_name(name)"
+				field.display_name = display_note.*;
+				field.display_name.data += 13; // Skip "display_name("
+				field.display_name.count -= 14; // Skip "display_name(" and ")"
+			}
 			array_add(fields, field);
 		}
 

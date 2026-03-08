@@ -302,7 +302,6 @@ Model :: struct {
 	max: V3f;
 
 	make_from_obj :: (obj: [] u8, debug: string = "unknown") -> Model {
-		print("Loading OBJ model: %\n", debug);
 		model: Model;
 		model.min.x = +FLOAT32_MAX;
 		model.min.y = +FLOAT32_MAX;
@@ -1917,19 +1916,25 @@ render_editor :: (
 
 	}
 
+	checkpoints_pos: [..] V3f;
+	checkpoints_pos.allocator = temp;
 	for path: editor.scene.paths {
-		beg := path.checkpoints.index + 0;
-		cnt := path.checkpoints.count;
-		off := ifx path.closed then 1 else 0;
+		checkpoints_pos.count = 0;
 
-		for 0..cnt - 1 {
-			a := editor.scene.checkpoints[beg + it].position;
-			add_debug_sphere(*extra, a, scale=0.1);
+		idx := path.checkpoint_head;
+		while idx >= 0 {
+			checkpoint := editor.scene.checkpoints[idx];
+			array_add(*checkpoints_pos, checkpoint.position);
+			idx = checkpoint.next;
 		}
+
+		for checkpoints_pos
+			add_debug_sphere(*extra, it, scale=0.1);
 		
-		for 1..cnt + off - 1 {
-			a := editor.scene.checkpoints[beg + (it - 1) % cnt].position;
-			b := editor.scene.checkpoints[beg + (it + 0) % cnt].position;
+		beg := ifx path.closed then 0 else 1;
+		for beg..checkpoints_pos.count - 1 {
+			a := checkpoints_pos[(it - 1 + checkpoints_pos.count) % checkpoints_pos.count];
+			b := checkpoints_pos[(it + 0 + checkpoints_pos.count) % checkpoints_pos.count];
 			add_debug_cylinder(*extra, a, b, color=V3f.{ 0.0, 1.0, 1.0 }, radius=0.05);
 		}
 	}
@@ -3073,10 +3078,39 @@ render_traps :: (
 		M4f.scale(*instance.M, V3f.{ scale, scale, scale });
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
-	if instanced.count == 0
-		return;
+	if instanced.count > 0
+		commit_geometry(frame, pass, *store.trap_base_model, instanced.count);
 
-	commit_geometry(frame, pass, *store.trap_spike_model, instanced.count);
+	instanced = append_instance_buffer(frame);
+	for scene.traps {
+		t := 0.0;
+		if !it.activable
+			t = 1.0;
+		else {
+			if it.activated {
+				dt := scene.client.clock - it.activated_clock.(float64);
+				// Spring the trap in ~3 frame.
+				t = smoothstep(dt.(float32), 12 / 60.0, 18 / 60.0);
+			} else {
+				// Spring the trap back in ~3 frame.
+				dt := (scene.client.clock - it.activated_clock - it.stay_activated_time).(float64);
+				t = 1 - smoothstep(dt.(float32), 0.0, 3 / 60.0);
+			}
+		}
+
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+
+		off_z := -0.2 + 0.2 * t;
+		M := M4f.translate(it.position + v3(0.0, 0.0, off_z));
+		instance.M = M;
+		scale := 2 * it.radius_hitbox;
+		M4f.scale(*instance.M, V3f.{ scale, scale, scale });
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0
+		commit_geometry(frame, pass, *store.trap_spike_model, instanced.count);
 }
 
 render_trophies :: (
