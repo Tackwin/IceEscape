@@ -495,6 +495,28 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.quad_shader.code = xx Assets.QUAD_WGSL;
 	store.quad_shader.input = .{};
 
+	prop_colormap_png := Assets.load_qoi(Assets.COLORMAPS_PNG,, temp);
+	store.colormaps = WRender.WTexture.make_from_image(prop_colormap_png, "colormaps");
+
+	terrain_tile_albedo_png := Assets.load_qoi(Assets.TERRAIN_TILE_ALBEDO_PNG,, temp);
+	store.terrain_tile_albedo =
+		WRender.WTexture.make_from_image(terrain_tile_albedo_png, "terrain_tile_albedo", .{ 4, 4 });
+
+	terrain_tile_normal_png := Assets.load_qoi(Assets.TERRAIN_TILE_NORMAL_PNG,, temp);
+	store.terrain_tile_normal =
+		WRender.WTexture.make_from_image(terrain_tile_normal_png, "terrain_tile_normal", .{ 4, 4 });
+		
+	particle_texture_png := Assets.load_qoi(Assets.PARTICLE_TEXTURE_PNG,, temp);
+	store.particle_texture =
+		WRender.WTexture.make_from_image(particle_texture_png, "particle_texture");
+
+	ui_atlas_png := Assets.load_qoi(Assets.ui_atlas_png,, temp);
+	store.ui_atlas = WRender.WTexture.make_from_image(ui_atlas_png, "ui_atlas");
+
+	verdana_atlas_png := Assets.load_qoi(Assets.verdana_png,, temp);
+	store.verdana_atlas = WRender.WTexture.make_from_image(verdana_atlas_png, "verdana_atlas");
+	store.verdana = Assets.load_font(xx Assets.verdana_csv);
+
 	store.terrain_tree_snow_a =
 		WRender.Model.make_from_obj(Assets.TERRAIN_TREE_SNOW_A, "terrain_tree_snow_a.obj");
 	store.terrain_tree_snow_b =
@@ -523,29 +545,6 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.rock_medium = WRender.Model.make_from_obj(Assets.ROCK_MEDIUM, "rock_medium.obj");
 	store.rock_large = WRender.Model.make_from_obj(Assets.ROCK_LARGE, "rock_large.obj");
 	store.tile_model = WRender.Model.make_from_obj(Assets.TILE_OBJ, "tile.obj");
-
-	prop_colormap_png := Assets.load_qoi(Assets.COLORMAPS_PNG,, temp);
-	store.colormaps = WRender.WTexture.make_from_image(prop_colormap_png, "colormaps");
-
-	terrain_tile_albedo_png := Assets.load_qoi(Assets.TERRAIN_TILE_ALBEDO_PNG,, temp);
-	store.terrain_tile_albedo =
-		WRender.WTexture.make_from_image(terrain_tile_albedo_png, "terrain_tile_albedo", .{ 4, 4 });
-
-	terrain_tile_normal_png := Assets.load_qoi(Assets.TERRAIN_TILE_NORMAL_PNG,, temp);
-	store.terrain_tile_normal =
-		WRender.WTexture.make_from_image(terrain_tile_normal_png, "terrain_tile_normal", .{ 4, 4 });
-		
-	particle_texture_png := Assets.load_qoi(Assets.PARTICLE_TEXTURE_PNG,, temp);
-	store.particle_texture =
-		WRender.WTexture.make_from_image(particle_texture_png, "particle_texture");
-
-	ui_atlas_png := Assets.load_qoi(Assets.ui_atlas_png,, temp);
-	store.ui_atlas = WRender.WTexture.make_from_image(ui_atlas_png, "ui_atlas");
-
-	verdana_atlas_png := Assets.load_qoi(Assets.verdana_png,, temp);
-	store.verdana_atlas = WRender.WTexture.make_from_image(verdana_atlas_png, "verdana_atlas");
-	store.verdana = Assets.load_font(xx Assets.verdana_csv);
-
 	store.racer_model = WRender.Model.make_from_obj(Assets.VEHICLE_RACER_OBJ, "racer");
 	store.suv_model = WRender.Model.make_from_obj(Assets.VEHICLE_SUV_OBJ, "suv");
 	store.speedster_model = WRender.Model.make_from_obj(Assets.VEHICLE_SPEEDSTER_OBJ, "speedster");
@@ -618,6 +617,8 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.indicator_stroke_model = WRender.Model.make_from_obj(Assets.INDICATOR_STROKE_OBJ, "indicator_stroke");
 	store.turn_table_turn_model = WRender.Model.make_from_obj(Assets.TURN_TABLE_TURN_OBJ, "turn_table_turn");
 	store.turn_table_base_model = WRender.Model.make_from_obj(Assets.TURN_TABLE_BASE_OBJ, "turn_table_base");
+
+	WRender.Model.commit_geometry_buffer();
 
 	promises: [..] Platform.Platform.extern_ref;
 

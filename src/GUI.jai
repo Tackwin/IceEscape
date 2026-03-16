@@ -1651,7 +1651,7 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 			render_texture_at(3, 0, RESURRECT_SLOT, .{ 0.5, 1.0, 0.5 });
 			render_hint_at(3, 0, action_to_icon(Action_Key.Square30, state.controls.layout));
 
-			dt := to_float64_seconds(state.controls.time - player.server.dead_time);
+			dt := scene.client.clock - player.server.dead_time;
 			t := clamp(dt / player.server.dead_cooldown, 0.0, 1.0).(float32);
 
 			if t > 0 {
@@ -2130,7 +2130,7 @@ push_main_menu :: (
 			V2f.{ 400, 300 },
 			Align.Center,
 			"create_instance_popup",
-			1
+			10
 		);
 
 		atom_label(
@@ -2138,7 +2138,7 @@ push_main_menu :: (
 			"Create Instance",
 			popup.pos + V2f.{ popup.size.x / 2, popup.size.y - 4 },
 			scale = 24,
-			z = 1.1,
+			z = 10.1,
 			align = .Top_Center,
 			color = V4f.{ 0, 0, 0, 1 }
 		);
@@ -2148,7 +2148,7 @@ push_main_menu :: (
 			popup.pos + V2f.{ 0, popup.size.y - 32 },
 			V2f.{ popup.size.x, 1 },
 			v3(GRAY_10),
-			z = 1.1
+			z = 10.1
 		);
 
 		cursor := popup.size.y - 32 - 8 - 8;
@@ -2159,7 +2159,7 @@ push_main_menu :: (
 			popup.pos + V2f.{ 4, cursor },
 			popup.size.x - 8,
 			16,
-			z = 1.1,
+			z = 10.1,
 			align = .Center_Left,
 			id = "private_instance_checkbox"
 		).checked;
@@ -2174,7 +2174,7 @@ push_main_menu :: (
 				24,
 				scale = 16,
 				_pos = popup.pos + V2f.{ 4 + 32, cursor },
-				_z = 1.1,
+				_z = 10.1,
 				_align = .Center_Left,
 				placeholder = "****",
 				max_chars = 8,
@@ -2189,7 +2189,7 @@ push_main_menu :: (
 			popup.pos + V2f.{ 4, cursor },
 			popup.size.x - 8,
 			16,
-			z = 1.1,
+			z = 10.1,
 			align = .Center_Left,
 			id = "auto_revive_checkbox"
 		).checked;
@@ -2203,7 +2203,7 @@ push_main_menu :: (
 			24,
 			scale = 16,
 			_pos = popup.pos + V2f.{ 4, cursor },
-			_z = 1.1,
+			_z = 10.1,
 			_align = .Center_Left,
 			placeholder = "Name",
 			max_chars = 16,
@@ -2217,7 +2217,7 @@ push_main_menu :: (
 			popup.pos + v2(popup.size.x, 0) + v2(-14.0, 15),
 			align = .Bottom_Right,
 			id = "create_instance_button",
-			z = 1.1
+			z = 10.1
 		);
 		ret.create_instance_create_clicked = create_clicked;
 
@@ -2225,7 +2225,7 @@ push_main_menu :: (
 			state,
 			"Cancel",
 			popup.pos + v2(popup.size.x, 0) + v2(-14.0, 15) - v2(width(create_widget.aabb) + 8.0, 0),
-			z = 1.1,
+			z = 10.1,
 			id = "cancel_create_instance_button",
 			align = .Bottom_Right
 		);
@@ -3228,7 +3228,7 @@ labeled_checkbox :: (
 		gui,
 		label,
 		lower_left + v2(padding, 0.0),
-		size * 0.6,
+		size,
 		z,
 		align = vertical(align) | Align.Left,
 		color = label_color,

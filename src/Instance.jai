@@ -352,6 +352,19 @@ process :: (
 				sync_stats.revive = person.run_stats.revive_count;
 				sync_stats.wins = person.run_stats.win_count;
 				queue_send(instance, make_command(sync_stats), sender_user_id);
+				return true;
+			}
+		}
+	}
+
+	signal_pick: *Command.Signal_Pick = isa(command.payload, Command.Signal_Pick);
+	if signal_pick {
+		person := find_person_by_user_id(instance, sender_user_id);
+		if person {
+			scene := find_scene_of_player_id(instance, person.player_id);
+			if scene {
+				Scene.process(scene, command, current_time_monotonic(), response);
+				return true;
 			}
 		}
 	}
@@ -563,6 +576,9 @@ gc_persons :: (instance: *Instance) {
 }
 
 update_instance :: (instance: *Instance, dt: float32) {
+	if instance.persons.count == 0
+		return;
+
 	Scene.clear(*instance.process_response);
 	time := current_time_monotonic();
 

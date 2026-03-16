@@ -1,3 +1,5 @@
+#import "Sort";
+
 Menu :: struct {
 	create_instance_popup_open: bool = false;
 	create_instance_name: string = "";
@@ -6,9 +8,26 @@ Menu :: struct {
 	login_popup_open: bool = false;
 	login_popup_password: string = "";
 
+	scene_name_leadeboard: string = "";
+
 	enter_instance_password: string = "";
 
 	instances_list: [..] Command.Ans_Instance_List.Instance_Info;
+
+	Terrain_Entry :: struct {
+		name: string;
+		author: string;
+		id: int;
+	}
+	terrain_entries: [..] Terrain_Entry;
+	terrain_entries_page := 0;
+
+	Entry_Leaderboard :: struct {
+		username: string;
+		time_ms: int;
+		timestamp_ms: int;
+	}
+	entries_leaderboard: [..] Entry_Leaderboard;
 
 	passcode: u64 = 0;
 	passstring: string = "";
@@ -90,6 +109,101 @@ push_left_main_menu :: (
 		id = "revive_label",
 		color = GUI.GRAY_00
 	);
+
+	GUI.space(gui, 24.0);
+
+
+	new_scene_name := GUI.labeled_input_text(
+		gui, "Scene name:", menu.scene_name_leadeboard, 256, 24, id = "scene_name_leaderboard_input"
+	);
+	if new_scene_name != menu.scene_name_leadeboard {
+		free(menu.scene_name_leadeboard);
+		menu.scene_name_leadeboard = sprint("%", new_scene_name);
+
+		// get_terrain: Command.Get_Terrain_Leaderboard;
+		// get_terrain.terrain_id = -1;
+		// get_terrain.scene_name = tprint("%", menu.scene_name_leadeboard);
+		// send_web_message(platform, gui.controls.time, make_command(get_terrain));
+		ask_list_terrain: Command.Ask_List_Terrain;
+		ask_list_terrain.filter = menu.scene_name_leadeboard;
+		send_web_message(platform, gui.controls.time, make_command(ask_list_terrain));
+	}
+
+	Row_Terrain :: struct {
+		name: string; @name("Name") @size(213)
+		author: string; @name("Author") @size(128)
+		leaderboard: string; @name("Leaderboard") @button @align(Right)
+		play: string; @name("Play") @button @align(Right)
+	}
+	PAGE_SIZE := 5;
+	page_count := max((menu.terrain_entries.count + PAGE_SIZE - 1) / PAGE_SIZE, 1);
+	menu.terrain_entries_page = clamp(
+		menu.terrain_entries_page,
+		0,
+		max((menu.terrain_entries.count + PAGE_SIZE - 1) / PAGE_SIZE - 1, 0)
+	);
+
+	beg := menu.terrain_entries_page * PAGE_SIZE;
+	end := beg + PAGE_SIZE;
+	end = min(end, menu.terrain_entries.count);
+	terrain_list_view: []Menu.Terrain_Entry;
+	terrain_list_view.count = end - beg;
+	terrain_list_view.data = menu.terrain_entries.data + beg;
+
+	rows := NewArray(terrain_list_view.count, Row_Terrain,, temp);
+	for terrain_list_view {
+		rows[it_index].name = it.name;
+		rows[it_index].author = it.author;
+		rows[it_index].leaderboard = "View";
+		rows[it_index].play = "----";
+	}
+	scene_table := GUI.table(gui, rows, v2(512.0, 24.0 * 6 + 12), id = "terrain_table");
+	if scene_table.clicked_row_index >= 0 {
+		entry := terrain_list_view[scene_table.clicked_row_index];
+		if scene_table.clicked_col_index == 2 {
+			get_terrain_leaderboard: Command.Get_Terrain_Leaderboard;
+			get_terrain_leaderboard.terrain_id = entry.id;
+			send_web_message(platform, gui.controls.time, make_command(get_terrain_leaderboard));
+		}
+	}
+
+	GUI.space(gui, 24 * 7);
+	GUI._atom_label(
+		gui, "Leaderboard", id = "leaderboard_label", color = GUI.GRAY_00
+	);
+
+	Row_Leaderboard :: struct {
+		usermame: string; @name("Name") @size(118)
+		time_ms: string; @name("Time(s)")
+		timestamp_ms: string; @name("Date") @size(178) @align(Right)
+	}
+	rows_leaderboard := NewArray(menu.entries_leaderboard.count, Row_Leaderboard,, temp);
+	for menu.entries_leaderboard {
+		entry := menu.entries_leaderboard[it_index];
+		row := *rows_leaderboard[it_index];
+		row.usermame = entry.username;
+		if row.usermame.count == 0
+			row.usermame = "Anonymous";
+		row.time_ms = tprint(
+			"%1.%2%3%4",
+			entry.time_ms / 1000,
+			entry.time_ms % 1000 / 100,
+			entry.time_ms % 100 / 10,
+			entry.time_ms % 10
+		);
+		cal := platform.to_calendar(milliseconds_to_apollo(entry.timestamp_ms));
+		row.timestamp_ms = tprint(
+			"%/% %:%",
+			cal.day_of_month_starting_at_0 + 1,
+			cal.month_starting_at_0 + 1,
+			cal.hour,
+			cal.minute
+		);
+		if it_index > 5
+			break;
+	}
+
+	GUI.table(gui, rows_leaderboard, v2(256.0 + 128, 24.0 * 6), id = "leaderboard_table");
 
 	if menu.login_popup_open {
 		window := GUI.begin_window(
@@ -220,6 +334,17 @@ process_menu :: (state: *State, command: Command) -> bool {
 		return true;
 	}
 
+	ans_list_terrain := isa(command.payload, Command.Ans_List_Terrain);
+	if ans_list_terrain {
+		array_resize(*state.menu.terrain_entries, ans_list_terrain.terrains_id.count);
+		for * state.menu.terrain_entries {
+			it.id = ans_list_terrain.terrains_id[it_index];
+			it.name = ans_list_terrain.terrains_name[it_index];
+			it.author = ans_list_terrain.authors_name[it_index];
+		}
+		return true;
+	}
+
 	sync_scene := isa(command.payload, Command.Sync_Scene);
 	if sync_scene {
 		state.screen_state = .Game;
@@ -239,6 +364,19 @@ process_menu :: (state: *State, command: Command) -> bool {
 			);
 		}
 		state.platform.set_token(login.token);
+	}
+
+	get_terrain_leaderboard := isa(command.payload, Command.Get_Terrain_Leaderboard);
+	if get_terrain_leaderboard {
+		array_resize(*state.menu.entries_leaderboard, get_terrain_leaderboard.entries.count);
+		for get_terrain_leaderboard.entries {
+			entry := *state.menu.entries_leaderboard[it_index];
+			entry.username = it.username;
+			entry.time_ms = it.time_ms;
+			entry.timestamp_ms = it.timestamp_ms;
+		}
+
+		quick_sort(state.menu.entries_leaderboard, x => x.time_ms);
 	}
 
 	return false;

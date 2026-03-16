@@ -846,6 +846,33 @@ wasmRenderPassEncoderDraw :: (
 
 	jsRenderPassEncoderDraw(*params, null);
 }
+wasmRenderPassEncoderDrawIndexed :: (
+	pass: WGPURenderPassEncoder,
+	indexCount: u32,
+	instanceCount: u32,
+	firstIndex: u32,
+	baseVertex: s32,
+	firstInstance: u32
+) -> void #c_call {
+	jsRenderPassEncoderDrawIndexed :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		pass: WGPURenderPassEncoder;
+		indexCount: u32;
+		instanceCount: u32;
+		firstIndex: u32;
+		baseVertex: s32;
+		firstInstance: u32;
+	};
+	params.pass = pass;
+	params.indexCount = indexCount;
+	params.instanceCount = instanceCount;
+	params.firstIndex = firstIndex;
+	params.baseVertex = baseVertex;
+	params.firstInstance = firstInstance;
+
+	jsRenderPassEncoderDrawIndexed(*params, null);
+}
 wasmRenderPassEncoderEnd :: (
 	pass: WGPURenderPassEncoder
 ) -> void #c_call {
@@ -1032,6 +1059,29 @@ wasmRenderPassEncoderSetVertexBuffer :: (
 	params.size = size;
 	jsRenderPassEncoderSetVertexBuffer(*params, null);
 }
+wasmRenderPassEncoderSetIndexBuffer :: (
+	pass: WGPURenderPassEncoder,
+	buffer: WGPUBuffer,
+	format: WGPUIndexFormat,
+	offset: u64,
+	size: u64
+) -> void #c_call {
+	jsRenderPassEncoderSetIndexBuffer :: (params: *void, returns: *void) #foreign;
+	params: struct {
+		pass: WGPURenderPassEncoder;
+		buffer: WGPUBuffer;
+		offset: u64;
+		size: u64;
+		format: WGPUIndexFormat;
+	};
+
+	params.pass = pass;
+	params.buffer = buffer;
+	params.offset = offset;
+	params.size = size;
+	params.format = format;
+	jsRenderPassEncoderSetIndexBuffer(*params, null);
+}
 wasmDeviceCreateTexture :: (
 	device: WGPUDevice,
 	descriptor: *WGPUTextureDescriptor
@@ -1159,6 +1209,7 @@ entries :: Entry.[
 	.{ "commandEncoderBeginRenderPass", WGPUProcCommandEncoderBeginRenderPass, "wasmCommandEncoderBeginRenderPass" },
 	.{ "renderPassEncoderSetPipeline", WGPUProcRenderPassEncoderSetPipeline, "wasmRenderPassEncoderSetPipeline" },
 	.{ "renderPassEncoderDraw", WGPUProcRenderPassEncoderDraw, "wasmRenderPassEncoderDraw" },
+	.{ "renderPassEncoderDrawIndexed", WGPUProcRenderPassEncoderDrawIndexed, "wasmRenderPassEncoderDrawIndexed" },
 	.{ "renderPassEncoderEnd", WGPUProcRenderPassEncoderEnd, "wasmRenderPassEncoderEnd" },
 	.{ "surfaceGetCurrentTexture", WGPUProcSurfaceGetCurrentTexture, "wasmSurfaceGetCurrentTexture" },
 	.{ "textureCreateView", WGPUProcTextureCreateView, "wasmTextureCreateView" },
@@ -1175,6 +1226,7 @@ entries :: Entry.[
 	.{ "renderPipelineGetBindGroupLayout", WGPUProcRenderPipelineGetBindGroupLayout, "wasmRenderPipelineGetBindGroupLayout" },
 	.{ "renderPassEncoderSetBindGroup", WGPUProcRenderPassEncoderSetBindGroup, "wasmRenderPassEncoderSetBindGroup" },
 	.{ "renderPassEncoderSetVertexBuffer", WGPUProcRenderPassEncoderSetVertexBuffer, "wasmRenderPassEncoderSetVertexBuffer" },
+	.{ "renderPassEncoderSetIndexBuffer", WGPUProcRenderPassEncoderSetIndexBuffer, "wasmRenderPassEncoderSetIndexBuffer" },
 	.{ "deviceCreateTexture", WGPUProcDeviceCreateTexture, "wasmDeviceCreateTexture" },
 	.{ "deviceCreateSampler", WGPUProcDeviceCreateSampler, "wasmDeviceCreateSampler" },
 	.{ "samplerRelease", WGPUProcSamplerRelease, "wasmSamplerRelease" },

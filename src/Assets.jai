@@ -98,7 +98,7 @@ FORMAT;
 #insert #run embed_data("tile_atlas_png", "Tile/atlas.png", #filepath);
 #insert #run embed_data("ztotez_atlas_png", "ZTOtez-Regular.png", #filepath);
 
-#insert #run embed_data("VEHICLE_RACER_OBJ", "vehicle-racer.obj", #filepath);
+#insert #run embed_data("VEHICLE_RACER_OBJ", "Mesh/Vehicle_Racer.obj", #filepath);
 #insert #run embed_data("VEHICLE_SUV_OBJ", "vehicle-suv.obj", #filepath);
 #insert #run embed_data("VEHICLE_SPEEDSTER_OBJ", "vehicle-speedster.obj", #filepath);
 #insert #run embed_data("VEHICLE_MONSTER_TRUCK_OBJ", "vehicle-monster-truck.obj", #filepath);

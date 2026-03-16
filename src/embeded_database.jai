@@ -1,4 +1,5 @@
 #import "String";
+#import "Hash";
 
 embed_database_default_rosters :: (app: *App) {
 	app_user := app.user_data.(*App_User);
@@ -68,6 +69,8 @@ embed_database_default_terrains :: (app: *App) {
 	server := *app_user.server;
 	platform := app.platform;
 	save :: (new_id: int, ascii: string, name: string) #expand {
+		print("Saving terrain % with id %\n", name, new_id);
+
 		ids: [1] DB_Terrain_Id;
 		ids[0].id = new_id;
 		store_database(platform, server.db, "terrain_ids", ids);
@@ -84,8 +87,9 @@ embed_database_default_terrains :: (app: *App) {
 		to_asciis: [1] DB_Terrain_Ascii;
 		to_ascii := *to_asciis[0];
 		to_ascii.id = new_id;
+		to_ascii.ascii_id = new_id;
 		to_ascii.ascii = ascii;
-		store_database(platform, server.db, "terrain_asciis", to_asciis);
+		store_database(platform, server.db, "terrain_asciis", to_asciis, true, "ascii_id");
 	}
 
 	terrains := platform.list_files("../assets/terrain", false);
@@ -97,7 +101,6 @@ embed_database_default_terrains :: (app: *App) {
 	save(105, BIG_POUNDING, "Built Big Pounding");
 	save(106, BIG_ROUND, "Built Big Round");
 
-	user := 200;
 	for terrains {
 		if !ends_with(it, ".terrain")
 			continue;
@@ -115,8 +118,10 @@ embed_database_default_terrains :: (app: *App) {
 			ascii.data = data.data;
 			ascii.count = data.count;
 
-			save(user, ascii, name);
-			user += 1;
+			id := fnv1a_hash(name.data, name.count, 2356);
+			id &= 0x7FFFFFFFFFFFFFFF; // Ensure positive.
+
+			save(cast,no_check(s64) ((id / 100000) * 100000), ascii, name);
 		}
 	}
 }

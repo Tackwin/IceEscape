@@ -774,6 +774,14 @@ init_platform :: () -> Platform {
 		firstVertex: u32,
 		firstInstance: u32
 	) -> void #foreign wgpu_native;
+	wgpuRenderPassEncoderDrawIndexed :: (
+		pass: WGPURenderPassEncoder,
+		indexCount: u32,
+		instanceCount: u32,
+		firstIndex: u32,
+		baseVertex: s32,
+		firstInstance: u32
+	) -> void #foreign wgpu_native;
 	wgpuRenderPassEncoderEnd :: (
 		pass: WGPURenderPassEncoder
 	) -> void #foreign wgpu_native;
@@ -824,6 +832,13 @@ init_platform :: () -> Platform {
 		pass: WGPURenderPassEncoder,
 		slot: u32,
 		buffer: WGPUBuffer,
+		offset: u64,
+		size: u64
+	) -> void #foreign wgpu_native;
+	wgpuRenderPassEncoderSetIndexBuffer :: (
+		pass: WGPURenderPassEncoder,
+		buffer: WGPUBuffer,
+		indexFormat: WGPUIndexFormat,
 		offset: u64,
 		size: u64
 	) -> void #foreign wgpu_native;

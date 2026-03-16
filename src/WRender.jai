@@ -8,6 +8,7 @@
 #import "Rand";
 #import "Sort";
 #import "Pool";
+#import "Hash";
 #import "Reflect";
 Store :: #import "Store";
 Scene :: #import "Scene";
@@ -54,6 +55,16 @@ Graphics :: struct {
 	adapter: WGPUAdapter;
 	device: WGPUDevice;
 	mainQueue: WGPUQueue;
+
+	Geometry_Vertex :: struct {
+		pos: V3f;
+		normal: V3f;
+		uv: V2f;
+	}
+	geometry_vertices: WGPUBuffer;
+	geometry_indices: WGPUBuffer;
+	geometry_vertices_cpu: [..] Geometry_Vertex;
+	geometry_indices_cpu: [..] u16;
 
 	done: [16] bool;
 
@@ -296,10 +307,19 @@ WTexture :: struct {
 }
 
 Model :: struct {
-	gpu: WGPUBuffer;
-	prim_count: int;
+	base_vertex: int;
+	indices_offset: int;
+	indices_count: int;
 	min: V3f;
 	max: V3f;
+	Part :: struct {
+		base_vertex: int;
+		indices_offset: int;
+		indices_count: int;
+		min: V3f;
+		max: V3f;
+	}
+	parts: [..] Part;
 
 	make_from_obj :: (obj: [] u8, debug: string = "unknown") -> Model {
 		model: Model;
@@ -309,6 +329,12 @@ Model :: struct {
 		model.max.x = -FLOAT32_MAX;
 		model.max.y = -FLOAT32_MAX;
 		model.max.z = -FLOAT32_MAX;
+
+		Obj_Face :: struct {
+			positions: [3] u32 = .[ 0, 0, 0 ];
+			normals: [3] u32 = .[ 0, 0, 0 ];
+			textures: [3] u32 = .[ 0, 0, 0 ];
+		}
 
 		vertices: [..] V3f;
 		vertices.allocator = temp;
@@ -322,18 +348,78 @@ Model :: struct {
 		textures.allocator = temp;
 		array_add(*textures, .{ 0, 0 });
 
-		Obj_Face :: struct {
-			positions: [3] u32 = .[ 0, 0, 0 ];
-			normals: [3] u32 = .[ 0, 0, 0 ];
-			textures: [3] u32 = .[ 0, 0, 0 ];
-		}
-
 		faces: [..] Obj_Face;
 		faces.allocator = temp;
 
+		vertice_table: Table(u64, u16);
+		vertice_table.allocator = temp;
+		model.base_vertex = graphics.geometry_vertices_cpu.count;
+		model.indices_offset = graphics.geometry_indices_cpu.count;
+
+		commit_part :: () #expand {
+			part: Part;
+			part.min.x = +FLOAT32_MAX;
+			part.min.y = +FLOAT32_MAX;
+			part.min.z = +FLOAT32_MAX;
+			part.max.x = -FLOAT32_MAX;
+			part.max.y = -FLOAT32_MAX;
+			part.max.z = -FLOAT32_MAX;
+			for vertices {
+				part.min.x = ifx part.min.x > it.x then it.x else part.min.x;
+				part.min.y = ifx part.min.y > it.y then it.y else part.min.y;
+				part.min.z = ifx part.min.z > it.z then it.z else part.min.z;
+				
+				part.max.x = ifx part.max.x < it.x then it.x else part.max.x;
+				part.max.y = ifx part.max.y < it.y then it.y else part.max.y;
+				part.max.z = ifx part.max.z < it.z then it.z else part.max.z;
+			}
+
+			hash_triplet :: (a: u32, b: u32, c: u32) -> u64 {
+				data: [3] u32 = .[ a, b, c ];
+				return fnv1a_hash(data.data.(*void), xx (3 * size_of(u32)));
+			}
+
+			array_reserve(
+				*graphics.geometry_vertices_cpu,
+				graphics.geometry_vertices_cpu.count + faces.count * 3
+			);
+			array_reserve(
+				*graphics.geometry_indices_cpu,
+				graphics.geometry_indices_cpu.count + faces.count * 3
+			);
+			part.base_vertex = model.base_vertex;
+			part.indices_offset = graphics.geometry_indices_cpu.count;
+			for face: faces {
+				for i: 0..2 {
+					hash := hash_triplet(face.positions[i], face.normals[i], face.textures[i]);
+					idx := table_find_pointer(*vertice_table, hash);
+					if !idx {
+						new_idx := graphics.geometry_vertices_cpu.count - part.base_vertex;
+						graphics.geometry_vertices_cpu.count += 1;
+						new_vertex: Graphics.Geometry_Vertex;
+						new_vertex.pos = vertices[face.positions[i]];
+						new_vertex.normal = normals[face.normals[i]];
+						new_vertex.uv = textures[face.textures[i]];
+						graphics.geometry_vertices_cpu[graphics.geometry_vertices_cpu.count - 1] =
+							new_vertex;
+						table_set(*vertice_table, hash, xx new_idx);
+						idx = table_find_pointer(*vertice_table, hash);
+					}
+
+					graphics.geometry_indices_cpu.count += 1;
+					graphics.geometry_indices_cpu[graphics.geometry_indices_cpu.count - 1] = idx.*;
+				}
+			}
+			part.indices_count = graphics.geometry_indices_cpu.count - part.indices_offset;
+			if part.indices_count > 0
+				array_add(*model.parts, part);
+
+			faces.count = 0;
+			table_reset(*vertice_table);
+		}
+
 		cursor := 0;
 		line: string;
-
 		while true {
 			next_cursor := find_index_from_left(xx obj, "\n", cursor);
 			if next_cursor < 0
@@ -344,6 +430,11 @@ Model :: struct {
 			cursor = next_cursor + 1;
 			if line.count == 0
 				continue;
+
+			if line.data[0] == #char "g" {
+				commit_part();
+				continue;
+			}
 
 			x: float32;
 			y: float32;
@@ -398,49 +489,50 @@ Model :: struct {
 				array_add(*faces, face);
 			}
 		}
+		commit_part();
+		model.indices_count = graphics.geometry_indices_cpu.count - model.indices_offset;
 
-		for vertices {
-			model.min.x = ifx model.min.x < it.x then model.min.x else it.x;
-			model.min.y = ifx model.min.y < it.y then model.min.y else it.y;
-			model.min.z = ifx model.min.z < it.z then model.min.z else it.z;
+		for model.parts {
+			model.min.x = ifx model.min.x > it.min.x then it.min.x else model.min.x;
+			model.min.y = ifx model.min.y > it.min.y then it.min.y else model.min.y;
+			model.min.z = ifx model.min.z > it.min.z then it.min.z else model.min.z;
 			
-			model.max.x = ifx model.max.x < it.x then it.x else model.max.x;
-			model.max.y = ifx model.max.y < it.y then it.y else model.max.y;
-			model.max.z = ifx model.max.z < it.z then it.z else model.max.z;
+			model.max.x = ifx model.max.x < it.max.x then it.max.x else model.max.x;
+			model.max.y = ifx model.max.y < it.max.y then it.max.y else model.max.y;
+			model.max.z = ifx model.max.z < it.max.z then it.max.z else model.max.z;
 		}
+		return model;
+	}
 
-		cpu_buffer := NewArray(faces.count * 3, WFramegraph.Vertex, false,, temp);
-		for faces {
-			cpu_buffer[it_index * 3 + 0].position = vertices[it.positions[0]];
-			cpu_buffer[it_index * 3 + 0].normal = normals[it.normals[0]];
-			cpu_buffer[it_index * 3 + 0].uv = textures[it.textures[0]];
-
-			cpu_buffer[it_index * 3 + 1].position = vertices[it.positions[1]];
-			cpu_buffer[it_index * 3 + 1].normal = normals[it.normals[1]];
-			cpu_buffer[it_index * 3 + 1].uv = textures[it.textures[1]];
-
-			cpu_buffer[it_index * 3 + 2].position = vertices[it.positions[2]];
-			cpu_buffer[it_index * 3 + 2].normal = normals[it.normals[2]];
-			cpu_buffer[it_index * 3 + 2].uv = textures[it.textures[2]];
-		}
-
+	commit_geometry_buffer :: () {
 		desc: WGPUBufferDescriptor = .{};
-		desc.label = toWGPUStringView(tprint("Vertex Buffer (%))", debug));
+		desc.label = toWGPUStringView("Geometry Vertex Buffer");
 		desc.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst;
-		desc.size = xx (cpu_buffer.count * size_of(WFramegraph.Vertex));
+		desc.size = xx (graphics.geometry_vertices_cpu.count * size_of(Graphics.Geometry_Vertex));
 		desc.mappedAtCreation = 0;
-		model.gpu = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
-		model.prim_count = cpu_buffer.count;
+		graphics.geometry_vertices = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
 
 		graphics.gpu.queueWriteBuffer(
 			graphics.mainQueue,
-			model.gpu,
+			graphics.geometry_vertices,
 			0,
-			cpu_buffer.data,
-			xx (cpu_buffer.count * size_of(WFramegraph.Vertex))
+			graphics.geometry_vertices_cpu.data,
+			xx (graphics.geometry_vertices_cpu.count * size_of(Graphics.Geometry_Vertex))
 		);
 
-		return model;
+		desc.label = toWGPUStringView("Geometry Index Buffer");
+		desc.usage = WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst;
+		desc.size = xx (graphics.geometry_indices_cpu.count * size_of(u16));
+		desc.mappedAtCreation = 0;
+		graphics.geometry_indices = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
+
+		graphics.gpu.queueWriteBuffer(
+			graphics.mainQueue,
+			graphics.geometry_indices,
+			0,
+			graphics.geometry_indices_cpu.data,
+			xx (graphics.geometry_indices_cpu.count * size_of(u16))
+		);
 	}
 }
 
@@ -448,8 +540,9 @@ Frame :: struct {
 	Draw :: struct {
 		instance_start := 0;
 		instance_count := 0;
-		model: *Model = null;
 		second_bind_group: *WGPUBindGroup = null;
+		model: *Model = null;
+		part_idx := -1;
 	}
 
 	Pass :: struct(U: Type) {
@@ -1409,7 +1502,7 @@ append_ui_instance_buffer :: (frame: *Frame) -> [] WFramegraph.UI_Instance {
 }
 
 commit_geometry :: (
-	frame: *Frame, pass: *Frame.Pass, model: *Model, count: int
+	frame: *Frame, pass: *Frame.Pass, model: *Model, count: int, part_idx: int = -1
 ) {
 	if count <= 0
 		return;
@@ -1422,6 +1515,7 @@ commit_geometry :: (
 	draw.instance_count = count;
 	draw.instance_start = frame.cpu_cursor / stride;
 	draw.second_bind_group = pass.current_bind_group;
+	draw.part_idx = part_idx;
 	frame.cpu_cursor += xx (count * stride);
 }
 
@@ -1621,6 +1715,14 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 
 		graphics.gpu.renderPassEncoderSetPipeline(pass, framegraph.geometryShadowPipeline);
 		graphics.gpu.renderPassEncoderSetBindGroup(pass, 0, geometry_bind_group, 0, null);
+		NV := graphics.geometry_vertices_cpu.count;
+		NI := graphics.geometry_indices_cpu.count;
+		graphics.gpu.renderPassEncoderSetVertexBuffer(
+			pass, 0, graphics.geometry_vertices, 0, xx (NV * size_of(Graphics.Geometry_Vertex))
+		);
+		graphics.gpu.renderPassEncoderSetIndexBuffer(
+			pass, graphics.geometry_indices, .Uint16, 0, xx (NI * size_of(u16))
+		);
 		
 		last_bind_group: *WGPUBindGroup = null;
 		for * frame.shadow.draws {
@@ -1633,12 +1735,26 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 			if !it.model
 				continue;
 
-			graphics.gpu.renderPassEncoderSetVertexBuffer(
-				pass, 0, it.model.gpu, 0, xx (it.model.prim_count * size_of(WFramegraph.Vertex))
-			);
-			graphics.gpu.renderPassEncoderDraw(
-				pass, xx it.model.prim_count, xx it.instance_count, 0, xx it.instance_start
-			);
+			if it.part_idx < 0 {
+				graphics.gpu.renderPassEncoderDrawIndexed(
+					pass,
+					xx it.model.indices_count,
+					xx it.instance_count,
+					xx it.model.indices_offset,
+					xx it.model.base_vertex,
+					xx it.instance_start
+				);
+			} else {
+				part := it.model.parts.data[it.part_idx];
+				graphics.gpu.renderPassEncoderDrawIndexed(
+					pass,
+					xx part.indices_count,
+					xx it.instance_count,
+					xx part.indices_offset,
+					xx part.base_vertex,
+					xx it.instance_start
+				);
+			}
 		}
 		graphics.gpu.renderPassEncoderEnd(pass);
 	}
@@ -1655,7 +1771,15 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 
 		graphics.gpu.renderPassEncoderSetPipeline(pass, framegraph.geometryPipeline);
 		graphics.gpu.renderPassEncoderSetBindGroup(pass, 0, geometry_bind_group, 0, null);
-		
+		NV := graphics.geometry_vertices_cpu.count;
+		NI := graphics.geometry_indices_cpu.count;
+		graphics.gpu.renderPassEncoderSetVertexBuffer(
+			pass, 0, graphics.geometry_vertices, 0, xx (NV * size_of(Graphics.Geometry_Vertex))
+		);
+		graphics.gpu.renderPassEncoderSetIndexBuffer(
+			pass, graphics.geometry_indices, .Uint16, 0, xx (NI * size_of(u16))
+		);
+
 		last_bind_group: *WGPUBindGroup = null;
 		for * frame.geometry.draws {
 			if it.second_bind_group != last_bind_group {
@@ -1667,12 +1791,26 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 			if !it.model
 				continue;
 
-			graphics.gpu.renderPassEncoderSetVertexBuffer(
-				pass, 0, it.model.gpu, 0, xx (it.model.prim_count * size_of(WFramegraph.Vertex))
-			);
-			graphics.gpu.renderPassEncoderDraw(
-				pass, xx it.model.prim_count, xx it.instance_count, 0, xx it.instance_start
-			);
+			if it.part_idx < 0 {
+				graphics.gpu.renderPassEncoderDrawIndexed(
+					pass,
+					xx it.model.indices_count,
+					xx it.instance_count,
+					xx it.model.indices_offset,
+					xx it.model.base_vertex,
+					xx it.instance_start
+				);
+			} else {
+				part := it.model.parts.data[it.part_idx];
+				graphics.gpu.renderPassEncoderDrawIndexed(
+					pass,
+					xx part.indices_count,
+					xx it.instance_count,
+					xx part.indices_offset,
+					xx part.base_vertex,
+					xx it.instance_start
+				);
+			}
 		}
 		graphics.gpu.renderPassEncoderEnd(pass);
 	}
@@ -1704,7 +1842,14 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 
 		graphics.gpu.renderPassEncoderSetPipeline(pass, framegraph.geometryPipeline);
 		graphics.gpu.renderPassEncoderSetBindGroup(pass, 0, geometry_bind_group, 0, null);
-		
+		NV := graphics.geometry_vertices_cpu.count;
+		NI := graphics.geometry_indices_cpu.count;
+		graphics.gpu.renderPassEncoderSetVertexBuffer(
+			pass, 0, graphics.geometry_vertices, 0, xx (NV * size_of(Graphics.Geometry_Vertex))
+		);
+		graphics.gpu.renderPassEncoderSetIndexBuffer(
+			pass, graphics.geometry_indices, .Uint16, 0, xx (NI * size_of(u16))
+		);
 		last_bind_group: *WGPUBindGroup = null;
 		for * frame.editor.draws {
 			if it.second_bind_group != last_bind_group {
@@ -1716,12 +1861,26 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 			if !it.model
 				continue;
 
-			graphics.gpu.renderPassEncoderSetVertexBuffer(
-				pass, 0, it.model.gpu, 0, xx (it.model.prim_count * size_of(WFramegraph.Vertex))
-			);
-			graphics.gpu.renderPassEncoderDraw(
-				pass, xx it.model.prim_count, xx it.instance_count, 0, xx it.instance_start
-			);
+			if it.part_idx < 0 {
+				graphics.gpu.renderPassEncoderDrawIndexed(
+					pass,
+					xx it.model.indices_count,
+					xx it.instance_count,
+					xx it.model.indices_offset,
+					xx it.model.base_vertex,
+					xx it.instance_start
+				);
+			} else {
+				part := it.model.parts.data[it.part_idx];
+				graphics.gpu.renderPassEncoderDrawIndexed(
+					pass,
+					xx part.indices_count,
+					xx it.instance_count,
+					xx part.indices_offset,
+					xx part.base_vertex,
+					xx it.instance_start
+				);
+			}
 		}
 		graphics.gpu.renderPassEncoderEnd(pass);
 	}
@@ -2014,6 +2173,7 @@ render_scene :: (
 		frame.shadow.current_bind_group = null;
 
 		render_players(frame, *frame.shadow, scene, store, *extra);
+		render_debris(frame, *frame.shadow, scene, store, *extra);
 		render_keys(frame, *frame.shadow, scene, store, *extra);
 		render_skulls(frame, *frame.shadow, scene, store, *extra);
 		render_shurikens(frame, *frame.shadow, scene, store, *extra);
@@ -2298,6 +2458,7 @@ render_scene :: (
 
 		frame.geometry.current_bind_group = *framegraph.geometryBindGroup;
 		render_players(frame, *frame.geometry, scene, store, *extra);
+		render_debris(frame, *frame.geometry, scene, store, *extra);
 		render_keys(frame, *frame.geometry, scene, store, *extra);
 		render_skulls(frame, *frame.geometry, scene, store, *extra);
 		render_shurikens(frame, *frame.geometry, scene, store, *extra);
@@ -2530,6 +2691,25 @@ render_mark :: (
 		instance.flags = WFramegraph.Instance.UV_REPEAT;
 		commit_geometry(frame, pass, *store.mark_model, instanced.count);
 	}
+	for scene.signal_picks {
+		instanced := append_instance_buffer(frame);
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.pos);
+		M4f.scale(*instance.M, V3f.{ 0.25, 0.25, 0.166 });
+		t := clamp(
+			(scene.client.clock - it.birthtime) / it.lifetime,
+			0.0,
+			1.0
+		);
+		t = 1 -  (1 - t);
+		instance.texture_rect = Store.Colormaps_Rect.down_arrow;
+		instance.uv_offset = V2f.{ 0, xx t };
+		instance.flags = WFramegraph.Instance.UV_REPEAT;
+		instance.color = V4f.{ 2.0, 0.3, 0.3, 1.0 };
+		commit_geometry(frame, pass, *store.mark_model, instanced.count);
+	}
 }
 
 render_particles :: (
@@ -2544,7 +2724,7 @@ render_particles :: (
 		instance.* = .{};
 		instance.M = R;
 		M4f.z_rotate(*instance.M, it.rotation);
-		M4f.translate(*instance.M, it.position + v3(-0.5, -0.5, 0));
+		M4f.translate(*instance.M, it.position + v3(-0.5 * it.size, -0.5 * it.size, 0));
 		M4f.scale(*instance.M, .{ it.size, it.size, it.size });
 		instance.texture_rect = .{
 			it.texture_rec.x, it.texture_rec.y, it.texture_rec.z, it.texture_rec.w
@@ -3682,6 +3862,82 @@ render_players :: (
 				model = *store.spirit_model;
 			commit_geometry(frame, pass, model, instanced.count);
 		}
+	}
+}
+
+render_debris :: (
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+) {
+	max_model_id := 0;
+	for scene.debris
+		max_model_id = max(max_model_id, it.model_id);
+
+	debris_indices := NewArray(scene.debris.count, int, false,, temp);
+	for * debris_indices {
+		it.* = it_index;
+	}
+
+	sort_helper :: (a: *$T, n: s64, f: (T, Scene.Scene) -> $R, scene: Scene.Scene) {
+		if n < 2 return;
+
+		p := a[n / 2];
+
+		i := 0;
+		j := n-1;
+
+		while true {
+			fp := f(p, scene);
+			while f(a[i], scene) < fp  {i += 1;}
+			while fp < f(a[j], scene)  {j -= 1;}
+
+			if i >= j break;
+
+			t := a[i];
+			a[i] = a[j];
+			a[j] = t;
+
+			i += 1;
+			j -= 1;
+		}
+		
+		sort_helper(a, i, f, scene);
+		sort_helper(a + i, n - i, f, scene);
+	}
+
+	sort_helper(
+		debris_indices.data,
+		debris_indices.count,
+		(x, scene) => scene.debris[x].model_id * 100 + scene.debris[x].part_idx,
+		scene
+	);
+
+	instanced := append_instance_buffer(frame);
+	last_model_id := -1;
+	last_part_idx := -1;
+
+	for scene.debris {
+		if it.model_id != last_model_id || it.part_idx != last_part_idx {
+			if instanced.count > 0 {
+				model := Store.get_model(store, xx it.model_id);
+				if model
+					commit_geometry(frame, pass, model, instanced.count, it.part_idx);
+			}
+			last_model_id = it.model_id;
+			last_part_idx = it.part_idx;
+			instanced = append_instance_buffer(frame);
+		}
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		M := M4f.identity();
+		M = M4f.translate(it.position) * M;
+		instance.M = M;
+		instance.texture_rect = Store.get_rect(xx it.model_id);
+	}
+	if instanced.count > 0 {
+		model := Store.get_model(store, xx last_model_id);
+		if model
+			commit_geometry(frame, pass, model, instanced.count, last_part_idx);
 	}
 }
 

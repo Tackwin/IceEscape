@@ -177,6 +177,7 @@ App_User :: struct {
 	WRender.init_framegraph(*app_user.framegraph, *app_user.store);
 
 	Scene.make(*app_user.state.scene);
+	app_user.state.scene.client.store = *app_user.store;
 	Scene.init_camera(*app_user.state.scene);
 
 	launch_music(app_user, app.platform);

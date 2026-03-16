@@ -276,6 +276,7 @@ win32_db_query :: (query: *DB_query) {
 				result := sqlite3_step(stmt);
 				if result != SQLITE_DONE {
 					print_sqliterror(db, "Failed to execute statement");
+					print("Failed query: %\n", query.query_string);
 				}
 			}
 		case .LOAD;
@@ -305,6 +306,7 @@ win32_db_query :: (query: *DB_query) {
 					break;
 				} else if result != SQLITE_ROW {
 					print_sqliterror(db, "Failed to execute statement");
+					print("Failed query: %\n", query.query_string);
 					break;
 				}
 

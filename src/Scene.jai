@@ -8,6 +8,7 @@
 #import "Xar";
 #import "Hash_Table";
 #import "Terrain";
+#import "Store";
 Platform :: #import "Platform";
 Controls :: #import "Controls";
 Rand :: #import "Rand";
@@ -120,6 +121,17 @@ Entity :: struct {
 	position: V3f;
 }
 
+Debris :: struct {
+	model_id: int;
+	part_idx: int;
+	half_size: V3f;
+
+	position: V3f;
+	velocity: V3f;
+
+	birthtime: float;
+}
+
 Scene :: struct {
 	State :: enum {
 		Normal :: 0;
@@ -136,6 +148,8 @@ Scene :: struct {
 		clock_sync_cd := 0.0;
 	}
 	client: struct {
+		store: *Store;
+
 		clock: float64 = 0.0;
 		end_level: Command.End_Level;
 		render_particles := false;
@@ -191,6 +205,7 @@ Scene :: struct {
 	news: [..] string; @allocate("lifetime") @clear("run")
 	sound_triggers: [..] Sound_Trigger; @allocate("lifetime") @clear("run")
 	jukeboxes: [..] Jukebox; @allocate("lifetime") @clear("run")
+	debris: [..] Debris; @allocate("lifetime") @clear("run")
 	indices: [..] int; @allocate("lifetime") @clear("run")
 	trigger_activated: Table(int, bool); @allocate("lifetime") @clear("run")
 
@@ -231,6 +246,13 @@ Scene :: struct {
 
 	auto_revive := false;
 	camera_locked := true;
+
+	Pick :: struct {
+		pos: V3f;
+		birthtime: float;
+		lifetime :: 0.25;
+	}
+	signal_picks: [..] Pick; @allocate("lifetime") @clear("run")
 
 	lifetime_pool: Pool;
 	frame_pool: Pool;
@@ -1458,7 +1480,7 @@ Player :: struct {
 		speed := 3.5;
 		turning_speed := 360 * 1.1;
 		dead := false;
-		dead_time: Apollo_Time;
+		dead_time: float;
 		dead_cooldown := 90;
 
 		radius_hitbox_tombstone := 0.75;
@@ -1485,6 +1507,7 @@ Player :: struct {
 	client: struct {
 		position  := V3f.{ 0, 0, 0 };
 		direction := V3f.{ 1, 0, 0 };
+		delta_frame_position := V3f.{ 0, 0, 0 };
 	};
 }
 
@@ -1669,9 +1692,9 @@ interpolate_all_to_server :: (scene: *Scene, dt: float) {
 }
 
 interpolate_to_server :: (player: *Player, dt: float) {
-	player.client.direction = damp(player.client.direction, player.server.direction, 50.0, dt);
+	player.client.direction = damp(player.client.direction, player.server.direction, 25.0, dt);
 	player.client.direction = normalize(player.client.direction);
-	player.client.position = damp(player.client.position, player.server.position, 50.0, dt);
+	player.client.position = damp(player.client.position, player.server.position, 25.0, dt);
 }
 
 interpolate_to_server :: (skull: *Skull) {
@@ -1714,6 +1737,62 @@ add_checkpoint_to_path :: (scene: *Scene, path: *Path, checkpoint: Checkpoint) {
 
 	array_add(*scene.checkpoints, checkpoint);
 	scene.checkpoints[idx].next = scene.checkpoints.count - 1;
+}
+
+add_dirt_particles :: (scene: *Scene, dt: float32) {
+	player := find_by_player_id(scene, scene.controlled_player_id);
+	if !player || player.server.dead
+		return;
+
+	tile, ok := tile_under(scene, player.client.position);
+	if !ok
+		return;
+	
+	n := dt * 3000.0 * norm(player.client.delta_frame_position);
+	if n > 10
+		n = 10;
+	while n > 0.0 {
+		r := Rand.random_uniform(*scene.client_rng, 0.0, 1.0);
+		if r > n
+			break;
+		p: Particle;
+		p.position = player.client.position;
+		p.velocity = normalize(player.client.delta_frame_position);
+		p.velocity = p.velocity * Rand.random_uniform(*scene.client_rng, -0.25, -0.125);
+		side := cross(p.velocity, V3f.{ 0, 0, 1 });
+		side = normalize(side);
+		p.position = p.position + player.client.delta_frame_position * 0.5;
+		if Rand.random_u64(*scene.client_rng) % 2 == 0
+			p.position = p.position + side * 0.15;
+		else
+			p.position = p.position - side * 0.15;
+		if Rand.random_u64(*scene.client_rng) % 2 == 0
+			p.position = p.position + player.client.delta_frame_position * 0.85;
+		else
+			p.position = p.position - player.client.delta_frame_position * 0.85;
+
+		p.velocity = p.velocity + side * Rand.random_uniform(*scene.client_rng, -0.3, 0.3);
+		p.velocity.z = Rand.random_uniform(*scene.client_rng, 0.5, 1.0);
+		p.size = Rand.random_uniform(*scene.client_rng, 0.1, 0.2);
+		p.rotation_speed = Rand.random_uniform(*scene.client_rng, -5.0, 5.0);
+		p.lifetime = Rand.random_uniform(*scene.client_rng, 0.25, 0.5);
+		p.fade_out_time = Rand.random_uniform(*scene.client_rng, 0.1, 0.25);
+		p.floor_bounce = Rand.random_uniform(*scene.client_rng, 0.2, 0.5);
+		p.drag = Rand.random_uniform(*scene.client_rng, 0.7, 0.9);
+		
+		if tile.kind == .Grass {
+			p.color = V4f.{ 0.6, 0.3, 0.1, 1 };
+			texture_idx := Rand.random_uniform(*scene.client_rng, 1, 3);
+			p.texture_rec = V4f.{ texture_idx / 4.0, 2 / 4.0, 1 / 4.0, 1 / 4.0 };
+		}
+		else {
+			p.color = V4f.{ 0.3, 0.6, 0.8, 1 };
+			texture_idx := Rand.random_uniform(*scene.client_rng, 1, 4);
+			p.texture_rec = V4f.{ texture_idx / 4.0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
+		}
+		array_add(*scene.particles, p);
+		n -= 1.0;
+	}
 }
 
 add_snow :: (scene: *Scene, dt: float32) {
@@ -1858,6 +1937,26 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 				array_add(*scene.sound_triggers, sound);
 			}
 		}
+
+		if controls.just_pressed[Platform.Key.MouseRight] {
+			V := look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
+			P := perspective(scene.camera);
+			r := unproject_ndc(
+				.{
+					controls.mouse_pos.x / controls.window_size.x * 2 - 1,
+					controls.mouse_pos.y / controls.window_size.y * 2 - 1
+				},
+				V,
+				P
+			);
+
+			target, ok := ray_plane(scene.camera.position, r, .{ 0, 0, 1 });
+			if ok && scene.state == .Normal {
+				command: Command.Signal_Pick;
+				command.pos = target;
+				add(result, scene.id, command);
+			}
+		}
 	}
 	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Coin) {
 		player := find_by_player_id(scene, scene.controlled_player_id);
@@ -1958,8 +2057,22 @@ update :: (scene: *Scene, lantern: *Lantern, dt: float32) {
 }
 
 update_client :: (scene: *Scene, dt: float32, result: *Frame_Result) {
-	if scene.client.render_particles
+	if scene.client.render_particles {
 		add_snow(scene, dt);
+		add_dirt_particles(scene, dt);
+	}
+
+	{
+		pick_cursor := 0;
+		for scene.signal_picks {
+			if scene.client.clock > it.birthtime + it.lifetime {
+				continue;
+			}
+			scene.signal_picks[pick_cursor] = it;
+			pick_cursor += 1;
+		}
+		scene.signal_picks.count = pick_cursor;
+	}
 
 	for * scene.safe_zones {
 		it.client.time += dt;
@@ -2206,8 +2319,10 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		}
 	}
 
-	if scene.client.render_particles
+	if scene.client.render_particles {
+		update_debris(scene, dt);
 		update_particles(scene, dt);
+	}
 
 	if scene.is_server
 		update_server(scene, time, dt, result);
@@ -2875,6 +2990,21 @@ update_explosions :: (scene: *Scene, dt: float32) {
 	}
 }
 
+update_debris :: (scene: *Scene, dt: float32) {
+	for * scene.debris {
+		it.position += it.velocity * dt;
+		it.velocity.z -= 1.81 * dt;
+		it.velocity *= clamp(pow(0.50, dt), 0.0, 1.0);
+		
+		if it.position.z < 0.05 + it.half_size.z {
+			it.position.z = 0.05 + it.half_size.z;
+			if it.velocity.z < 0 {
+				it.velocity.z = -it.velocity.z;
+			}
+		}
+	}
+}
+
 update_particles :: (scene: *Scene, dt: float32) {
 	for * scene.particles {
 		it.position += it.velocity * dt;
@@ -3010,6 +3140,42 @@ drop_bombs :: (scene: *Scene, player: *Player) {
 	}
 }
 
+client_die :: (scene: *Scene, player: *Player, at: V3f) {
+	player.server.dead = true;
+	player.server.dead_time = xx scene.server.clock;
+	player.server.has_safe_present = false;
+	player.server.has_hook_present = 0;
+	tombstone: Tombstone;
+	tombstone.player_id = player.id;
+	tombstone.position = at;
+
+	if player.id == scene.controlled_player_id {
+		trigger: Sound_Trigger;
+		trigger.kind = .Loser;
+		trigger.position = at;
+		array_add(*scene.sound_triggers, trigger);
+	}
+
+	array_add(*scene.tombstones, tombstone);
+
+	model := get_model(scene.client.store, xx player.server.model_id);
+	if model {
+		for model.parts {
+			debris: Debris;
+			debris.part_idx = it_index;
+			debris.model_id = player.server.model_id;
+			debris.position = player.client.position;
+			debris.velocity = v3(
+				Rand.random_uniform(*scene.client_rng, -1.0, 1.0),
+				Rand.random_uniform(*scene.client_rng, -1.0, 1.0),
+				Rand.random_uniform(*scene.client_rng, 2.0, 5.0),
+			);
+			debris.half_size = (it.max - it.min) / 2;
+			array_add(*scene.debris, debris);
+		}
+	}
+}
+
 server_die :: (scene: *Scene, player: *Player, time: Apollo_Time, result: *Frame_Result) {
 	player.server.has_safe_present = false;
 	player.server.has_hook_present = 0;
@@ -3028,7 +3194,7 @@ server_die :: (scene: *Scene, player: *Player, time: Apollo_Time, result: *Frame
 		died.position = player.server.position;
 		array_add(*result.died, died);
 		player.server.dead = true;
-		player.server.dead_time = time;
+		player.server.dead_time = xx scene.server.clock;
 		player.server.souls = 0;
 
 		if result {
@@ -3587,6 +3753,11 @@ update :: (scene: Scene, coin: *Coin, dt: float32) {
 }
 
 update :: (scene: Scene, player: *Player, dt: float32) {
+	og_pos := player.client.position;
+	defer {
+		player.client.delta_frame_position = player.client.position - og_pos;
+	}
+
 	if !scene.is_server
 		interpolate_to_server(player, dt);
 
@@ -3820,13 +3991,20 @@ process_server_only :: (
 		}
 	}
 
+	signal_pick: *Command.Signal_Pick = isa(command.payload, Command.Signal_Pick);
+	if signal_pick {
+		cmd: Command.Signal_Pick;
+		cmd.pos = signal_pick.pos;
+		add(response, scene.id, cmd);
+		return true;
+	}
 
 	ask_respawn: *Command.Ask_Respawn = isa(command.payload, Command.Ask_Respawn);
 	if ask_respawn {
 		player := find_by_player_id(scene, ask_respawn.player_id);
 		if player {
 			if player.server.dead {
-				dt := to_float64_seconds(time - player.server.dead_time);
+				dt := scene.server.clock - player.server.dead_time;
 				if dt.(float32) >= player.server.dead_cooldown.(float32) {
 					player.server.need_respawn = true;
 				}
@@ -3951,6 +4129,14 @@ process_client_only :: (
 		return true;
 	}
 	
+	signal_pick: *Command.Signal_Pick = isa(command.payload, Command.Signal_Pick);
+	if signal_pick {
+		new: Scene.Pick;
+		new.pos = signal_pick.pos;
+		new.birthtime = xx scene.client.clock;
+		array_add(*scene.signal_picks, new);
+	}
+
 	get_terrain_leaderboard := isa(command.payload, Command.Get_Terrain_Leaderboard);
 	if get_terrain_leaderboard {
 		scene.client.leaderboard = get_terrain_leaderboard.*;
@@ -3991,22 +4177,7 @@ process_client_only :: (
 		player := find_by_player_id(scene, died.player_id);
 		if player
 		{
-			player.server.dead = true;
-			player.server.dead_time = time;
-			player.server.has_safe_present = false;
-			player.server.has_hook_present = 0;
-			tombstone: Tombstone;
-			tombstone.player_id = died.player_id;
-			tombstone.position = died.position;
-
-			if player.id == scene.controlled_player_id {
-				trigger: Sound_Trigger;
-				trigger.kind = .Loser;
-				trigger.position = died.position;
-				array_add(*scene.sound_triggers, trigger);
-			}
-
-			array_add(*scene.tombstones, tombstone);
+			client_die(scene, player, died.position);
 			return true;
 		}
 	}

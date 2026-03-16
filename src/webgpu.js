@@ -1791,6 +1791,26 @@ jai_imports.jsRenderPassEncoderDraw = (params_ptr, returns_ptr) => {
 	pass.draw(vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
+jai_imports.jsRenderPassEncoderDrawIndexed = (params_ptr, returns_ptr) => {
+	const pass_idx = getU64(params_ptr, 0);
+	const indexCount = getU32(params_ptr, 8);
+	const instanceCount = getU32(params_ptr, 12);
+	const firstIndex = getU32(params_ptr, 16);
+	const baseVertex = getU32(params_ptr, 20);
+	const firstInstance = getU32(params_ptr, 24);
+
+	if (pass_idx <= 0) {
+		return;
+	}
+
+	const pass = object_map[pass_idx];
+	if (!pass ) {
+		return;
+	}
+
+	pass.drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
+}
+
 jai_imports.jsRenderPassEncoderEnd = (params_ptr, returns_ptr) => {
 	const pass_idx = getU64(params_ptr, 0);
 	if (pass_idx <= 0) {

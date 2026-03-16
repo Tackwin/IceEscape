@@ -527,6 +527,8 @@ respond :: (platform: Platform, time: Apollo_Time, response: Scene.Process_Respo
 			send_web_message(platform, time, it.command);
 		if isa(it.command.payload, Command.Ask_Respawn)
 			send_web_message(platform, time, it.command);
+		if isa(it.command.payload, Command.Signal_Pick)
+			send_web_message(platform, time, it.command);
 	}
 }
 

@@ -2552,6 +2552,26 @@ jai_imports.jsRenderPassEncoderDraw = (params_ptr, returns_ptr) => {
 	pass.draw(vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
+jai_imports.jsRenderPassEncoderDrawIndexed = (params_ptr, returns_ptr) => {
+	const pass_idx = getU64(params_ptr, 0);
+	const indexCount = getU32(params_ptr, 8);
+	const instanceCount = getU32(params_ptr, 12);
+	const firstIndex = getU32(params_ptr, 16);
+	const baseVertex = getU32(params_ptr, 20);
+	const firstInstance = getU32(params_ptr, 24);
+
+	if (pass_idx <= 0) {
+		return;
+	}
+
+	const pass = object_map[pass_idx];
+	if (!pass ) {
+		return;
+	}
+
+	pass.drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
+}
+
 jai_imports.jsRenderPassEncoderEnd = (params_ptr, returns_ptr) => {
 	const pass_idx = getU64(params_ptr, 0);
 	if (pass_idx <= 0) {
@@ -3035,6 +3055,45 @@ jai_imports.jsRenderPassEncoderSetVertexBuffer = (params_ptr, returns_ptr) => {
 		pass.setVertexBuffer(slot, buffer, Number(offset));
 	} else {
 		pass.setVertexBuffer(slot, buffer);
+	}
+}
+
+const indexFormatConvert = (format) => {
+	if (format == WGPUIndexFormat_Uint16)
+		return "uint16";
+	if (format == WGPUIndexFormat_Uint32)
+		return "uint32";
+	return "uint16";
+}
+
+jai_imports.jsRenderPassEncoderSetIndexBuffer = (params_ptr, returns_ptr) => {
+	const pass_idx = getU64(params_ptr, 0);
+	const buffer_idx = getU64(params_ptr, 8);
+	const offset = getU64(params_ptr, 16);
+	const size = getU64(params_ptr, 24);
+	const indexFormatRaw = getU32(params_ptr, 32);
+
+	if (pass_idx <= 0 || buffer_idx <= 0) {
+		return;
+	}
+
+	const pass = object_map[pass_idx];
+	const buffer = object_map[buffer_idx];
+	if (!pass || !buffer) {
+		return;
+	}
+
+	let indexFormat = undefined;
+	if (indexFormatRaw != 0) {
+		indexFormat = indexFormatConvert(indexFormatRaw);
+	}
+
+	if (size != 0) {
+		pass.setIndexBuffer(buffer, indexFormat, Number(offset), Number(size));
+	} else if (offset != 0) {
+		pass.setIndexBuffer(buffer, indexFormat, Number(offset));
+	} else {
+		pass.setIndexBuffer(buffer, indexFormat);
 	}
 }
 

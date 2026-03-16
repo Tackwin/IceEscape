@@ -301,7 +301,8 @@ store_database :: (
 	db: DB_query.Handle,
 	table: string,
 	inputs: [] $T,
-	on_conflict_update: bool = true
+	on_conflict_update: bool = true,
+	primary_key_name: string = "id"
 ) {
 	query := DB_query.{};
 	query.kind = .STORE;
@@ -340,10 +341,10 @@ store_database :: (
 		}
 
 		if any_to_update {
-			print_to_builder(*sb, " ON CONFLICT(id) DO UPDATE SET ");
+			print_to_builder(*sb, " ON CONFLICT(%) DO UPDATE SET ", primary_key_name);
 			sep = "";
 			for info.members {
-				if it.name == "id" {
+				if it.name == primary_key_name {
 					continue;
 				}
 				print_to_builder(*sb, "%1%2 = excluded.%2", sep, to_lower_copy(it.name,, temp));

@@ -367,34 +367,50 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 
 	get_terrain_leaderboard := isa(cmd.payload, Command.Get_Terrain_Leaderboard);
 	if get_terrain_leaderboard {
-		where :: #string WHERE_QUERY
-terrain_id = %1
-AND time_ms = (
-	SELECT MIN(time_ms)
-	FROM time_entries
-	WHERE terrain_id = %1
-)
-WHERE_QUERY;
-		
+		terrain_id := get_terrain_leaderboard.terrain_id;
+		if terrain_id < 0 && get_terrain_leaderboard.scene_name.count > 0 {
+			// Try to lookup the terrain with the name instead
+			infos := load_database(
+				platform,
+				server.db,
+				"terrain_infos",
+				DB_Terrain_Infos,
+				tprint("name = '%1'", get_terrain_leaderboard.scene_name)
+			);
+			if infos.count > 0 {
+				terrain_id = infos[0].id;
+			}
+		}
+		if terrain_id < 0
+			return true;
+
 		time_entries := load_database(
 			platform,
 			server.db,
 			"time_entries",
 			DB_Time_Entry,
-			tprint(where, get_terrain_leaderboard.terrain_id)
+			tprint("terrain_id = %1", terrain_id)
 		);
 
 		reply: Command.Get_Terrain_Leaderboard;
-		reply.terrain_id = get_terrain_leaderboard.terrain_id;
+		reply.terrain_id = terrain_id;
 		if time_entries.count > 0 {
-			reply.wr_time_ms = time_entries[0].time_ms;
+
+			min_idx := 0;
+			for 1..time_entries.count - 1 {
+				if time_entries[it].time_ms < time_entries[min_idx].time_ms {
+					min_idx = it;
+				}
+			}
+
+			reply.wr_time_ms = time_entries[min_idx].time_ms;
 
 			profile_usernames := load_database(
 				platform,
 				server.db,
 				"profile_usernames",
 				DB_Profile_Username,
-				tprint("id = %", time_entries[0].profile_id)
+				tprint("id = %", time_entries[min_idx].profile_id)
 			);
 
 			if profile_usernames.count > 0 {
@@ -402,9 +418,32 @@ WHERE_QUERY;
 			} else {
 				reply.wr_username = "Unknown";
 			}
+
+			reply.entries = NewArray(
+				time_entries.count, Command.Get_Terrain_Leaderboard_Entry,, temp
+			);
+			for 0..time_entries.count - 1 {
+				reply.entries[it].time_ms = time_entries[it].time_ms;
+				reply.entries[it].timestamp_ms = time_entries[it].timestamp_ms;
+
+				profile_usernames := load_database(
+					platform,
+					server.db,
+					"profile_usernames",
+					DB_Profile_Username,
+					tprint("id = %", time_entries[it].profile_id)
+				);
+
+				if profile_usernames.count > 0 {
+					reply.entries[it].username = profile_usernames[0].username;
+				} else {
+					reply.entries[it].username = "Unknown";
+				}
+			}
 		}
 		
 		append_queue(server, reply, sender);
+		return true;
 	}
 
 	save_terrain := isa(cmd.payload, Command.Save_Terrain);
@@ -1133,6 +1172,7 @@ ensure_database :: (app: *App) {
 		app_user.server.db,
 		#string QUERY
 			CREATE TABLE IF NOT EXISTS terrain_asciis (
+				ascii_id INTEGER PRIMARY KEY,
 				id INTEGER,
 				ascii TEXT,
 				created_ms INTEGER,

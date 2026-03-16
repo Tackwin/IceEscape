@@ -433,12 +433,22 @@ Command :: struct {
 
 		from_coin_id: int;
 	}
-
+	Get_Terrain_Leaderboard_Entry :: struct {
+		username: string;
+		time_ms: int;
+		timestamp_ms: int;
+	}
 	Get_Terrain_Leaderboard :: struct {
 		terrain_id: int;
+		scene_name: string;
 
 		wr_time_ms: int;
 		wr_username: string;
+
+		entries: [] Get_Terrain_Leaderboard_Entry;
+	}
+	Signal_Pick :: struct {
+		pos: V3f;
 	}
 
 	Payload_t :: Sum_Type(
@@ -452,7 +462,7 @@ Command :: struct {
 		Sync_Stats, Sync_Clock, Note_Played, Sync_Bomb_Spawner, Sync_Bomb, Sync_Score,
 		Ask_Enter_Custom_Instance, Ans_Enter_Custom_Instance, Save_Terrain, Load_Terrain,
 		Ask_List_Terrain, Ans_List_Terrain, Login, Set_Passcode, Get_Profile_Stats, Set_Username,
-		Get_Username, Get_Terrain_Leaderboard
+		Get_Username, Get_Terrain_Leaderboard, Signal_Pick
 	);
 	payload: Payload_t;
 	sent_timestamp: float64;
@@ -501,13 +511,15 @@ serialize_generic :: (payload: *$T, data: [] u8) -> int {
 		// Compute size needed to serialize
 
 		#if info.type == .STRING {
-			return payload.count;
+			return payload.count + 8;
 		} else #if info.type == .STRUCT {
 			size := 0;
 
 			#insert #run -> string {
 				sb: String_Builder;
 				for info.members {
+					if it.offset_into_constant_storage >= 0
+						continue;
 					print_to_builder(
 						*sb,
 						"size += serialize_generic(*payload.%, .[]);\n",
@@ -519,19 +531,19 @@ serialize_generic :: (payload: *$T, data: [] u8) -> int {
 
 			return size;
 		} else #if info.type == .ARRAY {
-			if info.array_type == .FIXED
-				return 0;
-			if info.array_type == .VIEW
-				return payload.count * serialize_generic(payload.data, .[]);
-			assert(false, "Don't know how to serialize an array of type%\n", T);
+			size := 8; // The count
+			for 0..payload.count - 1 {
+				size += serialize_generic(payload.data + it, .[]);
+			}
+			return size;
 		} else #if info.type == .INTEGER {
-			return 0;
+			return info.runtime_size;
 		} else #if info.type == .FLOAT {
-			return 0;
+			return info.runtime_size;
 		} else #if info.type == .BOOL {
-			return 0;
+			return info.runtime_size;
 		} else #if info.type == .ENUM {
-			return 0;
+			return info.runtime_size;
 		} else #if info.type == .VARIANT {
 			varT :: #run -> Type {
 				return get_type(type_info(T).variant_of);
@@ -549,15 +561,16 @@ serialize_generic :: (payload: *$T, data: [] u8) -> int {
 	}
 
 	cursor := 0;
-	subdata :: () -> [] u8 #expand {
+	subdata :: (data: [] u8, cursor: int) -> [] u8 {
 		out: [] u8;
 		out.data = data.data + cursor;
 		out.count = data.count - cursor;
 		return out;
 	}
 	#if info.type == .STRING {
-		memcpy(data.data, payload.data, payload.count);
-		cursor += payload.count;
+		memcpy(data.data + 0, *payload.count, 8);
+		memcpy(data.data + 8, payload.data, payload.count);
+		cursor += payload.count + 8;
 	}
 	#if info.type == .VARIANT {
 		varT :: #run -> Type {
@@ -566,22 +579,43 @@ serialize_generic :: (payload: *$T, data: [] u8) -> int {
 		variant: *varT = xx payload;
 		cursor += serialize_generic(variant, data);
 	}
+	#if info.type == .INTEGER {
+		memcpy(data.data, payload, info.runtime_size);
+		cursor += info.runtime_size;
+	}
+	#if info.type == .FLOAT {
+		memcpy(data.data, payload, info.runtime_size);
+		cursor += info.runtime_size;
+	}
+	#if info.type == .BOOL {
+		memcpy(data.data, payload, info.runtime_size);
+		cursor += info.runtime_size;
+	}
+	#if info.type == .ENUM {
+		memcpy(data.data, payload, info.runtime_size);
+		cursor += info.runtime_size;
+	}
 	#if info.type == .STRUCT {
-
 		#insert #run -> string {
 			sb: String_Builder;
-			for info.members
+			for info.members {
+				if it.offset_into_constant_storage >= 0
+					continue;
 				print_to_builder(
-					*sb, "cursor += serialize_generic(*payload.%, subdata());\n", it.name
+					*sb,
+					"cursor += serialize_generic(*payload.%, subdata(data, cursor));\n",
+					it.name
 				);
+			}
 			return builder_to_string(*sb);
 		};
 	}
 	#if info.type == .ARRAY {
-		if info.array_type == .VIEW {
-			for 0..payload.count - 1 {
-				cursor += serialize_generic(payload.data + it, subdata());
-			}
+		memcpy(data.data + cursor, *payload.count, 8);
+		cursor += 8;
+		for 0..payload.count - 1 {
+			sub := subdata(data, cursor);
+			cursor += serialize_generic(payload.data + it, sub);
 		}
 	}
 	return cursor;
@@ -590,15 +624,32 @@ serialize_generic :: (payload: *$T, data: [] u8) -> int {
 deserialize_generic :: (data: [] u8, out: *$T) -> int {
 	info :: type_info(T);
 	cursor := 0;
-	subdata :: () -> [] u8 #expand {
+	subdata :: (data: [] u8, cursor: int) -> [] u8 {
 		out: [] u8;
 		out.data = data.data + cursor;
 		out.count = data.count - cursor;
 		return out;
 	}
 	#if info.type == .STRING {
-		out.data = data.data;
-		cursor += out.count;
+		out.count = data.data.(*s64).*;
+		out.data  = data.data + 8;
+		cursor += out.count + 8;
+	}
+	#if info.type == .INTEGER {
+		memcpy(out, data.data, info.runtime_size);
+		cursor += info.runtime_size;
+	}
+	#if info.type == .FLOAT {
+		memcpy(out, data.data, info.runtime_size);
+		cursor += info.runtime_size;
+	}
+	#if info.type == .BOOL {
+		memcpy(out, data.data, info.runtime_size);
+		cursor += info.runtime_size;
+	}
+	#if info.type == .ENUM {
+		memcpy(out, data.data, info.runtime_size);
+		cursor += info.runtime_size;
 	}
 	#if info.type == .VARIANT {
 		varT :: #run -> Type {
@@ -611,9 +662,11 @@ deserialize_generic :: (data: [] u8, out: *$T) -> int {
 		#insert #run -> string {
 			sb: String_Builder;
 			for info.members {
+				if it.offset_into_constant_storage >= 0
+					continue;
 				print_to_builder(
 					*sb,
-					"cursor += deserialize_generic(subdata(), *out.%);\n",
+					"sub_%1 := subdata(data, cursor);\ncursor += deserialize_generic(sub_%1, *out.%1);\n",
 					it.name
 				);
 			}
@@ -621,11 +674,12 @@ deserialize_generic :: (data: [] u8, out: *$T) -> int {
 		};
 	}
 	#if info.type == .ARRAY {
-		if info.array_type == .VIEW {
-			for 0..out.count - 1 {
-				sub := subdata();
-				cursor += deserialize_generic(sub, out.data + it);
-			}
+		memcpy(*out.count, data.data + cursor, 8);
+		cursor += 8;
+		out.data = talloc(out.count * info.element_type.runtime_size);
+		for 0..out.count - 1 {
+			sub := subdata(data, cursor);
+			cursor += deserialize_generic(sub, out.data + it);
 		}
 	}
 	return cursor;
@@ -719,20 +773,9 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Set_Username;
 			generic_case(Command.Set_Username);
 		case .Get_Username;
-			get_username := isa(cmd.payload, Command.Get_Username);
-			if !get_username {
-				print("Weirdge\n");
-				break label;
-			}
-
-			additional_data_size := serialize_generic(get_username, .[]);
-			array_reserve(buffer, dry_size + additional_data_size);
-			cursor := dry_size;
-			subdata: [] u8;
-			subdata.data = buffer.data + cursor;
-			subdata.count = additional_data_size;
-			cursor += serialize_generic(get_username, subdata);
-			buffer.count = cursor;
+			generic_case(Command.Get_Username);
+		case .Signal_Pick;
+			generic_case(Command.Signal_Pick);
 		case .Load_Terrain;
 			load_terrain := isa(cmd.payload, Command.Load_Terrain);
 			if !load_terrain {
@@ -1009,12 +1052,12 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 			break `label;
 		}
 
-		remaining_size := expected_size - cursor;
+		remaining_size := expected_size - 8 - size_of(Command);
 		subdata: [] u8;
-		subdata.data = buffer.data + cursor;
+		subdata.data = buffer.data + 8 + size_of(Command);
 		subdata.count = remaining_size;
 
-		cursor += deserialize_generic(subdata, typed);
+		cursor = 8 + deserialize_generic(subdata, typed);
 	}
 
 	for label: 0..0 if #complete cmd.payload.kind == {
@@ -1072,6 +1115,9 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Ans_Enter_Instance; #through;
 		case .Ask_Instance_List; #through;
 		case .Move_To_Play_World;
+			return cmd, true;
+		case .Signal_Pick;
+			generic_case(Command.Signal_Pick);
 			return cmd, true;
 		case .Get_Terrain_Leaderboard;
 			generic_case(Command.Get_Terrain_Leaderboard);
