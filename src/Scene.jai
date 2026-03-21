@@ -13,6 +13,7 @@ Platform :: #import "Platform";
 Controls :: #import "Controls";
 Rand :: #import "Rand";
 GUI :: #import "GUI";
+XPBD :: #import "XPBD";
 
 #scope_export
 
@@ -124,10 +125,14 @@ Entity :: struct {
 Debris :: struct {
 	model_id: int;
 	part_idx: int;
+
+	origin: V3f;
 	half_size: V3f;
 
 	position: V3f;
 	velocity: V3f;
+	w: V3f;
+	q: Qf;
 
 	birthtime: float;
 }
@@ -1748,9 +1753,9 @@ add_dirt_particles :: (scene: *Scene, dt: float32) {
 	if !ok
 		return;
 	
-	n := dt * 3000.0 * norm(player.client.delta_frame_position);
-	if n > 10
-		n = 10;
+	n := dt * 6000.0 * norm(player.client.delta_frame_position);
+	if n > 20
+		n = 20;
 	while n > 0.0 {
 		r := Rand.random_uniform(*scene.client_rng, 0.0, 1.0);
 		if r > n
@@ -1775,18 +1780,19 @@ add_dirt_particles :: (scene: *Scene, dt: float32) {
 		p.velocity.z = Rand.random_uniform(*scene.client_rng, 0.5, 1.0);
 		p.size = Rand.random_uniform(*scene.client_rng, 0.1, 0.2);
 		p.rotation_speed = Rand.random_uniform(*scene.client_rng, -5.0, 5.0);
-		p.lifetime = Rand.random_uniform(*scene.client_rng, 0.25, 0.5);
+		p.lifetime = Rand.random_uniform(*scene.client_rng, 0.35, 0.6);
 		p.fade_out_time = Rand.random_uniform(*scene.client_rng, 0.1, 0.25);
 		p.floor_bounce = Rand.random_uniform(*scene.client_rng, 0.2, 0.5);
 		p.drag = Rand.random_uniform(*scene.client_rng, 0.7, 0.9);
 		
 		if tile.kind == .Grass {
-			p.color = V4f.{ 0.6, 0.3, 0.1, 1 };
+			p.color = V4f.{ 0.5, 0.2, 0.0, 1 };
 			texture_idx := Rand.random_uniform(*scene.client_rng, 1, 3);
 			p.texture_rec = V4f.{ texture_idx / 4.0, 2 / 4.0, 1 / 4.0, 1 / 4.0 };
 		}
 		else {
-			p.color = V4f.{ 0.3, 0.6, 0.8, 1 };
+			p.color = V4f.{ 0.8, 0.8, 1.0, 1 };
+			p.size *= 1.5;
 			texture_idx := Rand.random_uniform(*scene.client_rng, 1, 4);
 			p.texture_rec = V4f.{ texture_idx / 4.0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
 		}
@@ -2991,18 +2997,70 @@ update_explosions :: (scene: *Scene, dt: float32) {
 }
 
 update_debris :: (scene: *Scene, dt: float32) {
+	world: XPBD.World;
+	world.iterations = 1;
+	world.substeps = 5;
+	world.bodies = NewArray(scene.debris.count, XPBD.Rigid_Body,, temp);
+	body_cursor := 0;
 	for * scene.debris {
-		it.position += it.velocity * dt;
-		it.velocity.z -= 1.81 * dt;
-		it.velocity *= clamp(pow(0.50, dt), 0.0, 1.0);
-		
-		if it.position.z < 0.05 + it.half_size.z {
-			it.position.z = 0.05 + it.half_size.z;
-			if it.velocity.z < 0 {
-				it.velocity.z = -it.velocity.z;
+		if it.part_idx == -1
+			continue;
+
+		model := get_model(scene.client.store, xx it.model_id);
+		if model {
+			part := model.parts[it.part_idx];
+			body: XPBD.Rigid_Body;
+			body.p = it.position;
+			body.v = it.velocity;
+			body.w = it.w;
+			body.q = it.q;
+			body.I = part.I;
+			body.Ii = part.Iinv;
+			body.m = part.M;
+			if scene.client.clock > it.birthtime + 1 {
+				body.collide = true;
+				body.collide_factor = smoothstep(
+					scene.client.clock.(float32), it.birthtime + 1, it.birthtime + 2
+				);
 			}
+
+			body.half_size = it.half_size;
+			world.bodies[body_cursor] = body;
+			body_cursor += 1;
 		}
 	}
+	world.bodies.count = body_cursor;
+
+	XPBD.step(*world, dt);
+
+	body_cursor = 0;
+	for * debri: scene.debris {
+		if debri.part_idx == -1
+			continue;
+
+		model := get_model(scene.client.store, xx debri.model_id);
+		if model {
+			debri.position = world.bodies[body_cursor].p;
+			debri.velocity = world.bodies[body_cursor].v;
+			debri.q = world.bodies[body_cursor].q;
+			debri.w = world.bodies[body_cursor].w;
+			body_cursor += 1;
+		}
+	}
+	
+	// for * scene.debris {
+	// 	floor := it.half_size.z - 0.01;
+	// 	it.position += it.velocity * dt;
+	// 	it.velocity.z -= 1.81 * dt;
+	// 	it.velocity *= clamp(pow(0.50, dt), 0.0, 1.0);
+		
+	// 	if it.position.z < floor {
+	// 		it.position.z = floor;
+	// 		if it.velocity.z < 0 {
+	// 			it.velocity.z = -it.velocity.z * 0.5;
+	// 		}
+	// 	}
+	// }
 }
 
 update_particles :: (scene: *Scene, dt: float32) {
@@ -3157,21 +3215,32 @@ client_die :: (scene: *Scene, player: *Player, at: V3f) {
 	}
 
 	array_add(*scene.tombstones, tombstone);
+	drop_debris(scene, player);
+}
 
+drop_debris :: (scene: *Scene, player: *Player) {
 	model := get_model(scene.client.store, xx player.server.model_id);
 	if model {
 		for model.parts {
 			debris: Debris;
 			debris.part_idx = it_index;
 			debris.model_id = player.server.model_id;
-			debris.position = player.client.position;
 			debris.velocity = v3(
 				Rand.random_uniform(*scene.client_rng, -1.0, 1.0),
 				Rand.random_uniform(*scene.client_rng, -1.0, 1.0),
-				Rand.random_uniform(*scene.client_rng, 2.0, 5.0),
+				Rand.random_uniform(*scene.client_rng, 0.0, 1.0),
 			);
+			// debris.velocity += normalize(player.client.delta_frame_position);
 			debris.half_size = (it.max - it.min) / 2;
+			debris.origin = (it.max + it.min) / 2;
+			debris.position = player.client.position + debris.origin;
+			debris.position.z += 0.5;
+			debris.birthtime = xx scene.client.clock;
+			debris.q = from_unit_vectors(
+				normalize(v3(1.0, 0.0, Rand.random_uniform(*scene.client_rng, 0.0, 1.0))), player.client.direction
+			);
 			array_add(*scene.debris, debris);
+			break;
 		}
 	}
 }
@@ -3697,7 +3766,7 @@ update :: (scene: Scene, camera: *Camera, dt: float32) {
 	player_locked := find_by_player_id(scene, camera.locked_to);
 
 	distance_to_target := norm(camera.wanted_target_to_position);
-	target_distance_to_target := camera.nominal_distance;
+	target_distance_to_target := 2.0;
 	if player_locked && camera.locked {
 		update_camera_locked(scene, camera, player_locked, dt);
 
@@ -4475,12 +4544,13 @@ process :: (scene: *Scene, command: Command, time: Apollo_Time, response: *Proce
 
 	respawn: *Command.Respawn = isa(command.payload, Command.Respawn);
 	if respawn {
+		player := find_by_player_id(scene, respawn.player_id);
+		drop_debris(scene, player);
 
 		pos := V3f.{ 0, 0, 0 };
 		for * scene.tombstones {
 			if it.player_id == respawn.player_id {
 				pos = it.position;
-				player := find_by_player_id(scene, it.player_id);
 				if player {
 					spawn_into(player, scene);
 				}

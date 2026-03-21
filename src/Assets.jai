@@ -232,6 +232,7 @@ FORMAT;
 
 #insert #run embed_data("UNIT_CYLINDER_OBJ", "unit_cylinder.obj", #filepath);
 #insert #run embed_data("UNIT_SPHERE_OBJ", "unit_sphere.obj", #filepath);
+#insert #run embed_data("UNIT_CUBE_OBJ", "Mesh/Cube.obj", #filepath);
 
 #insert #run embed_data("GEOMETRY_WGSL", "Shader/geometry.wgsl", #filepath);
 #insert #run embed_data("GEOMETRY_SHADOW_WGSL", "Shader/geometry_shadow.wgsl", #filepath);
@@ -440,6 +441,7 @@ load_everything :: (platform: Platform) {
 			"ZONE_WALL_OBJ",
 			"UNIT_CYLINDER_OBJ",
 			"UNIT_SPHERE_OBJ",
+			"UNIT_CUBE_OBJ",
 			"GEOMETRY_WGSL",
 			"GEOMETRY_SHADOW_WGSL",
 			"PRESENT_WGSL",

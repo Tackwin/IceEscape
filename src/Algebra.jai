@@ -288,6 +288,40 @@ M4 :: struct(T: Type) {
 M4d :: M4(float64);
 M4f :: M4(float32);
 
+M3 :: struct(T: Type) {
+	data: [9] T;
+
+	identity :: () -> M3(T) {
+		M: M3(T);
+		for * M.data
+			it.* = 0;
+		M.data[0 + 0 * 3] = 1;
+		M.data[1 + 1 * 3] = 1;
+		M.data[2 + 2 * 3] = 1;
+		return M;
+	}
+
+	by_rows :: (a: V3($T), b: V3(T), c: V3(T)) -> M3(T) {
+		M: M3(T);
+		M.data[0 + 0 * 3] = a.x;
+		M.data[0 + 1 * 3] = a.y;
+		M.data[0 + 2 * 3] = a.z;
+
+		M.data[1 + 0 * 3] = b.x;
+		M.data[1 + 1 * 3] = b.y;
+		M.data[1 + 2 * 3] = b.z;
+
+		M.data[2 + 0 * 3] = c.x;
+		M.data[2 + 1 * 3] = c.y;
+		M.data[2 + 2 * 3] = c.z;
+
+		return M;
+	}
+}
+
+M3d :: M3(float64);
+M3f :: M3(float32);
+
 Q :: struct(T: Type) {
 	x: T = 0;
 	y: T = 0;
@@ -395,6 +429,16 @@ to_rotation_matrix :: (q: Q($T)) -> M4(T) {
 		V4f.{ 0.0, 0.0, 0.0, 1.0 }
 	);
 }
+to_rotation_matrix3 :: (q: Q($T)) -> M3(T) {
+	x := q * V3(T).{1, 0, 0};
+	y := q * V3(T).{0, 1, 0};
+	z := q * V3(T).{0, 0, 1};
+	return M3f.by_rows(
+		V3f.{ x.x, y.x, z.x },
+		V3f.{ x.y, y.y, z.y },
+		V3f.{ x.z, y.z, z.z }
+	);
+}
 
 angle_between :: (from: V3($T), to: V3(T), up: V3(T)) -> T {
 	s := cross(from, to);
@@ -414,6 +458,9 @@ operator / :: (v: V3($T), f: T) -> V3(T) {
 }
 operator * :: (v: V3($T), f: T) -> V3(T) #symmetric {
 	return .{ v.x * f, v.y * f, v.z * f };
+}
+operator * :: (v: Q($T), f: T) -> Q(T) #symmetric {
+	return .{ v.x * f, v.y * f, v.z * f, v.w * f };
 }
 operator * :: (v: V2($T), f: T) -> V2(T) #symmetric {
 	return .{ v.x * f, v.y * f };
@@ -454,6 +501,12 @@ operator - :: (a: V2($T), b: V2(T)) -> V2(T) #symmetric {
 operator + :: (a: V3($T), b: V3(T)) -> V3(T) #symmetric {
 	return .{ a.x + b.x, a.y + b.y, a.z + b.z };
 }
+operator + :: (a: Q($T), b: Q(T)) -> Q(T) #symmetric {
+	return .{ a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w };
+}
+operator - :: (a: Q($T), b: Q(T)) -> Q(T) #symmetric {
+	return .{ a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w };
+}
 
 operator + :: (a: V2($T), b: V2(T)) -> V2(T) #symmetric {
 	return .{ a.x + b.x, a.y + b.y };
@@ -464,6 +517,13 @@ normalize :: (a: V3($T)) -> V3(T) {
 	if l == 0
 		return .{ 0, 0, 0 };
 	return .{ a.x / l, a.y / l, a.z / l };
+}
+
+normalize :: (q: Q($T)) -> Q(T) {
+	l := sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+	if l == 0
+		return .{ 0, 0, 0, 1 };
+	return .{ q.x / l, q.y / l, q.z / l, q.w / l };
 }
 
 cross :: (a: V3($T), b: V3(T)) -> V3(T) {
@@ -489,6 +549,45 @@ norm :: (a: V3($T)) -> T {
 }
 norm :: (a: V2($T)) -> T {
 	return sqrt(dot(a, a));
+}
+
+operator * :: (m: M3($T), v: T) -> M3(T) #symmetric {
+	y := m;
+	for * y.data
+		it.* *= v;
+	return y;
+}
+
+operator * :: (m: M3($T), v: V3(T)) -> V3(T) {
+	return .{
+		m.data[0] * v.x + m.data[3] * v.y + m.data[6] * v.z,
+		m.data[1] * v.x + m.data[4] * v.y + m.data[7] * v.z,
+		m.data[2] * v.x + m.data[5] * v.y + m.data[8] * v.z
+	};
+}
+
+operator * :: (A: M3($T), B: M3(T)) -> M3(T) {
+	C: M3(T) = ---;
+
+	ad := A.data.data;
+	bd := B.data.data;
+	cd := C.data.data;
+
+	elem :: (x: int, y: int) #expand {
+		cd[y * 3 + x] = ad[0 * 3 + x] * bd[y * 3 + 0];
+		cd[y * 3 + x] += ad[1 * 3 + x] * bd[y * 3 + 1];
+		cd[y * 3 + x] += ad[2 * 3 + x] * bd[y * 3 + 2];
+	}
+	elem(0, 0);
+	elem(0, 1);
+	elem(0, 2);
+	elem(1, 0);
+	elem(1, 1);
+	elem(1, 2);
+	elem(2, 0);
+	elem(2, 1);
+	elem(2, 2);
+	return C;
 }
 
 operator * :: (A: M4($T), B: M4(T)) -> M4(T) {
@@ -605,6 +704,73 @@ v4 :: (a: $T, b: T, c: T, w := 1.0) -> V4(T) {
 }
 v4 :: (v3: V3($T), w := 1.0) -> V4(T) {
 	return .{ v3.x, v3.y, v3.z, w };
+}
+
+conjugate :: (q: Q($T)) -> Q(T) {
+	return .{ -q.x, -q.y, -q.z, q.w };
+}
+
+x_extract :: (q: Q($T)) -> V3(T) {
+	// return the result of q * V3(T).{1, 0, 0}
+	return .{
+		q.w * q.w + q.x * q.x - q.y * q.y - q.z * q.z,
+		2 * (q.x * q.y + q.w * q.z),
+		2 * (q.x * q.z - q.w * q.y)
+	};
+}
+
+y_extract :: (q: Q($T)) -> V3(T) {
+	// return the result of q * V3(T).{0, 1, 0}
+	return .{
+		2 * (q.x * q.y - q.w * q.z),
+		q.w * q.w - q.x * q.x + q.y * q.y - q.z * q.z,
+		2 * (q.y * q.z + q.w * q.x)
+	};
+}
+
+z_extract :: (q: Q($T)) -> V3(T) {
+	// return the result of q * V3(T).{0, 0, 1}
+	return .{
+		2 * (q.x * q.z + q.w * q.y),
+		2 * (q.y * q.z - q.w * q.x),
+		q.w * q.w - q.x * q.x - q.y * q.y + q.z * q.z
+	};
+}
+
+transpose :: (m: M3($T)) -> M3(T) {
+	mt: M3(T);
+	for y: 0..2 {
+		for x: 0..2 {
+			mt.data[x + y * 3] = m.data[y + x * 3];
+		}
+	}
+	return mt;
+}
+
+inverse :: (mm: M3($T)) -> M3(T) {
+	minv: M3(T);
+	inv := minv.data.data;
+	m := mm.data.data;
+
+	inv[0] = m[4]  * m[8] - m[5]  * m[7];
+	inv[1] = m[2]  * m[7] - m[1]  * m[8];
+	inv[2] = m[1]  * m[5] - m[2]  * m[4];
+	inv[3] = m[5]  * m[6] - m[3]  * m[8];
+	inv[4] = m[0]  * m[8] - m[2]  * m[6];
+	inv[5] = m[2]  * m[3] - m[0]  * m[5];
+	inv[6] = m[3]  * m[7] - m[4]  * m[6];
+	inv[7] = m[1]  * m[6] - m[0]  * m[7];
+	inv[8] = m[0]  * m[4] - m[1]  * m[3];
+
+	det := m[0] * inv[0] + m[1] * inv[3] + m[2] * inv[6];
+	if det == 0
+		return M3(T).identity();
+
+	det_inv := 1 / det;
+	for i: 0..9 {
+		inv[i] *= det_inv;
+	}
+	return minv;
 }
 
 inverse :: (mm: M4($T)) -> M4(T) {
@@ -902,6 +1068,316 @@ linear_step :: (x: float, edge0: float, edge1: float) -> float {
 smoothstep :: (x: float, edge0: float, edge1: float) -> float {
 	t := clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
 	return t * t * (3 - 2 * t);
+}
+
+det :: (m: M3($T)) -> T {
+	return m.data[0] * (m.data[4] * m.data[8] - m.data[5] * m.data[7])
+		- m.data[1] * (m.data[3] * m.data[8] - m.data[5] * m.data[6])
+		+ m.data[2] * (m.data[3] * m.data[7] - m.data[4] * m.data[6]);
+}
+
+covariance_tetrahedron :: (a: V3($T), b: V3(T), c: V3(T), d: V3(T)) -> M3(T) {
+	centroid := (a + b + c + d) / 4;
+	cov: M3(T);
+	memset(cov.data.data, 0, 9 * sizeof(T));
+	for v: .[ a, b, c, d ] {
+		diff := v - centroid;
+		cov += M3(T).by_rows(
+			V3(T).{ diff.x * diff.x, diff.x * diff.y, diff.x * diff.z },
+			V3(T).{ diff.y * diff.x, diff.y * diff.y, diff.y * diff.z },
+			V3(T).{ diff.z * diff.x, diff.z * diff.y, diff.z * diff.z }
+		);
+	}
+	return cov / 4;
+}
+
+covariance_to_inertia :: (cov: M3($T), mass: T) -> M3(T) {
+	inertia: M3(T);
+	inertia.data[0] = mass * (cov.data[4] + cov.data[8]);
+	inertia.data[4] = mass * (cov.data[0] + cov.data[8]);
+	inertia.data[8] = mass * (cov.data[0] + cov.data[4]);
+	inertia.data[1] = inertia.data[3] = -mass * cov.data[1];
+	inertia.data[2] = inertia.data[6] = -mass * cov.data[2];
+	inertia.data[5] = inertia.data[7] = -mass * cov.data[5];
+	return inertia;
+}
+
+compute_inertia_moment :: (P: [3] V3f, i: int) -> float {
+	Pd := P.data.(*float);
+	result := 0.0;
+	result += Pd[3 * 0 + i] * Pd[3 * 0 + i] + Pd[3 * 1 + i] * Pd[3 * 2 + i];
+	result += Pd[3 * 1 + i] * Pd[3 * 1 + i] + Pd[3 * 0 + i] * Pd[3 * 2 + i];
+	result += Pd[3 * 2 + i] * Pd[3 * 2 + i] + Pd[3 * 0 + i] * Pd[3 * 1 + i];
+	return result;
+}
+
+compute_inertia_product :: (P: [3] V3f, i: int, j: int) -> float {
+	Pd := P.data.(*float);
+	result := 0.0;
+	result += 2.0 * Pd[3 * 0 + i] * Pd[3 * 0 + j];
+	result += Pd[3 * 1 + i] * Pd[3 * 2 + j] + Pd[3 * 2 + i] * Pd[3 * 1 + j];
+	
+	result += 2.0 * Pd[3 * 1 + i] * Pd[3 * 1 + j];
+	result += Pd[3 * 0 + i] * Pd[3 * 2 + j] + Pd[3 * 2 + i] * Pd[3 * 0 + j];
+	
+	result += 2.0 * Pd[3 * 2 + i] * Pd[3 * 2 + j];
+	result += Pd[3 * 0 + i] * Pd[3 * 1 + j] + Pd[3 * 1 + i] * Pd[3 * 0 + j];
+	
+	return result;
+}
+
+compute_inertia :: (size: V3($T)) -> M3(T), V3(T), float {
+	Ia := (size.y * size.y + size.z * size.z) / 12;
+	Ib := (size.x * size.x + size.z * size.z) / 12;
+	Ic := (size.x * size.x + size.y * size.y) / 12;
+
+	I: M3(T) = ---;
+	memset(I.data.data, 0, 9 * size_of(T));
+	I.data[0] = Ia;
+	I.data[4] = Ib;
+	I.data[8] = Ic;
+
+	return I, size / 2, size.x * size.y * size.z;
+}
+
+compute_inertia :: (V: [] V3f, F: [] u16, off_indices := 0) -> M3f, V3f, float {
+	Ia := 0.0;
+	Ib := 0.0;
+	Ic := 0.0;
+	Iap := 0.0;
+	Ibp := 0.0;
+	Icp := 0.0;
+
+	mass := 0.0;
+	center_of_mass := v3(0.0, 0.0, 0.0);
+
+	for 0..F.count / 3 - 1 {
+		ai := F[it * 3 + 0] - off_indices;
+		bi := F[it * 3 + 1] - off_indices;
+		ci := F[it * 3 + 2] - off_indices;
+
+		P := V3f.[ V[ai], V[bi], V[ci] ];
+
+		detj := dot(cross(P[1] - P[0], P[2] - P[0]), P[0]);
+		volume := detj / 6;
+		com := (P[0] + P[1] + P[2]) / 4;
+
+		v100 := compute_inertia_moment(P, 0);
+		v010 := compute_inertia_moment(P, 1);
+		v001 := compute_inertia_moment(P, 2);
+
+		Ia += detj * (v010 + v001);
+		Ib += detj * (v100 + v001);
+		Ic += detj * (v100 + v010);
+
+		Iap += detj * compute_inertia_product(P, 1, 2);
+		Ibp += detj * compute_inertia_product(P, 0, 1);
+		Icp += detj * compute_inertia_product(P, 0, 2);
+
+		mass += volume;
+		center_of_mass += com * volume;
+	}
+
+	center_of_mass /= mass;
+	Ia = Ia / 60 - mass * (center_of_mass.y * center_of_mass.y + center_of_mass.z * center_of_mass.z);
+	Ib = Ib / 60 - mass * (center_of_mass.x * center_of_mass.x + center_of_mass.z * center_of_mass.z);
+	Ic = Ic / 60 - mass * (center_of_mass.x * center_of_mass.x + center_of_mass.y * center_of_mass.y);
+	Iap = Iap / 120 - mass * center_of_mass.y * center_of_mass.z;
+	Ibp = Ibp / 120 - mass * center_of_mass.x * center_of_mass.y;
+	Icp = Icp / 120 - mass * center_of_mass.x * center_of_mass.z;
+
+	I: M3f = ---;
+	memset(I.data.data, 0, 9 * size_of(float));
+	I.data[0] = Ia;
+	I.data[4] = Ib;
+	I.data[8] = Ic;
+	I.data[1] = -Iap;
+	I.data[3] = -Iap;
+	I.data[2] = -Icp;
+	I.data[6] = -Icp;
+	I.data[5] = -Ibp;
+	I.data[7] = -Ibp;
+
+	return I, center_of_mass, mass;
+}
+
+OBB :: struct {
+	center: V3f;
+	half_extents: V3f;
+	q: Qf;
+}
+
+Penetration :: struct {
+	penetration: V3f;
+
+	ra: V3f; // from center of A to contact point, in the body space of each box
+	rb: V3f; // from center of B to contact point, in the body space of each box
+}
+
+support :: (obb: OBB, dir: V3f) -> V3f {
+	localDir := conjugate(obb.q) * dir;
+	localSupport := v3(
+		ifx localDir.x > 0 then obb.half_extents.x else -obb.half_extents.x,
+		ifx localDir.y > 0 then obb.half_extents.y else -obb.half_extents.y,
+		ifx localDir.z > 0 then obb.half_extents.z else -obb.half_extents.z
+	);
+	return localSupport;
+}
+
+
+raw_projected_radius :: (obb: OBB, axis: V3f) -> float {
+	return abs(dot(obb.q * v3(1.0, 0.0, 0.0), axis)) * obb.half_extents.x +
+			abs(dot(obb.q * v3(0.0, 1.0, 0.0), axis)) * obb.half_extents.y +
+			abs(dot(obb.q * v3(0.0, 0.0, 1.0), axis)) * obb.half_extents.z;
+}
+obb_floor_penetration :: (A: OBB, floor: float) -> Penetration {
+	normal := v3(0.0, 0.0, 1.0);
+	signed_dist := dot(A.center, normal) - floor;  // positive = center above plane
+
+	rA := raw_projected_radius(A, normal);
+
+	pen := rA - signed_dist;
+	if pen <= 0.0 {
+		return .{};
+	}
+
+	penetrationVector := normal * pen;  // +z * depth
+
+	// Contact point = centroid of all vertices at or below the floor.
+	// Using a single support corner creates a spurious moment arm for
+	// edge/face contacts (flat-resting boxes), injecting rotational energy.
+	h := A.half_extents;
+	local_corners := V3f.[
+		V3f.{ -h.x, -h.y, -h.z },
+		V3f.{  h.x, -h.y, -h.z },
+		V3f.{ -h.x,  h.y, -h.z },
+		V3f.{  h.x,  h.y, -h.z },
+		V3f.{ -h.x, -h.y,  h.z },
+		V3f.{  h.x, -h.y,  h.z },
+		V3f.{ -h.x,  h.y,  h.z },
+		V3f.{  h.x,  h.y,  h.z },
+	];
+
+	centroid := v3(0.0, 0.0, 0.0);
+	count := 0;
+	for corner: local_corners {
+		world_z := A.center.z + (A.q * corner).z;
+		if world_z <= floor {
+			centroid += corner;
+			count += 1;
+		}
+	}
+
+	contactA: V3f;
+	if count > 0 {
+		contactA = centroid / cast(float32) count;
+	} else {
+		// Fallback: use the single lowest corner (support)
+		contactA = support(A, -1 * normal);
+	}
+
+	contactB := v3(A.center.x, A.center.y, floor);
+
+	return .{-1 * penetrationVector, contactA, contactB};
+}
+
+obb_penetration :: (A: OBB, B: OBB) -> Penetration {
+	delta := B.center - A.center;
+	if norm(delta) > norm(A.half_extents) + norm(B.half_extents)
+		return .{};
+
+	minPenetration := -1.0;
+	bestNormal := v3(0.0, 0.0, 0.0);          // will always be unit at the end
+
+	A_axes: [3] V3f;
+	B_axes: [3] V3f;
+
+	A_axes[0] = x_extract(A.q);
+	A_axes[1] = y_extract(A.q);
+	A_axes[2] = z_extract(A.q);
+
+	B_axes[0] = x_extract(B.q);
+	B_axes[1] = y_extract(B.q);
+	B_axes[2] = z_extract(B.q);
+
+	// --------------------------------------------------------------
+	// 1. Test A's 3 face normals (already unit)
+	for i: 0..2 {
+		axis := A_axes[i];
+		rA := raw_projected_radius(A, axis);
+		rB := raw_projected_radius(B, axis);
+		dist := abs(dot(delta, axis));
+		pen := rA + rB - dist;
+
+		if pen < 0.0
+			return .{};
+		if pen < minPenetration || minPenetration < 0 {
+			minPenetration = pen;
+			bestNormal = axis;
+		}
+	}
+
+    // --------------------------------------------------------------
+    // 2. Test B's 3 face normals (already unit)
+    for i: 0..2 {
+        axis := B_axes[i];
+        rA := raw_projected_radius(A, axis);
+        rB := raw_projected_radius(B, axis);
+        dist := abs(dot(delta, axis));
+        pen := rA + rB - dist;
+
+        if pen < 0.0
+            return .{};
+        if pen < minPenetration || minPenetration < 0 {
+            minPenetration = pen;
+            bestNormal = axis;
+        }
+    }
+
+    // --------------------------------------------------------------
+    // 3. Test 9 cross-product axes (the expensive ones)
+    for i: 0..2 {
+        for j: 0..2 {
+            rawAxis := cross(A_axes[i], B_axes[j]);
+            lenSq := dot(rawAxis, rawAxis);
+            if lenSq < 0.000001 continue;
+
+            rA_raw := raw_projected_radius(A, rawAxis);
+            rB_raw := raw_projected_radius(B, rawAxis);
+            absDistRaw := abs(dot(delta, rawAxis));
+
+            // Separation test — NO sqrt required!
+            if absDistRaw > rA_raw + rB_raw {
+                return .{};
+            }
+
+            // Overlaps → compute real penetration depth (requires sqrt)
+            len := sqrt(lenSq);
+            pen := (rA_raw + rB_raw - absDistRaw) / len;
+
+            if pen < minPenetration || minPenetration < 0 {
+                minPenetration = pen;
+                bestNormal = rawAxis / len;   // unit normal
+            }
+        }
+    }
+
+	if minPenetration < 0.0
+		return .{};
+
+    // --------------------------------------------------------------
+    // No separating axis found → collision
+    // Make normal point from A → B
+    if (dot(delta, bestNormal) < 0.0) {
+        bestNormal = -1 * bestNormal;
+    }
+
+    penetrationVector := bestNormal * minPenetration;
+
+    contactA := support(A, bestNormal);
+    contactB := support(B, -1 * bestNormal);
+
+    return .{penetrationVector, contactA, contactB};
 }
 
 // lut_sin_norm_angle :: (angle: float, $LUT: [N] float) -> float {

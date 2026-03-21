@@ -318,6 +318,11 @@ Model :: struct {
 		indices_count: int;
 		min: V3f;
 		max: V3f;
+
+		I: M3f;
+		Iinv: M3f;
+		com: V3f;
+		M: float32;
 	}
 	parts: [..] Part;
 
@@ -339,6 +344,8 @@ Model :: struct {
 		vertices: [..] V3f;
 		vertices.allocator = temp;
 		array_add(*vertices, .{ 0, 0, 0 });
+		V: [..] V3f;
+		V.allocator = temp;
 
 		normals: [..] V3f;
 		normals.allocator = temp;
@@ -356,6 +363,8 @@ Model :: struct {
 		model.base_vertex = graphics.geometry_vertices_cpu.count;
 		model.indices_offset = graphics.geometry_indices_cpu.count;
 
+		part_base_vertex := 0;
+
 		commit_part :: () #expand {
 			part: Part;
 			part.min.x = +FLOAT32_MAX;
@@ -364,7 +373,8 @@ Model :: struct {
 			part.max.x = -FLOAT32_MAX;
 			part.max.y = -FLOAT32_MAX;
 			part.max.z = -FLOAT32_MAX;
-			for vertices {
+			for idx: part_base_vertex..vertices.count-1 {
+				it := vertices[idx];
 				part.min.x = ifx part.min.x > it.x then it.x else part.min.x;
 				part.min.y = ifx part.min.y > it.y then it.y else part.min.y;
 				part.min.z = ifx part.min.z > it.z then it.z else part.min.z;
@@ -373,6 +383,7 @@ Model :: struct {
 				part.max.y = ifx part.max.y < it.y then it.y else part.max.y;
 				part.max.z = ifx part.max.z < it.z then it.z else part.max.z;
 			}
+
 
 			hash_triplet :: (a: u32, b: u32, c: u32) -> u64 {
 				data: [3] u32 = .[ a, b, c ];
@@ -389,6 +400,8 @@ Model :: struct {
 			);
 			part.base_vertex = model.base_vertex;
 			part.indices_offset = graphics.geometry_indices_cpu.count;
+			off_indices := graphics.geometry_vertices_cpu.count - model.base_vertex;
+			V.count = 0;
 			for face: faces {
 				for i: 0..2 {
 					hash := hash_triplet(face.positions[i], face.normals[i], face.textures[i]);
@@ -404,6 +417,7 @@ Model :: struct {
 							new_vertex;
 						table_set(*vertice_table, hash, xx new_idx);
 						idx = table_find_pointer(*vertice_table, hash);
+						array_add(*V, new_vertex.pos);
 					}
 
 					graphics.geometry_indices_cpu.count += 1;
@@ -411,6 +425,14 @@ Model :: struct {
 				}
 			}
 			part.indices_count = graphics.geometry_indices_cpu.count - part.indices_offset;
+			F: [] u16;
+			F.data = graphics.geometry_indices_cpu.data + part.indices_offset;
+			F.count = part.indices_count;
+
+			part.I, part.com, part.M = compute_inertia(part.max - part.min);
+			part.com += part.min;
+			part.Iinv = inverse(part.I);
+
 			if part.indices_count > 0
 				array_add(*model.parts, part);
 
@@ -433,6 +455,7 @@ Model :: struct {
 
 			if line.data[0] == #char "g" {
 				commit_part();
+				part_base_vertex = vertices.count;
 				continue;
 			}
 
@@ -3920,7 +3943,7 @@ render_debris :: (
 			if instanced.count > 0 {
 				model := Store.get_model(store, xx it.model_id);
 				if model
-					commit_geometry(frame, pass, model, instanced.count, it.part_idx);
+					commit_geometry(frame, pass, model, instanced.count, last_part_idx);
 			}
 			last_model_id = it.model_id;
 			last_part_idx = it.part_idx;
@@ -3930,6 +3953,9 @@ render_debris :: (
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
 		M := M4f.identity();
+		M = M4f.translate(-1 * it.origin) * M;
+		// M = scale_matrix(it.half_size) * M;
+		M = to_rotation_matrix(it.q) * M;
 		M = M4f.translate(it.position) * M;
 		instance.M = M;
 		instance.texture_rect = Store.get_rect(xx it.model_id);
@@ -3939,6 +3965,21 @@ render_debris :: (
 		if model
 			commit_geometry(frame, pass, model, instanced.count, last_part_idx);
 	}
+	// instanced = append_instance_buffer(frame);
+	// for scene.debris {
+	// 	instanced.count += 1;
+	// 	instance := *instanced[instanced.count - 1];
+	// 	instance.* = .{};
+	// 	M := M4f.identity();
+	// 	M = scale_matrix(it.half_size * 2) * M;
+	// 	M = to_rotation_matrix(it.q) * M;
+	// 	M = M4f.translate(it.position) * M;
+	// 	instance.M = M;
+	// 	instance.texture_rect = Store.get_rect(xx it.model_id);
+	// }
+	// if instanced.count > 0 {
+	// 	commit_geometry(frame, pass, *store.unit_cube_model, instanced.count);
+	// }
 }
 
 set_albedo_map_idx :: (instance: *WFramegraph.Instance, idx: int) {

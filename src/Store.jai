@@ -138,6 +138,8 @@ Store :: struct {
 
 	unit_cylinder_model: WRender.Model;
 	unit_sphere_model: WRender.Model;
+	unit_cube_model: WRender.Model;
+	
 	zone_wall_model: WRender.Model;
 	indicator_outline_model: WRender.Model;
 	indicator_stroke_model: WRender.Model;
@@ -611,6 +613,7 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 
 	store.unit_cylinder_model = WRender.Model.make_from_obj(Assets.UNIT_CYLINDER_OBJ, "unit_cylinder");
 	store.unit_sphere_model = WRender.Model.make_from_obj(Assets.UNIT_SPHERE_OBJ, "unit_sphere");
+	store.unit_cube_model = WRender.Model.make_from_obj(Assets.UNIT_CUBE_OBJ, "unit_cube");
 	store.zone_wall_model = WRender.Model.make_from_obj(Assets.ZONE_WALL_OBJ, "zone_wall");
 
 	store.indicator_outline_model = WRender.Model.make_from_obj(Assets.INDICATOR_OUTLINE_OBJ, "indicator_outline");
