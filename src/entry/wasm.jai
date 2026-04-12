@@ -471,6 +471,20 @@ wasmInstanceRequestAdapter :: (
 	callbackInfo.callback(.Success, adapter, .{}, callbackInfo.userdata1, callbackInfo.userdata2);
 	return .{};
 }
+wasmMyGpuToCpu :: (instance: WGPUInstance, buffer: WGPUBuffer, cpu: [] u8) -> void #c_call {
+	jsMyGpuToCpu :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		instance: WGPUInstance;
+		buffer: WGPUBuffer;
+		cpu: [] u8;
+	};
+	params.instance = instance;
+	params.buffer = buffer;
+	params.cpu = cpu;
+
+	jsMyGpuToCpu(*params, null);
+}
 wasmAdapterGetLimits :: (
 	adapter: WGPUAdapter,
 	limits: *WGPULimits
@@ -1082,6 +1096,27 @@ wasmRenderPassEncoderSetIndexBuffer :: (
 	params.format = format;
 	jsRenderPassEncoderSetIndexBuffer(*params, null);
 }
+wasmCommandEncoderCopyTextureToBuffer :: (
+	commandEncoder: WGPUCommandEncoder,
+	source: *WGPUTexelCopyTextureInfo,
+	destination: *WGPUTexelCopyBufferInfo,
+	copySize: *WGPUExtent3D
+) -> void #c_call {
+	jsCommandEncoderCopyTextureToBuffer :: (params: *void, returns: *void) #foreign;
+
+	params: struct {
+		commandEncoder: WGPUCommandEncoder;
+		source: *WGPUTexelCopyTextureInfo;
+		destination: *WGPUTexelCopyBufferInfo;
+		copySize: *WGPUExtent3D;
+	};
+	params.commandEncoder = commandEncoder;
+	params.source = source;
+	params.destination = destination;
+	params.copySize = copySize;
+
+	jsCommandEncoderCopyTextureToBuffer(*params, null);
+}
 wasmDeviceCreateTexture :: (
 	device: WGPUDevice,
 	descriptor: *WGPUTextureDescriptor
@@ -1227,6 +1262,8 @@ entries :: Entry.[
 	.{ "renderPassEncoderSetBindGroup", WGPUProcRenderPassEncoderSetBindGroup, "wasmRenderPassEncoderSetBindGroup" },
 	.{ "renderPassEncoderSetVertexBuffer", WGPUProcRenderPassEncoderSetVertexBuffer, "wasmRenderPassEncoderSetVertexBuffer" },
 	.{ "renderPassEncoderSetIndexBuffer", WGPUProcRenderPassEncoderSetIndexBuffer, "wasmRenderPassEncoderSetIndexBuffer" },
+	.{ "commandEncoderCopyTextureToBuffer", WGPUProcCommandEncoderCopyTextureToBuffer, "wasmCommandEncoderCopyTextureToBuffer" },
+	.{ "myGpuToCpu", #type (instance: WGPUInstance, buffer: WGPUBuffer, cpu: [] u8) -> void #c_call, "wasmMyGpuToCpu" },
 	.{ "deviceCreateTexture", WGPUProcDeviceCreateTexture, "wasmDeviceCreateTexture" },
 	.{ "deviceCreateSampler", WGPUProcDeviceCreateSampler, "wasmDeviceCreateSampler" },
 	.{ "samplerRelease", WGPUProcSamplerRelease, "wasmSamplerRelease" },

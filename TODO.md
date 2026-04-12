@@ -3,9 +3,9 @@
 + new level
 + Leave time for wipe
 + Add number of player for checkpoints
-- Add jukebox that can activate with coin
++ Add jukebox that can activate with coin
 + Add models
-- Add lever
++ Add lever
 + Add status bar for people
 + Add particles
 - Add emotes
@@ -28,8 +28,12 @@
 + Revive after 60 seconds
 + Fix bug that score reset on next level
 + Don't play sound when the player scoring isn't the controlling player
-- Add lights
-- Add button press
++ Add lights
++ Add button press
 - Add trails
 - Add camera rail
 - Make the ships dive and resurface at the end of open paths
+- Snowman that kills on touch. Is immobile, gets destroyed on touch and regenerate.
+- Spike that activate on touch, for the followers
+- Shaking camera
+- 

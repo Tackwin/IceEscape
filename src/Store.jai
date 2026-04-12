@@ -6,6 +6,8 @@ Scene :: #import "Scene";
 #import "String";
 #import "Basic";
 #import "Algebra";
+#import "Hash_Table";
+#import "Xar";
 
 #scope_export
 
@@ -43,7 +45,16 @@ Shader_Id :: enum {
 	Tile :: 4;
 }
 
-Store :: struct {
+Store :: struct #type_info_none {
+	user_textures: Xar(WRender.WTexture, 8, 25);
+	terrain_to_user_texture: Table(int, int);
+	Texture_Queue :: struct {
+		buffer: [] u8;
+		texture: *WRender.WTexture;
+	}
+	texture_queues: [..] Texture_Queue;
+	texture_lock: u32 = 0;
+
 	quad_shader: WRender.WShader;
 	present_shader: WRender.WShader;
 	geometry_shader: WRender.WShader;
@@ -82,12 +93,12 @@ Store :: struct {
 	ambulance_model: WRender.Model;
 	spaceship_model: WRender.Model;
 	tombstone_model: WRender.Model;
-	skull_model: WRender.Model;
 	pirateship_model: WRender.Model;
 	coin_model: WRender.Model;
 	key_model: WRender.Model;
 	bomb_model: WRender.Model;
 	crate_model: WRender.Model;
+	gravestone_model: WRender.Model;
 	mark_model: WRender.Model;
 	gate_model: WRender.Model;
 	gate_close_model: WRender.Model;
@@ -210,6 +221,58 @@ Store :: struct {
 
 	verdana_atlas: WRender.WTexture;
 	verdana: Platform.Font;
+
+
+}
+
+thumbnail_here_or_coming :: (store: *Store, terrain_id: int) -> bool {
+	idx := user_texture_idx_thumbnail_for(store, terrain_id);
+	return idx != -1;
+}
+
+user_texture :: (store: *Store, idx: int) -> *WRender.WTexture {
+	return *store.user_textures[idx];
+}
+
+user_texture_idx_thumbnail_for :: (store: *Store, terrain_id: int) -> int {
+	texture_idx := table_find_pointer(*store.terrain_to_user_texture, terrain_id);
+	if texture_idx {
+		return texture_idx.*;
+	}
+	return -1;
+}
+
+queue_user_texture :: (store: *Store, texture: *WRender.WTexture, buffer: [] u8) {
+	while true if (compare_and_swap(*store.texture_lock, 0, 1)) break;
+	defer compare_and_swap(*store.texture_lock, 1, 0);
+
+	to_add: Store.Texture_Queue;
+	to_add.buffer = buffer;
+	to_add.texture = texture;
+	array_add(*store.texture_queues, to_add);
+}
+
+queue_user_texture :: (store: *Store, idx: int, buffer: [] u8) {
+	while true if (compare_and_swap(*store.texture_lock, 0, 1)) break;
+	defer compare_and_swap(*store.texture_lock, 1, 0);
+
+	to_add: Store.Texture_Queue;
+	to_add.buffer = buffer;
+	to_add.texture = *store.user_textures[idx];
+	array_add(*store.texture_queues, to_add);
+}
+
+thumbnail_for :: (store: *Store, terrain_id: int) -> *WRender.WTexture {
+	texture_idx := table_find_pointer(*store.terrain_to_user_texture, terrain_id);
+	if texture_idx {
+		return *store.user_textures[texture_idx.*];
+	}
+
+	xar_add(
+		*store.user_textures, WRender.WTexture.reserve(128, 128, tprint("thumbnail_%1", terrain_id))
+	);
+	table_add(*store.terrain_to_user_texture, terrain_id, store.user_textures.count - 1);
+	return *store.user_textures[store.user_textures.count - 1];
 }
 
 get_horn_car :: (store: Store, idx: int) -> *Platform.Audio {
@@ -562,7 +625,6 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.ambulance_model = WRender.Model.make_from_obj(Assets.AMBULANCE_OBJ, "ambulance");
 	store.spaceship_model = WRender.Model.make_from_obj(Assets.SPACESHIP_OBJ, "spaceship");
 	store.tombstone_model = WRender.Model.make_from_obj(Assets.TOMBSTONE_OBJ, "tombstone");
-	store.skull_model = WRender.Model.make_from_obj(Assets.SKULL_OBJ, "skull");
 	store.end_hook_model = WRender.Model.make_from_obj(Assets.END_HOOK_OBJ, "end_hook");
 	store.pressbutton_pressed = WRender.Model.make_from_obj(Assets.PRESSBUTTON_PRESSED_OBJ, "pressbutton_pressed");
 	store.pressbutton_unpressed = WRender.Model.make_from_obj(Assets.PRESSBUTTON_UNPRESSED_OBJ, "pressbutton_unpressed");
@@ -574,6 +636,7 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.key_model = WRender.Model.make_from_obj(Assets.KEY_OBJ, "key");
 	store.bomb_model = WRender.Model.make_from_obj(Assets.BOMB_OBJ, "bomb");
 	store.crate_model = WRender.Model.make_from_obj(Assets.CRATE_OBJ, "crate");
+	store.gravestone_model = WRender.Model.make_from_obj(Assets.GRAVESTONE_OBJ, "gravestone");
 	store.mark_model = WRender.Model.make_from_obj(Assets.MARK_OBJ, "mark");
 	store.gate_model = WRender.Model.make_from_obj(Assets.GATE_OBJ, "gate");
 	store.gate_close_model = WRender.Model.make_from_obj(Assets.GATE_CLOSE_OBJ, "gate_close");

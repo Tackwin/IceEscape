@@ -6,12 +6,14 @@ Scene :: #import "Scene";
 #import "String";
 #import "Math";
 #import "Store";
+#import "Common";
 #import "Algebra";
 #import "Assets";
 #import "Hash_Table";
 #import "Sort";
 #import "Hash";
 #import "Reflection";
+#scope_export
 
 Z_SLOT :: V2f.{ 0, 15 };
 Q_SLOT :: V2f.{ 1, 15 };
@@ -112,6 +114,7 @@ key_to_icon :: (key: Platform.Key) -> V2f {
 }
 
 
+
 model_id_to_slot :: (id: Scene.Model_Id) -> V2f {
 	if id == {
 		case .Racer; return RACER_SLOT;
@@ -131,8 +134,6 @@ model_id_to_slot :: (id: Scene.Model_Id) -> V2f {
 	return QUESTION_SLOT;
 }
 
-#scope_export
-
 GUI_State :: struct {
 	Quad :: struct {
 		pos: V2f;
@@ -141,6 +142,7 @@ GUI_State :: struct {
 		z: float32 = 0;
 		texture_rect: V4f = .{ 0, 0, 0, 0 };
 		late := false;
+		custom_texture_idx := -1;
 	}
 	quads: [..] Quad;
 
@@ -384,12 +386,13 @@ pop_id :: (state: *GUI_State) {
 }
 
 push_register :: (state: *GUI_State) {
-	array_add(*state.register_stack, .{});
+	ids: [..] u64;
+	array_add(*state.register_stack, ids);
 }
 
 pop_register :: (state: *GUI_State) {
 	if state.register_stack.count > 0 {
-		array_free(*state.register_stack[state.register_stack.count - 1]);
+		array_free(state.register_stack[state.register_stack.count - 1]);
 		state.register_stack.count -= 1;
 	}
 }
@@ -409,6 +412,10 @@ widget_aabb ::(state: *GUI_State, id: $Id) -> AABBf
 		iid := cast(u64) id;
 	}
 	widget := table_find_pointer(*state.widgets, combine_id(last_id(state), iid));
+	if widget {
+		return widget.aabb;
+	}
+	widget = table_find_pointer(*state.widgets, iid); // Retry without the current id stack
 	if widget {
 		return widget.aabb;
 	}
@@ -473,6 +480,9 @@ widget :: (state: *GUI_State, raw_id: $Id, $T: Type, default: T = .{}) -> *T, *G
 	}
 
 	iid := combine_id(last_id(state), id);
+	if state.register_stack.count > 0 {
+		array_add(*state.register_stack[state.register_stack.count - 1], iid);
+	}
 
 	user_state := table_find_pointer(*state.widgets, iid);
 	if user_state {
@@ -480,9 +490,6 @@ widget :: (state: *GUI_State, raw_id: $Id, $T: Type, default: T = .{}) -> *T, *G
 			user_state.touched = true;
 			return user_state.user.(*T), user_state;
 		}
-	}
-	if state.register_stack.count > 0 {
-		array_add(*state.register_stack[state.register_stack.count - 1], iid);
 	}
 
 	widget_state: GUI_State.Widget;
@@ -653,6 +660,25 @@ begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Con
 	state.controls.captured_keyboard = met_keyboard_focused;
 }
 
+begin_row :: (state: *GUI_State, dir: GUI_State.Direction) {
+	push_register(state);
+	push_default_params(state, default_params(state));
+	default_params(state).direction = dir;
+}
+
+end_row :: (state: *GUI_State) {
+	id_stack := state.register_stack[state.register_stack.count - 1];
+	aabb := widgets_aabb(state, id_stack);
+
+	pop_default_params(state);
+
+	dir := default_params(state).direction;
+	origin := default_params(state).cursor;
+	defer {
+		pop_register(state);
+		advance_cursor(state, origin, dir, aabb);
+	}
+}
 
 push_checkbox :: (
 	state: *GUI_State, center: V2f, size: float, checked: bool
@@ -746,7 +772,21 @@ push_quad_texture :: (state: *GUI_State, pos: V2f, size: V2f, color: V3f, tex_sl
 	array_add(*state.quads, quad);
 }
 
-push_late_quad_screen :: (state: *GUI_State, pos: V2f, size: V2f, color: V4f, z := 0.0) {
+push_late_quad_screen :: (
+	state: *GUI_State, aabb: AABBf, color: V4f, z := 0.0
+) -> *state.Quad {
+	return push_late_quad_screen(
+		state,
+		aabb.min,
+		aabb.max - aabb.min,
+		color = color,
+		z = z
+	);
+}
+	
+push_late_quad_screen :: (
+	state: *GUI_State, pos: V2f, size: V2f, color: V4f, z := 0.0
+) -> *state.Quad {
 	quad: state.Quad;
 	// state.display_size
 	quad.pos.x = pos.x;
@@ -758,6 +798,7 @@ push_late_quad_screen :: (state: *GUI_State, pos: V2f, size: V2f, color: V4f, z 
 	quad.late = true;
 
 	array_add(*state.quads, quad);
+	return *state.quads[state.quads.count - 1];
 }
 
 Align :: enum {
@@ -1288,167 +1329,6 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 	);
 }
 
-push_score_tab :: (
-	state: *GUI_State, scene: Scene.Scene, stats: *Table(int, $T)
-) {
-	scoreboard_center := state.controls.window_size / 2;
-	scoreboard_center.y += state.controls.window_size.y / 12;
-	scoreboard_size := V2f.{ 600, 400 };
-	header_height := 32.0;
-
-	cursor := V2f.{
-		scoreboard_center.x - scoreboard_size.x / 2,
-		scoreboard_center.y - scoreboard_size.y / 2
-	};
-
-	push_quad_screen(
-		state,
-		pos = cursor,
-		size = scoreboard_size,
-		color = COLOR_BACK_A,
-		z = 5
-	);
-
-	cursor += V2f.{ 0, scoreboard_size.y };
-	push_quad_screen(
-		state,
-		pos = .{ cursor.x, cursor.y - header_height },
-		size = .{ scoreboard_size.x, header_height },
-		color = COLOR_SOMBER_A,
-		z = 6
-	);
-
-	cursor -= V2f.{ 0, header_height };
-	push_quad_screen(
-			state,
-		pos = .{ cursor.x, cursor.y - 1 },
-		size = .{ scoreboard_size.x, 1 },
-		color = .{ 1.0, 1.0, 1.0 },
-		z = 7
-	);
-
-	scoreline_size := V2f.{ scoreboard_size.x / 2, 48 };
-
-	push_scoreline :: (x: float, y: float, player: Scene.Player) #expand {
-		stat := table_find_pointer(stats, player.id);
-		if !stat
-			return;
-		
-		cursor := scoreboard_center;
-		cursor.x -= scoreboard_size.x / 2;
-		cursor.y += scoreboard_size.y / 2;
-		cursor.y -= header_height + 1;
-		cursor.x += x * scoreline_size.x;
-		cursor.y -= (y + 1) * scoreline_size.y;
-
-		model_size :: V2f.{ 48, 48 };
-		icon_size :: V2f.{ 24, 24 };
-
-		push_quad_screen(
-			state,
-			pos = cursor,
-			size = scoreline_size,
-			color = COLOR_HIGHLIGHT_A,
-			z = 10
-		);
-		push_quad_screen(
-			state,
-			pos = .{ cursor.x + 1, cursor.y + 1 },
-			size = .{ scoreline_size.x - 2, scoreline_size.y - 2 },
-			color = COLOR_BACK_A,
-			z = 11
-		);
-
-		push_quad_texture(
-			state,
-			pos = .{ cursor.x + 4, cursor.y + (scoreline_size.y - model_size.y) / 2 },
-			size = model_size,
-			color = .{ 1.0, 1.0, 1.0 },
-			tex_slot = model_id_to_slot(xx player.server.model_id),
-			z = 12
-		);
-
-		cursor.x += 16;
-
-		push_quad_texture(
-			state,
-			pos = .{
-				cursor.x + 4 + model_size.x + 4,
-				cursor.y + (scoreline_size.y - icon_size.y) / 2
-			},
-			size = icon_size,
-			color = .{ 1.0, 1.0, 1.0 },
-			tex_slot = AWARD_SLOT,
-			z = 12
-		);
-		atom_label(
-			state,
-			tprint("%", stat.win_count),
-			.{ cursor.x + 4 + model_size.x + 32, cursor.y + scoreline_size.y / 2 },
-			scale = 18,
-			z = 12,
-			align = Align.Center_Left,
-			outline = true,
-			id = 0
-		);
-
-		push_quad_texture(
-			state,
-			pos = .{
-				cursor.x + model_size.x + 4 + 32 + icon_size.x + 4,
-				cursor.y + (scoreline_size.y - icon_size.y) / 2
-			},
-			size = icon_size,
-			color = .{ 1.0, 1.0, 1.0 },
-			tex_slot = REVIVE_SLOT,
-			z = 12
-		);
-		atom_label(
-			state,
-			tprint("%", stat.revive_count),
-			.{
-				cursor.x + 4 + model_size.x + 32 + icon_size.x + 32,
-				cursor.y + scoreline_size.y / 2
-			},
-			scale = 18,
-			z = 12,
-			align = Align.Center_Left,
-			outline = true,
-			id = 1
-		);
-
-		push_quad_texture(
-			state,
-			pos = .{
-				cursor.x + model_size.x + 4 + 32 + icon_size.x + 4 + 32 + icon_size.x + 4,
-				cursor.y + (scoreline_size.y - icon_size.y) / 2
-			},
-			size = icon_size,
-			color = .{ 1.0, 1.0, 1.0 },
-			tex_slot = DEATH_SLOT,
-			z = 12
-		);
-		atom_label(
-			state,
-			tprint("%", stat.death_count),
-			.{
-				cursor.x + 4 + model_size.x + 32 + icon_size.x + 32 + icon_size.x + 32,
-				cursor.y + scoreline_size.y / 2
-			},
-			scale = 18,
-			z = 12,
-			align = Align.Center_Left,
-			outline = true,
-			id = 2
-		);
-	}
-
-	for scene.players {
-		x := it_index / 8;
-		y := it_index % 8;
-		push_scoreline(x.(float32), y.(float32), it);
-	}
-}
 
 push_death_indicator :: (state: *GUI_State, scene: Scene.Scene) {
 	V := Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
@@ -2111,14 +1991,14 @@ push_main_menu :: (
 	ret.temp_enter_instance_password = atom_input_text(
 		state,
 		args.enter_instance_password,
-		16,
+		24,
 		128.0,
 		id = password_input,
 		placeholder = "Password",
 		max_chars = 8,
 		_z=1,
 		_pos = input_text_aabb.min,
-		_align = Align.Center_Left
+		_align = Align.Bottom_Left
 	);
 
 	cursor =  .{ 16, state.controls.window_size.y - 64 - 16 };
@@ -4605,17 +4485,13 @@ v2_input :: (
 	lower_left := align_pos(pos, .{ width, height }, align);
 
 	component_width := (width - 4.0) / 2.0;
-	label_width := 16.0;
-	input_width := component_width - label_width - 4.0;
+	input_width := component_width - 4.0;
 
 	state.changed = false;
 	state.x_changed = false;
 	state.y_changed = false;
 
 	// X component
-	atom_label(
-		gui, labels[0], lower_left + v2(2.0, height / 2), height * 0.5, z, align = .Center_Left, color = label_color, id = xx 0
-	);
 	x_input := float_input(
 		gui,
 		input_width,
@@ -4625,7 +4501,7 @@ v2_input :: (
 		max_value = max_value.x,
 		drag_speed = drag_speed,
 		precision = precision,
-		_pos = lower_left + v2(label_width + 2.0, height / 2),
+		_pos = lower_left + v2(0 + 2.0, height / 2),
 		_z = z,
 		_align = .Center_Left,
 		id = "x"
@@ -4638,9 +4514,6 @@ v2_input :: (
 
 	// Y component
 	x_offset := component_width + 4.0;
-	atom_label(
-		gui, labels[1], lower_left + v2(x_offset + 2.0, height / 2), height * 0.5, z, align = .Center_Left, color = label_color, id = xx 1
-	);
 	y_input := float_input(
 		gui,
 		input_width,
@@ -4650,7 +4523,7 @@ v2_input :: (
 		max_value = max_value.y,
 		drag_speed = drag_speed,
 		precision = precision,
-		_pos = lower_left + v2(x_offset + label_width + 2.0, height / 2),
+		_pos = lower_left + v2(x_offset + 0 + 2.0, height / 2),
 		_z = z,
 		_align = .Center_Left,
 		id = "y"
@@ -4770,7 +4643,7 @@ v3_input :: (
 
 	lower_left := align_pos(pos, .{ width, height }, align);
 
-	component_width := (width - 8.0) / 3.0;
+	component_width := width / 3.0;
 	label_width := 16.0;
 	input_width := component_width - label_width - 4.0;
 
@@ -4780,22 +4653,22 @@ v3_input :: (
 	state.z_changed = false;
 
 	// X component
-	atom_label(
-		gui,
-		labels[0],
-		lower_left + v2(2.0, height / 2.0),
-		height * 0.5, z, align = .Center_Left, color = GRAY_80, id = xx 0
-	);
+	// atom_label(
+	// 	gui,
+	// 	labels[0],
+	// 	lower_left + v2(2.0, height / 2.0),
+	// 	height * 0.5, z, align = .Center_Left, color = GRAY_80, id = xx 0
+	// );
 	x_input := float_input(
 		gui,
-		input_width,
+		component_width,
 		height - 4.0,
 		value = state.value.x,
 		min_value = min_value.x,
 		max_value = max_value.x,
 		drag_speed = drag_speed,
 		precision = precision,
-		_pos = lower_left + v2(label_width + 2.0, height / 2.0),
+		_pos = lower_left + v2(0.0, height / 2.0),
 		_align = .Center_Left,
 		id = "x"
 	);
@@ -4807,17 +4680,17 @@ v3_input :: (
 
 	// Y component
 	x_offset := component_width + 4.0;
-	atom_label(gui, labels[1], lower_left + v2(x_offset + 2.0, height / 2.0), height * 0.5, z, align = .Center_Left, color = GRAY_80, id = xx 1);
+	// atom_label(gui, labels[1], lower_left + v2(x_offset + 2.0, height / 2.0), height * 0.5, z, align = .Center_Left, color = GRAY_80, id = xx 1);
 	y_input := float_input(
 		gui,
-		input_width,
+		component_width,
 		height - 4.0,
 		value = state.value.y,
 		min_value = min_value.y,
 		max_value = max_value.y,
 		drag_speed = drag_speed,
 		precision = precision,
-		_pos = lower_left + v2(x_offset + label_width + 2.0, height / 2.0),
+		_pos = lower_left + v2(x_offset + 2.0, height / 2.0),
 		_align = .Center_Left,
 		id = "y"
 	);
@@ -4829,17 +4702,17 @@ v3_input :: (
 
 	// Z component
 	x_offset2 := 2.0 * component_width + 8.0;
-	atom_label(gui, labels[2], lower_left + v2(x_offset2 + 2.0, height / 2.0), height * 0.5, z, align = .Center_Left, color = GRAY_80, id = xx 2);
+	// atom_label(gui, labels[2], lower_left + v2(x_offset2 + 2.0, height / 2.0), height * 0.5, z, align = .Center_Left, color = GRAY_80, id = xx 2);
 	z_input := float_input(
 		gui,
-		input_width,
+		component_width,
 		height - 4.0,
 		value = state.value.z,
 		min_value = min_value.z,
 		max_value = max_value.z,
 		drag_speed = drag_speed,
 		precision = precision,
-		_pos = lower_left + v2(x_offset2 + label_width + 2.0, height / 2.0),
+		_pos = lower_left + v2(x_offset2 + 2.0, height / 2.0),
 		_align = .Center_Left,
 		id = "zcomp"
 	);

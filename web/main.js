@@ -1711,8 +1711,8 @@ jai_imports.jsQueueWriteBuffer = (params_ptr, returns_ptr) => {
 
 const TEXTURE_ASPECT_MAP = {
 	1: "all",
-	2: "depth-only",
-	3: "stencil-only",
+	2: "stencil-only",
+	3: "depth-only",
 };
 
 jai_imports.jsQueueWriteTexture = (params_ptr, returns_ptr) => {
@@ -1764,6 +1764,99 @@ jai_imports.jsQueueWriteTexture = (params_ptr, returns_ptr) => {
 			offset: Number(layout_offset),
 			bytesPerRow: Number(bytesPerRow),
 			rowsPerImage: Number(rowsPerImage)
+		},
+		[width, height, depth]
+	);
+}
+
+jai_imports.jsMyGpuToCpu = new WebAssembly.Suspending(async (params_ptr, returns_ptr) => {
+	const instance_idx = getU64(params_ptr, 0);
+	if (instance_idx <= 0) {
+		return;
+	}
+	
+	const instance = object_map[instance_idx];
+
+	const buffer_idx = getU64(params_ptr, 8);
+	const cpu_buffer_size = getU64(params_ptr, 16);
+	const cpu_buffer_data = getU64(params_ptr, 24);
+
+	if (!instance || buffer_idx <= 0 || cpu_buffer_data == 0 || cpu_buffer_size == 0) {
+		return;
+	}
+
+	const buffer = object_map[buffer_idx];
+	if (!buffer) {
+		return;
+	}
+
+	await buffer.mapAsync(GPUMapMode.READ);
+	
+	try {
+		const arrayBuffer = buffer.getMappedRange(0, Number(cpu_buffer_size));
+		new Uint8Array(
+			jai_exports.memory.buffer,
+			Number(cpu_buffer_data),
+			Number(cpu_buffer_size)
+		).set(new Uint8Array(arrayBuffer, 0, Number(cpu_buffer_size)));
+		buffer.unmap();
+	} catch (e) {
+		buffer.unmap();
+		console.error("Error in jsMyGpuToCpu:", e);
+		throw e;
+	}
+});
+
+jai_imports.jsCommandEncoderCopyTextureToBuffer = (params_ptr, returns_ptr) => {
+	const encoder_idx = getU64(params_ptr, 0);
+	const source_info_ptr = getU64(params_ptr, 8);
+	const destination_info_ptr = getU64(params_ptr, 16);
+	const copy_size_ptr = getU64(params_ptr, 24);
+
+	if (encoder_idx == 0 || source_info_ptr == 0 || destination_info_ptr == 0 || copy_size_ptr == 0) {
+		return;
+	}
+
+	const encoder = object_map[encoder_idx];
+	if (!encoder) {
+		return;
+	}
+
+	const source_texture_idx = getU64(source_info_ptr, 0);
+	const source_mipLevel = getU32(source_info_ptr, 8);
+	const source_originX = getU32(source_info_ptr, 12);
+	const source_originY = getU32(source_info_ptr, 16);
+	const source_originZ = getU32(source_info_ptr, 20);
+	const source_aspect = TEXTURE_ASPECT_MAP[getU32(source_info_ptr, 24)];
+
+	const destination_offset = getU64(destination_info_ptr, 0);
+	const destination_bytesPerRow = getU32(destination_info_ptr, 8);
+	const destination_rowsPerImage = getU32(destination_info_ptr, 12);
+	const destination_buffer_idx = getU64(destination_info_ptr, 16);
+
+	const width = getU32(copy_size_ptr, 0);
+	const height = getU32(copy_size_ptr, 4);
+	const depth = getU32(copy_size_ptr, 8);
+
+	const source_texture = object_map[source_texture_idx];
+	const destination_buffer = object_map[destination_buffer_idx];
+
+	if (!source_texture || !destination_buffer) {
+		return;
+	}
+
+	encoder.copyTextureToBuffer(
+		{
+			texture: source_texture,
+			mipLevel: source_mipLevel,
+			origin: [source_originX, source_originY, source_originZ],
+			aspect: source_aspect
+		},
+		{
+			buffer: destination_buffer,
+			offset: Number(destination_offset),
+			bytesPerRow: Number(destination_bytesPerRow),
+			rowsPerImage: Number(destination_rowsPerImage)
 		},
 		[width, height, depth]
 	);

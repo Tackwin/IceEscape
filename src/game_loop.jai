@@ -8,11 +8,18 @@ Game_Page :: struct {
 		revive_count := 0;
 	}
 	player_stats: Table(int, Stats);
+	next_terrain_name: string;
+	wr_time_ms: int;
+	wr_player_name: string;
 }
 
 process_game :: (
-	state: *State, command: Command, controls: Controls.State, response: *Scene.Process_Response
+	app_user: *App_User,
+	command: Command,
+	controls: Controls.State,
+	response: *Scene.Process_Response
 ) ->  bool {
+	state := *app_user.state;
 	ntp: *Command.NTP = isa(command.payload, Command.NTP);
 	if ntp {
 		is_over := false;
@@ -62,18 +69,29 @@ process_game :: (
 		return true;
 	}
 
-	sync_stats: *Command.Sync_Stats = isa(command.payload, Command.Sync_Stats);
-	if sync_stats {
-		stats := table_find_pointer(*state.game.player_stats, sync_stats.player_id);
-		if !stats {
-			stats = table_add(*state.game.player_stats, sync_stats.player_id, .{});
+	get_instance_tab_stats: *Command.Get_Instance_Tab_Stats = isa(
+		command.payload, Command.Get_Instance_Tab_Stats
+	);
+	if get_instance_tab_stats {
+		table_reset(*state.game.player_stats);
+		for entry: get_instance_tab_stats.players_stats {
+			stats: Game_Page.Stats;
+			stats.win_count = entry.wins;
+			stats.death_count = entry.death;
+			stats.revive_count = entry.revive;
+			table_set(*state.game.player_stats, entry.player_id, stats);
 		}
-
-		stats.win_count = sync_stats.wins;
-		stats.death_count = sync_stats.death;
-		stats.revive_count = sync_stats.revive;
+		if state.game.next_terrain_name
+			free(state.game.next_terrain_name);
+		state.game.next_terrain_name = sprint("%", get_instance_tab_stats.next_terrain_name);
+		state.game.wr_time_ms = get_instance_tab_stats.wr_time_ms;
+		if state.game.wr_player_name
+			free(state.game.wr_player_name);
+		state.game.wr_player_name = sprint("%", get_instance_tab_stats.wr_player_name);
 		return true;
 	}
+
+
 
 	note_played: *Command.Note_Played = isa(command.payload, Command.Note_Played);
 	if note_played {
@@ -101,7 +119,6 @@ process_game :: (
 	sync_scene: *Command.Sync_Scene = isa(command.payload, Command.Sync_Scene);
 	if sync_scene {
 		Scene.clear_scene_run(*state.scene);
-		print("Terrain %\n", sync_scene.terrain);
 		Terrain.parse_terrain(sync_scene.terrain, *state.scene);
 		state.scene.id = sync_scene.id;
 		state.scene.info = sync_scene.info;
@@ -233,7 +250,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 
 	GUI.push_breaking_news(*app_user.gui_state, state.news);
 	if controls.pressed[Key.Tab] {
-		GUI.push_score_tab(*app_user.gui_state, state.scene, *state.game.player_stats);
+		push_score_tab(state.scene, *state.game, *app_user.gui_state);
 	}
 	GUI.push_death_indicator(*app_user.gui_state, state.scene);
 
@@ -387,14 +404,7 @@ input_game_loop :: (app_user: *App_User) {
 		app_user.state.playing.escape_menu_open = !app_user.state.playing.escape_menu_open;
 	}
 	if controls.just_pressed[Key.Tab] {
-		command: Command.Request_Stats;
-		cursor := 0;
-		for * state.scene.players {
-			if cursor < command.player_ids.count {
-				command.player_ids[cursor] = it.id;
-				cursor += 1;
-			}
-		}
+		command: Command.Get_Instance_Tab_Stats;
 		send_web_message(app.platform, controls.time, make_command(command));
 	}
 	if controls.pressed[Key.N] && controls.pressed[Key.P] {
@@ -532,6 +542,56 @@ respond :: (platform: Platform, time: Apollo_Time, response: Scene.Process_Respo
 	}
 }
 
+handle_received_asset :: (app_user: *App_User, big_asset: *Big_Asset) {
+	store := *app_user.store;
+	print("Received asset id %\n", big_asset.id);
+
+	editor_page := *app_user.state.editor_page;
+	for editor_page.thumbnail_receiving {
+		if it.asset_id == big_asset.id {
+			thumbnail4 := NewArray(128 * 128 * 4, u8, false);
+			for i: 0..128*128 - 1 {
+				thumbnail4[i * 4 + 0] = big_asset.buffer[i * 3 + 0];
+				thumbnail4[i * 4 + 1] = big_asset.buffer[i * 3 + 1];
+				thumbnail4[i * 4 + 2] = big_asset.buffer[i * 3 + 2];
+				thumbnail4[i * 4 + 3] = 255;
+			}
+			thumbnail := thumbnail_for(store, it.terrain_id);
+			queue_user_texture(store, thumbnail, thumbnail4);
+
+			print("Matching thumbnail pending found for terrain id %\n", it.terrain_id);
+			remove it;
+
+			free(big_asset.buffer.data);
+			table_remove(*editor_page.big_assets_receiving, big_asset.id);
+			return;
+		}
+	}
+
+	menu_page := *app_user.state.menu;
+	for menu_page.thumbnail_receiving {
+		if it.asset_id == big_asset.id {
+			thumbnail4 := NewArray(128 * 128 * 4, u8, false);
+			for i: 0..128*128 - 1 {
+				thumbnail4[i * 4 + 0] = big_asset.buffer[i * 3 + 0];
+				thumbnail4[i * 4 + 1] = big_asset.buffer[i * 3 + 1];
+				thumbnail4[i * 4 + 2] = big_asset.buffer[i * 3 + 2];
+				thumbnail4[i * 4 + 3] = 255;
+			}
+			thumbnail := thumbnail_for(store, it.terrain_id);
+			queue_user_texture(store, thumbnail, thumbnail4);
+
+			print("Matching thumbnail pending found for terrain id %\n", it.terrain_id);
+			remove it;
+
+			free(big_asset.buffer.data);
+			table_remove(*menu_page.big_assets_receiving, big_asset.id);
+			return;
+		}
+	}
+
+}
+
 game_loop :: (app_user: *App_User) -> bool {
 	using app_user;
 
@@ -552,7 +612,7 @@ game_loop :: (app_user: *App_User) -> bool {
 	// Rendering
 	frame := WRender.begin_frame(*framegraph, controls.time);
 	WRender.render_scene(frame, *framegraph, state.scene, store);
-	WRender.render_gui(frame, *framegraph, app_user.gui_state, store);
+	WRender.render_gui(frame, *framegraph, app_user.gui_state, *store);
 	WRender.end_frame(*framegraph, frame);
 
 	respond(app.platform, controls.time, process_response);
@@ -708,4 +768,218 @@ sounding :: (
 		}
 	}
 	scene.sound_triggers.count = 0;
+}
+
+
+push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) {
+	scoreboard_center := state.controls.window_size / 2;
+	scoreboard_center.y += state.controls.window_size.y / 12;
+	scoreboard_size := V2f.{ 600, 400 };
+	header_height := 32.0;
+
+	cursor := V2f.{
+		scoreboard_center.x - scoreboard_size.x / 2,
+		scoreboard_center.y - scoreboard_size.y / 2
+	};
+
+	GUI.push_quad_screen(
+		state,
+		pos = cursor,
+		size = scoreboard_size,
+		color = GUI.COLOR_BACK_A,
+		z = 5
+	);
+
+	GUI._atom_label(
+		state,
+		string_from_arr(scene.info.name),
+		_pos = .{ cursor.x + scoreboard_size.x / 2, cursor.y + scoreboard_size.y - header_height / 2 },
+		_z = 10,
+		_align = .Center
+	);
+
+	if page.wr_time_ms > 0 {
+		wr_time_ms := page.wr_time_ms;
+		wr_minutes := wr_time_ms / 60000;
+		wr_seconds := (wr_time_ms / 1000) % 60;
+		wr_milliseconds := wr_time_ms % 1000;
+
+		wr_string := tprint(
+			"WR %:%s %ms (%)",
+			formatInt(wr_minutes.(int), minimum_digits = 3, padding = #char "_"),
+			formatInt(wr_seconds.(int), minimum_digits = 2, padding = #char "_"),
+			formatInt(wr_milliseconds.(int), minimum_digits = 3, padding = #char "_"),
+			page.wr_player_name
+		);
+
+		GUI._atom_label(
+			state,
+			wr_string,
+			_pos = .{ cursor.x + 16, cursor.y - header_height / 2 + 1 },
+			_z = 100,
+			_align = .Center_Left
+		);
+	}
+
+	GUI._atom_label(
+		state,
+		tprint("Next up: %", page.next_terrain_name),
+		_pos = .{ cursor.x + scoreboard_size.x - 16, cursor.y - header_height / 2 + 1 },
+		_z = 100,
+		_align = .Center_Right
+	);
+
+	cursor += V2f.{ 0, scoreboard_size.y };
+	GUI.push_quad_screen(
+		state,
+		pos = .{ cursor.x, cursor.y - header_height },
+		size = .{ scoreboard_size.x, header_height },
+		color = GUI.COLOR_SOMBER_A,
+		z = 6
+	);
+	GUI.push_quad_screen(
+		state,
+		pos = .{ cursor.x, cursor.y - scoreboard_size.y - header_height },
+		size = .{ scoreboard_size.x, header_height },
+		color = GUI.COLOR_SOMBER_A,
+		z = 6
+	);
+	GUI.push_quad_screen(
+		state,
+		pos = .{ cursor.x, cursor.y - scoreboard_size.y },
+		size = .{ scoreboard_size.x, 1 },
+		color = .{ 1.0, 1.0, 1.0 },
+		z = 7
+	);
+
+	cursor -= V2f.{ 0, header_height };
+	GUI.push_quad_screen(
+		state,
+		pos = .{ cursor.x, cursor.y - 1 },
+		size = .{ scoreboard_size.x, 1 },
+		color = .{ 1.0, 1.0, 1.0 },
+		z = 7
+	);
+
+	scoreline_size := V2f.{ scoreboard_size.x / 2, 48 };
+
+	push_scoreline :: (x: float, y: float, player: Scene.Player) #expand {
+		stat := table_find_pointer(*page.player_stats, player.id);
+		if !stat
+			return;
+		
+		cursor := scoreboard_center;
+		cursor.x -= scoreboard_size.x / 2;
+		cursor.y += scoreboard_size.y / 2;
+		cursor.y -= header_height + 1;
+		cursor.x += x * scoreline_size.x;
+		cursor.y -= (y + 1) * scoreline_size.y;
+
+		model_size :: V2f.{ 48, 48 };
+		icon_size :: V2f.{ 24, 24 };
+
+		GUI.push_quad_screen(
+			state,
+			pos = cursor,
+			size = scoreline_size,
+			color = GUI.COLOR_HIGHLIGHT_A,
+			z = 10
+		);
+		GUI.push_quad_screen(
+			state,
+			pos = .{ cursor.x + 1, cursor.y + 1 },
+			size = .{ scoreline_size.x - 2, scoreline_size.y - 2 },
+			color = GUI.COLOR_BACK_A,
+			z = 11
+		);
+
+		GUI.push_quad_texture(
+			state,
+			pos = .{ cursor.x + 4, cursor.y + (scoreline_size.y - model_size.y) / 2 },
+			size = model_size,
+			color = .{ 1.0, 1.0, 1.0 },
+			tex_slot = GUI.model_id_to_slot(xx player.server.model_id),
+			z = 12
+		);
+
+		cursor.x += 16;
+
+		GUI.push_quad_texture(
+			state,
+			pos = .{
+				cursor.x + 4 + model_size.x + 4,
+				cursor.y + (scoreline_size.y - icon_size.y) / 2
+			},
+			size = icon_size,
+			color = .{ 1.0, 1.0, 1.0 },
+			tex_slot = GUI.AWARD_SLOT,
+			z = 12
+		);
+		GUI.atom_label(
+			state,
+			tprint("%", stat.win_count),
+			.{ cursor.x + 4 + model_size.x + 32, cursor.y + scoreline_size.y / 2 },
+			scale = 18,
+			z = 12,
+			align = GUI.Align.Center_Left,
+			outline = true,
+			id = 0
+		);
+
+		GUI.push_quad_texture(
+			state,
+			pos = .{
+				cursor.x + model_size.x + 4 + 32 + icon_size.x + 4,
+				cursor.y + (scoreline_size.y - icon_size.y) / 2
+			},
+			size = icon_size,
+			color = .{ 1.0, 1.0, 1.0 },
+			tex_slot = GUI.REVIVE_SLOT,
+			z = 12
+		);
+		GUI.atom_label(
+			state,
+			tprint("%", stat.revive_count),
+			.{
+				cursor.x + 4 + model_size.x + 32 + icon_size.x + 32,
+				cursor.y + scoreline_size.y / 2
+			},
+			scale = 18,
+			z = 12,
+			align = GUI.Align.Center_Left,
+			outline = true,
+			id = 1
+		);
+
+		GUI.push_quad_texture(
+			state,
+			pos = .{
+				cursor.x + model_size.x + 4 + 32 + icon_size.x + 4 + 32 + icon_size.x + 4,
+				cursor.y + (scoreline_size.y - icon_size.y) / 2
+			},
+			size = icon_size,
+			color = .{ 1.0, 1.0, 1.0 },
+			tex_slot = GUI.DEATH_SLOT,
+			z = 12
+		);
+		GUI.atom_label(
+			state,
+			tprint("%", stat.death_count),
+			.{
+				cursor.x + 4 + model_size.x + 32 + icon_size.x + 32 + icon_size.x + 32,
+				cursor.y + scoreline_size.y / 2
+			},
+			scale = 18,
+			z = 12,
+			align = GUI.Align.Center_Left,
+			outline = true,
+			id = 2
+		);
+	}
+
+	for scene.players {
+		x := it_index / 8;
+		y := it_index % 8;
+		push_scoreline(x.(float32), y.(float32), it);
+	}
 }

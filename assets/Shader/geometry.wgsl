@@ -361,6 +361,33 @@ fn flaggedSample(
 		normal = normalize(normal);
 	}
 
+	if ((flags & 4) != 0) {
+		let uvx = uv.x;
+		let uvy = uv.y;
+		var sleft = smoothstep(0.0, 3.0 / 128.0, uvx);
+		var sright = smoothstep(1.0, 1.0 - 3.0 / 128.0, uvx);
+		var stop = smoothstep(0.0, 3.0 / 128.0, uvy);
+		var sbottom = smoothstep(1.0, 1.0 - 3.0 / 128.0, uvy);
+		var s = 1.0;
+		if ((flags & 8) != 0) {
+			s *= stop;
+		}
+		if ((flags & 16) != 0) {
+			s *= sleft;
+		}
+		if ((flags & 32) != 0) {
+			s *= sbottom;
+		}
+		if ((flags & 64) != 0) {
+			s *= sright;
+		}
+
+		let newColor = mix(vec3(0.25), color.rgb, s);
+		color.r = newColor.r;
+		color.g = newColor.g;
+		color.b = newColor.b;
+	}
+
 	// Shadow mapping
 	var light: f32 = light_intensity(
 		f32(instanceData[instanceIndex].useShadowMap), worldPos, normal

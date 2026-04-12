@@ -23,7 +23,9 @@ editable_entities_type :: Type.[
 	Scene.Present,
 	Scene.PressButton,
 	Scene.Lantern,
-	Scene.Turn_Table
+	Scene.Turn_Table,
+	Scene.AntiAir,
+	Scene.Robot
 ];
 
 Editor :: struct {

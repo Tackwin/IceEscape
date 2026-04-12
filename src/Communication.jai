@@ -9,6 +9,29 @@
 Rand :: #import "Rand";
 
 #scope_export
+Big_Asset :: struct {
+	id: int;
+	buffer: [] u8;
+
+	written := 0;
+	last_written: Apollo_Time;
+
+	kind: enum {
+		Sending;
+		Receiving;
+	};
+}
+
+Asset_Info :: struct {
+	id: int;
+	size: int;
+}
+
+Thumbnail_Pending :: struct {
+	terrain_id: int;
+	asset_id: int;
+}
+
 string_to_array :: (in: string, out: [] u8) {
 	for 0..min(in.count, out.count)-1
 		out[it] = in[it];
@@ -106,6 +129,8 @@ Command :: struct {
 	Die :: struct {
 		player_id: int;
 		position: V3f;
+		explode_source: V3f;
+		explode_strength: float;
 	}
 	Quit :: struct {
 		player_id: int;
@@ -215,8 +240,7 @@ Command :: struct {
 	Sync_AntiAir :: struct {
 		id: int;
 		position: V3f;
-		target: V3f;
-		target_size: V2f;
+		target_aabb: AABBf;
 		cooldown: float;
 		next_target: V2f;
 		t: float; // Time since spawn
@@ -357,11 +381,16 @@ Command :: struct {
 			Instance_Full;
 			Rejected;
 			Kicked;
+			Already_In;
 		}
 	}
 
 	Ask_Enter_Custom_Instance :: struct {
 		terrain: string;
+	}
+	
+	Ask_Enter_Quick_Instance :: struct {
+		terrain_id: int;
 	}
 
 	Ans_Enter_Custom_Instance :: struct {
@@ -385,9 +414,11 @@ Command :: struct {
 		ascii: string;
 	}
 	Ask_List_Terrain :: struct {
+		correlation_id: int;
 		filter: string;
 	}
 	Ans_List_Terrain :: struct {
+		correlation_id: int;
 		terrains_id: [] int;
 		terrains_name: [] string;
 		authors_name: [] string;
@@ -395,10 +426,12 @@ Command :: struct {
 	}
 
 	Create_Instance :: struct {
-		name: [64] u8;
-		password: [64] u8;
+		name: [] u8;
+		password: [] u8;
 		auto_revive: bool;
 		private: bool;
+
+		roster: [] int;
 	}
 	Ans_Create_Instance :: struct {
 		reason: enum {
@@ -447,8 +480,43 @@ Command :: struct {
 
 		entries: [] Get_Terrain_Leaderboard_Entry;
 	}
+	Get_Instance_Tab_Stats_Player_Stats_Entry :: struct {
+		player_id: int;
+		death: int;
+		revive: int;
+		wins: int;
+	}
+	Get_Instance_Tab_Stats :: struct {
+		wr_time_ms: int;
+		wr_player_name: string;
+
+		next_terrain_name: string;
+
+		players_stats: [] Get_Instance_Tab_Stats_Player_Stats_Entry;
+	}
 	Signal_Pick :: struct {
 		pos: V3f;
+	}
+	Set_Thumbnail :: struct {
+		terrain_id: int;
+		asset: Asset_Info;
+	}
+	Get_Thumbnail :: struct {
+		terrain_id: int;
+		asset: Asset_Info;
+
+		reason: enum {
+			Accepted;
+			Not_Found;
+			Rejected;
+		}
+	}
+	Asset_Chunk :: struct {
+		CHUNK :: 2048;
+		data: [] u8;
+		offset: int;
+
+		asset: Asset_Info;
 	}
 
 	Payload_t :: Sum_Type(
@@ -462,7 +530,8 @@ Command :: struct {
 		Sync_Stats, Sync_Clock, Note_Played, Sync_Bomb_Spawner, Sync_Bomb, Sync_Score,
 		Ask_Enter_Custom_Instance, Ans_Enter_Custom_Instance, Save_Terrain, Load_Terrain,
 		Ask_List_Terrain, Ans_List_Terrain, Login, Set_Passcode, Get_Profile_Stats, Set_Username,
-		Get_Username, Get_Terrain_Leaderboard, Signal_Pick
+		Get_Username, Get_Terrain_Leaderboard, Signal_Pick, Get_Instance_Tab_Stats,
+		Ask_Enter_Quick_Instance, Set_Thumbnail, Get_Thumbnail, Asset_Chunk
 	);
 	payload: Payload_t;
 	sent_timestamp: float64;
@@ -742,7 +811,6 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Sync_Key; #through;
 		case .Sync_Gate; #through;
 		case .Leave_Instance; #through;
-		case .Create_Instance; #through;
 		case .Ans_Create_Instance; #through;
 		case .Version_Info; #through;
 		case .Sync_Stats; #through;
@@ -768,6 +836,8 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Ask_Enter_Instance; #through;
 		case .Move_To_Play_World;
 			// Nothing
+		case .Create_Instance;
+			generic_case(Command.Create_Instance);
 		case .Get_Terrain_Leaderboard;
 			generic_case(Command.Get_Terrain_Leaderboard);
 		case .Set_Username;
@@ -776,6 +846,16 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 			generic_case(Command.Get_Username);
 		case .Signal_Pick;
 			generic_case(Command.Signal_Pick);
+		case .Get_Instance_Tab_Stats;
+			generic_case(Command.Get_Instance_Tab_Stats);
+		case .Ask_Enter_Quick_Instance;
+			generic_case(Command.Ask_Enter_Quick_Instance);
+		case .Set_Thumbnail;
+			generic_case(Command.Set_Thumbnail);
+		case .Asset_Chunk;
+			generic_case(Command.Asset_Chunk);
+		case .Get_Thumbnail;
+			generic_case(Command.Get_Thumbnail);
 		case .Load_Terrain;
 			load_terrain := isa(cmd.payload, Command.Load_Terrain);
 			if !load_terrain {
@@ -1073,7 +1153,6 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Cheat_Action; #through;
 		case .Respawn; #through;
 		case .Leave_Instance; #through;
-		case .Create_Instance; #through;
 		case .Ans_Create_Instance; #through;
 		case .Version_Info; #through;
 		case .Sync_Stats; #through;
@@ -1116,8 +1195,24 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Ask_Instance_List; #through;
 		case .Move_To_Play_World;
 			return cmd, true;
+		case .Create_Instance;
+			generic_case(Command.Create_Instance);
+			return cmd, true;
+		case .Set_Thumbnail;
+			generic_case(Command.Set_Thumbnail);
+			return cmd, true;
+		case .Asset_Chunk;
+			generic_case(Command.Asset_Chunk);
+			asset := isa(cmd.payload, Command.Asset_Chunk);
+			return cmd, true;
+		case .Get_Thumbnail;
+			generic_case(Command.Get_Thumbnail);
+			return cmd, true;
 		case .Signal_Pick;
 			generic_case(Command.Signal_Pick);
+			return cmd, true;
+		case .Get_Instance_Tab_Stats;
+			generic_case(Command.Get_Instance_Tab_Stats);
 			return cmd, true;
 		case .Get_Terrain_Leaderboard;
 			generic_case(Command.Get_Terrain_Leaderboard);
@@ -1127,6 +1222,9 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 			return cmd, true;
 		case .Get_Username;
 			generic_case(Command.Get_Username);
+			return cmd, true;
+		case .Ask_Enter_Quick_Instance;
+			generic_case(Command.Ask_Enter_Quick_Instance);
 			return cmd, true;
 		case .Ask_List_Terrain;
 			ask_list_terrain := isa(cmd.payload, Command.Ask_List_Terrain);

@@ -43,6 +43,7 @@ GPU_proc :: struct {
     renderPassEncoderSetVertexBuffer: WGPUProcRenderPassEncoderSetVertexBuffer = null;
     renderPassEncoderSetIndexBuffer: WGPUProcRenderPassEncoderSetIndexBuffer = null;
     renderPassEncoderSetViewport: WGPUProcRenderPassEncoderSetViewport = null;
+    commandEncoderCopyTextureToBuffer: WGPUProcCommandEncoderCopyTextureToBuffer = null;
     surfaceGetCurrentTexture: WGPUProcSurfaceGetCurrentTexture = null;
     textureCreateView: WGPUProcTextureCreateView = null;
     textureViewRelease: WGPUProcTextureViewRelease = null;
@@ -60,4 +61,5 @@ GPU_proc :: struct {
     samplerRelease: WGPUProcSamplerRelease = null;
     deviceCreatePipelineLayout: WGPUProcDeviceCreatePipelineLayout = null;
     pipelineLayoutRelease: WGPUProcPipelineLayoutRelease = null;
+    myGpuToCpu: #type (instance: WGPUInstance, buffer: WGPUBuffer, cpu: [] u8) -> void #c_call = null;
 }

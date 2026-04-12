@@ -6,6 +6,7 @@
 #import "Communication";
 #import "Pool";
 #import "Xar";
+#import "Common";
 #import "Hash_Table";
 #import "Terrain";
 #import "Store";
@@ -137,6 +138,11 @@ Debris :: struct {
 	birthtime: float;
 }
 
+Gravestone :: struct {
+	player_id: int;
+	position: V3f;
+}
+
 Scene :: struct {
 	State :: enum {
 		Normal :: 0;
@@ -211,6 +217,7 @@ Scene :: struct {
 	sound_triggers: [..] Sound_Trigger; @allocate("lifetime") @clear("run")
 	jukeboxes: [..] Jukebox; @allocate("lifetime") @clear("run")
 	debris: [..] Debris; @allocate("lifetime") @clear("run")
+	gravestones: [..] Gravestone; @allocate("lifetime") @clear("run")
 	indices: [..] int; @allocate("lifetime") @clear("run")
 	trigger_activated: Table(int, bool); @allocate("lifetime") @clear("run")
 
@@ -580,10 +587,9 @@ make_sync :: (robot: *Robot) -> Command.Sync_Robot {
 make_sync :: (antiair: *AntiAir) -> Command.Sync_AntiAir {
 	sync_antiair: Command.Sync_AntiAir;
 	sync_antiair.id = antiair.id;
-	sync_antiair.position = antiair.server.position;
-	sync_antiair.target = antiair.server.target;
-	sync_antiair.cooldown = antiair.server.cooldown;
-	sync_antiair.target_size = antiair.server.target_size;
+	sync_antiair.position = antiair.position;
+	sync_antiair.target_aabb = antiair.target_aabb;
+	sync_antiair.cooldown = antiair.cooldown;
 	sync_antiair.next_target = antiair.server.next_target;
 	sync_antiair.t = antiair.server.t;
 	return sync_antiair;
@@ -689,15 +695,14 @@ Spawn :: struct {
 
 AntiAir :: struct {
 	id: int;
-	server: struct {
-		position: V3f;
-		target: V3f;
-		target_size: V2f = .{ 0.25, 0.25 };
-		cooldown: float = 2.0;
-		radius := 1.0;
-		t := 0.0;
-		just_shooted := false;
+	position: V3f; @edit @picking
+	target_aabb: AABBf; @edit @picking
+	cooldown: float = 2.0; @edit
+	radius := 1.0; @edit
+	just_shooted := false;
 
+	server: struct {
+		t := 0.0;
 		next_target: V2f = .{ FLOAT32_MAX, FLOAT32_MAX };
 		curr_target: V2f = .{ FLOAT32_MAX, FLOAT32_MAX };
 	}
@@ -710,7 +715,7 @@ AntiAir :: struct {
 Bomb_Spawner :: struct {
 	id: int;
 
-	position: V3f; @edit
+	position: V3f; @edit @picking
 
 	spawned_id := -1;
 	explosion_time := 10.0; @edit
@@ -748,12 +753,12 @@ Block_Rock :: struct {
 
 	id: int;
 	exploded := false;
-	position: V3f; @edit
+	position: V3f; @edit @picking
 }
 
 PressButton :: struct {
 	id: int;
-	position: V3f; @edit
+	position: V3f; @edit @picking
 
 	is_radio := false; @edit
 	
@@ -771,7 +776,7 @@ PressButton :: struct {
 Turn_Table :: struct {
 	id: int;
 
-	position: V3f; @edit
+	position: V3f; @edit @picking
 	turning_speed := 1.0; @edit
 	turning_offset := 0.0; @edit
 
@@ -784,7 +789,7 @@ Turn_Table :: struct {
 
 Trap :: struct {
 	id: int;
-	position: V3f; @edit
+	position: V3f; @edit @picking
 	radius_hitbox := 0.5;
 
 	activable := false; @edit
@@ -797,7 +802,7 @@ Trap :: struct {
 
 Present :: struct {
 	id: int;
-	position: V3f; @edit
+	position: V3f; @edit @picking
 
 	Kind :: enum {
 		A :: 0;
@@ -827,7 +832,7 @@ Prop :: struct {
 
 Trophy :: struct {
 	id: int;
-	position: V3f; @edit
+	position: V3f; @edit @picking
 }
 
 Particle :: struct {
@@ -856,24 +861,23 @@ Explosion :: struct {
 Robot :: struct {
 	id: int;
 
-	position: V3f;
-	start_target_aabb: V2f;
-	end_target_aabb: V2f;
+	position: V3f; @edit @picking
+	target_aabb: AABBf; @edit @picking
 
 	axes: [5] float;
 
 	player_targeted_id := -1;
 
-	max_rotation_speed := 3.141592 * 0.5; // radians per second
+	max_rotation_speed := 3.141592 * 0.5; @edit // radians per second
 
-	charging_time := 1.0;
-	effectshoot_time := 0.5;
-	shooting_cd := 5.0;
+	charging_time := 1.0; @edit
+	effectshoot_time := 0.5; @edit
+	shooting_cd := 5.0; @edit
 	shooting_time := 0.0;
-	shooting_offset := 0.0;
-	explosion_radius := 0.4;
+	shooting_offset := 0.0; @edit
+	explosion_radius := 0.4; @edit
 
-	predict := 0.0;
+	predict := 0.0; @edit
 
 	shooted := false;
 	just_shooted := false;
@@ -1070,30 +1074,15 @@ add_single_reply :: (process_response: *Process_Response, player_id: int, comman
 Camera :: struct {
 	position: V3f;
 	target:   V3f;
+	delta_unit: V3f;
+
 	target_target: V3f;
-	wanted_target_to_position: V3f;
+	distance_target := 0.0;
 
 	nominal_distance := 8.0;
 	locked_nominal_distance := 8.0;
 
-	locked_drag_anchor: V3f;
-	locked_drag_anchor_last_drag_pos: V3f;
-	locked_drag_anchor_last_delta: V3f;
-	locked_drag_anchor_leash: float = 1.0;
-
 	max_distance := 0.0;
-
-	// Camera rail tracking
-	rail_position: V3f;  // Current position on the rail
-	rail_target_position: V3f;  // Target position on the rail
-	current_rail_id := -1;
-	rail_progress := 0.0;  // Progress along current rail segment [0, 1]
-	current_segment := 0;  // Which segment of the rail we're on
-
-	// POI tracking
-	current_poi_id := -1;
-	poi_zoom_factor := 1.0;
-	poi_target_zoom_factor := 1.0;
 
 	locked_to := -1;
 	locked := false;
@@ -1110,21 +1099,22 @@ init_camera :: (scene: *Scene) {
 	scene.camera.position = .{ 0, -4, 8 };
 	scene.camera.target = .{ 0, 0, 0 };
 	scene.camera.target_target = scene.camera.target;
-	scene.camera.wanted_target_to_position = scene.camera.position - scene.camera.target;
-	scene.camera.nominal_distance = norm(scene.camera.wanted_target_to_position);
+	scene.camera.delta_unit = normalize(scene.camera.position - scene.camera.target);
+	scene.camera.nominal_distance = norm(scene.camera.position - scene.camera.target);
+	scene.camera.distance_target = scene.camera.nominal_distance;
 	scene.camera.locked_nominal_distance = scene.camera.nominal_distance * 1.05;
 	scene.camera.fov = 55;
-	scene.camera.max_distance = norm(scene.camera.wanted_target_to_position);
+	scene.camera.max_distance = scene.camera.locked_nominal_distance;
 }
 
 reset_camera_zoom :: (camera: *Camera) {
 	pos := camera.target;
 	camera.position = pos - V3f.{ 0, -4, 8 };
 	camera.target_target = pos;
-	camera.wanted_target_to_position = camera.position - camera.target;
-	camera.max_distance = norm(camera.wanted_target_to_position);
-	camera.nominal_distance = norm(camera.wanted_target_to_position);
+	camera.delta_unit = normalize(camera.position - camera.target);
+	camera.nominal_distance = norm(camera.position - camera.target);
 	camera.locked_nominal_distance = camera.nominal_distance * 1.05;
+	camera.max_distance = camera.locked_nominal_distance;
 	camera.fov = 55;
 }
 
@@ -1260,8 +1250,8 @@ Trigger :: enum {
 
 Lantern :: struct {
 	id: int;
-	position: V3f; @edit
-	light_aabb: AABBf; @edit
+	position: V3f; @edit @picking
+	light_aabb: AABBf; @edit @picking @display_name(aabb)
 	turned_on := false;
 	button_id: int; @edit
 	intensity := 1.0; @edit
@@ -1269,7 +1259,7 @@ Lantern :: struct {
 
 Flag :: struct {
 	id: int;
-	position: V3f;
+	position: V3f; @edit @picking
 	radius: float = 0.75;
 
 	count_changed_juice_t := 0.0;
@@ -1378,7 +1368,7 @@ Key :: struct {
 	holder: int = -1;
 	server: struct {
 		home: V3f;
-		position: V3f; @edit @display_name(position)
+		position: V3f; @edit @picking @display_name(position)
 		radius_hitbox := 0.25;
 		last_hold_clock : float64 = 0.0;
 	}
@@ -1435,7 +1425,7 @@ Tombstone :: struct {
 
 Gate :: struct {
 	id: int;
-	position: V3f; @edit
+	position: V3f; @edit @picking
 	direction: V3f; @edit @normalize
 	is_closed := true;
 
@@ -1848,16 +1838,10 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 	any_camera_move := false;
 	dt := V3f.{ 0, 0, 0 };
 	if controls.mouse_wheel > 0 {
-		scene.camera.wanted_target_to_position *= 0.9;
+		scene.camera.distance_target *= 0.9;
 	}
 	if controls.mouse_wheel < 0 {
-		scene.camera.wanted_target_to_position *= (1.0 / 0.9);
-		l := norm(scene.camera.wanted_target_to_position);
-		if l > scene.camera.max_distance {
-			l = scene.camera.max_distance;
-		}
-		scene.camera.wanted_target_to_position =
-			l * normalize(scene.camera.wanted_target_to_position);
+		scene.camera.distance_target *= (1.0 / 0.9);
 	}
 	if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Left) {
 		dt.x -= scene.camera.speed * controls.delta_time;
@@ -1902,7 +1886,6 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 	scene.camera.target_target += dt;
 	if scene.camera.locked {
 		scene.camera.target += dt;
-		scene.camera.locked_drag_anchor -= dt / 2;
 	}
 
 	// if !any_camera_move {
@@ -2362,6 +2345,8 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		soft_die: bool = false;
 	}
 	should_die := NewArray(scene.players.count, Should_Die,, temp);
+	should_die_source: V3f = v3(FLOAT32_MAX, FLOAT32_MAX, FLOAT32_MAX);
+	should_die_strength := 0.0;
 
 	// // >RULE Presents respawn.
 	// for * scene.presents {
@@ -2451,6 +2436,8 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				d := max(abs((p - q).x), abs((p - q).y));
 				if d < it.radius_hitbox {
 					should_die[player_idx].soft_die = true;
+					should_die_source = p;
+					should_die_strength = 1.0;
 					continue;
 				}
 			}
@@ -2467,10 +2454,14 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 					if it.activator_id == player.id {
 						if scene.server.clock > it.activated_clock + 0.5 {
 							should_die[player_idx].soft_die = true;
+							should_die_source = p;
+							should_die_strength = 1.0;
 							continue;
 						}
 					} else {
 						should_die[player_idx].soft_die = true;
+						should_die_source = p;
+						should_die_strength = 1.0;
 						continue;
 					}
 				} else {
@@ -2753,6 +2744,8 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				dt := norm(player.server.position - skull_pos);
 				if dt < player.server.radius_hurtbox_skull {
 					should_die[player_idx].soft_die = true;
+					should_die_source = skull_pos;
+					should_die_strength = 1.0;
 					continue;
 				}
 			}
@@ -2835,6 +2828,8 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				d := norm(p - q);
 				if d < dt {
 					should_die[player_idx].soft_die = true;
+					should_die_source = p;
+					should_die_strength = 3.0;
 					continue;
 				}
 			}
@@ -2852,6 +2847,8 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				d := norm(p - q);
 				if d < (it.server.radius_hitbox + player.server.radius_hurtbox_shuriken) {
 					should_die[player_idx].soft_die = true;
+					should_die_source = p;
+					should_die_strength = 1.0;
 					continue;
 				}
 			}
@@ -2903,11 +2900,11 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	}
 
 	for * antiair: scene.antiairs {
-		if antiair.server.just_shooted {
+		if antiair.just_shooted {
 			explosion: Explosion;
 			explosion.position = v3(antiair.server.curr_target, 0.0);
 			explosion.lifetime = 1.0;
-			explosion.max_size = antiair.server.radius;
+			explosion.max_size = antiair.radius;
 
 			array_add(*scene.explosions, explosion);
 
@@ -2927,7 +2924,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				array_add(*result.antiair_shoot, cmd);
 			}
 		}
-		antiair.server.just_shooted = false;
+		antiair.just_shooted = false;
 	}
 
 	// >RULE Apply deaths
@@ -2947,7 +2944,14 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		}
 
 		if it.hard_die {
-			server_die(scene, *scene.players[it_index], time, result);
+			server_die(
+				scene,
+				*scene.players[it_index],
+				time,
+				result,
+				should_die_source,
+				should_die_strength
+			);
 		} else if it.soft_die {
 			player := *scene.players[it_index];
 			in_safe_zone := false;
@@ -2960,7 +2964,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				}
 			}
 			if !in_safe_zone {
-				server_die(scene, player, time, result);
+				server_die(scene, player, time, result, should_die_source, should_die_strength);
 			}
 		}
 	}
@@ -2997,19 +3001,49 @@ update_explosions :: (scene: *Scene, dt: float32) {
 }
 
 update_debris :: (scene: *Scene, dt: float32) {
+
 	world: XPBD.World;
 	world.iterations = 1;
-	world.substeps = 5;
+	world.substeps = 3;
 	world.bodies = NewArray(scene.debris.count, XPBD.Rigid_Body,, temp);
+
 	body_cursor := 0;
 	for * scene.debris {
 		if it.part_idx == -1
 			continue;
+		dt := scene.client.clock - it.birthtime;
+		scale := 1.0 - smoothstep(dt.(float32), 5, 7) * 0.7;
+		can_stop := false;
+		
+		body: XPBD.Rigid_Body;
+		tile, ok := tile_under(scene, it.position);
+		if ok {
+			if #complete tile.kind == {
+				case .Dirt;
+					body.mu_d = 0.9;
+					can_stop = true;
+				case .Grass;
+					body.mu_d = 0.7;
+					can_stop = true;
+				case .Ice;
+					body.mu_d = 0.001;
+				case .Slippy_Ice;
+					body.mu_d = 0.00;
+				case .Funny_Ice;
+					body.mu_d = 0.1;
+				case .None;
+					body.mu_d = 0.5;
+			}
+		}
+		if dt > 10 && can_stop
+			continue;
+		if norm(it.velocity) < 0.01
+			continue;
+
 
 		model := get_model(scene.client.store, xx it.model_id);
 		if model {
 			part := model.parts[it.part_idx];
-			body: XPBD.Rigid_Body;
 			body.p = it.position;
 			body.v = it.velocity;
 			body.w = it.w;
@@ -3024,7 +3058,8 @@ update_debris :: (scene: *Scene, dt: float32) {
 				);
 			}
 
-			body.half_size = it.half_size;
+			body.half_size = it.half_size * scale;
+			body.user_idx = it_index;
 			world.bodies[body_cursor] = body;
 			body_cursor += 1;
 		}
@@ -3033,34 +3068,16 @@ update_debris :: (scene: *Scene, dt: float32) {
 
 	XPBD.step(*world, dt);
 
-	body_cursor = 0;
-	for * debri: scene.debris {
-		if debri.part_idx == -1
+	for world.bodies {
+		if it.user_idx < 0
 			continue;
 
-		model := get_model(scene.client.store, xx debri.model_id);
-		if model {
-			debri.position = world.bodies[body_cursor].p;
-			debri.velocity = world.bodies[body_cursor].v;
-			debri.q = world.bodies[body_cursor].q;
-			debri.w = world.bodies[body_cursor].w;
-			body_cursor += 1;
-		}
+		debri := *scene.debris[it.user_idx];
+		debri.position = it.p;
+		debri.velocity = it.v;
+		debri.q = it.q;
+		debri.w = it.w;
 	}
-	
-	// for * scene.debris {
-	// 	floor := it.half_size.z - 0.01;
-	// 	it.position += it.velocity * dt;
-	// 	it.velocity.z -= 1.81 * dt;
-	// 	it.velocity *= clamp(pow(0.50, dt), 0.0, 1.0);
-		
-	// 	if it.position.z < floor {
-	// 		it.position.z = floor;
-	// 		if it.velocity.z < 0 {
-	// 			it.velocity.z = -it.velocity.z * 0.5;
-	// 		}
-	// 	}
-	// }
 }
 
 update_particles :: (scene: *Scene, dt: float32) {
@@ -3198,7 +3215,7 @@ drop_bombs :: (scene: *Scene, player: *Player) {
 	}
 }
 
-client_die :: (scene: *Scene, player: *Player, at: V3f) {
+client_die :: (scene: *Scene, player: *Player, at: V3f, die_source: V3f, die_strength: float32) {
 	player.server.dead = true;
 	player.server.dead_time = xx scene.server.clock;
 	player.server.has_safe_present = false;
@@ -3214,11 +3231,16 @@ client_die :: (scene: *Scene, player: *Player, at: V3f) {
 		array_add(*scene.sound_triggers, trigger);
 	}
 
+	gravestone: Gravestone;
+	gravestone.player_id = player.id;
+	gravestone.position = at;
+	array_add(*scene.gravestones, gravestone);
+
 	array_add(*scene.tombstones, tombstone);
-	drop_debris(scene, player);
+	drop_debris(scene, player, die_source, die_strength);
 }
 
-drop_debris :: (scene: *Scene, player: *Player) {
+drop_debris :: (scene: *Scene, player: *Player, die_source: V3f, die_strength: float32) {
 	model := get_model(scene.client.store, xx player.server.model_id);
 	if model {
 		for model.parts {
@@ -3228,24 +3250,37 @@ drop_debris :: (scene: *Scene, player: *Player) {
 			debris.velocity = v3(
 				Rand.random_uniform(*scene.client_rng, -1.0, 1.0),
 				Rand.random_uniform(*scene.client_rng, -1.0, 1.0),
-				Rand.random_uniform(*scene.client_rng, 0.0, 1.0),
+				Rand.random_uniform(*scene.client_rng, 1.0, 2.0),
 			);
-			// debris.velocity += normalize(player.client.delta_frame_position);
-			debris.half_size = (it.max - it.min) / 2;
-			debris.origin = (it.max + it.min) / 2;
+			debris.velocity = normalize(debris.velocity);
+			debris.velocity += normalize(player.client.delta_frame_position) * 2;
 			debris.position = player.client.position + debris.origin;
 			debris.position.z += 0.5;
+
+			if die_source.x != FLOAT32_MAX {
+				debris.velocity += normalize(debris.position - die_source) * die_strength;
+			}
+
+			debris.half_size = (it.max - it.min) / 2;
+			debris.origin = (it.max + it.min) / 2;
 			debris.birthtime = xx scene.client.clock;
 			debris.q = from_unit_vectors(
-				normalize(v3(1.0, 0.0, Rand.random_uniform(*scene.client_rng, 0.0, 1.0))), player.client.direction
+				normalize(v3(1.0, 0.0, Rand.random_uniform(*scene.client_rng, 0.0, 1.0))),
+				player.client.direction
 			);
 			array_add(*scene.debris, debris);
-			break;
 		}
 	}
 }
 
-server_die :: (scene: *Scene, player: *Player, time: Apollo_Time, result: *Frame_Result) {
+server_die :: (
+	scene: *Scene,
+	player: *Player,
+	time: Apollo_Time,
+	result: *Frame_Result,
+	should_die_source: V3f,
+	should_die_strength: float32
+) {
 	player.server.has_safe_present = false;
 	player.server.has_hook_present = 0;
 
@@ -3261,6 +3296,8 @@ server_die :: (scene: *Scene, player: *Player, time: Apollo_Time, result: *Frame
 		died: Command.Die;
 		died.player_id = player.id;
 		died.position = player.server.position;
+		died.explode_source = should_die_source;
+		died.explode_strength = should_die_strength;
 		array_add(*result.died, died);
 		player.server.dead = true;
 		player.server.dead_time = xx scene.server.clock;
@@ -3319,16 +3356,16 @@ update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
 	antiair.server.t += dt;
 	antiair.client.t += dt;
 	antiair.client.t = damp(antiair.client.t, antiair.server.t, 10.0, dt);
-	if 0.1 < antiair.client.t && antiair.client.t + 1 < antiair.server.cooldown
+	if 0.1 < antiair.client.t && antiair.client.t + 1 < antiair.cooldown
 		antiair.client.next_target = antiair.server.next_target;
-	if antiair.client.t > antiair.server.cooldown {
+	if antiair.client.t > antiair.cooldown {
 		antiair.client.t = 0.0;
 	}
 
 	if scene.is_server {
-		if antiair.server.t > antiair.server.cooldown {
+		if antiair.server.t > antiair.cooldown {
 			antiair.server.t = 0.0;
-			antiair.server.just_shooted = true;
+			antiair.just_shooted = true;
 			antiair.server.curr_target = antiair.server.next_target;
 			antiair.server.next_target = .{ FLOAT32_MAX, FLOAT32_MAX };
 		}
@@ -3337,10 +3374,10 @@ update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
 	if antiair.server.next_target.x == FLOAT32_MAX {
 		x := Rand.random_uniform(*scene.server_rng, -0.5, +0.5);
 		y := Rand.random_uniform(*scene.server_rng, -0.5, +0.5);
-		x *= antiair.server.target_size.x;
-		y *= antiair.server.target_size.y;
-		x += antiair.server.target.x;
-		y += antiair.server.target.y;
+		x *= width(antiair.target_aabb);
+		y *= height(antiair.target_aabb);
+		x += antiair.target_aabb.min.x;
+		y += antiair.target_aabb.min.y;
 		antiair.server.next_target = .{ x, y };
 	}
 }
@@ -3353,10 +3390,7 @@ update :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
 		robot.player_targeted_id = -1;
 	} else {
 		p := v2(player.server.position);
-		if p.x < robot.start_target_aabb.x
-		|| p.x > robot.end_target_aabb.x
-		|| p.y < robot.start_target_aabb.y
-		|| p.y > robot.end_target_aabb.y {
+		if !in(robot.target_aabb, p) {
 			robot.player_targeted_id = -1;
 		}
 	}
@@ -3369,10 +3403,7 @@ update :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
 				continue;
 
 			p := v2(it.server.position);
-			if p.x >= robot.start_target_aabb.x
-			&& p.x <= robot.end_target_aabb.x
-			&& p.y >= robot.start_target_aabb.y
-			&& p.y <= robot.end_target_aabb.y {
+			if in(robot.target_aabb, p) {
 				elligibles.count += 1;
 				elligibles[elligibles.count - 1] = it.id;
 			}
@@ -3683,128 +3714,56 @@ find_closest_poi :: (scene: Scene, position: V3f, max_distance: float = 3.0) -> 
 }
 
 update_camera_locked :: (scene: Scene, camera: *Camera, player_locked: *Player, dt: float32) {
-	player_pos := player_locked.client.position;
-
-	// If we don't have a rail yet or camera position is uninitialized, find the closest rail
-	if camera.current_rail_id < 0 || camera.current_rail_id >= scene.camera_rails.count {
-		if scene.camera_rails.count > 0 {
-			camera.current_rail_id = 0;
-			rail := scene.camera_rails[0];
-			camera.rail_position, camera.current_segment, camera.rail_progress =
-				find_closest_point_on_rail(scene, rail, player_pos);
-			camera.rail_target_position = camera.rail_position;
-		} else {
-			// No rails, fall back to following player directly
-			camera.target_target = player_pos;
-
-
-
-			return;
-		}
-	}
-
-	// Get current rail
-	rail := scene.camera_rails[camera.current_rail_id];
-	waypoints := iterator(rail.waypoints, scene.camera_rail_waypoints);
-
-	// Find where player wants us to be on the rail
-	target_rail_point, target_segment, target_progress :=
-		find_closest_point_on_rail(scene, rail, player_pos);
-
-	// Smoothly move rail target position toward where player wants us
-	camera.rail_target_position = damp(camera.rail_target_position, target_rail_point, 8.0, dt);
-	camera.current_segment = target_segment;
-	camera.rail_progress = damp(camera.rail_progress, target_progress, 8.0, dt);
-
-	// The actual rail position follows the target with damping
-	camera.rail_position = damp(camera.rail_position, camera.rail_target_position, 10.0, dt);
-
-	// Check for nearby POIs
-	poi, poi_distance := find_closest_poi(scene, player_pos);
-
-	if poi && poi_distance < 2.0 {
-		// Player is near a POI - snap camera to it
-		if camera.current_poi_id != poi.id {
-			camera.current_poi_id = poi.id;
-		}
-
-		// Smoothly transition to POI
-		poi_influence := 1.0 - clamp(poi_distance / 2.0, 0.0, 1.0);
-		poi_influence = poi_influence * poi_influence;  // Ease in
-
-		target_with_poi := poi.position * poi_influence + camera.rail_position * (1.0 - poi_influence);
-		camera.target_target = damp(camera.target_target, target_with_poi, 12.0, dt);
-
-		// Zoom based on POI
-		camera.poi_target_zoom_factor = poi.zoom_out_factor;
-	} else {
-		// No POI nearby, follow the rail
-		camera.current_poi_id = -1;
-		camera.target_target = damp(camera.target_target, camera.rail_position, 10.0, dt);
-
-		// Return to default zoom
-		camera.poi_target_zoom_factor = 1.0;
-	}
-
-	// Smoothly adjust zoom
-	camera.poi_zoom_factor = damp(camera.poi_zoom_factor, camera.poi_target_zoom_factor, 5.0, dt);
-
-	// Apply zoom by scaling the camera offset
-	base_offset_length := norm(camera.wanted_target_to_position);
-	if base_offset_length > 0.001 {
-		base_offset_dir := normalize(camera.wanted_target_to_position);
-		camera.wanted_target_to_position = damp(
-			camera.wanted_target_to_position,
-			base_offset_dir * base_offset_length * camera.poi_zoom_factor,
-			5.0,
-			dt
-		);
-	}
+	camera.target_target = player_locked.client.position;
+	camera.distance_target = camera.locked_nominal_distance;
 }
 
 update :: (scene: Scene, camera: *Camera, dt: float32) {
 	player_locked := find_by_player_id(scene, camera.locked_to);
+	curr_distance := norm(camera.position - camera.target);
 
-	distance_to_target := norm(camera.wanted_target_to_position);
-	target_distance_to_target := 2.0;
-	if player_locked && camera.locked {
+	if player_locked && camera.locked && !player_locked.server.dead {
 		update_camera_locked(scene, camera, player_locked, dt);
-
-		target_distance_to_target = camera.locked_nominal_distance;
 	}
 
-	distance_to_target = damp(distance_to_target, target_distance_to_target, 5.0, dt);
-	camera.wanted_target_to_position =
-		normalize(camera.wanted_target_to_position) * distance_to_target;
+	// Restrict target target
+	camera.target_target.x = clamp(
+		camera.target_target.x,
+		scene.camera_min.x - 0.2,
+		scene.camera_max.x + 0.2
+	);
+	camera.target_target.y = clamp(
+		camera.target_target.y,
+		scene.camera_min.y - 0.2,
+		scene.camera_max.y + 0.2
+	);
+	camera.distance_target = clamp(
+		camera.distance_target,
+		camera.locked_nominal_distance * 0.25,
+		camera.max_distance
+	);
 
+	distance := damp(curr_distance, camera.distance_target, 10.0, dt);
 	camera.target = damp(camera.target, camera.target_target, 50.0, dt);
-	camera.position = camera.target + camera.wanted_target_to_position;
+	camera.position = camera.target + camera.delta_unit * distance;
 
-	restricted_target: V3f = camera.target;
-	restricted_target.x = clamp(camera.target.x, scene.camera_min.x, scene.camera_max.x);
-	restricted_target.y = clamp(camera.target.y, scene.camera_min.y, scene.camera_max.y);
-
-	restricted_position: V3f = camera.position;
-	restricted_position.x = clamp(
+	camera.position.x = clamp(
 		camera.position.x,
-		scene.camera_min.x + camera.wanted_target_to_position.x + 0.2,
-		scene.camera_max.x + camera.wanted_target_to_position.x - 0.2
+		scene.camera_min.x + camera.delta_unit.x * distance / 1.05,
+		scene.camera_max.x + camera.delta_unit.x * distance / 1.05
 	);
-	restricted_position.y = clamp(
+	camera.position.y = clamp(
 		camera.position.y,
-		scene.camera_min.y + camera.wanted_target_to_position.y + 0.75,
-		scene.camera_max.y + camera.wanted_target_to_position.y - 0.75
+		scene.camera_min.y + camera.delta_unit.y * distance / 1.05,
+		scene.camera_max.y + camera.delta_unit.y * distance / 1.05
 	);
 
-	sig :: (x: float) -> float {
-		return 2.0 / (1.0 + exp(-x)) - 1.0;
+	// Renormalize the distance to the target after clamping
+	{
+		dt := camera.position - camera.target;
+		dt = normalize(dt) * distance;
+		camera.position = camera.target + dt;
 	}
-	camera.target.x = restricted_target.x + sig((camera.target.x - restricted_target.x) * 5.0) * 0.2;
-	camera.target.y = restricted_target.y + sig((camera.target.y - restricted_target.y) * 5.0) * 0.2;
-	camera.position.x = restricted_position.x + sig((camera.position.x - restricted_position.x) * 5.0) * 0.2;
-	camera.position.y = restricted_position.y + sig((camera.position.y - restricted_position.y) * 5.0) * 0.2;
-	// camera.target = damp(restricted_target, camera.target, 10.0, 0.1);
-	// camera.position = damp(restricted_position, camera.position, 10.0, 0.1);
 }
 
 update :: (scene: Scene, skull: *Skull, dt: float32) {
@@ -4246,7 +4205,7 @@ process_client_only :: (
 		player := find_by_player_id(scene, died.player_id);
 		if player
 		{
-			client_die(scene, player, died.position);
+			client_die(scene, player, died.position, died.explode_source, died.explode_strength);
 			return true;
 		}
 	}
@@ -4362,10 +4321,9 @@ process_client_only :: (
 		if antiair {
 			antiair.server.t = sync_antiair.t;
 			antiair.client.t = antiair.server.t;
-			antiair.server.cooldown = sync_antiair.cooldown;
-			antiair.server.position = sync_antiair.position;
-			antiair.server.target = sync_antiair.target;
-			antiair.server.target_size = sync_antiair.target_size;
+			antiair.cooldown = sync_antiair.cooldown;
+			antiair.position = sync_antiair.position;
+			antiair.target_aabb = sync_antiair.target_aabb;
 			antiair.server.next_target = sync_antiair.next_target;
 			return true;
 		}
@@ -4545,7 +4503,8 @@ process :: (scene: *Scene, command: Command, time: Apollo_Time, response: *Proce
 	respawn: *Command.Respawn = isa(command.payload, Command.Respawn);
 	if respawn {
 		player := find_by_player_id(scene, respawn.player_id);
-		drop_debris(scene, player);
+		if respawn.cause_player_id < 0
+			drop_debris(scene, player, v3(FLOAT32_MAX, FLOAT32_MAX, FLOAT32_MAX), 0);
 
 		pos := V3f.{ 0, 0, 0 };
 		for * scene.tombstones {
@@ -5096,6 +5055,8 @@ serialize :: (scene: Scene) -> string {
 	// Add empty line separator
 	append(*sb, "\n");
 
+	print_to_builder(*sb, "- name: %\n", string_from_arr(scene.info.name));
+
 	if scene.night {
 		print_to_builder(*sb, "- night\n");
 	}
@@ -5318,6 +5279,54 @@ TURN_TABLE,
 			it.position.x, it.position.y, it.position.z,
 			it.turning_speed,
 			it.turning_offset
+		);
+	}
+
+	for * scene.antiairs {
+		print_to_builder(
+			*sb,
+			#string ANTI_AIR
+antiair
+- position: % % %
+- target: % % % %
+- cooldown: %
+- radius: %
+- offset_time: %
+ANTI_AIR,
+			it.position.x, it.position.y, it.position.z,
+			it.target_aabb.min.x, it.target_aabb.min.y, it.target_aabb.max.x, it.target_aabb.max.y,
+			it.cooldown,
+			it.radius,
+			it.server.t
+		);
+	}
+
+	for * scene.robots {
+		print_to_builder(
+			*sb,
+			#string ROBOT
+robot
+- position: % % %
+- max_rotation_speed: %
+- start_target_aabb: % %
+- end_target_aabb: % %
+- charging_time: %
+- effectshoot_time: %
+- predict: %
+- shooting_cd: %
+- shooting_time: %
+- shooting_offset: %
+ROBOT,
+			it.position.x, it.position.y, it.position.z,
+			it.max_rotation_speed,
+			it.target_aabb.min.x, it.target_aabb.min.y,
+			it.target_aabb.max.x, it.target_aabb.max.y,
+			it.charging_time,
+			it.effectshoot_time,
+			it.predict,
+			it.shooting_cd,
+			it.shooting_time,
+			it.shooting_offset
 		);
 	}
 	

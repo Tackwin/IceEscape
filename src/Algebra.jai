@@ -11,6 +11,7 @@ V3 :: struct(T: Type) {
 
 V3d :: V3(float64);
 V3f :: V3(float32);
+V3f_MAX :: V3f.{ FLOAT32_MAX, FLOAT32_MAX, FLOAT32_MAX };
 
 V4 :: struct(T: Type) {
 	x: T = 0;
@@ -68,6 +69,12 @@ pow :: (v: V3f, p: float) -> V3f {
 		pow(v.y, p),
 		pow(v.z, p)
 	};
+}
+span_x :: (aabb: AABB($T), beg_x: T, end_x: T) -> AABB(T) {
+	new_aabb := aabb;
+	new_aabb.min.x = aabb.min.x + (aabb.max.x - aabb.min.x) * beg_x;
+	new_aabb.max.x = aabb.min.x + (aabb.max.x - aabb.min.x) * end_x;
+	return new_aabb;
 }
 move :: (_aabb: AABB($T), delta: V2(T)) -> AABB(T) {
 	aabb := _aabb;
@@ -1127,17 +1134,19 @@ compute_inertia_product :: (P: [3] V3f, i: int, j: int) -> float {
 }
 
 compute_inertia :: (size: V3($T)) -> M3(T), V3(T), float {
+	M := size.x * size.y * size.z;
+	
 	Ia := (size.y * size.y + size.z * size.z) / 12;
 	Ib := (size.x * size.x + size.z * size.z) / 12;
 	Ic := (size.x * size.x + size.y * size.y) / 12;
 
 	I: M3(T) = ---;
 	memset(I.data.data, 0, 9 * size_of(T));
-	I.data[0] = Ia;
-	I.data[4] = Ib;
-	I.data[8] = Ic;
+	I.data[0] = Ia * M;
+	I.data[4] = Ib * M;
+	I.data[8] = Ic * M;
 
-	return I, size / 2, size.x * size.y * size.z;
+	return I, size / 2, M;
 }
 
 compute_inertia :: (V: [] V3f, F: [] u16, off_indices := 0) -> M3f, V3f, float {

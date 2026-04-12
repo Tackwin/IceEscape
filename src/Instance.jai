@@ -48,6 +48,7 @@ Instance :: struct {
 	id: int;
 	id_generation := 0;
 
+	hidden := false;
 	private := false;
 	user_created := false;
 

@@ -31,6 +31,7 @@ void fn(struct mg_connection* c, int ev, void* ev_data) {
 				*receive_dropped += 1;
 			} else {
 				uint8_t* buffer = &receive_buffer[receive_buffer_count];
+				memset(buffer +  0, 0, 16);
 				memcpy(buffer +  0, &c->id, sizeof(c->id));
 				memcpy(buffer +  8, &msg->data.len, sizeof(msg->data.len));
 				memcpy(buffer + 16, msg->data.buf, msg->data.len);

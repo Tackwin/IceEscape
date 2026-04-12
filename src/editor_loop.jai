@@ -10,6 +10,10 @@ Editor_Mode :: enum {
 }
 
 Editor_Page :: struct {
+	big_assets_sending: [..] Big_Asset;
+	big_assets_receiving: Table(int, Big_Asset);
+	thumbnail_receiving: [..] Thumbnail_Pending;
+
 	show_load_dialog := false;
 	load_filter: string;
 	load_result_page := 0;
@@ -37,14 +41,21 @@ Editor_Page :: struct {
 		type: Type_Info_Struct;
 	}
 	selected: [..] Selection;
+
+	picking_v3f_field: *V3f = null;
+	picking_aabb_field: *AABBf = null;
+	picking_aabb_field_did_press := false;
 	placing_entity_type: *Type_Info_Struct = null;
 
 	multiple_posititon_offset: V3f;
+
+	wait_for_screenshot_generation_set_thumbnail := -1;
 }
 
 process_editor :: (app_user: *App_User, command: Command) -> bool {
 	editor := *app_user.state.editor;
 	page := *app_user.state.editor_page;
+	state := *app_user.state;
 
 	ans_enter_custom_instance := isa(command.payload, Command.Ans_Enter_Custom_Instance);
 	if ans_enter_custom_instance {
@@ -65,6 +76,7 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 			reset_entity_selection(editor, page);
 			Scene.clear_scene_run(*editor.scene);
 			parse_terrain(load_terrain.ascii, *editor.scene, generate_props = false);
+			editor.scene.info.id = load_terrain.terrain_id;
 
 			new_save_dialog_input: string;
 			new_save_dialog_input.data = load_terrain.info.name.data;
@@ -81,8 +93,36 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 		}
 		return true;
 	}
-	ans_list_terrain := isa(command.payload, Command.Ans_List_Terrain);
 
+	get_thumbnail := isa(command.payload, Command.Get_Thumbnail);
+	if get_thumbnail {
+		big_asset := table_find_pointer(*page.big_assets_receiving, get_thumbnail.asset.id);
+		if big_asset {
+			big_asset.buffer = NewArray(get_thumbnail.asset.size, u8, false);
+			return true;
+		}
+	}
+
+	asset_chunk := isa(command.payload, Command.Asset_Chunk);
+	if asset_chunk {
+		big_asset := table_find_pointer(*page.big_assets_receiving, asset_chunk.asset.id);
+		if big_asset {
+			print("Received asset chunk for asset id %, offset %, size %\n", asset_chunk.asset.id, asset_chunk.offset, asset_chunk.data.count);
+			memcpy(
+				big_asset.buffer.data + asset_chunk.offset,
+				asset_chunk.data.data,
+				min(asset_chunk.data.count, big_asset.buffer.count - asset_chunk.offset)
+			);
+			big_asset.written += asset_chunk.data.count;
+			big_asset.last_written = app_user.state.current_time;
+			if big_asset.written >= big_asset.buffer.count {
+				handle_received_asset(app_user, big_asset);
+			}
+			return true;
+		}
+	}
+
+	ans_list_terrain := isa(command.payload, Command.Ans_List_Terrain);
 	if ans_list_terrain {
 		for page.terrain_list
 			free(it.name.data,, page.terrain_list.allocator);
@@ -97,6 +137,23 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 				ans_list_terrain.authors_name[it_index],, page.terrain_list.allocator
 			);
 			it.created_ms = ans_list_terrain.creation_time_ms[it_index];
+
+			get_thumbnail: Command.Get_Thumbnail;
+			get_thumbnail.asset.id = app_user.counter;
+			get_thumbnail.terrain_id = it.id;
+			app_user.counter += 1;
+			send_web_message(state.platform, state.current_time, make_command(get_thumbnail));
+
+			big_asset: Big_Asset;
+			big_asset.id = get_thumbnail.asset.id;
+			big_asset.kind = .Receiving;
+			big_asset.last_written = state.platform.get_current_time();
+
+			pending: Thumbnail_Pending;
+			pending.asset_id = get_thumbnail.asset.id;
+			pending.terrain_id = it.id;
+			array_add(*page.thumbnail_receiving, pending);
+			table_add(*page.big_assets_receiving, big_asset.id, big_asset);
 		}
 		return true;
 	}
@@ -218,14 +275,14 @@ editor_loop :: (app_user: *App_User) -> bool {
 
 	// Draw UI panels
 	draw_mode_picker(editor, editor_page, gui);
-	draw_editor_toolbar(editor, editor_page, gui, *app_user.state);
+	draw_editor_toolbar(editor, editor_page, gui, *app_user.state, app_user);
 
 	if editor_page.show_save_dialog {
 		draw_save_dialog(editor, editor_page, gui, app_user.app.platform);
 	}
 
 	if editor_page.show_load_dialog {
-		draw_load_dialog(editor, editor_page, gui, app_user.app.platform);
+		draw_load_dialog(app_user, editor, editor_page, gui, app_user.app.platform);
 	}
 
 	if !gui.controls.captured_mouse && !gui.controls.captured_keyboard {
@@ -248,8 +305,12 @@ editor_loop :: (app_user: *App_User) -> bool {
 		if editor_page.mode == .Tiles {
 			handle_tile_painting(editor, gui);
 		} else {
-			if !handle_entity_picking(editor, editor_page, gui)
-				handle_entity_placing(editor, editor_page, gui);
+			if handle_field_picking(editor, editor_page, gui) {
+				// If we picked a field, don't also place an entity
+			} else {
+				if !handle_entity_picking(editor, editor_page, gui)
+					handle_entity_placing(editor, editor_page, gui);
+			}
 		}
 	}
 	if gui.controls.just_released[Key.MouseLeft] {
@@ -330,6 +391,52 @@ handle_tile_painting :: (editor: *Editor, gui: *GUI.GUI_State) {
 			editor.scene.terrain.tiles[tile_idx].kind = editor.selected_tile_kind;
 		}
 	}
+}
+
+handle_field_picking :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) -> bool {
+	// Don't pick if GUI captured the mouse
+	if gui.controls.captured_mouse {
+		return false;
+	}
+
+	if page.picking_v3f_field {
+		if gui.controls.just_released[Key.MouseLeft] {
+			// Convert screen position to world position
+			world_pos := screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
+
+			page.picking_v3f_field.* = world_pos;
+			page.picking_v3f_field = null;
+			return true;
+		}
+	}
+	
+	if page.picking_aabb_field {
+		if gui.controls.just_pressed[Key.MouseLeft] {
+			// Convert screen position to world position
+			world_pos := screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
+
+			page.picking_aabb_field.min = v2(world_pos);
+			page.picking_aabb_field_did_press = true;
+			return true;
+		}
+		if page.picking_aabb_field_did_press {
+			// Convert screen position to world position
+			world_pos := screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
+
+			page.picking_aabb_field.max = v2(world_pos);
+		}
+		if gui.controls.just_released[Key.MouseLeft] {
+			// Convert screen position to world position
+			world_pos := screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
+
+			page.picking_aabb_field.max = v2(world_pos);
+			page.picking_aabb_field = null;
+			page.picking_aabb_field_did_press = false;
+			return true;
+		}
+	}
+
+	return false;
 }
 
 handle_entity_placing :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
@@ -432,7 +539,10 @@ handle_entity_picking :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_Sta
 	}
 
 	current_pos := gui.controls.mouse_pos;
-	if gui.controls.pressed[Key.MouseLeft] && norm(current_pos - page.rectangle_dragging_start) > 5.0 {
+	if gui.controls.pressed[Key.MouseLeft]
+	&& norm(current_pos - page.rectangle_dragging_start) > 5.0
+	&& !page.picking_aabb_field
+	{
 		page.rectangle_dragging = true;
 	}
 
@@ -887,6 +997,8 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 		// Generic
 		edit_fields := get_edit_fields(*selected_entity_type);
 		for field: edit_fields {
+			GUI.push_id(gui, it_index);
+			defer GUI.pop_id(gui);
 			if field.type.type == .FLOAT {
 				current_value := member_pointer(
 					selected_entity_type, selected_entity_ptr, field.path, float
@@ -950,20 +1062,31 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 						selected_entity_type, selected_entity_ptr, field.path, V3f
 					);
 
+					GUI.begin_row(gui, GUI.GUI_State.Direction.Right);
+					defer GUI.end_row(gui);
 					v3_result := GUI.labeled_v3_input(
 						gui,
-						tprint("%:", field.path),
-						content_width,
+						tprint("%:", field.display_name),
+						content_width - 50,
 						24,
 						value = current_value.*,
 						drag_speed = 0.1,
 						precision = 2,
-						id = tprint("entity_field_%", field.path),
+						id = tprint("entity_field_%", field.display_name),
 					);
+
 					if v3_result.changed {
 						current_value.* = v3_result.value;
 						if has_note(field.member, "normalize") {
 							current_value.* = normalize(current_value.*);
+						}
+					}
+
+					if field.has_picking {
+						GUI.space(gui, 8);
+						if GUI._text_button(gui, "X") {
+							page.picking_v3f_field = current_value;
+							page.was_rectangle_dragging = false;
 						}
 					}
 				}
@@ -975,15 +1098,16 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 						selected_entity_type, selected_entity_ptr, tprint("%.max", field.path), V3f
 					);
 
+					GUI.begin_row(gui, GUI.GUI_State.Direction.Right);
 					pos_result := GUI.labeled_v2_input(
 						gui,
-						tprint("%: Position", field.path),
-						content_width,
+						tprint("Pos: %", field.display_name),
+						content_width - 50,
 						24,
 						value = v2(pos.*),
 						drag_speed = editor.grid_snapping,
 						precision = 2,
-						id = tprint("entity_field_%_pos", field.path),
+						id = tprint("entity_field_%_pos", field.display_name),
 						label_color = GUI.GRAY_80
 					);
 					if pos_result.changed {
@@ -991,16 +1115,27 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 						pos.* = v3(pos_result.value, pos.*.z);
 						size.* = pos.* + sized;
 					}
+					if field.has_picking {
+						GUI.space(gui, 8);
+						if GUI._text_button(gui, "X") {
+							page.picking_aabb_field = member_pointer(
+								selected_entity_type, selected_entity_ptr, field.path, AABBf
+							);
+							page.picking_aabb_field_did_press = false;
+							page.was_rectangle_dragging = false;
+						}
+					}
+					GUI.end_row(gui);
 
 					size_result := GUI.labeled_v2_input(
 						gui,
-						tprint("%: Size", field.path),
-						content_width,
+						tprint("Size: %", field.display_name),
+						content_width - 50,
 						24,
 						value = v2(size.*) - v2(pos.*),
 						drag_speed = editor.grid_snapping,
 						precision = 2,
-						id = tprint("entity_field_%_size", field.path),
+						id = tprint("entity_field_%_size", field.display_name),
 						label_color = GUI.GRAY_80
 					);
 					if size_result.changed {
@@ -1008,6 +1143,7 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 							pos.*.x + size_result.value.x, pos.*.y + size_result.value.y, size.*.z
 						);
 					}
+
 				}
 			}
 			if field.type.type == .BOOL {
@@ -1079,10 +1215,13 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 
 				cursor.y += 32;
 
+				GUI.begin_row(gui, GUI.GUI_State.Direction.Right);
+				defer GUI.end_row(gui);
+
 				pos_result := GUI.labeled_v3_input(
 					gui,
-					tprint("Checkpoint %:", idx),
-					content_width,
+					tprint("cp %", idx),
+					content_width - 32,
 					24,
 					value = checkpoint.position,
 					drag_speed = editor.grid_snapping,
@@ -1091,6 +1230,11 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 				);
 				if pos_result.changed {
 					checkpoint.position = pos_result.value;
+				}
+				GUI.space(gui, 8);
+				if GUI._text_button(gui, "X", id = tprint("checkpoint_pos_%", idx)) {
+					page.picking_v3f_field = *checkpoint.position;
+					page.was_rectangle_dragging = false;
 				}
 				idx = checkpoint.next;
 			}
@@ -1325,7 +1469,9 @@ remove_entity_at :: (scene: *Scene.Scene, entity: Scene_Placeable_Entity, index:
 	count_ptr.* = count - 1;
 }
 
-draw_editor_toolbar :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, state: *State) {
+draw_editor_toolbar :: (
+	editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, state: *State, app_user: *App_User
+) {
 	// Top toolbar
 	toolbar_height := 40.0;
 	toolbar_y := gui.controls.window_size.y - toolbar_height;
@@ -1429,15 +1575,56 @@ draw_editor_toolbar :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State
 		editor.clock_running = !editor.clock_running;
 	}
 
+	screenshot_clicked, _, _ := GUI._text_button(
+		gui,
+		"Screenshot",
+		id = "screenshot_btn"
+	);
+
+	current_generation := app_user.framegraph.screenshot_data_generation;
+	if page.wait_for_screenshot_generation_set_thumbnail == current_generation {
+		page.wait_for_screenshot_generation_set_thumbnail = -1;
+
+		big_asset: Big_Asset;
+		big_asset.id = app_user.counter;
+		app_user.counter += 1;
+		big_asset.buffer = NewArray(app_user.framegraph.screenshot_data.count, u8);
+		print("Setting thumbnail with asset id % and size % bytes\n", big_asset.id, big_asset.buffer.count);
+		print("View buffer data: %\n", app_user.framegraph.screenshot_data);
+		memcpy(
+			big_asset.buffer.data, app_user.framegraph.screenshot_data.data, big_asset.buffer.count
+		);
+		array_add(*page.big_assets_sending, big_asset);
+		
+		command: Command.Set_Thumbnail;
+		command.terrain_id = editor.scene.info.id;
+		command.asset.id = big_asset.id;
+		command.asset.size = big_asset.buffer.count;
+		send_web_message(state.platform, gui.controls.time, make_command(command));
+	}
+	if screenshot_clicked {
+		app_user.framegraph.take_screenshot = true;
+		WRender.reset_frame(*app_user.framegraph.screenshot_frame, gui.controls.time);
+		WRender.render_wide_scene_screenshot(
+			*app_user.framegraph.screenshot_frame,
+			*app_user.framegraph,
+			editor.scene,
+			app_user.store
+		);
+		page.wait_for_screenshot_generation_set_thumbnail = current_generation + 1;
+	}
+
 	// Capture mouse on toolbar
 	if point_aabb(gui.controls.mouse_pos, V2f.{ 0, toolbar_y }, V2f.{ gui.controls.window_size.x, toolbar_y + toolbar_height }) {
 		gui.controls.captured_mouse = true;
 	}
 }
 
-draw_load_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, platform: *Platform) {
+draw_load_dialog :: (
+	app_user: *App_User, editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, platform: *Platform
+) {
 	dialog_width := 500.0;
-	dialog_height := 400.0;
+	dialog_height := 500.0;
 	dialog_x := (gui.controls.window_size.x - dialog_width) / 2;
 	dialog_y := (gui.controls.window_size.y - dialog_height) / 2;
 
@@ -1473,62 +1660,63 @@ draw_load_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 		send_web_message(platform, gui.controls.time, make_command(ask_list_terrain));
 	}
 
-	// List of files
+	// // List of files
+	draw_load_terrain_list(app_user, page, gui);
 
-	PAGE_SIZE := 10;
-	page_count := max((page.terrain_list.count + PAGE_SIZE - 1) / PAGE_SIZE, 1);
-	page.load_result_page = clamp(
-		page.load_result_page,
-		0,
-		max((page.terrain_list.count + PAGE_SIZE - 1) / PAGE_SIZE - 1, 0)
-	);
+	// PAGE_SIZE := 10;
+	// page_count := max((page.terrain_list.count + PAGE_SIZE - 1) / PAGE_SIZE, 1);
+	// page.load_result_page = clamp(
+	// 	page.load_result_page,
+	// 	0,
+	// 	max((page.terrain_list.count + PAGE_SIZE - 1) / PAGE_SIZE - 1, 0)
+	// );
 
-	beg := page.load_result_page * PAGE_SIZE;
-	end := beg + PAGE_SIZE;
-	end = min(end, page.terrain_list.count);
-	terrain_list_view: []Editor_Page.Terrain_Entry;
-	terrain_list_view.count = end - beg;
-	terrain_list_view.data = page.terrain_list.data + beg;
+	// beg := page.load_result_page * PAGE_SIZE;
+	// end := beg + PAGE_SIZE;
+	// end = min(end, page.terrain_list.count);
+	// terrain_list_view: []Editor_Page.Terrain_Entry;
+	// terrain_list_view.count = end - beg;
+	// terrain_list_view.data = page.terrain_list.data + beg;
 
-	List_Row :: struct {
-		name: string; @name("Name") @size(160)
-		author: string; @name("Author") @size(130) @align(Right)
-		date: string; @name("Created") @align(Right) @size(115)
-		load: string; @name("Load") @button  @size(55) @align(Center)
-	}
-	rows := NewArray(terrain_list_view.count, List_Row,, temp);
-	for terrain_list_view {
-		rows[it_index].name = it.name;
-		rows[it_index].author = it.author;
-		if rows[it_index].author == "" {
-			rows[it_index].author = "Anonymous";
-		}
-		if it.created_ms > 0 {
-			cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
-			rows[it_index].date = tprint(
-				"%/% %:%",
-				cal.day_of_month_starting_at_0 + 1,
-				cal.month_starting_at_0 + 1,
-				cal.hour,
-				cal.minute
-			);
-		} else {
-			rows[it_index].date = "Immemorial";
-		}
-		rows[it_index].load = "Load";
-	}
+	// List_Row :: struct {
+	// 	name: string; @name("Name") @size(160)
+	// 	author: string; @name("Author") @size(130) @align(Right)
+	// 	date: string; @name("Created") @align(Right) @size(115)
+	// 	load: string; @name("Load") @button  @size(55) @align(Center)
+	// }
+	// rows := NewArray(terrain_list_view.count, List_Row,, temp);
+	// for terrain_list_view {
+	// 	rows[it_index].name = it.name;
+	// 	rows[it_index].author = it.author;
+	// 	if rows[it_index].author == "" {
+	// 		rows[it_index].author = "Anonymous";
+	// 	}
+	// 	if it.created_ms > 0 {
+	// 		cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
+	// 		rows[it_index].date = tprint(
+	// 			"%/% %:%",
+	// 			cal.day_of_month_starting_at_0 + 1,
+	// 			cal.month_starting_at_0 + 1,
+	// 			cal.hour,
+	// 			cal.minute
+	// 		);
+	// 	} else {
+	// 		rows[it_index].date = "Immemorial";
+	// 	}
+	// 	rows[it_index].load = "Load";
+	// }
 
-	table := GUI.table(
-		gui, rows, v2(dialog_width - 20, 24 * 12 - 2), id = "terrain_list_table", _z = 101
-	);
-	if table.clicked_row_index != -1 {
-		load_terrain_cmd: Command.Load_Terrain;
-		load_terrain_cmd.terrain_id = terrain_list_view[table.clicked_row_index].id;
-		send_web_message(
-			platform, gui.controls.time, make_command(load_terrain_cmd)
-		);
-		page.show_load_dialog = false;
-	}
+	// table := GUI.table(
+	// 	gui, rows, v2(dialog_width - 20, 24 * 12 - 2), id = "terrain_list_table", _z = 101
+	// );
+	// if table.clicked_row_index != -1 {
+	// 	load_terrain_cmd: Command.Load_Terrain;
+	// 	load_terrain_cmd.terrain_id = terrain_list_view[table.clicked_row_index].id;
+	// 	send_web_message(
+	// 		platform, gui.controls.time, make_command(load_terrain_cmd)
+	// 	);
+	// 	page.show_load_dialog = false;
+	// }
 
 	// for terrain_list_view {
 	// 	GUI.push_id(gui, it_index);
@@ -1555,7 +1743,107 @@ draw_load_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 	// 	// }
 	// }
 
-	GUI.default_params(gui).cursor = v2(dialog_x + dialog_width - 14, dialog_y + 12);
+}
+
+draw_load_terrain_list :: (app_user: *App_User, page: *Editor_Page, gui: *GUI.GUI_State) {
+	store := *app_user.store;
+	platform := app_user.app.platform;
+
+	cursor := GUI.default_params(gui).cursor;
+	z := GUI.default_params(gui).z;
+
+	terrain_entry_row_height := 64.0;
+	terrain_entry_row_width := 480.0;
+
+	PAGE_SIZE := 5;
+	page_count := max((page.terrain_list.count + PAGE_SIZE - 1) / PAGE_SIZE, 1);
+	page.load_result_page = clamp(
+		page.load_result_page,
+		0,
+		max((page.terrain_list.count + PAGE_SIZE - 1) / PAGE_SIZE - 1, 0)
+	);
+
+	beg := page.load_result_page * PAGE_SIZE;
+	end := beg + PAGE_SIZE;
+	end = min(end, page.terrain_list.count);
+	terrain_list_view: []Editor_Page.Terrain_Entry;
+	terrain_list_view.count = end - beg;
+	terrain_list_view.data = page.terrain_list.data + beg;
+
+	for terrain_list_view {
+		GUI.push_id(gui, it_index);
+		defer GUI.pop_id(gui);
+
+		row_aabb := pos_size(
+			cursor - v2(0.0, terrain_entry_row_height),
+			v2(terrain_entry_row_width, terrain_entry_row_height)
+		);
+		GUI.push_quad_screen(gui, row_aabb, v3(GUI.GRAY_90), z = z);
+
+		thumbnail_aabb: AABBf;
+		thumbnail_aabb.min = row_aabb.min + v2(4.0, 4);
+		thumbnail_aabb.max = thumbnail_aabb.min + v2(56.0, 56);
+		quad := GUI.push_late_quad_screen(gui, thumbnail_aabb, GUI.GRAY_70, z = z + 1);
+		quad.custom_texture_idx = user_texture_idx_thumbnail_for(store, it.id);
+		if quad.custom_texture_idx >= 0 {
+			quad.texture_rect = v4(0.0, 1.0, 1, -1);
+		}
+
+		cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
+		date := tprint(
+			"%/% %:%",
+			cal.day_of_month_starting_at_0 + 1, cal.month_starting_at_0 + 1, cal.hour, cal.minute
+		);
+		GUI.atom_label(
+			gui,
+			it.name,
+			row_aabb.min + v2(72.0, 42.0),
+			z = z + 1,
+			scale = 16,
+			color = GUI.GRAY_10
+		);
+		GUI.atom_label(
+			gui,
+			ifx it.author.count == 0 then "Anonymous" else it.author,
+			row_aabb.min + v2(72.0, 12.0),
+			z = z + 1,
+			scale = 14,
+			color = GUI.GRAY_20
+		);
+		GUI.atom_label(
+			gui,
+			date,
+			row_aabb.min + v2(terrain_entry_row_width - 78, 12.0),
+			z = z + 1,
+			scale = 14,
+			color = GUI.GRAY_20,
+			align = .Bottom_Right
+		);
+
+		load_clicked := GUI.text_button(
+			gui,
+			"Load",
+			row_aabb.min + v2(terrain_entry_row_width - 12, terrain_entry_row_height / 2),
+			z = z + 1,
+			id = tprint("load_btn_%", it.id),
+			align = .Center_Right
+		);
+		if load_clicked {
+			load_terrain_cmd: Command.Load_Terrain;
+			load_terrain_cmd.terrain_id = it.id;
+			send_web_message(
+				platform, gui.controls.time, make_command(load_terrain_cmd)
+			);
+			page.show_load_dialog = false;
+		}
+
+		cursor.y -= terrain_entry_row_height;
+		cursor.y -= 8;
+	}
+
+	cursor.y -= 16;
+	GUI.default_params(gui).cursor.x = cursor.x + terrain_entry_row_width;
+	GUI.default_params(gui).cursor.y = cursor.y;
 	GUI.default_params(gui).direction = .Left;
 	GUI.default_params(gui).align = .Bottom_Right;
 
@@ -1573,6 +1861,7 @@ draw_load_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 		page.load_result_page = (page.load_result_page + page_count - 1) % page_count;
 	}
 }
+
 draw_save_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, platform: *Platform) {
 	// Dialog background
 	dialog_width := 400.0;

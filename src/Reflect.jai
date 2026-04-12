@@ -250,6 +250,7 @@ Edit_Field :: struct {
 	offset: int;
 	member: Type_Info_Struct_Member;
 	display_name: string;
+	has_picking := false;
 }
 
 get_edit_fields :: (ti: *Type_Info_Struct) -> [] Edit_Field {
@@ -269,6 +270,7 @@ get_edit_fields :: (
 			field.offset = member.offset_in_bytes + offset;
 			field.member = member;
 			field.display_name = field.path;
+			field.has_picking = has_note(member, "picking");
 			display_note := has_note_starts_with(member, "display_name");
 			if display_note {
 				// Pattern is "display_name(name)"

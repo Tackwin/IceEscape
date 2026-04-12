@@ -10,6 +10,7 @@
 #import "Platform";
 #import "Hash_Table";
 #import "File_Watcher";
+#import "Common";
 #import "Communication";
 Scene :: #import "Scene";
 #import "Database";
@@ -53,6 +54,17 @@ Server :: struct {
 	changes: [..] string;
 
 	db: DB_query.Handle;
+
+	pending_big_assets: Table(int, Big_Asset);
+	Big_Asset_Sending :: struct {
+		user_asset_id: int;
+		destination: Connection;
+		asset: Big_Asset;
+	}
+	pending_big_assets_sending: [..] Big_Asset_Sending;
+
+	pending_thumbnails: [1024] Thumbnail_Pending;
+	pending_thumbnails_count := 0;
 }
 
 find_user_by_id :: (server: *Server, id: int) -> *User {
@@ -161,6 +173,41 @@ append_queue :: (server: *Server, cmd: $T, connection: Connection) {
 	server.queue.connection[server.queue.count] = connection;
 	server.queue.commands[server.queue.count] = make_command(cmd);
 	server.queue.count += 1;
+}
+
+handle_end_asset :: (server: *Server, asset: *Big_Asset, platform: *Platform) {
+	for * server.pending_thumbnails {
+		if it.asset_id == asset.id {
+			// find the latest ascii_id for the given terrain_id
+			terrain_ascii := load_database_custom(
+				platform,
+				server.db,
+				DB_Terrain_Ascii,
+				tprint(
+					"SELECT * FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1",
+					it.terrain_id
+				)
+			);
+
+			if terrain_ascii.count > 0 {
+				ascii_id := terrain_ascii[0].ascii_id;
+
+				// Store the thumbnail with the ascii_id as id, and overwrite if it already exists
+				to_saves: [1] DB_Terrain_Thumbnail;
+				to_save := *to_saves[0];
+				to_save.ascii_id = ascii_id;
+				to_save.thumbnail = asset.buffer;
+
+				store_database(
+					platform, server.db, "terrain_thumbnails", to_saves, primary_key_name="ascii_id"
+				);
+			}
+		}
+		it.* = .{};
+	}
+
+	free(asset.buffer.data);
+	table_remove(*server.pending_big_assets, asset.id);
 }
 
 process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platform) -> bool {
@@ -365,11 +412,55 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 		return true;
 	}
 
+	get_instance_tab_stats: *Command.Get_Instance_Tab_Stats = isa(
+		cmd.payload, Command.Get_Instance_Tab_Stats
+	);
+	if get_instance_tab_stats {
+		user := find_user_by_connection(server, sender);
+		if user {
+			instance := find_instance_by_id(server, user.instance_id);
+			if instance {
+				person := find_person_by_user_id(instance, user.id);
+				if person {
+					scene := find_scene_of_player_id(instance, person.player_id);
+					if scene {
+						reply: Command.Get_Instance_Tab_Stats;
+						time_entry := get_wr_info(platform, server.db, scene.info.id);
+						reply.wr_time_ms = time_entry.time_ms;
+						reply.wr_player_name = get_profile_name(
+							platform, server.db, time_entry.profile_id
+						);
+						if scene.next_id >= 0 && scene.next_id < instance.scenes.count {
+							next_terrain_id := instance.scenes[scene.next_id].info.id;
+							reply.next_terrain_name = get_terrain_info(
+								platform, server.db, next_terrain_id
+							).name;
+						}
+						reply.players_stats = NewArray(
+							instance.persons.count,
+							Command.Get_Instance_Tab_Stats_Player_Stats_Entry,,
+							temp
+						);
+						for instance.persons {
+							reply.players_stats[it_index].player_id = it.player_id;
+							reply.players_stats[it_index].death = it.run_stats.death_count;
+							reply.players_stats[it_index].revive = it.run_stats.revive_count;
+							reply.players_stats[it_index].wins = it.run_stats.win_count;
+						}
+
+						queue_send(instance, make_command(reply), user.id);
+						return true;
+					}
+				}
+			}
+		}
+	}
+
 	get_terrain_leaderboard := isa(cmd.payload, Command.Get_Terrain_Leaderboard);
 	if get_terrain_leaderboard {
 		terrain_id := get_terrain_leaderboard.terrain_id;
+		info: DB_Terrain_Infos;
 		if terrain_id < 0 && get_terrain_leaderboard.scene_name.count > 0 {
-			// Try to lookup the terrain with the name instead
 			infos := load_database(
 				platform,
 				server.db,
@@ -377,8 +468,21 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 				DB_Terrain_Infos,
 				tprint("name = '%1'", get_terrain_leaderboard.scene_name)
 			);
+			// Try to lookup the terrain with the name instead
 			if infos.count > 0 {
+				info = infos[0];
 				terrain_id = infos[0].id;
+			}
+		} else {
+			infos := load_database(
+				platform,
+				server.db,
+				"terrain_infos",
+				DB_Terrain_Infos,
+				tprint("id = %", terrain_id)
+			);
+			if infos.count > 0 {
+				info = infos[0];
 			}
 		}
 		if terrain_id < 0
@@ -394,6 +498,8 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 
 		reply: Command.Get_Terrain_Leaderboard;
 		reply.terrain_id = terrain_id;
+		reply.scene_name = tprint("%", info.name);
+		reply.wr_time_ms = -1;
 		if time_entries.count > 0 {
 
 			min_idx := 0;
@@ -615,6 +721,7 @@ SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
 		reply.terrains_name = NewArray(entries.count, string,, temp);
 		reply.authors_name = NewArray(entries.count, string,, temp);
 		reply.creation_time_ms = NewArray(entries.count, s64,, temp);
+		reply.correlation_id = ask_terrain_list.correlation_id;
 	
 		for 0..entries.count - 1 {
 			reply.terrains_id[it] = entries[it].id;
@@ -633,24 +740,32 @@ SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
 			server.instance_count, Command.Ans_Instance_List.Instance_Info,, temp
 		);
 
-		for * reply.instances {
-			it.instance_id = server.instances[it_index].id;
+		cursor := 0;
+		for index: 0..server.instance_count - 1 {
+			instance := *server.instances[index];
+			if instance.hidden
+				continue;
+			it := *reply.instances[cursor];
+			cursor += 1;
+
+			it.instance_id = instance.id;
 			memcpy(
 				it.name.data,
-				server.instances[it_index].name.data,
-				min(server.instances[it_index].name.count, it.name.count)
+				instance.name.data,
+				min(instance.name.count, it.name.count)
 			);
-			it.current_players = server.instances[it_index].persons.count;
+			it.current_players = instance.persons.count;
 			it.max_players = 64; // Hardcoded for now
-			it.auto_revive = server.instances[it_index].scene_parameters.auto_revive;
-			it.private = server.instances[it_index].private;
-			level_name := get_current_level_name(server.instances[it_index]);
+			it.auto_revive = instance.scene_parameters.auto_revive;
+			it.private = instance.private;
+			level_name := get_current_level_name(instance);
 			memcpy(
 				it.level_name.data,
 				level_name.data,
 				min(level_name.count, it.level_name.count)
 			);
 		}
+		reply.instances.count = cursor;
 
 		append_queue(server, reply, sender);
 		return true;
@@ -689,6 +804,14 @@ SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
 		}
 
 		if user {
+			if user.instance_id == instance.id {
+				// If the user is already in the instance, we just resend the current state to them
+				ans_enter_instance: Command.Ans_Enter_Instance;
+				ans_enter_instance.reason = .Already_In;
+				append_queue(server, ans_enter_instance, sender);
+
+				resync_old_person(instance, user.id);
+			}
 			if add_new_person(instance, user.id) {
 				user.instance_id = instance.id;
 
@@ -699,6 +822,156 @@ SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
 		}
 
 		return true;
+	}
+
+	asset_chunk := isa(cmd.payload, Command.Asset_Chunk);
+	if asset_chunk {
+		user := find_user_by_connection(server, sender);
+		if user {
+			asset_id := get_hash(int.[asset_chunk.asset.id, user.profile_id]);
+			asset := table_find_pointer(*server.pending_big_assets, asset_id);
+			if asset {
+				memcpy(
+					asset.buffer.data + asset_chunk.offset,
+					asset_chunk.data.data,
+					min(asset_chunk.data.count, asset.buffer.count - asset_chunk.offset)
+				);
+				asset.written += asset_chunk.data.count;
+				if asset.written >= asset.buffer.count {
+					handle_end_asset(server, asset, platform);
+				}
+				asset.last_written = current_time_monotonic();
+			}
+			return true;
+		}
+	}
+
+	set_thumbnail := isa(cmd.payload, Command.Set_Thumbnail);
+	if set_thumbnail {
+		user := find_user_by_connection(server, sender);
+		if user {
+			print("Received request to set thumbnail for terrain id %\n", set_thumbnail.terrain_id);
+			asset_id := get_hash(int.[set_thumbnail.asset.id, user.profile_id]);
+
+			pending: Thumbnail_Pending;
+			pending.terrain_id = set_thumbnail.terrain_id;
+			pending.asset_id = asset_id;
+			server.pending_thumbnails[server.pending_thumbnails_count] = pending;
+			server.pending_thumbnails_count += 1;
+			server.pending_thumbnails_count %= server.pending_thumbnails.count;
+
+			asset: Big_Asset;
+			asset.id = asset_id;
+			array_resize(*asset.buffer, set_thumbnail.asset.size);
+			asset.written = 0;
+			asset.last_written = current_time_monotonic();
+			table_add(*server.pending_big_assets, asset.id, asset);
+			return true;
+		}
+	}
+
+	get_thumbnail := isa(cmd.payload, Command.Get_Thumbnail);
+	if get_thumbnail {
+		user := find_user_by_connection(server, sender);
+		if user {
+			// find the latest ascii_id for the given terrain_id
+			terrain_ascii := load_database_custom(
+				platform,
+				server.db,
+				struct { ascii_id: int; },
+				tprint(
+					"SELECT ascii_id FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1",
+					get_thumbnail.terrain_id
+				)
+			);
+			if terrain_ascii.count > 0 {
+				thumbnail: DB_Terrain_Thumbnail;
+				thumbnail.ascii_id = terrain_ascii[0].ascii_id;
+				buffers := load_database_custom(
+					platform,
+					server.db,
+					struct { thumbnail: [] u8; },
+					tprint(
+						"SELECT thumbnail FROM terrain_thumbnails WHERE ascii_id = %",
+						thumbnail.ascii_id
+					)
+				);
+				if buffers.count > 0 {
+					reply: Command.Get_Thumbnail;
+					reply.terrain_id = get_thumbnail.terrain_id;
+					reply.asset.size = buffers[0].thumbnail.count;
+					reply.asset.id = get_thumbnail.asset.id;
+
+					asset_id := get_hash(int.[thumbnail.ascii_id, user.profile_id]);
+
+					sending: Server.Big_Asset_Sending;
+					sending.user_asset_id = get_thumbnail.asset.id;
+					sending.destination = sender;
+					sending.asset.id = asset_id;
+					sending.asset.buffer = NewArray(buffers[0].thumbnail.count, u8);
+					memcpy(
+						sending.asset.buffer.data,
+						buffers[0].thumbnail.data,
+						sending.asset.buffer.count
+					);
+					array_add(*server.pending_big_assets_sending, sending);
+
+					append_queue(server, reply, sender);
+				}
+			}
+
+			return true;
+		}
+	}
+
+	ask_enter_quick_instance := isa(cmd.payload, Command.Ask_Enter_Quick_Instance);
+	if ask_enter_quick_instance {
+		user := find_user_by_connection(server, sender);
+		if user {
+			if server.instance_count >= server.instances.count {
+				ans_create_instance: Command.Ans_Create_Instance;
+				ans_create_instance.reason = .Server_Full;
+				append_queue(server, ans_create_instance, sender);
+				return true;
+			}
+
+			params: Scene.Scene_Parameters;
+			params.auto_revive = false;
+
+			created := init_quick_instance(
+				server,
+				server.instances.data + server.instance_count,
+				ask_enter_quick_instance.terrain_id,
+				platform
+			);
+			if !created {
+				ans_create_instance: Command.Ans_Create_Instance;
+				ans_create_instance.reason = .Bugged;
+				append_queue(server, ans_create_instance, sender);
+				return true;
+			}
+			server.instances[server.instance_count].scene_parameters = params;
+			server.instances[server.instance_count].id = server.instance_generation;
+			server.instances[server.instance_count].hidden = true;
+			server.instances[server.instance_count].private = true;
+			server.instances[server.instance_count].user_created = true;
+			server.instance_count += 1;
+			server.instance_generation += 1;
+
+			if !add_new_person(*server.instances[server.instance_count - 1], user.id) {
+				command: Command.Ans_Enter_Custom_Instance;
+				command.reason = .Rejected;
+				append_queue(server, command, sender);
+				return true;
+			}
+
+			user.instance_id = server.instances[server.instance_count - 1].id;
+			ans_enter_custom_instance: Command.Ans_Enter_Custom_Instance;
+			ans_enter_custom_instance.reason = .Accepted;
+			ans_enter_custom_instance.instance_id = server.instances[server.instance_count - 1].id;
+			append_queue(server, ans_enter_custom_instance, sender);
+			return true;
+		}
 	}
 
 	ask_enter_custom_instance := isa(cmd.payload, Command.Ask_Enter_Custom_Instance);
@@ -771,10 +1044,20 @@ SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
 
 			params: Scene.Scene_Parameters;
 			params.auto_revive = create_inst.auto_revive;
-
-			created := init_instance_with_roster(
-				server, server.instances.data + server.instance_count, 2, platform
-			);
+			
+			created: bool;
+			if create_inst.roster.count == 0 {
+				created = init_instance_with_roster(
+					server, server.instances.data + server.instance_count, 2, platform
+				);
+			} else {
+				created = init_instance_with_terrain_ids(
+					server,
+					server.instances.data + server.instance_count,
+					create_inst.roster,
+					platform
+				);
+			}
 			if !created {
 				ans_create_instance: Command.Ans_Create_Instance;
 				ans_create_instance.reason = .Bugged;
@@ -803,13 +1086,53 @@ SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
 
 			ans_create_instance: Command.Ans_Create_Instance;
 			ans_create_instance.reason = .Created;
-			ans_create_instance.created_id = server.instances[server.instance_count].id;
+			ans_create_instance.created_id = server.instances[server.instance_count - 1].id;
 			append_queue(server, ans_create_instance, sender);
 			return true;
 		}
 	}
 
 	return false;
+}
+
+init_quick_instance :: (
+	server: *Server, instance: *Instance, terrain_id: int, platform: *Platform
+) -> bool {
+	terrain_ascii := load_database_custom(
+		platform,
+		server.db,
+		DB_Terrain_Ascii,
+		tprint("SELECT * FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1", terrain_id)
+	);
+
+	if terrain_ascii.count == 0
+		return false;
+
+	terrain_info := load_database(
+		platform,
+		server.db,
+		"terrain_infos",
+		DB_Terrain_Infos,
+		tprint("id = %", terrain_id)
+	);
+	
+	if terrain_info.count == 0
+		return false;
+
+	info: Scene.Scene_Info;
+	info.id = terrain_info[0].id;
+	info.author_profile_id = terrain_info[0].author_profile_id;
+	string_to_arr(terrain_info[0].name, info.name);
+
+	add_scene(instance, terrain_ascii[0].ascii, info);
+	if instance.scenes.count > 0 {
+		instance.pick_scene_id = instance.scenes[0].id;
+		for 0..instance.scenes.count-2 {
+			instance.scenes[it].next_id = instance.scenes[it+1].id;
+		}
+		instance.playing_scene_id = instance.scenes[0].next_id;
+	}
+	return true;
 }
 
 init_instance_with_roster :: (
@@ -823,8 +1146,24 @@ init_instance_with_roster :: (
 	}
 
 	roster := rosters[0];
+	return init_instance_with_terrain_ids(server, instance, roster.terrain_ids, platform);
+}
 
-	for roster.terrain_ids {
+init_instance_with_terrain_ids :: (
+	server: *Server, instance: *Instance, terrain_ids: [] int, platform: *Platform
+) -> bool {
+	instance.last_activity_time = current_time_monotonic();
+
+	ids := NewArray(terrain_ids.count + 1, int,, temp);
+	ids[0] = 100; // The pick up terrain
+	for terrain_ids {
+		ids[1 + it_index] = it;
+	}
+
+	for ids {
+		if it_index > 0 && it == 100
+			continue;
+
 		terrain_ascii := load_database_custom(
 			platform,
 			server.db,
@@ -849,6 +1188,7 @@ init_instance_with_roster :: (
 		info: Scene.Scene_Info;
 		info.id = terrain_info[0].id;
 		info.author_profile_id = terrain_info[0].author_profile_id;
+		string_to_arr(terrain_info[0].name, info.name);
 
 		add_scene(instance, terrain_ascii[0].ascii, info);
 	}
@@ -859,7 +1199,6 @@ init_instance_with_roster :: (
 		}
 		instance.playing_scene_id = instance.scenes[0].next_id;
 	}
-	instance.last_activity_time = current_time_monotonic();
 	return true;
 }
 
@@ -987,6 +1326,31 @@ server_send_tick :: (platform: *Platform, server: *Server) {
 			broadcast(platform, server, cmd);
 	}
 	server.queue.count = 0;
+
+	// also handle the big assets that are pending to be sent
+	cursor := 0;
+	for 0..server.pending_big_assets_sending.count - 1 {
+		sending := *server.pending_big_assets_sending[it];
+		if sending.asset.buffer.count > 0 {
+			command: Command.Asset_Chunk;
+			command.asset.id = sending.user_asset_id;
+			command.asset.size = sending.asset.buffer.count;
+			command.data.data = sending.asset.buffer.data + sending.asset.written;
+			command.data.count = min(
+				1024, sending.asset.buffer.count - sending.asset.written
+			);
+			command.offset = sending.asset.written;
+			send(platform, sending.destination, make_command(command));
+			sending.asset.written += command.data.count;
+			server.pending_big_assets_sending[cursor] = sending;
+			if sending.asset.written < sending.asset.buffer.count {
+				cursor += 1;
+			} else {
+				free(sending.asset.buffer.data);
+			}
+		}
+	}
+	server.pending_big_assets_sending.count = cursor;
 
 	// Then the instances
 	for 0..server.instance_count - 1 {
@@ -1165,6 +1529,17 @@ ensure_database :: (app: *App) {
 				FOREIGN KEY(id) REFERENCES terrain_ids(id) ON DELETE CASCADE
 			);
 			ALTER TABLE terrain_infos ADD COLUMN created_ms INTEGER DEFAULT 0;
+		QUERY
+	);
+	exec_database(
+		app.platform,
+		app_user.server.db,
+		#string QUERY
+			CREATE TABLE IF NOT EXISTS terrain_thumbnails (
+				ascii_id INTEGER PRIMARY KEY,
+				thumbnail BLOB,
+				FOREIGN KEY(ascii_id) REFERENCES terrain_asciis(ascii_id) ON DELETE CASCADE
+			);
 		QUERY
 	);
 	exec_database(

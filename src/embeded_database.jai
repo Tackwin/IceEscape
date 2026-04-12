@@ -1,5 +1,6 @@
 #import "String";
 #import "Hash";
+#import "Terrain";
 
 embed_database_default_rosters :: (app: *App) {
 	app_user := app.user_data.(*App_User);
@@ -18,27 +19,27 @@ embed_database_default_rosters :: (app: *App) {
 	);
 
 	roster: [] string = .[
-		"pick",
-		"good_intro",
-		"good_too",
-		"good_ice",
-		"good_night",
-		"good_three",
-		"good_pounding",
-		"good_light",
-		"good_bomb",
-		"good_steady",
-		"good_turn",
-		"big_round",
-		"roundabout",
-		"funny",
-		"chamber",
-		"buzz",
-		"right",
-		"frogger",
-		"here_and_there",
-		"volcano",
-		"tetris",
+		"Welcome",
+		"Good Intro",
+		"Good Too",
+		"Good Ice",
+		"Good Night",
+		"Good Three",
+		"Good Pounding",
+		"Good Light",
+		"Good Bomb",
+		"Good Steady",
+		"Good Turn",
+		"Big Round",
+		"Roundabout",
+		"Funny",
+		"Chamber",
+		"Buzzzzz",
+		"Right Angle",
+		"Frogger",
+		"Don't give up",
+		"Volcano",
+		"Tetris",
 	];
 
 	sb: String_Builder;
@@ -69,8 +70,6 @@ embed_database_default_terrains :: (app: *App) {
 	server := *app_user.server;
 	platform := app.platform;
 	save :: (new_id: int, ascii: string, name: string) #expand {
-		print("Saving terrain % with id %\n", name, new_id);
-
 		ids: [1] DB_Terrain_Id;
 		ids[0].id = new_id;
 		store_database(platform, server.db, "terrain_ids", ids);
@@ -79,9 +78,8 @@ embed_database_default_terrains :: (app: *App) {
 		to_save := *to_saves[0];
 		to_save.id = new_id;
 		to_save.author_profile_id = -1;
-		to_save.name = name;
+		to_save.name = parse_terrain_name(ascii);
 		to_save.created_ms = 0;
-
 		store_database(platform, server.db, "terrain_infos", to_saves);
 
 		to_asciis: [1] DB_Terrain_Ascii;
@@ -154,8 +152,9 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 - name: Welcome
 
 frame
-- origin: 6.0 4.0
-- size: 14.0 5.0
+- position: 9.25 5.0
+- size: 4.5 5.75
+- origin: 6 4
 
 standin
 - model_id: 1
@@ -178,6 +177,13 @@ trigger_zone
 - accept_player_id: -1
 - trigger: Move_To_Play_World
 - position: 8.5 10.5 0.0
+- radius: 1.0
+- model_id: 2
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 8.5 12.5 0.0
 - radius: 1.0
 - model_id: 2
 
@@ -190,6 +196,13 @@ trigger_zone
 - accept_player_id: -1
 - trigger: Move_To_Play_World
 - position: 14.5 10.5 0.0
+- radius: 1.0
+- model_id: 3
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 14.5 12.5 0.0
 - radius: 1.0
 - model_id: 3
 
@@ -307,6 +320,14 @@ trigger_zone
 - radius: 1.0
 - model_id: 23
 
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 4.5 13.5 0.0
+- radius: 1.0
+- model_id: 23
+
 standin
 - model_id: 24
 - position: 17.5 9.5 0.0
@@ -316,6 +337,13 @@ trigger_zone
 - accept_player_id: -1
 - trigger: Move_To_Play_World
 - position: 17.5 9.5 0.0
+- radius: 1.0
+- model_id: 24
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 18.5 13.5 0.0
 - radius: 1.0
 - model_id: 24
 

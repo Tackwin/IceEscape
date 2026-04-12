@@ -1,0 +1,197 @@
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGXXXX 
+XXXXXXXXXXXXIIGGIXIIGGIXXXXXXXGGGGXXXXXXXXXXXXXXXGGGGXXXX 
+XXXXXXXXXXXXIIXXIXIIXXIXXXXXXXGGGGIIIIIIIIGGXXXXXGGGGXXXX 
+XXXXXXXXXXXXXIXIIXXIXIIXXXXXXXGGGGIIIIIIIIGGIIIXXiiiiXXXX 
+XXXXXXXXXXGGGIXIIGGIXIIGGGGGGGGGGGXXXXXXXXGGIIIXXXXIIXXXX 
+XXXXXXXXXXGXXXXXXXXXXXXIIIGGGXXXXXXXXXXXXXGGIIIXXiiiiXXXX 
+XXXXXXXXXXGXXXIIXXXXIIXIIIGGGXXXXXXGGIIIIIGGIIIXXiiiiXXXX 
+XXXXXXXXXXGGGIIIIIIIIIIGGGGGGGGGGGXGGIIIIIGGXXXXXiiiiXXXX 
+XXXXXXXXXXXXXXIIXXXXIIXXXXXXXXGGGGXGGXXXXXXXXXXXXIIXXXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGXGGXXXXXXXXXXXXiiiiXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGXGGIIIIIGGXXXXXiiiiXXXX 
+XXXXXXXXXXXXXXIIIIIIIIIIIIXXXXIIIIXGGIIIIIGGIIIXXiiiiXXXX 
+XXXXXXXXXXXXXXIIIIIIIIIIIIXXXXIIIIXXXXXXXXGGIIIXXiiiiXXXX 
+XXXXXXXXXXXXXXIIIIIIIIIIIIXXXXIIIIXXXXXXXXGGIIIXXIIIIXXXX 
+XXXXXXXXXXXXXXIIIIIIIIIIIIXXXXIIIIXGGIIIIIGGIIIXXIIIIXXXX 
+XXXXXXXXXXGGGGIIIIXXXXIIIIIIIIIIIIXGGIIIIIGGXXXGGGIIIXXXX 
+XXXXXXXXXXGGGGIIIIXXXXIIIIIIIIIIIIXGGXXXXXXXXXXGGGIIIXXXX 
+XXXXXXXXXXGGGGIIIIXXXXIIIIIIIIIIIIXGGXXXXXGGGGGGGGIIIXXXX 
+XXXXXXXXXXGGGGIIIIXXXXIIIIIIIIIIIIXGGIIIIIGGGGGGXXXXXXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGIIIIIGGGGGGXXXXXXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGGGXXXXXXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 
+
+path
+- checkpoint: 30.75 18.450001 0
+- checkpoint: 30.75 1.5 0
+- checkpoint: 34.25 1.5 0
+- checkpoint: 34.25 18.5 0
+- closed
+path
+- checkpoint: 6.5 19.5 0
+- checkpoint: 9.5 19.5 0
+- checkpoint: 9.5 13.5 0
+- checkpoint: 12.5 13.5 0
+- checkpoint: 12.5 19.5 0
+- checkpoint: 15.5 19.5 0
+- checkpoint: 15.5 13.5 0
+- checkpoint: 6.5 13.525 0
+- closed
+spawn
+- position: 4 3.5 0
+- size: 0.05 0.05
+frame
+- position: -0.75 -1
+- size: 48.75 23.25
+- origin: 7 3
+flag
+- position: 20.75 15 0
+- index: 0
+flag
+- position: 42.25 4.5 0
+- index: 1
+present
+- position: 37.5 3.5 0
+- kind: B
+- refresh_cooldown: 10
+- depends_on_flag_id: -1
+present
+- position: 37.5 0.5 0
+- kind: A
+- refresh_cooldown: 10
+- depends_on_flag_id: -1
+trap
+- position: 11 6.5 0
+- radius_hitbox: 0.5
+trap
+- position: 11 7.25 0
+- radius_hitbox: 0.5
+trap
+- position: 11 8 0
+- radius_hitbox: 0.5
+trap
+- position: 15.25 9.75 0
+- radius_hitbox: 0.5
+trap
+- position: 15.25 9 0
+- radius_hitbox: 0.5
+trap
+- position: 15.25 8.25 0
+- radius_hitbox: 0.5
+trap
+- position: 15.5 5.75 0
+- radius_hitbox: 0.5
+trap
+- position: 16.25 5.75 0
+- radius_hitbox: 0.5
+trap
+- position: 17 5.75 0
+- radius_hitbox: 0.5
+trap
+- position: 19.5 5.5 0
+- radius_hitbox: 0.5
+trap
+- position: 19.5 4.75 0
+- radius_hitbox: 0.5
+trap
+- position: 19.5 4 0
+- radius_hitbox: 0.5
+trap
+- position: 23.5 2.5 0
+- radius_hitbox: 0.5
+trap
+- position: 23.5 3.25 0
+- radius_hitbox: 0.5
+trap
+- position: 23.5 4 0
+- radius_hitbox: 0.5
+trap
+- position: 23.5 6.5 0
+- radius_hitbox: 0.5
+trap
+- position: 24.25 6.5 0
+- radius_hitbox: 0.5
+trap
+- position: 25 6.5 0
+- radius_hitbox: 0.5
+trap
+- position: 25.25 6.5 0
+- radius_hitbox: 0.5
+trap
+- position: 19.5 3.75 0
+- radius_hitbox: 0.5
+trap
+- position: 23.5 4.25 0
+- radius_hitbox: 0.5
+trap
+- position: 42.75 10.75 0
+- radius_hitbox: 0.5
+trap
+- position: 45.5 15.25 0
+- radius_hitbox: 0.5
+trophy
+- position: 44 19.75 0
+block_rock
+- position: 22.5 13.5 0
+block_rock
+- position: 3.5 15.5 0
+bomb_spawner
+- position: 5.25 5.25 0
+- explosion_time: 10
+- explosion_radius: 0.5
+bomb_spawner
+- position: 20.75 13.5 0
+- explosion_time: 10
+- explosion_radius: 0.5
+skull
+- path_id: 0
+- speed: 5
+- offset: 0
+skull
+- path_id: 0
+- speed: 5
+- offset: 0.66
+skull
+- path_id: 0
+- speed: 5
+- offset: 0.33
+skull
+- path_id: 1
+- speed: 1
+- offset: 0.33
+skull
+- path_id: 1
+- speed: 1
+- offset: 0.66
+skull
+- path_id: 1
+- speed: 1
+- offset: 0
+gate
+- position: 22.5 16.5 0
+- direction: 0 0 0
+- is_closed: true
+- wait_for_key_id: 0
+- wait_for_trigger_id: -1
+gate
+- position: 40.5 3.5 0
+- direction: 0.723809 0.69 0
+- is_closed: true
+- wait_for_key_id: -1
+- wait_for_trigger_id: -1
+key
+- position: 3.5 13.75 0
+pressbutton
+- position: 39 2 0
+turn_table
+- position: 11 13.5 0
+- turning_speed: 0
+- turning_offset: 0

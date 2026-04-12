@@ -366,7 +366,7 @@ build_game_dll_2 :: () {
 	add_build_file("src/main_game.jai", w);
 	date := to_calendar(current_time_consensus());
 	version_string := tprint(
-		"version_string :: \"0.0.1 (%)\";", calendar_to_string(date)
+		"version_string :: \"0.1.0 (%)\";", calendar_to_string(date)
 	);
 	add_build_string(version_string, w);
 	while true {
@@ -563,6 +563,7 @@ build_wasm_2 :: () {
 	opts.llvm_options.function_sections      = true; // To get around "LLVM ERROR: section already has a defining function: .text"
 	opts.llvm_options.enable_loop_vectorization = true;
 	opts.llvm_options.enable_slp_vectorization = true;
+	opts.llvm_options.enable_loop_unrolling = true;
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -592,7 +593,7 @@ build_wasm_2 :: () {
 	compiler_begin_intercept(w);
 	date := to_calendar(current_time_consensus());
 	version_string := tprint(
-		"version_string :: \"0.0.1 (%)\"; ", calendar_to_string(date)
+		"version_string :: \"0.1.0 (%)\"; ", calendar_to_string(date)
 	);
 	add_build_string(version_string, w);
 	add_build_file("src/entry/wasm.jai", w);
@@ -638,7 +639,7 @@ build_c_lib :: () {
 		"-shared",
 		"./src/c/wsserver.c",
 		"-o",
-		"./src/c/wsserver.dll"
+		"./bin/wsserver.dll"
 	);
 	run_command(
 		"clang",

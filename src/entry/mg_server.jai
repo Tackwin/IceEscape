@@ -70,6 +70,12 @@ win32_db_query :: (query: *DB_query) {
 			return sqlite3_bind_int(
 				stmt, (index + 1).(s32), (ifx value_ptr.(*bool).* then 1 else 0).(s32)
 			) == SQLITE_OK;
+		} else if tag == .ARRAY && info.(*Type_Info_Array).array_type == .VIEW {
+			view := value_ptr.(*[] u8).*;
+			view.count *= info.(*Type_Info_Array).element_type.runtime_size;
+			return sqlite3_bind_blob(
+				stmt, (index + 1).(s32), view.data, xx view.count, SQLITE_STATIC
+			) == SQLITE_OK;
 		} else {
 			return false;
 		}
@@ -163,6 +169,13 @@ win32_db_query :: (query: *DB_query) {
 					parsed = true;
 				else
 					print("Failed to parse JSON array: %\n", sqlite_text);
+			} else {
+				blob := sqlite3_column_blob(stmt, index.(s32));
+				length := sqlite3_column_bytes(stmt, index.(s32));
+				value_ptr.(*[] u8).data = blob;
+				value_ptr.(*[] u8).count = length;
+				value_ptr.(*[] u8).count /= info.(*Type_Info_Array).element_type.runtime_size;
+				parsed = true;
 			}
 		}
 
@@ -366,10 +379,11 @@ win32_gather_web_messages :: () -> [] Web_Message {
 
 	msgs := NewArray(xx received, Web_Message, false,, temp);
 	for * msgs {
-		it.sender = xx (*receive_buffer[cursor]).(*u64).*;
-		it.data.count = xx (*receive_buffer[cursor + 8]).(*u64).*;
+		it.sender = cast,no_check(int) (receive_buffer.data + cursor).(*u64).*;
+		it.data.count = cast,no_check(int) (receive_buffer.data + cursor + 8).(*u64).*;
 		it.data.data  = receive_buffer.data + cursor + 16;
-		cursor = (it.data.count.(u64) + (it.data.data.(u64) - receive_buffer.data.(u64))).(s64);
+		cursor += 16;
+		cursor += it.data.count;
 	}
 	
 	return msgs;

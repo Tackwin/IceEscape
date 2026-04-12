@@ -16,6 +16,19 @@ Config :: struct {
 	antiair_offset_std := 0.0;
 }
 
+parse_terrain_name :: (text: string) -> string {
+	name: string;
+	lines := split(text, "\n",, temp);
+	for lines {
+		if starts_with(it, "- name: ") {
+			name.data = it.data + 8;
+			name.count = it.count - 8;
+			return name;
+		}
+	}
+	return "Unnamed terrain";
+}
+
 parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 	rng := Rand.seed(123456789);
 
@@ -189,19 +202,42 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 					break;
 				}
 
-				pos := *antiair.server.position;
+				pos := *antiair.position;
 				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
 					continue;
-				target := *antiair.server.target;
-				if scan2(line, "- target: % % %", *target.x, *target.y, *target.z)
+				target_pos_v3: V3f;
+				if scan2(line, "- target: % % %", *target_pos_v3.x, *target_pos_v3.y, *target_pos_v3.z) {
+					dtx := antiair.target_aabb.max.x - antiair.target_aabb.min.x;
+					dty := antiair.target_aabb.max.y - antiair.target_aabb.min.y;
+					antiair.target_aabb.min.x = target_pos_v3.x;
+					antiair.target_aabb.min.y = target_pos_v3.y;
+					antiair.target_aabb.max.x = target_pos_v3.x + dtx;
+					antiair.target_aabb.max.y = target_pos_v3.y + dty;
 					continue;
-
-				target_size := *antiair.server.target_size;
-				if scan2(line, "- target_size: % %", *target_size.x, *target_size.y)
+				}
+				target_pos_v2: V2f;
+				if scan2(line, "- target: % %", *target_pos_v2.x, *target_pos_v2.y) {
+					dtx := antiair.target_aabb.max.x - antiair.target_aabb.min.x;
+					dty := antiair.target_aabb.max.y - antiair.target_aabb.min.y;
+					antiair.target_aabb.min.x = target_pos_v2.x;
+					antiair.target_aabb.min.y = target_pos_v2.y;
+					antiair.target_aabb.max.x = target_pos_v2.x + dtx;
+					antiair.target_aabb.max.y = target_pos_v2.y + dty;
 					continue;
-				if scan2(line, "- cooldown: %", *antiair.server.cooldown)
+				}
+				target_size: V2f;
+				if scan2(line, "- target_size: % %", *target_size.x, *target_size.y) {
+					antiair.target_aabb.max.x = antiair.target_aabb.min.x + target_size.x;
+					antiair.target_aabb.max.y = antiair.target_aabb.min.y + target_size.y;
 					continue;
-				if scan2(line, "- radius: %", *antiair.server.radius)
+				}
+				aabb: AABBf;
+				if scan2(line, "- target_aabb: % % % %", *aabb.min.x, *aabb.min.y, *aabb.max.x, *aabb.max.y) {
+					continue;
+				}
+				if scan2(line, "- cooldown: %", *antiair.cooldown)
+					continue;
+				if scan2(line, "- radius: %", *antiair.radius)
 					continue;
 				if scan2(line, "- offset_time: %", *antiair.server.t)
 					continue;
@@ -343,16 +379,16 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 				if scan2(
 					line,
 					"- start_target_aabb: % %",
-					*robot.start_target_aabb.x,
-					*robot.start_target_aabb.y
+					*robot.target_aabb.min.x,
+					*robot.target_aabb.min.y
 				)
 					continue;
 
 				if scan2(
 					line,
 					"- end_target_aabb: % %",
-					*robot.end_target_aabb.x,
-					*robot.end_target_aabb.y
+					*robot.target_aabb.max.x,
+					*robot.target_aabb.max.y
 				)
 					continue;
 
@@ -363,8 +399,8 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 					*size_aabb.x,
 					*size_aabb.y
 				) {
-					robot.end_target_aabb.x = robot.start_target_aabb.x + size_aabb.x;
-					robot.end_target_aabb.y = robot.start_target_aabb.y + size_aabb.y;
+					robot.target_aabb.max.x = robot.target_aabb.min.x + size_aabb.x;
+					robot.target_aabb.max.y = robot.target_aabb.min.y + size_aabb.y;
 					continue;
 				}
 				if scan2(line, "- charging_time: %", *robot.charging_time)

@@ -148,6 +148,11 @@ win32_is_server_connected :: () -> bool {
 	return curl_connected;
 }
 
+win32_write_file :: (path: string, data: [] u8) -> bool {
+	write_entire_file(path, data.data, data.count);
+	return true;
+}
+
 win32_read_entire_file :: (path: string, data: [] u8) -> int {
 	push_context,defer_pop launcher_context;
 	if !data.data {
@@ -611,6 +616,7 @@ init_platform :: () -> Platform {
 	platform.wait = win32_wait;
 	platform.connect_server = win32_connect_server;
 	platform.is_server_connected = win32_is_server_connected;
+	platform.write_file = win32_write_file;
 	platform.read_entire_file = win32_read_entire_file;
 	platform.load_image = win32_load_image;
 	platform.free_image = win32_free_image;
@@ -717,6 +723,64 @@ init_platform :: () -> Platform {
 	wgpuSurfacePresent :: (
 		surface: WGPUSurface
 	) -> WGPUStatus #foreign wgpu_native;
+	wgpuBufferGetConstMappedRange :: (
+		buffer: WGPUBuffer,
+		offset: u64,
+		size: u64
+	) -> *void #foreign wgpu_native;
+	wgpuMyGpuToCpu :: (instance: WGPUInstance, buffer: WGPUBuffer, cpu: [] u8) -> void #c_call {
+		wgpuBufferMapAsync :: (
+			buffer: WGPUBuffer,
+			mode: WGPUMapMode,
+			offset: u64,
+			size: u64,
+			callbackInfo: WGPUBufferMapCallbackInfo
+		) -> WGPUFuture #foreign wgpu_native;
+		wgpuBufferGetMapState :: (
+			buffer: WGPUBuffer
+		) -> WGPUBufferMapState #foreign wgpu_native;
+		wgpuInstanceProcessEvents :: (
+			instance: WGPUInstance
+		) -> void #foreign wgpu_native;
+
+		Userdata :: struct {
+			buffer: WGPUBuffer;
+			cpu: [] u8;
+			ready_flag: bool;
+		}
+		userdata: Userdata = .{};
+		userdata.buffer = buffer;
+		userdata.cpu = cpu;
+		userdata.ready_flag = false;
+		callback :: (
+			status: WGPUMapAsyncStatus, message: WGPUStringView, userdata1: *void, userdata2: *void
+		) -> void #c_call {
+			userdata: *Userdata = userdata1.(*Userdata);
+			if status != .Success {
+				str: string;
+				str.data = message.data;
+				str.count = c_style_strlen(message.data);
+				return;
+			}
+			userdata.ready_flag = true;
+		}
+
+		callback_info: WGPUBufferMapCallbackInfo = .{};
+		callback_info.nextInChain = null;
+		callback_info.callback = callback;
+		callback_info.userdata1 = *userdata;
+		callback_info.mode = .AllowSpontaneous;
+
+		wgpuBufferMapAsync(buffer, WGPUMapMode_Read, 0, xx cpu.count, callback_info);
+		while !userdata.ready_flag {
+			wgpuInstanceProcessEvents(instance);
+		}
+		mapped := wgpuBufferGetConstMappedRange(userdata.buffer, 0, xx userdata.cpu.count);
+		if mapped {
+			memcpy(userdata.cpu.data, mapped, userdata.cpu.count);
+		}
+		wgpuBufferUnmap(buffer);
+	}
 	wgpuMyInstanceCreateSurface :: (
 		instance: WGPUInstance,
 		descriptor: *WGPUSurfaceDescriptor
@@ -755,7 +819,12 @@ init_platform :: () -> Platform {
 		device: WGPUDevice,
 		descriptor: *WGPURenderPipelineDescriptor
 	) -> WGPURenderPipeline #foreign wgpu_native;
-
+	wgpuCommandEncoderCopyTextureToBuffer :: (
+		encoder: WGPUCommandEncoder,
+		source: *WGPUTexelCopyTextureInfo,
+		destination: *WGPUTexelCopyBufferInfo,
+		copySize: *WGPUExtent3D
+	) -> void #foreign wgpu_native;
 	wgpuCommandEncoderBeginRenderPass :: (
 		encoder: WGPUCommandEncoder,
 		descriptor: *WGPURenderPassDescriptor

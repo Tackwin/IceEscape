@@ -201,6 +201,102 @@ WShader :: struct {
 	input: Type_Info;
 }
 
+downscale_2x :: (input: [] u8, width: int, height: int) -> [] u8 {
+	output := NewArray((width/2) * (height/2) * 3, u8);
+
+	// Average 4 pixels into 1
+	for y: 0..height/2 - 1 {
+		for x: 0..width/2 - 1 {
+			sumr := 0;
+			sumg := 0;
+			sumb := 0;
+
+			for j: 0..1 {
+				for i: 0..1 {
+					idx := ((y*2 + j) * width + (x*2 + i)) * 3;
+					sumr += input[idx + 0];
+					sumg += input[idx + 1];
+					sumb += input[idx + 2];
+				}
+			}
+			output[(y * (width/2) + x) * 3 + 0] = (sumr / 4).(u8);
+			output[(y * (width/2) + x) * 3 + 1] = (sumg / 4).(u8);
+			output[(y * (width/2) + x) * 3 + 2] = (sumb / 4).(u8);
+		}
+	}
+
+	return output;
+}
+
+downscale_within_2x :: (
+	input: [] u8, width: int, height: int, new_width: int, new_height: int
+) -> [] u8 {
+	output := NewArray(new_width * new_height * 3, u8);
+
+	u := (new_width).(float) / width;
+	v := (new_height).(float) / height;
+
+	for y: 0..new_height - 1 {
+		for x: 0..new_width - 1 {
+			upx := (width * x / new_width).(int);
+			upy := (height * y / new_height).(int);
+
+			sumrx := input[(upy * width + upx) * 3 + 0] * u;
+			sumrx += input[(upy * width + upx + 1) * 3 + 0] * (1 - u);
+			r := sumrx * v;
+			if v < 1 {
+				sumry := input[((upy + 1) * width + upx) * 3 + 1] * u;
+				sumry += input[((upy + 1) * width + upx + 1) * 3 + 1] * (1 - u);
+				r += sumry * (1 - v);
+			}
+
+			sumgx := input[(upy * width + upx) * 3 + 1] * u;
+			sumgx += input[(upy * width + upx + 1) * 3 + 1] * (1 - u);
+			g := sumgx * v;
+			if v < 1 {
+				sumgy := input[((upy + 1) * width + upx) * 3 + 1] * u;
+				sumgy += input[((upy + 1) * width + upx + 1) * 3 + 1] * (1 - u);
+				g += sumgy * (1 - v);
+			}
+
+			sumbx := input[(upy * width + upx) * 3 + 2] * u;
+			sumbx += input[(upy * width + upx + 1) * 3 + 2] * (1 - u);
+			b := sumbx * v;
+			if v < 1 {
+				sumby := input[((upy + 1) * width + upx) * 3 + 2] * u;
+				sumby += input[((upy + 1) * width + upx + 1) * 3 + 2] * (1 - u);
+				b += sumby * (1 - v);
+			}
+
+			output[(y * new_width + x) * 3 + 0] = r.(u8);
+			output[(y * new_width + x) * 3 + 1] = g.(u8);
+			output[(y * new_width + x) * 3 + 2] = b.(u8);
+		}
+	}
+	return output;
+}
+
+downscale :: (input: [] u8, width: int, height: int, new_width: int, new_height: int) -> [] u8 {
+	fx := width.(float) / new_width;
+	fy := height.(float) / new_height;
+
+	if fx > 2 && fy > 2 {
+		intermediate := downscale_2x(input, width, height);
+		return downscale(intermediate, width / 2, height / 2, new_width, new_height);
+	} else {
+		if fx > 2 {
+			intermediate := downscale_within_2x(input, width, height, width / 2, height);
+			return downscale(intermediate, width / 2, height, new_width, new_height);
+		}
+		else if fy > 2 {
+			intermediate := downscale_within_2x(input, width, height, width, height / 2);
+			return downscale(intermediate, width, height / 2, new_width, new_height);
+		} else {
+			return downscale_within_2x(input, width, height, new_width, new_height);
+		}
+	}
+}
+
 WTexture :: struct {
 	gpu: WGPUTexture;
 	view: WGPUTextureView;
@@ -208,12 +304,86 @@ WTexture :: struct {
 
 	width: int;
 	height: int;
+	layers: int;
+	channels :: 4;
+
+	reserve :: (width: int, height: int, label := "unknown") -> WTexture {
+		texture: WTexture;
+		texture.width = width;
+		texture.height = height;
+		texture.layers = 1;
+		return texture;
+	}
+	make_blank :: (width: int, height: int, label := "unknown") -> WTexture {
+		texture: WTexture;
+		texture.width = width;
+		texture.height = height;
+		texture.layers = 1;
+		make_blank(label, *texture);
+		return texture;
+	}
+
+	make_blank :: (label := "unknown", texture: *WTexture) {
+		desc: WGPUTextureDescriptor = .{};
+		desc.label = toWGPUStringView(tprint("Texture (%)", label));
+		desc.usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst;
+		desc.size.width = xx texture.width;
+		desc.size.height = xx texture.height;
+		desc.size.depthOrArrayLayers = xx texture.layers;
+		desc.mipLevelCount = 1;
+		desc.sampleCount = 1;
+		desc.dimension = ._2D;
+		desc.format = .RGBA8Unorm;
+		texture.gpu = graphics.gpu.deviceCreateTexture(graphics.device, *desc);
+
+		viewDesc: WGPUTextureViewDescriptor;
+		viewDesc.label = toWGPUStringView(tprint("Texture View (%)", label));
+		viewDesc.format = desc.format;
+		viewDesc.dimension = ._2DArray;
+		viewDesc.mipLevelCount = 1;
+		viewDesc.baseArrayLayer = 0;
+		viewDesc.arrayLayerCount = xx texture.layers;
+		viewDesc.aspect = .All;
+		viewDesc.usage = WGPUTextureUsage_TextureBinding;
+		texture.view = graphics.gpu.textureCreateView(texture.gpu, *viewDesc);
+
+		samplerDesc: WGPUSamplerDescriptor = .{};
+		samplerDesc.label = toWGPUStringView(tprint("Texture Sampler (%)", label));
+		samplerDesc.addressModeU = .Repeat;
+		samplerDesc.addressModeV = .Repeat;
+		samplerDesc.addressModeW = .Repeat;
+		samplerDesc.magFilter = .Linear;
+		samplerDesc.minFilter = .Linear;
+		samplerDesc.mipmapFilter = .Linear;
+		samplerDesc.lodMinClamp = 0;
+		samplerDesc.lodMaxClamp = 32;
+		samplerDesc.maxAnisotropy = 1;
+		texture.sampler = graphics.gpu.deviceCreateSampler(graphics.device, *samplerDesc);
+	}
+
+	upload :: (rgb: [] u8, offset: int, texture: *WTexture) {
+		copyInfo: WGPUTexelCopyTextureInfo;
+		copyInfo.texture = texture.gpu;
+		copyInfo.mipLevel = 0;
+		copyInfo.origin = .{ 0, 0, 0 };
+		copyInfo.aspect = .All;
+		copyLayout: WGPUTexelCopyBufferLayout;
+		copyLayout.offset = xx offset;
+		copyLayout.bytesPerRow = xx (texture.width * texture.channels);
+		copyLayout.rowsPerImage = xx (texture.height);
+		size: WGPUExtent3D;
+		size.width = xx texture.width;
+		size.height = xx texture.height;
+		size.depthOrArrayLayers = xx texture.layers;
+		graphics.gpu.queueWriteTexture(
+			graphics.mainQueue, *copyInfo, rgb.data, xx rgb.count, *copyLayout, *size
+		);
+	}
 
 	make_from_image :: (
 		image: Image, label: string = "unknown", tiles_count := V2i.{ 1, 1 }
 	) -> WTexture {
 		texture: WTexture;
-		print("Making image % (% %)\n", label, image.width, image.height);
 
 		desc: WGPUTextureDescriptor = .{};
 		desc.label = toWGPUStringView(tprint("Texture (%)", label));
@@ -301,6 +471,10 @@ WTexture :: struct {
 		samplerDesc.lodMaxClamp = 32;
 		samplerDesc.maxAnisotropy = 1;
 		texture.sampler = graphics.gpu.deviceCreateSampler(graphics.device, *samplerDesc);
+
+		texture.width = xx (image.width / tiles_count.x);
+		texture.height = xx (image.height / tiles_count.y);
+		texture.layers = xx (tiles_count.x * tiles_count.y);
 
 		return texture;
 	}
@@ -566,12 +740,14 @@ Frame :: struct {
 		second_bind_group: *WGPUBindGroup = null;
 		model: *Model = null;
 		part_idx := -1;
+		custom_texture: *WTexture = null;
 	}
 
 	Pass :: struct(U: Type) {
 		draws: [..] Draw;
 		uniforms: U;
 		current_bind_group: *WGPUBindGroup;
+		current_custom_texture: *WTexture;
 	}
 	shadow: Pass(WFramegraph.Uniforms);
 	geometry: Pass(WFramegraph.Uniforms);
@@ -611,6 +787,7 @@ WFramegraph :: struct {
 	textureBindGroupLayout: WGPUBindGroupLayout;
 	presentBindGroupLayout: WGPUBindGroupLayout;
 	quadBindGroupLayout: WGPUBindGroupLayout;
+	quadBindGroupTextureLayout: WGPUBindGroupLayout;
 
 	geometryModule: WGPUShaderModule;
 	geometryPipeline: WGPURenderPipeline;
@@ -631,12 +808,14 @@ WFramegraph :: struct {
 	shadowTexture: WTexture;
 	hdrTexture: WTexture;
 	uiTexture: WTexture;
+	screenshotTexture: WTexture;
 
 	geometryBindGroup: WGPUBindGroup;
 	textureBindGroup: WGPUBindGroup;
 	particleBindGroup: WGPUBindGroup;
 
 	frame_buffer: WGPUBuffer;
+	readback_buffer: WGPUBuffer;
 
 	UI_Uniform :: struct {
 		window_size: V2f;
@@ -649,7 +828,7 @@ WFramegraph :: struct {
 		z30sdf2: u32 = 0;
 		rotation: float = 0;
 		outline: float = 0;
-		padding2: u32 = 0;
+		use_custom_texture: u32 = 0;
 	}
 
 	Present_Uniform :: struct {
@@ -690,6 +869,12 @@ WFramegraph :: struct {
 	Instance :: struct {
 		UV_REPEAT :: 1;
 		UV_NO_TILE :: 2;
+		UV_GRID :: 4;
+		GRID_TOP :: 8;
+		GRID_LEFT :: 16;
+		GRID_BOTTOM :: 32;
+		GRID_RIGHT :: 64;
+
 
 		M: M4f;
 		texture_rect: V4f = .{ 0, 0, 1, 1 }; // x, y, width, height
@@ -725,6 +910,11 @@ WFramegraph :: struct {
 	}
 
 	frames: [3] Frame;
+
+	screenshot_frame: Frame;
+	take_screenshot: bool;
+	screenshot_data: [..] u8;
+	screenshot_data_generation := 0;
 
 	rendering_frame_idx := -1;
 	working_frame_idx := -1;
@@ -857,6 +1047,9 @@ init_quad_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 
 		framegraph.quadBindGroupLayout = graphics.gpu.renderPipelineGetBindGroupLayout(
 			framegraph.quadPipeline, 0
+		);
+		framegraph.quadBindGroupTextureLayout = graphics.gpu.renderPipelineGetBindGroupLayout(
+			framegraph.quadPipeline, 1
 		);
 	}
 }
@@ -1130,12 +1323,19 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 			graphics.gpu.bufferRelease(framegraph.frame_buffer);
 		framegraph.frame_buffer = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
 	}
-	for * framegraph.frames {
-		array_resize(*it.cpu, 128 * 1024 * 1024);
-		array_reserve(*it.shadow.draws, 1024 * 1024);
-		array_reserve(*it.geometry.draws, 1024 * 1024);
-		array_reserve(*it.ui.draws, 1024 * 1024);
+	{
+		desc: WGPUBufferDescriptor = .{};
+		desc.label = toWGPUStringView("Readback Buffer");
+		desc.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+		desc.size = 128 * 1024 * 1024;
+		desc.mappedAtCreation = 0;
+		if framegraph.readback_buffer
+			graphics.gpu.bufferRelease(framegraph.readback_buffer);
+		framegraph.readback_buffer = graphics.gpu.deviceCreateBuffer(graphics.device, *desc);
 	}
+	for * framegraph.frames
+		reserve_frame(it);
+	reserve_frame(*framegraph.screenshot_frame);
 	{
 		desc: WGPUTextureDescriptor = .{};
 		desc.label = toWGPUStringView("Depth Texture");
@@ -1288,6 +1488,36 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 			graphics.gpu.deviceCreateSampler(graphics.device, *samplerDesc);
 	}
 
+	{
+		desc: WGPUTextureDescriptor = .{};
+		desc.label = toWGPUStringView("Screenshot Texture");
+		desc.usage =
+			WGPUTextureUsage_CopySrc |
+			WGPUTextureUsage_TextureBinding |
+			WGPUTextureUsage_RenderAttachment;
+		desc.size.width = 1366;
+		desc.size.height = 768;
+		desc.size.depthOrArrayLayers = 1;
+		desc.mipLevelCount = 1;
+		desc.sampleCount = 1;
+		desc.dimension = ._2D;
+		desc.format = .BGRA8Unorm;
+		if framegraph.screenshotTexture.gpu
+			graphics.gpu.textureRelease(framegraph.screenshotTexture.gpu);
+		framegraph.screenshotTexture.gpu =
+			graphics.gpu.deviceCreateTexture(graphics.device, *desc);
+		
+		viewDesc: WGPUTextureViewDescriptor = .{};
+		viewDesc.label = toWGPUStringView("Screenshot Texture View");
+		viewDesc.format = .BGRA8Unorm;
+		viewDesc.dimension = ._2D;
+		viewDesc.aspect = .All;
+		if framegraph.screenshotTexture.view
+			graphics.gpu.textureViewRelease(framegraph.screenshotTexture.view);
+		framegraph.screenshotTexture.view =
+			graphics.gpu.textureCreateView(framegraph.screenshotTexture.gpu, null);
+	}
+
 	init_bindgroup_layout(framegraph);
 
 	init_geometry_pipeline(framegraph, store);
@@ -1324,12 +1554,12 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 
 present_bind_group :: (
 	framegraph: *WFramegraph,
+	frame: *Frame,
 	uniforms: WFramegraph.Present_Uniform,
 	name: string,
 	hdr: WTexture,
 	ui: WTexture
 ) -> WGPUBindGroup {
-	frame := *framegraph.frames[framegraph.rendering_frame_idx]; // not working, rendering
 	align_up(*frame.cpu_cursor, 256);
 
 	desc: WGPUBindGroupDescriptor = .{};
@@ -1357,11 +1587,11 @@ present_bind_group :: (
 
 ui_instance_bind_group :: (
 	framegraph: *WFramegraph,
+	frame: *Frame,
 	uniforms: WFramegraph.UI_Uniform,
 	albedo_map: WTexture,
 	sdf_map: WTexture
 ) -> WGPUBindGroup {
-	frame := *framegraph.frames[framegraph.rendering_frame_idx];
 	align_up(*frame.cpu_cursor, 256);
 
 	desc: WGPUBindGroupDescriptor = .{};
@@ -1393,14 +1623,33 @@ ui_instance_bind_group :: (
 	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
 }
 
+ui_instance_custom_bind_group :: (
+	framegraph: *WFramegraph,
+	frame: *Frame,
+	custom: *WTexture,
+	name: string
+) -> WGPUBindGroup {
+	desc: WGPUBindGroupDescriptor = .{};
+	desc.label = toWGPUStringView(tprint("% UI Instance Custom Texture Bind Group", name));
+	desc.layout = framegraph.quadBindGroupTextureLayout;
+	entries: [2] WGPUBindGroupEntry;
+	entries[0].binding = 0;
+	entries[0].textureView = custom.view;
+	entries[1].binding = 1;
+	entries[1].sampler = custom.sampler;
+	desc.entryCount = entries.count;
+	desc.entries = entries.data;
+
+	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
+}
+
 
 instance_bind_group :: (
 	framegraph: *WFramegraph,
+	frame: *Frame,
 	uniforms: WFramegraph.Uniforms,
 	name: string
 ) -> WGPUBindGroup {
-	frame := *framegraph.frames[framegraph.rendering_frame_idx];
-
 	align_up(*frame.cpu_cursor, 256);
 
 	desc: WGPUBindGroupDescriptor = .{};
@@ -1551,6 +1800,7 @@ commit_ui :: (frame: *Frame, pass: *Frame.Pass, count: int) {
 	draw.instance_count = count;
 	draw.instance_start = frame.cpu_cursor / stride;
 	draw.second_bind_group = pass.current_bind_group;
+	draw.custom_texture = pass.current_custom_texture;
 	array_add(*pass.draws, draw);
 	frame.cpu_cursor += xx (count * stride);
 }
@@ -1607,6 +1857,27 @@ free :: (extra: *Extra) {
 	array_free(extra.quads);
 }
 
+reserve_frame :: (frame: *Frame) {
+	print("A\n");
+	array_resize(*frame.cpu, 64 * 1024 * 1024);
+	print("B\n");
+	array_reserve(*frame.shadow.draws, 1024 * 1024);
+	print("C\n");
+	array_reserve(*frame.geometry.draws, 1024 * 1024);
+	print("D\n");
+	array_reserve(*frame.ui.draws, 1024 * 1024);
+	print("E\n");
+}
+
+reset_frame :: (frame: *Frame, current_time: Apollo_Time) {
+	frame.cpu_cursor = 0;
+	frame.shadow.draws.count = 0;
+	frame.geometry.draws.count = 0;
+	frame.editor.draws.count = 0;
+	frame.ui.draws.count = 0;
+	frame.current_time = current_time;
+}
+
 begin_frame :: (framegraph: *WFramegraph, current_time: Apollo_Time) -> *Frame
 {
 	while true {
@@ -1628,12 +1899,7 @@ begin_frame :: (framegraph: *WFramegraph, current_time: Apollo_Time) -> *Frame
 	framegraph.current_time = current_time;
 
 	frame := *framegraph.frames[framegraph.working_frame_idx];
-	frame.cpu_cursor = 0;
-	frame.shadow.draws.count = 0;
-	frame.geometry.draws.count = 0;
-	frame.editor.draws.count = 0;
-	frame.ui.draws.count = 0;
-	frame.current_time = current_time;
+	reset_frame(frame, current_time);
 
 	return frame;
 }
@@ -1649,6 +1915,80 @@ end_frame :: (framegraph: *WFramegraph, frame: *Frame) {
 
 	compare_and_swap(*framegraph.frame_lock, 1, 0);
 
+}
+
+screenshot_frame :: (framegraph: *WFramegraph, store: *Store.Store, platform: *Platform) {
+	encoder := graphics.gpu.deviceCreateCommandEncoder(graphics.device, null);
+	defer graphics.gpu.commandEncoderRelease(encoder);
+
+	present_frame_to(
+		framegraph, *framegraph.screenshot_frame, encoder, store, framegraph.screenshotTexture.view
+	);
+
+	source_info: WGPUTexelCopyTextureInfo = .{};
+	source_info.texture = framegraph.screenshotTexture.gpu;
+	source_info.aspect = .All;
+	source_info.mipLevel = 0;
+	source_info.origin = .{ 0, 0, 0 };
+
+	destination_info: WGPUTexelCopyBufferInfo = .{};
+	destination_info.buffer = framegraph.readback_buffer;
+	destination_info.layout.offset = 0;
+	destination_info.layout.bytesPerRow = xx align_forward(4 * 1366, 256);
+	destination_info.layout.rowsPerImage = 768;
+	size_info: WGPUExtent3D = .{};
+	size_info.width = 1366;
+	size_info.height = 768;
+	size_info.depthOrArrayLayers = 1;
+	graphics.gpu.commandEncoderCopyTextureToBuffer(
+		encoder, *source_info, *destination_info, *size_info
+	);
+
+	bufferDesc: WGPUCommandBufferDescriptor = .{};
+	bufferDesc.label = toWGPUStringView("Command Buffer");
+	present := graphics.gpu.commandEncoderFinish(encoder, *bufferDesc);
+	defer graphics.gpu.commandBufferRelease(present);
+
+	submit: [] WGPUCommandBuffer = .[present];
+	graphics.gpu.queueSubmit(graphics.mainQueue, xx submit.count, submit.data);
+
+	array_resize(*framegraph.screenshot_data, 1366 * 768 * 3);
+	data := NewArray(destination_info.layout.bytesPerRow * 768, u8,, temp);
+	graphics.gpu.myGpuToCpu(graphics.instance, framegraph.readback_buffer, data);
+	for y: 0..768-1 {
+		for x: 0..1366-1 {
+			idx := (y * destination_info.layout.bytesPerRow) + (x * 4);
+			r := data[idx + 2];
+			g := data[idx + 1];
+			b := data[idx + 0];
+			framegraph.screenshot_data[(y * 1366 + x) * 3 + 0] = r;
+			framegraph.screenshot_data[(y * 1366 + x) * 3 + 1] = g;
+			framegraph.screenshot_data[(y * 1366 + x) * 3 + 2] = b;
+		}
+	}
+
+	scaled := downscale(framegraph.screenshot_data, 1366, 768, 128, 128,, temp);
+	memcpy(framegraph.screenshot_data.data, scaled.data, scaled.count);
+	framegraph.screenshot_data.count = scaled.count;
+
+	if platform.write_file {
+		sb: String_Builder;
+		sb.allocator = temp;
+		print_to_builder(*sb, "P3\n% %\n255\n", 128, 128);
+		for y: 0..128-1 {
+			for x: 0..128-1 {
+				idx := (y * 128 + x) * 3;
+				r := scaled[idx + 0];
+				g := scaled[idx + 1];
+				b := scaled[idx + 2];
+				print_to_builder(*sb, "% % % ", r, g, b);
+			}
+		}
+
+		str := builder_to_string(*sb,, temp);
+		platform.write_file("screenshot.ppm", xx str);
+	}
+	framegraph.screenshot_data_generation += 1;
 }
 
 present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
@@ -1669,13 +2009,33 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 
 	frame := *framegraph.frames[framegraph.rendering_frame_idx];
 
-	encoder := graphics.gpu.deviceCreateCommandEncoder(graphics.device, null);
-	defer graphics.gpu.commandEncoderRelease(encoder);
-
 	surfaceTexture: WGPUSurfaceTexture;
 	graphics.gpu.surfaceGetCurrentTexture(graphics.surface, *surfaceTexture);
 	surfaceView := graphics.gpu.textureCreateView(surfaceTexture.texture, null);
 	defer graphics.gpu.textureViewRelease(surfaceView);
+
+	encoder := graphics.gpu.deviceCreateCommandEncoder(graphics.device, null);
+	defer graphics.gpu.commandEncoderRelease(encoder);
+
+	present_frame_to(framegraph, frame, encoder, store, surfaceView);
+
+	bufferDesc: WGPUCommandBufferDescriptor = .{};
+	bufferDesc.label = toWGPUStringView("Command Buffer");
+	present := graphics.gpu.commandEncoderFinish(encoder, *bufferDesc);
+	defer graphics.gpu.commandBufferRelease(present);
+
+	submit: [] WGPUCommandBuffer = .[present];
+	graphics.gpu.queueSubmit(graphics.mainQueue, xx submit.count, submit.data);
+
+	return true;
+}
+present_frame_to :: (
+	framegraph: *WFramegraph,
+	frame: *Frame,
+	encoder: WGPUCommandEncoder,
+	store: *Store.Store,
+	presentView: WGPUTextureView
+) {
 
 	hdrAttachment: WGPURenderPassColorAttachment;
 	hdrAttachment.view = framegraph.hdrTexture.view;
@@ -1710,16 +2070,19 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 	shadowAttachment.stencilClearValue = 0;
 
 	surfaceAttachment: WGPURenderPassColorAttachment;
-	surfaceAttachment.view = surfaceView;
+	surfaceAttachment.view = presentView;
 	surfaceAttachment.depthSlice = DEPTH_SLICE_UNDEFINED;
 	surfaceAttachment.loadOp = .Clear;
 	surfaceAttachment.storeOp = .Store;
 	surfaceAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
 	
-	geometry_bind_group := instance_bind_group(framegraph, frame.geometry.uniforms, "Geometry");
+	geometry_bind_group := instance_bind_group(
+		framegraph, frame, frame.geometry.uniforms, "Geometry"
+	);
 	defer graphics.gpu.bindGroupRelease(geometry_bind_group);
-	ui_bind_group :=
-		ui_instance_bind_group(framegraph, frame.ui.uniforms, store.ui_atlas, store.verdana_atlas);
+	ui_bind_group := ui_instance_bind_group(
+		framegraph, frame, frame.ui.uniforms, store.ui_atlas, store.verdana_atlas
+	);
 	defer graphics.gpu.bindGroupRelease(ui_bind_group);
 
 	extra: Extra;
@@ -1919,14 +2282,30 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 
 		graphics.gpu.renderPassEncoderSetPipeline(pass, framegraph.quadPipeline);
 		graphics.gpu.renderPassEncoderSetBindGroup(pass, 0, ui_bind_group, 0, null);
-		
-		last_bind_group: *WGPUBindGroup = null;
+		created_bind_groups: [..] WGPUBindGroup;
+		created_bind_groups.allocator = temp;
+		defer for created_bind_groups {
+			graphics.gpu.bindGroupRelease(it);
+		};
+		bg := ui_instance_custom_bind_group(
+			framegraph, frame, *store.terrain_tile_normal, "UI Custom Texture"
+		);
+		graphics.gpu.renderPassEncoderSetBindGroup(pass, 1, bg, 0, null);
+		array_add(*created_bind_groups, bg);
+
+		last_custom_texture: *WTexture = null;
+
+
 		for * frame.ui.draws {
-			if it.second_bind_group != last_bind_group {
-				graphics.gpu.renderPassEncoderSetBindGroup(
-					pass, 1, it.second_bind_group.*, 0, null
-				);
-				last_bind_group = it.second_bind_group;
+			if it.custom_texture != last_custom_texture {
+				if it.custom_texture {
+					bg := ui_instance_custom_bind_group(
+						framegraph, frame, it.custom_texture, "UI Custom Texture"
+					);
+					array_add(*created_bind_groups, bg);
+					graphics.gpu.renderPassEncoderSetBindGroup(pass, 1, bg, 0, null);
+				}
+				last_custom_texture = it.custom_texture;
 			}
 			graphics.gpu.renderPassEncoderDraw(
 				pass, 6, xx it.instance_count, 0, xx it.instance_start
@@ -1949,7 +2328,12 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 		presentUniform.exposure = 1.0;
 		presentUniform.gamma = 2.2;
 		bindGroup := present_bind_group(
-			framegraph, presentUniform, "Present", framegraph.hdrTexture, framegraph.uiTexture
+			framegraph,
+			frame,
+			presentUniform,
+			"Present",
+			framegraph.hdrTexture,
+			framegraph.uiTexture
 		);
 		defer graphics.gpu.bindGroupRelease(bindGroup);
 
@@ -1966,16 +2350,6 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 	graphics.gpu.queueWriteBuffer(
 		graphics.mainQueue, framegraph.frame_buffer, 0, frame.cpu.data, xx frame.cpu_cursor
 	);
-
-	bufferDesc: WGPUCommandBufferDescriptor = .{};
-	bufferDesc.label = toWGPUStringView("Command Buffer");
-	present := graphics.gpu.commandEncoderFinish(encoder, *bufferDesc);
-	defer graphics.gpu.commandBufferRelease(present);
-
-	submit: [] WGPUCommandBuffer = .[present];
-	graphics.gpu.queueSubmit(graphics.mainQueue, xx submit.count, submit.data);
-
-	return true;
 }
 
 snap_shadow_center :: (VP: M4f, iVP: M4f, center: V3f, width: u32) -> V3f {
@@ -2095,7 +2469,45 @@ render_editor :: (
 		add_debug_cylinder(
 			*extra, v3(a.x, b.y, 0.25), v3(a.x, a.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
 		);
+	}
 
+	for editor.scene.robots {
+		p := it.position;
+		a := it.target_aabb.min;
+		b := it.target_aabb.max;
+		c := (a + b) / 2;
+		add_debug_cylinder(
+			*extra, v3(a.x, a.y, 0.25), v3(b.x, a.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
+		);
+		add_debug_cylinder(
+			*extra, v3(b.x, a.y, 0.25), v3(b.x, b.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
+		);
+		add_debug_cylinder(
+			*extra, v3(b.x, b.y, 0.25), v3(a.x, b.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
+		);
+		add_debug_cylinder(
+			*extra, v3(a.x, b.y, 0.25), v3(a.x, a.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
+		);
+	}
+
+	for editor.scene.antiairs {
+		p := it.position;
+
+		a := it.target_aabb.min;
+		b := it.target_aabb.max;
+		c := (a + b) / 2;
+		add_debug_cylinder(
+			*extra, v3(a.x, a.y, 0.25), v3(b.x, a.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
+		);
+		add_debug_cylinder(
+			*extra, v3(b.x, a.y, 0.25), v3(b.x, b.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
+		);
+		add_debug_cylinder(
+			*extra, v3(b.x, b.y, 0.25), v3(a.x, b.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
+		);
+		add_debug_cylinder(
+			*extra, v3(a.x, b.y, 0.25), v3(a.x, a.y, 0.25), color=V3f.{ 1.0, 1.0, 0.0 }
+		);
 	}
 
 	checkpoints_pos: [..] V3f;
@@ -2129,24 +2541,54 @@ render_editor :: (
 	render_extra(frame, *frame.geometry, store, *extra);
 }
 
+render_wide_scene_screenshot :: (
+	frame: *Frame,
+	framegraph: *WFramegraph,
+	scene: Scene.Scene,
+	store: Store.Store
+) {
+	center := (scene.camera_max + scene.camera_min) / 2;
+	size := scene.camera_max - scene.camera_min;
+	camera_pos := v3(center, 0.0);
+	camera_target := v3(center, 0.0);
+	delta := normalize(scene.camera.position - scene.camera.target);
+	camera_pos += delta * max(size.x, size.y) / 2;
+	render_scene(
+		frame,
+		framegraph,
+		scene,
+		store,
+		custom_camera_pos=camera_pos,
+		custom_camera_target=camera_target
+	);
+	framegraph.take_screenshot = true;
+}
+
 render_scene :: (
 	frame: *Frame,
 	framegraph: *WFramegraph,
 	scene: Scene.Scene,
 	store: Store.Store,
-	in_editor: bool = false
+	in_editor: bool = false,
+	custom_camera_pos := V3f_MAX,
+	custom_camera_target := V3f_MAX
 ) {
+	camera_center := scene.camera.position;
+	camera_target := scene.camera.target;
+	if custom_camera_pos.x != FLOAT32_MAX
+		camera_center = custom_camera_pos;
+	if custom_camera_target.x != FLOAT32_MAX
+		camera_target = custom_camera_target;
+
 	frame.geometry.uniforms = .{};
-	frame.geometry.uniforms.V =
-		Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
+	frame.geometry.uniforms.V = Scene.look_at(camera_center, camera_target, .{ 0, 0, 1 });
 	frame.geometry.uniforms.P = Scene.perspective(scene.camera);
 
-	center := scene.camera.target;
 	frame.geometry.uniforms.shadowV = Scene.look_at(
-		center + V3f.{ 100, 100, 100 }, center, V3f.{ 0, 1, 0 }
+		camera_center + V3f.{ 100, 100, 100 }, camera_center, V3f.{ 0, 1, 0 }
 	);
 	iV := Scene.look_at_inverse(
-		center + V3f.{ 100, 100, 100 }, center, V3f.{ 0, 1, 0 }
+		camera_center + V3f.{ 100, 100, 100 }, camera_center, V3f.{ 0, 1, 0 }
 	);
 
 	SW := 10.5;
@@ -2154,9 +2596,9 @@ render_scene :: (
 	iP := Scene.orthographic_inverse(-SW, SW, -SW, SW, 0.1, 500);
 	VP := frame.geometry.uniforms.shadowP * frame.geometry.uniforms.shadowV;
 	iVP := iV * iP;
-	center = snap_shadow_center(VP, iVP, center, xx framegraph.settings.shadow_size);
+	camera_target = snap_shadow_center(VP, iVP, camera_target, xx framegraph.settings.shadow_size);
 	frame.geometry.uniforms.shadowV = Scene.look_at(
-		center + V3f.{ 100, 100, 100 }, center, V3f.{ 0, 1, 0 }
+		camera_target + V3f.{ 100, 100, 100 }, camera_target, V3f.{ 0, 1, 0 }
 	);
 	frame.geometry.uniforms.shadowP = Scene.orthographic(-SW, SW, -SW, SW, 0.1, 500);
 	
@@ -2178,10 +2620,10 @@ render_scene :: (
 		frame.geometry.uniforms.use_lighting = 1.0;
 	frame.geometry.uniforms.light_bin_count_x = 50;
 	frame.geometry.uniforms.light_bin_count_y = 50;
-	frame.geometry.uniforms.light_bin_min_x = scene.camera.target.x - 10;
-	frame.geometry.uniforms.light_bin_min_y = scene.camera.target.y - 6;
-	frame.geometry.uniforms.light_bin_max_x = scene.camera.target.x + 10;
-	frame.geometry.uniforms.light_bin_max_y = scene.camera.target.y + 9;
+	frame.geometry.uniforms.light_bin_min_x = camera_target.x - 10;
+	frame.geometry.uniforms.light_bin_min_y = camera_target.y - 6;
+	frame.geometry.uniforms.light_bin_max_x = camera_target.x + 10;
+	frame.geometry.uniforms.light_bin_max_y = camera_target.y + 9;
 	defer frame.shadow.uniforms = frame.geometry.uniforms;
 	
 	extra: Extra;
@@ -2206,6 +2648,7 @@ render_scene :: (
 		render_gates(frame, *frame.shadow, scene, store, *extra);
 		render_tombstones(frame, *frame.shadow, scene, store, *extra);
 		render_coins(frame, *frame.shadow, scene, store, *extra);
+		render_gravestones(frame, *frame.shadow, scene, store, *extra);
 		render_trophies(frame, *frame.shadow, scene, store, *extra);
 		render_hooks(frame, *frame.shadow, scene, store, *extra);
 		render_presents(frame, *frame.shadow, scene, store, *extra);
@@ -2491,6 +2934,7 @@ render_scene :: (
 		render_gates(frame, *frame.geometry, scene, store, *extra);
 		render_tombstones(frame, *frame.geometry, scene, store, *extra);
 		render_coins(frame, *frame.geometry, scene, store, *extra);
+		render_gravestones(frame, *frame.geometry, scene, store, *extra);
 		render_robots(frame, *frame.geometry, scene, store, *extra);
 		render_trophies(frame, *frame.geometry, scene, store, *extra);
 		render_antiairs(frame, *frame.geometry, scene, store, *extra);
@@ -2505,68 +2949,6 @@ render_scene :: (
 		render_bombs(frame, *frame.geometry, scene, store, *extra);
 		render_traps(frame, *frame.geometry, scene, store, *extra);
 		render_explosions(frame, *frame.geometry, scene, store, *extra);
-
-		if false {
-			for 0..10 {
-				t := it / 11.0 * 2 * 3.1415926;
-				factor := cos(t);
-				factor = (1 - factor) / 2.0;
-				factor = factor * factor * factor;
-				factor = exp(-factor) + 0.7;
-				dt := v3(cos(t), sin(t), 0) * factor * 1.5;
-				add_debug_sphere(*extra, scene.camera.locked_drag_anchor_last_drag_pos + dt, scale = 0.05);
-			}
-			add_debug_sphere(*extra, scene.camera.target, scale = 0.05);
-			add_debug_sphere(*extra, scene.camera.target_target, scale = 0.1);
-			add_debug_sphere(*extra, scene.camera.locked_drag_anchor, scale = 0.2);
-			add_debug_sphere(
-				*extra,
-				scene.camera.locked_drag_anchor_last_drag_pos,
-				color = V4f.{ 1, 0, 0, 1 },
-				scale = 0.3
-			);
-		}
-
-		if true {
-			// Debug visualization for camera rails
-			for rail: scene.camera_rails {
-				waypoints := Scene.iterator(rail.waypoints, scene.camera_rail_waypoints);
-				prev_waypoint: V3f;
-				first := true;
-				end := min(waypoints.span.count + waypoints.span.index, waypoints.array.count);
-				for index: waypoints.span.index..end - 1 {
-					waypoint := waypoints.array[index];
-					if !first {
-						// Draw cylinder between waypoints
-						direction := waypoint - prev_waypoint;
-						length := norm(direction);
-						if length > 0.001 {
-							mid_point := (prev_waypoint + waypoint) / 2.0;
-
-							cylinder: Extra.Cylinder;
-							cylinder.color = V3f.{ 0.0, 1.0, 1.0 }; // Cyan color for rails
-							cylinder.M = M4f.translate(prev_waypoint);
-							cylinder.M *= to_rotation_matrix(
-								from_unit_vectors(V3f.{ 0, 0, 1 }, normalize(direction))
-							);
-							cylinder.M *= scale_matrix(V3f.{ 0.05, 0.05, length });
-							array_add(*extra.cylinders, cylinder);
-						}
-					}
-					first = false;
-					prev_waypoint = waypoint;
-				}
-			}
-
-			// Debug visualization for camera POIs
-			for poi: scene.camera_pois {
-				cylinder: Extra.Cylinder;
-				cylinder.color = V3f.{ 1.0, 0.0, 1.0 }; // Magenta color for POIs
-				cylinder.M = M4f.translate(poi.position);
-				cylinder.M *= scale_matrix(V3f.{ 0.1, 0.1, 0.5 });
-				array_add(*extra.cylinders, cylinder);
-			}
-		}
 		render_within_zones(frame, *frame.geometry, scene, store, *extra);
 		render_extra(frame, *frame.geometry, store, *extra);
 		render_safezones(frame, *frame.geometry, scene, store, *extra);
@@ -2581,7 +2963,7 @@ render_scene :: (
 	}
 }
 render_gui :: (
-	frame: *Frame, framegraph: *WFramegraph, gui_state: GUI.GUI_State, store: Store.Store
+	frame: *Frame, framegraph: *WFramegraph, gui_state: GUI.GUI_State, store: *Store.Store
 ) {
 	frame.ui.uniforms = .{};
 	frame.ui.uniforms.window_size = V2f.{ 1366, 768 };
@@ -2620,23 +3002,35 @@ render_gui :: (
 		instance.outline = ifx it.outline then 1.0 else 0.0;
 	}
 
-	quick_sort(
-		instances, (a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
-			az := a.z30sdf2 / 4;
-			bz := b.z30sdf2 / 4;
-			if az < bz
-				return -1;
-			if az > bz
-				return 1;
-			return 0;
-		}
-	);
+	instance_sort :: (a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
+		az := a.z30sdf2 / 4;
+		bz := b.z30sdf2 / 4;
+		if az < bz
+			return -1;
+		if az > bz
+			return 1;
+		return 0;
+	};
+	quick_sort(instances, instance_sort);
 	commit_ui(frame, *frame.ui, instances.count);
 	instances = append_ui_instance_buffer(frame);
-	
+
+	last_custom_texture := -1;
 	for gui_state.quads {
 		if !it.late
 			continue;
+
+		if it.custom_texture_idx != last_custom_texture {
+			user_texture := Store.user_texture(store, it.custom_texture_idx);
+			if user_texture.gpu {
+				quick_sort(instances, instance_sort);
+				commit_ui(frame, *frame.ui, instances.count);
+				instances = append_ui_instance_buffer(frame);
+				last_custom_texture = it.custom_texture_idx;
+				frame.ui.current_custom_texture = user_texture;
+			}
+		}
+
 		instances.count += 1;
 		instance := *instances[instances.count - 1];
 		instance.* = .{};
@@ -2645,18 +3039,10 @@ render_gui :: (
 		instance.color = it.color;
 		instance.z30sdf2 = xx (it.z * 400);
 		instance.texture_rect = it.texture_rect;
+		if it.custom_texture_idx >= 0
+			instance.use_custom_texture = 1;
 	}
-	quick_sort(
-		instances, (a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
-			az := a.z30sdf2 / 4;
-			bz := b.z30sdf2 / 4;
-			if az < bz
-				return -1;
-			if az > bz
-				return 1;
-			return 0;
-		}
-	);
+	quick_sort(instances, instance_sort);
 	commit_ui(frame, *frame.ui, instances.count);
 }
 
@@ -2930,6 +3316,23 @@ render_explosions :: (
 	commit_geometry(frame, pass, *store.unit_sphere_model, instanced.count);
 }
 
+render_gravestones :: (
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+) {
+	instanced := append_instance_buffer(frame);
+	for scene.gravestones {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count == 0
+		return;
+
+	commit_geometry(frame, pass, *store.gravestone_model, instanced.count);
+}
+
 render_coins :: (
 	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
@@ -2958,7 +3361,7 @@ render_antiairs :: (
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
-		M := M4f.translate(it.server.position);
+		M := M4f.translate(it.position);
 		instance.M = M;
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
@@ -2971,11 +3374,11 @@ render_antiairs :: (
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
-		dt := normalize(v3(it.server.next_target, 0.0) - it.server.position);
+		dt := normalize(v3(it.server.next_target, 0.0) - it.position);
 		dt.z = 0;
 		dt = normalize(dt);
 		R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, dt));
-		M := M4f.translate(it.server.position + V3f.{ -0.5, 0, 0.7 } * 0.7 * 0.8);
+		M := M4f.translate(it.position + V3f.{ -0.5, 0, 0.7 } * 0.7 * 0.8);
 		instance.M = M * R;
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
@@ -2987,7 +3390,7 @@ render_antiairs :: (
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
-		dt := normalize(v3(it.server.next_target, 0.0) - it.server.position);
+		dt := normalize(v3(it.server.next_target, 0.0) - it.position);
 		dt.z = 0;
 		dt = normalize(dt);
 		{
@@ -2996,25 +3399,25 @@ render_antiairs :: (
 			dt = normalize(dt);
 		}
 
-		M := M4f.translate(it.server.position + V3f.{ -0.55, 0, 0.9 } * 0.7 * 0.8);
+		M := M4f.translate(it.position + V3f.{ -0.55, 0, 0.9 } * 0.7 * 0.8);
 		R := to_rotation_matrix(from_unit_vectors(V3f.{ 0, 0, 1 }, dt));
 		// In the chamber
-		if it.client.t < (it.server.cooldown - 1.5) {
+		if it.client.t < (it.cooldown - 1.5) {
 			instance.M = M * R;
 		}
 		// Taking off
-		else if it.client.t < (it.server.cooldown - 1.0) {
-			t := linear_step(it.client.t, it.server.cooldown - 1.5, it.server.cooldown - 0.75);
+		else if it.client.t < (it.cooldown - 1.0) {
+			t := linear_step(it.client.t, it.cooldown - 1.5, it.cooldown - 0.75);
 			t = ease_in_quad(t);
 			instance.M = M * R * M4f.translate(V3f.{ 0, 0, 15 * t });
 		}
 		// In flight some place random
-		else if it.client.t < (it.server.cooldown - 0.5) {
+		else if it.client.t < (it.cooldown - 0.5) {
 			instance.M = M4f.translate(.{ 0, 0, -100 });
 		}
 		// landing
 		else {
-			t := linear_step(it.client.t, it.server.cooldown - 0.5, it.server.cooldown);
+			t := linear_step(it.client.t, it.cooldown - 0.5, it.cooldown);
 			t = ease_in_quad(t);
 			instance.M = M4f.translate(
 				.{ it.client.next_target.x, it.client.next_target.y, 10 * (1 - t) }
@@ -3029,13 +3432,13 @@ render_antiairs :: (
 	}
 
 	for scene.antiairs {
-		if !(it.client.t > (it.server.cooldown - 0.75))
+		if !(it.client.t > (it.cooldown - 0.75))
 			continue;
 
 		particle: Extra.Quad;
 		particle.M =
-		M4f.translate(v3(it.client.next_target - V2f.{ it.server.radius, it.server.radius } / 2, 0.05))
-		* scale_matrix(V3f.{ it.server.radius, it.server.radius, 1.0 });
+		M4f.translate(v3(it.client.next_target - V2f.{ it.radius, it.radius } / 2, 0.05))
+		* scale_matrix(V3f.{ it.radius, it.radius, 1.0 });
 		particle.texture_rect = V4f.{ 0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
 		particle.color = V4f.{ 1.0, 1.0, 1.0, 0.5 };
 		array_add(*extra.quads, particle);
@@ -3949,12 +4352,16 @@ render_debris :: (
 			last_part_idx = it.part_idx;
 			instanced = append_instance_buffer(frame);
 		}
+		
+		dt := scene.client.clock - it.birthtime;
+		scale := 1.0 - smoothstep(dt.(float32), 5, 7) * 0.7;
+
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
 		M := M4f.identity();
 		M = M4f.translate(-1 * it.origin) * M;
-		// M = scale_matrix(it.half_size) * M;
+		M = scale_matrix(scale) * M;
 		M = to_rotation_matrix(it.q) * M;
 		M = M4f.translate(it.position) * M;
 		instance.M = M;
@@ -4024,6 +4431,11 @@ render_terrain :: (
 	for y: min_tiles.y .. max_tiles.y - 1 {
 		for x: min_tiles.x .. max_tiles.x - 1 {
 			it_index := y * terrain.tiles_count.x + x;
+			left_index := y * terrain.tiles_count.x + (x - 1);
+			up_index := (y - 1) * terrain.tiles_count.x + x;
+			down_index := (y + 1) * terrain.tiles_count.x + x;
+			right_index := y * terrain.tiles_count.x + (x + 1);
+
 			it := terrain.tiles[it_index];
 			pos := Scene.tile_bottom_left(scene, V2i.{ x, y });
 			if cull(VP, pos + v3(0.5, 0.5, 0.0), safety = 1.5)
@@ -4038,8 +4450,19 @@ render_terrain :: (
 			set_albedo_map_idx(instance, Store.get_tile_idx(it.kind));
 			instance.texture_rect.x = xx x;
 			instance.texture_rect.y = xx y;
-		// if it.kind != .Grass
-		// 	instance.flags = instance.UV_NO_TILE;
+			instance.flags = 0;
+			if it.kind != .Grass
+				instance.flags = instance.UV_NO_TILE;
+			instance.flags |= instance.UV_GRID;
+
+			if x > 0 && terrain.tiles[left_index].kind != it.kind
+				instance.flags |= instance.GRID_LEFT;
+			if x < terrain.tiles_count.x - 1 && terrain.tiles[right_index].kind != it.kind
+				instance.flags |= instance.GRID_RIGHT;
+			if y > 0 && terrain.tiles[up_index].kind != it.kind
+				instance.flags |= instance.GRID_TOP;
+			if y < terrain.tiles_count.y - 1 && terrain.tiles[down_index].kind != it.kind
+				instance.flags |= instance.GRID_BOTTOM;
 		}
 	}
 	if instanced.count == 0 {

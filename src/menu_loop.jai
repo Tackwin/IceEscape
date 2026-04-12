@@ -1,14 +1,40 @@
 #import "Sort";
 
+Create_Instance :: struct {
+	open := false;
+
+	filter: string;
+	name: string;
+	password: string;
+	auto_revive: bool;
+	private: bool;
+
+	Terrain_Entry :: struct {
+		name: string;
+		author: string;
+		id: int;
+		created_ms: int;
+		selected := false;
+	}
+
+	terrain_entries: [..] Terrain_Entry;
+	terrain_page := 0;
+
+	roster_list: [..] Terrain_Entry;
+}
+
 Menu :: struct {
-	create_instance_popup_open: bool = false;
-	create_instance_name: string = "";
-	create_instance_password: string = "";
+	big_assets_sending: [..] Big_Asset;
+	big_assets_receiving: Table(int, Big_Asset);
+	thumbnail_receiving: [..] Thumbnail_Pending;
 
 	login_popup_open: bool = false;
 	login_popup_password: string = "";
 
 	scene_name_leadeboard: string = "";
+	terrain_name_selected_leaderboard: string = "";
+
+	create_instance: Create_Instance;
 
 	enter_instance_password: string = "";
 
@@ -120,12 +146,9 @@ push_left_main_menu :: (
 		free(menu.scene_name_leadeboard);
 		menu.scene_name_leadeboard = sprint("%", new_scene_name);
 
-		// get_terrain: Command.Get_Terrain_Leaderboard;
-		// get_terrain.terrain_id = -1;
-		// get_terrain.scene_name = tprint("%", menu.scene_name_leadeboard);
-		// send_web_message(platform, gui.controls.time, make_command(get_terrain));
 		ask_list_terrain: Command.Ask_List_Terrain;
 		ask_list_terrain.filter = menu.scene_name_leadeboard;
+		ask_list_terrain.correlation_id = 0;
 		send_web_message(platform, gui.controls.time, make_command(ask_list_terrain));
 	}
 
@@ -155,7 +178,7 @@ push_left_main_menu :: (
 		rows[it_index].name = it.name;
 		rows[it_index].author = it.author;
 		rows[it_index].leaderboard = "View";
-		rows[it_index].play = "----";
+		rows[it_index].play = "Play";
 	}
 	scene_table := GUI.table(gui, rows, v2(512.0, 24.0 * 6 + 12), id = "terrain_table");
 	if scene_table.clicked_row_index >= 0 {
@@ -165,11 +188,22 @@ push_left_main_menu :: (
 			get_terrain_leaderboard.terrain_id = entry.id;
 			send_web_message(platform, gui.controls.time, make_command(get_terrain_leaderboard));
 		}
+		if scene_table.clicked_col_index == 3 {
+			ask_enter_custom_instance: Command.Ask_Enter_Quick_Instance;
+			ask_enter_custom_instance.terrain_id = entry.id;
+			send_web_message(
+				platform, gui.controls.time, make_command(ask_enter_custom_instance)
+			);
+		}
 	}
 
 	GUI.space(gui, 24 * 7);
+	leaderboard_string := "Leaderboard for: Unselected";
+	if menu.terrain_name_selected_leaderboard.count > 0
+		leaderboard_string = tprint("Leaderboard for: %", menu.terrain_name_selected_leaderboard);
+	
 	GUI._atom_label(
-		gui, "Leaderboard", id = "leaderboard_label", color = GUI.GRAY_00
+		gui, leaderboard_string, id = "leaderboard_label", color = GUI.GRAY_00
 	);
 
 	Row_Leaderboard :: struct {
@@ -287,7 +321,8 @@ string_to_code :: (str: string) -> u64 {
 	return code;
 }
 
-process_menu :: (state: *State, command: Command) -> bool {
+process_menu :: (app_user: *App_User, command: Command) -> bool {
+	state := *app_user.state;
 	connect := isa(command.payload, Command.Connect);
 	if connect {
 		state.is_connected = true;
@@ -303,6 +338,10 @@ process_menu :: (state: *State, command: Command) -> bool {
 
 		get_username: Command.Get_Username;
 		send_web_message(state.platform, state.current_time, make_command(get_username));
+		
+		ask_list_terrain: Command.Ask_List_Terrain;
+		ask_list_terrain.filter = "";
+		send_web_message(state.platform, state.current_time, make_command(ask_list_terrain));
 
 		return true;
 	}
@@ -313,6 +352,33 @@ process_menu :: (state: *State, command: Command) -> bool {
 		return true;
 	}
 
+	get_thumbnail := isa(command.payload, Command.Get_Thumbnail);
+	if get_thumbnail {
+		big_asset := table_find_pointer(*state.menu.big_assets_receiving, get_thumbnail.asset.id);
+		if big_asset {
+			big_asset.buffer = NewArray(get_thumbnail.asset.size, u8, false);
+			return true;
+		}
+	}
+
+	asset_chunk := isa(command.payload, Command.Asset_Chunk);
+	if asset_chunk {
+		big_asset := table_find_pointer(*state.menu.big_assets_receiving, asset_chunk.asset.id);
+		if big_asset {
+			print("Received asset chunk for asset id %, offset %, size %\n", asset_chunk.asset.id, asset_chunk.offset, asset_chunk.data.count);
+			memcpy(
+				big_asset.buffer.data + asset_chunk.offset,
+				asset_chunk.data.data,
+				min(asset_chunk.data.count, big_asset.buffer.count - asset_chunk.offset)
+			);
+			big_asset.written += asset_chunk.data.count;
+			big_asset.last_written = state.current_time;
+			if big_asset.written >= big_asset.buffer.count {
+				handle_received_asset(app_user, big_asset);
+			}
+			return true;
+		}
+	}
 	get_username := isa(command.payload, Command.Get_Username);
 	if get_username {
 		free(state.menu.profile.username);
@@ -336,11 +402,43 @@ process_menu :: (state: *State, command: Command) -> bool {
 
 	ans_list_terrain := isa(command.payload, Command.Ans_List_Terrain);
 	if ans_list_terrain {
-		array_resize(*state.menu.terrain_entries, ans_list_terrain.terrains_id.count);
-		for * state.menu.terrain_entries {
-			it.id = ans_list_terrain.terrains_id[it_index];
-			it.name = ans_list_terrain.terrains_name[it_index];
-			it.author = ans_list_terrain.authors_name[it_index];
+		if ans_list_terrain.correlation_id == 0 {
+			array_resize(*state.menu.terrain_entries, ans_list_terrain.terrains_id.count);
+			for * state.menu.terrain_entries {
+				it.id = ans_list_terrain.terrains_id[it_index];
+				it.name = ans_list_terrain.terrains_name[it_index];
+				it.author = ans_list_terrain.authors_name[it_index];
+			}
+		} else if ans_list_terrain.correlation_id == 1 {
+			array_resize(
+				*state.menu.create_instance.terrain_entries, ans_list_terrain.terrains_id.count
+			);
+			for * state.menu.create_instance.terrain_entries {
+				it.id = ans_list_terrain.terrains_id[it_index];
+				it.name = ans_list_terrain.terrains_name[it_index];
+				it.author = ans_list_terrain.authors_name[it_index];
+				it.created_ms = ans_list_terrain.creation_time_ms[it_index];
+
+				if !thumbnail_here_or_coming(*app_user.store, it.id) {
+					get_thumbnail: Command.Get_Thumbnail;
+					get_thumbnail.asset.id = app_user.counter;
+					get_thumbnail.terrain_id = it.id;
+					app_user.counter += 1;
+					send_web_message(state.platform, state.current_time, make_command(get_thumbnail));
+
+					big_asset: Big_Asset;
+					big_asset.id = get_thumbnail.asset.id;
+					big_asset.kind = .Receiving;
+					big_asset.last_written = state.platform.get_current_time();
+
+					pending: Thumbnail_Pending;
+					pending.asset_id = get_thumbnail.asset.id;
+					pending.terrain_id = it.id;
+					array_add(*state.menu.thumbnail_receiving, pending);
+					table_add(*state.menu.big_assets_receiving, big_asset.id, big_asset);
+				}
+
+			}
 		}
 		return true;
 	}
@@ -375,6 +473,12 @@ process_menu :: (state: *State, command: Command) -> bool {
 			entry.time_ms = it.time_ms;
 			entry.timestamp_ms = it.timestamp_ms;
 		}
+
+		if state.menu.terrain_name_selected_leaderboard
+			free(state.menu.terrain_name_selected_leaderboard);
+		state.menu.terrain_name_selected_leaderboard = sprint(
+			"%", get_terrain_leaderboard.scene_name
+		);
 
 		quick_sort(state.menu.entries_leaderboard, x => x.time_ms);
 	}
@@ -415,7 +519,7 @@ menu_loop :: (_app: *App) -> bool {
 		if no_connection_ret.retry_localhost_clicked {
 			if !state.is_communication_established {
 				connection:, state.is_communication_established = _app.platform.connect_server(
-					"localhost", 8000, "ws"
+					"localhost", 2356, "ws"
 				);
 			}
 
@@ -431,9 +535,9 @@ menu_loop :: (_app: *App) -> bool {
 		main_menu_args.instances = NewArray(
 			state.menu.instances_list.count, GUI.Instance_Info,, temp
 		);
-		main_menu_args.create_instance_popup_open = state.menu.create_instance_popup_open;
-		main_menu_args.create_instance_name = state.menu.create_instance_name;
-		main_menu_args.create_instance_password = state.menu.create_instance_password;
+		main_menu_args.create_instance_popup_open = state.menu.create_instance.open;
+		main_menu_args.create_instance_name = state.menu.create_instance.name;
+		main_menu_args.create_instance_password = state.menu.create_instance.password;
 		main_menu_args.enter_instance_password = state.menu.enter_instance_password;
 		for state.menu.instances_list {
 			gui_instance := *main_menu_args.instances[it_index];
@@ -452,49 +556,7 @@ menu_loop :: (_app: *App) -> bool {
 			gui_instance.auto_revive = it.auto_revive;
 			gui_instance.instance_id = it.instance_id;
 		}
-		main_menu_ret := GUI.push_main_menu(*app_user.gui_state, main_menu_args);
-	
-		if state.menu.create_instance_name.count > 0 &&  state.menu.create_instance_name.data
-			free(state.menu.create_instance_name);
-		state.menu.create_instance_name = sprint("%", main_menu_ret.temp_create_instance_name);
-
-		if state.menu.create_instance_password.count > 0 &&  state.menu.create_instance_password.data
-			free(state.menu.create_instance_password);
-		state.menu.create_instance_password = sprint("%", main_menu_ret.temp_create_instance_password);
-
-		if state.menu.enter_instance_password.count > 0 &&  state.menu.enter_instance_password.data
-			free(state.menu.enter_instance_password);
-		state.menu.enter_instance_password = sprint("%", main_menu_ret.temp_enter_instance_password);
-
-		if main_menu_ret.create_instance_cancel_clicked {
-			state.menu.create_instance_popup_open = false;
-		}
-
-		if main_menu_ret.create_instance_create_clicked {
-			command: Command.Create_Instance;
-			string_to_array(state.menu.create_instance_name, command.name);
-			string_to_array(state.menu.create_instance_password, command.password);
-			command.auto_revive = main_menu_ret.create_instance_auto_revive;
-			command.private = main_menu_ret.create_instance_private;
-			send_web_message(_app.platform, controls.time, make_command(command));
-			state.menu.create_instance_popup_open = false;
-		}
-
-		if main_menu_ret.reload_instances_clicked {
-			command: Command.Ask_Instance_List;
-			send_web_message(_app.platform, controls.time, make_command(command));
-		}
-
-		if main_menu_ret.enter_instance_clicked && main_menu_ret.selected_instance_id >= 0 {
-			command: Command.Ask_Enter_Instance;
-			command.instance_id = main_menu_ret.selected_instance_id;
-			string_to_array(state.menu.enter_instance_password, command.password);
-			send_web_message(_app.platform, controls.time, make_command(command));
-		}
-
-		if main_menu_ret.create_instance_clicked {
-			state.menu.create_instance_popup_open = !state.menu.create_instance_popup_open;
-		}
+		push_main_menu(app_user, *app_user.gui_state, *state.menu);
 
 		push_left_main_menu(*app_user.gui_state, *state.menu, _app.platform);
 		// #if OS == .WASM {
@@ -511,23 +573,608 @@ menu_loop :: (_app: *App) -> bool {
 			offset_pos = v2(-4.0, 0.0),
 			scale = 10
 		);
-	}
 
-	// Editor button (always visible)
-	editor_clicked, _, _ := GUI.text_button(
-		*app_user.gui_state,
-		"Level Editor",
-		V2f.{ 20, 20 },
-		z = 10,
-		id = "editor_btn"
-	);
-	if editor_clicked {
-		state.screen_state = .Editor;
+		// Editor button
+		editor_clicked, _, _ := GUI.text_button(
+			*app_user.gui_state,
+			"Level Editor",
+			V2f.{ 20, 20 },
+			z = 5,
+			id = "editor_btn"
+		);
+		if editor_clicked {
+			state.screen_state = .Editor;
+		}
 	}
 
 	frame := WRender.begin_frame(*framegraph, controls.time);
-	WRender.render_gui(frame, *framegraph, app_user.gui_state, store);
+	WRender.render_gui(frame, *framegraph, app_user.gui_state, *store);
 	WRender.end_frame(*framegraph, frame);
 
 	return true;
+}
+
+push_main_menu :: (
+	app_user: *App_User,
+	gui: *GUI.GUI_State,
+	menu: *Menu
+) {
+	_app := app_user.app;
+
+	GUI.push_quad_screen(
+		gui,
+		pos = .{ 0, 0 },
+		size = gui.controls.window_size,
+		color = v3(GUI.GRAY_80),
+		z = 0.01
+	);
+
+	GUI.atom_label(
+		gui,
+		"Name game",
+		.{ gui.controls.window_size.x / 2, gui.controls.window_size.y - 16 },
+		32,
+		z = 1,
+		align = .Top_Center,
+		color = V4f.{ 0, 0, 0, 1 }
+	);
+	GUI.push_quad_screen(
+		gui,
+		.{ 16, gui.controls.window_size.y - 64 },
+		.{ gui.controls.window_size.x - 32, 1 },
+		v3(GUI.GRAY_10),
+		z = 0.02
+	);
+	Row :: struct {
+		instance_name: string; @"name(\"Name\")" @"size(128)" @"align(Left)"
+		players_count: string; @"name(\"# Players\")" @"align(Right)"
+		level_name: string; @"name(\"Level name\")" @"align(Right)"
+		auto_revive: bool; @"name(\"Auto-revive\")" @"align(Right)"
+		private: bool; @"name(\"Private\")" @"align(Right)"
+	}
+
+	rows := NewArray(menu.instances_list.count, Row,, temp);
+	for * rows {
+		it.instance_name = string_from_arr(menu.instances_list[it_index].name);
+		it.players_count = tprint(
+			"% / %",
+			formatInt(menu.instances_list[it_index].current_players, 10, 3, #char " "),
+			formatInt(menu.instances_list[it_index].max_players, 10, 3, #char " ")
+		);
+		it.level_name = string_from_arr(menu.instances_list[it_index].level_name);
+		it.auto_revive = menu.instances_list[it_index].auto_revive;
+		it.private = menu.instances_list[it_index].private;
+	}
+
+	table := GUI.atom_table(
+		gui,
+		.{ gui.controls.window_size.x - 16, gui.controls.window_size.y - 64 - 16 },
+		.{ 512 + 128, gui.controls.window_size.y - 64 - 16 - 16 - 32 },
+		rows,
+		id = "table",
+		align = GUI.Align.Top_Right
+	);
+
+	selected_instance_id := -1;
+	if table.selected_row_index >= 0 && table.selected_row_index < menu.instances_list.count {
+		selected_instance_id = menu.instances_list[table.selected_row_index].instance_id;
+	}
+
+	lower_input_aabb := pos_size(
+		V2f.{ table.aabb_min.x, table.aabb_min.y - 4 - 32 },
+		V2f.{ table.aabb_max.x - table.aabb_min.x, 32 }
+	);
+	GUI.push_quad_screen(gui, lower_input_aabb, v3(GUI.GRAY_70), z = 0.02);
+
+	text_button_state: GUI.Text_Button;
+	cursor := V2f.{ table.aabb_min.x + 8, table.aabb_min.y - 4 - 32 + 16 };
+	reload_instances_clicked:, text_button_state = GUI.text_button(
+		gui, "Reload", cursor, 1, id = "reload", align = GUI.Align.Center_Left
+	);
+	if reload_instances_clicked {
+		command: Command.Ask_Instance_List;
+		send_web_message(_app.platform, gui.controls.time, make_command(command));
+	}
+	cursor.x += GUI.widget_width(gui, "reload") + 4;
+	enter_instance_clicked:, text_button_state = GUI.text_button(
+		gui, "Enter instance", cursor, 1, id = "enter_instance", align = GUI.Align.Center_Left
+	);
+	if enter_instance_clicked && selected_instance_id >= 0 {
+		command: Command.Ask_Enter_Instance;
+		command.instance_id = selected_instance_id;
+		string_to_array(menu.enter_instance_password, command.password);
+		send_web_message(_app.platform, gui.controls.time, make_command(command));
+	}
+	cursor.x += GUI.widget_width(gui, "enter_instance") + 4;
+	create_instance_clicked:, text_button_state = GUI.text_button(
+		gui, "Create instance", cursor, 1, id = "create_instance", align = GUI.Align.Center_Left
+	);
+	if create_instance_clicked {
+		menu.create_instance.open = !menu.create_instance.open;
+	}
+
+	input_text_aabb := pos_size(v2(0.0), v2(128.0, 24.0));
+	input_text_aabb = GUI.align_aabb(
+		input_text_aabb, shrink(lower_input_aabb, 4), GUI.Align.Bottom_Right
+	);
+	enter_instance_password := GUI.atom_input_text(
+		gui,
+		menu.enter_instance_password,
+		24,
+		128.0,
+		id = GUI.string_id("password_input"),
+		placeholder = "Password",
+		max_chars = 8,
+		_z=1,
+		_pos = input_text_aabb.min,
+		_align = GUI.Align.Bottom_Left
+	);
+	if menu.enter_instance_password != enter_instance_password {
+		free(menu.enter_instance_password);
+		menu.enter_instance_password = sprint("%", enter_instance_password);
+	}
+
+	cursor =  .{ 16, gui.controls.window_size.y - 64 - 16 };
+
+	if menu.create_instance.open {
+		popup := GUI.begin_window(
+			gui,
+			gui.controls.window_size / 2,
+			V2f.{ 1280, 720 },
+			GUI.Align.Center,
+			"create_instance_popup",
+			10
+		);
+
+		GUI.atom_label(
+			gui,
+			"Create Instance",
+			popup.pos + V2f.{ popup.size.x / 2, popup.size.y - 4 },
+			scale = 24,
+			z = 10.1,
+			align = GUI.Align.Top_Center,
+			color = V4f.{ 0, 0, 0, 1 }
+		);
+
+		GUI.push_quad_screen(
+			gui,
+			popup.pos + V2f.{ 0, popup.size.y - 32 },
+			V2f.{ popup.size.x, 1 },
+			v3(GUI.GRAY_10),
+			z = 10.1
+		);
+
+		cursor := popup.size.y - 32 - 8 - 8;
+
+		content_aabb := pos_size(popup.pos + V2f.{ 8, 8 }, popup.size - V2f.{ 16, 32 + 16 });
+
+		terrain_list_aabb := content_aabb;
+		terrain_list_aabb = span_x(terrain_list_aabb, 0.0, 0.5);
+
+		roster_list_aabb := content_aabb;
+		roster_list_aabb = span_x(roster_list_aabb, 0.5, 0.75);
+
+		param_aabb := content_aabb;
+		param_aabb = span_x(param_aabb, 0.75, 1.0);
+
+		draw_create_instance_terrain_panel(app_user, gui, menu, terrain_list_aabb);
+		draw_create_instance_roster_panel(app_user, gui, menu, roster_list_aabb);
+		draw_create_instance_param_panel(app_user, gui, menu, param_aabb);
+
+		GUI.end_window(gui, "create_instance_popup");
+	}
+
+}
+
+draw_create_instance_param_panel :: (
+	app: *App_User,
+	gui: *GUI.GUI_State,
+	menu: *Menu,
+	aabb: AABBf
+) {
+	store := *app.store;
+	platform := app.app.platform;
+
+	GUI.push_id(gui, 456);
+	defer GUI.pop_id(gui);
+
+	// vertical separator
+	GUI.push_quad_screen(
+		gui,
+		pos = v2(aabb.min.x - 1, aabb.min.y),
+		size = v2(1.0, height(aabb)),
+		color = v3(GUI.GRAY_20),
+		z = 26.1
+	);
+	GUI.atom_label(
+		gui,
+		"Parameters",
+		v2(aabb.min.x + 8, aabb.max.y - 8),
+		scale = 16,
+		color = GUI.GRAY_10,
+		z = 26.2,
+		align = .Top_Left
+	);
+	GUI.push_quad_screen(
+		gui,
+		pos = v2(aabb.min.x + 4, aabb.max.y - 32),
+		size = v2(width(aabb) - 8, 1),
+		color = v3(GUI.GRAY_20),
+		z = 26.1
+	);
+
+	GUI.push_default_params(gui, GUI.default_params(gui).*);
+	defer GUI.pop_default_params(gui);
+	GUI.default_params(gui).cursor = v2(aabb.min.x + 8, aabb.max.y - 40);
+	GUI.default_params(gui).direction = .Down;
+	GUI.default_params(gui).align = .Top_Left;
+	GUI.default_params(gui).z = 26.2;
+	
+	create_instance_name := GUI.labeled_input_text(
+		gui,
+		"Name",
+		menu.create_instance.name,
+		width(aabb) - 8,
+		24,
+		scale = 16,
+		max_chars = 8,
+		id = "instance_name_input",
+	);
+	if menu.create_instance.name != create_instance_name {
+		free(menu.create_instance.name);
+		menu.create_instance.name = sprint("%", create_instance_name);
+	}
+
+	create_instance_private := GUI._labeled_checkbox(
+		gui, "Private Instance", width(aabb) - 8, 16, id = "private_instance_checkbox"
+	).checked;
+
+	if create_instance_private {
+		create_instance_password := GUI.labeled_input_text(
+			gui,
+			"Password",
+			menu.create_instance.password,
+			width(aabb) - 8,
+			24,
+			scale = 16,
+			placeholder = "****",
+			max_chars = 8,
+			id = "private_instance_password_input",
+		);
+		if menu.create_instance.password != create_instance_password {
+			free(menu.create_instance.password);
+			menu.create_instance.password = sprint("%", create_instance_password);
+		}
+	}
+
+	create_instance_auto_revive := GUI._labeled_checkbox(
+		gui,
+		"Auto revive",
+		width(aabb) - 8,
+		16,
+		id = "auto_revive_checkbox"
+	).checked;
+
+	GUI.default_params(gui).direction = .Left;
+	GUI.default_params(gui).align = .Bottom_Right;
+	GUI.default_params(gui).cursor = v2(aabb.max.x - 8, aabb.min.y + 8);
+	create_clicked, create_button, create_widget := GUI._text_button(
+		gui, "Create", id = "create_instance_button"
+	);
+	if create_clicked {
+		command: Command.Create_Instance;
+		string_to_array(menu.create_instance.name, command.name);
+		string_to_array(menu.create_instance.password, command.password);
+		command.auto_revive = menu.create_instance.auto_revive;
+		command.private = menu.create_instance.private;
+		command.roster = NewArray(menu.create_instance.roster_list.count, int,, temp);
+		for menu.create_instance.roster_list {
+			command.roster[it_index] = it.id;
+		}
+		send_web_message(app.app.platform, gui.controls.time, make_command(command));
+		menu.create_instance.open = false;
+	}
+
+	cancel_clicked := GUI._text_button(
+		gui, "Cancel", id = "cancel_create_instance_button"
+	);
+	if cancel_clicked
+		menu.create_instance.open = false;
+
+}
+
+
+draw_create_instance_roster_panel :: (
+	app: *App_User,
+	gui: *GUI.GUI_State,
+	menu: *Menu,
+	aabb: AABBf
+) {
+	store := *app.store;
+	platform := app.app.platform;
+	GUI.push_id(gui, 123);
+	defer GUI.pop_id(gui);
+
+	// vertical separator
+	GUI.push_quad_screen(
+		gui,
+		pos = v2(aabb.min.x - 1, aabb.min.y),
+		size = v2(1.0, height(aabb)),
+		color = v3(GUI.GRAY_20),
+		z = 26.1
+	);
+
+	GUI.atom_label(
+		gui,
+		"Roster",
+		v2(aabb.min.x + 8, aabb.max.y - 8),
+		scale = 16,
+		color = GUI.GRAY_10,
+		z = 26.2,
+		align = .Top_Left
+	);
+	GUI.push_quad_screen(
+		gui,
+		pos = v2(aabb.min.x + 4, aabb.max.y - 32),
+		size = v2(width(aabb) - 8, 1),
+		color = v3(GUI.GRAY_20),
+		z = 26.1
+	);
+
+	cursor := v2(aabb.min.x, aabb.max.y);
+	cursor.y -= 40;
+	terrain_entry_row_height := 64.0;
+	terrain_entry_row_width := width(aabb);
+
+	for * menu.create_instance.roster_list {
+		GUI.push_id(gui, it_index);
+		defer GUI.pop_id(gui);
+
+		row_aabb := pos_size(
+			cursor - v2(0.0, terrain_entry_row_height),
+			v2(terrain_entry_row_width, terrain_entry_row_height)
+		);
+
+		GUI.push_quad_screen(gui, row_aabb, v3(GUI.GRAY_90));
+
+		thumbnail_aabb: AABBf;
+		thumbnail_aabb.min = row_aabb.min + v2(4.0, 4);
+		thumbnail_aabb.max = thumbnail_aabb.min + v2(56.0, 56);
+		quad := GUI.push_late_quad_screen(gui, thumbnail_aabb, GUI.GRAY_70);
+		quad.custom_texture_idx = user_texture_idx_thumbnail_for(store, it.id);
+		if quad.custom_texture_idx >= 0 {
+			quad.texture_rect = v4(0.0, 1.0, 1, -1);
+		}
+
+		cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
+		date := tprint(
+			"%/% %:%",
+			cal.day_of_month_starting_at_0 + 1, cal.month_starting_at_0 + 1, cal.hour, cal.minute
+		);
+		GUI.atom_label(
+			gui,
+			it.name,
+			row_aabb.min + v2(72.0, 42.0),
+			scale = 16,
+			color = GUI.GRAY_10,
+			z = 26.2
+		);
+		GUI.atom_label(
+			gui,
+			ifx it.author.count == 0 then "Anonymous" else it.author,
+			row_aabb.min + v2(72.0, 12.0),
+			scale = 14,
+			color = GUI.GRAY_20,
+			z = 26.2
+		);
+		GUI.atom_label(
+			gui,
+			date,
+			row_aabb.min + v2(terrain_entry_row_width - 78, 12.0),
+			scale = 14,
+			color = GUI.GRAY_20,
+			align = .Bottom_Right,
+			z = 26.2
+		);
+
+		if it_index < menu.create_instance.roster_list.count - 1
+		&& menu.create_instance.roster_list.count > 1
+		{
+			clicked := GUI.text_button(
+				gui,
+				"Down",
+				v2(row_aabb.max.x - 8, row_aabb.min.y + 12.0),
+				id = "down_btn",
+				z = 26.2,
+				align = .Bottom_Right
+			);
+			if clicked {
+				t := menu.create_instance.roster_list[it_index];
+				menu.create_instance.roster_list[it_index] =
+					menu.create_instance.roster_list[it_index + 1];
+				menu.create_instance.roster_list[it_index + 1] = t;
+			}
+		}
+		if it_index > 0 && menu.create_instance.roster_list.count > 1
+		{
+			clicked := GUI.text_button(
+				gui,
+				"Up",
+				v2(row_aabb.max.x - 8, row_aabb.max.y - 12.0),
+				id = "up_btn",
+				z = 26.2,
+				align = .Top_Right
+			);
+			if clicked {
+				t := menu.create_instance.roster_list[it_index];
+				menu.create_instance.roster_list[it_index] =
+					menu.create_instance.roster_list[it_index - 1];
+				menu.create_instance.roster_list[it_index - 1] = t;
+			}
+		}
+
+		cursor.y -= terrain_entry_row_height;
+		cursor.y -= 8;
+	}
+}
+
+draw_create_instance_terrain_panel :: (
+	app: *App_User,
+	gui: *GUI.GUI_State,
+	menu: *Menu,
+	aabb: AABBf
+) {
+	platform := app.app.platform;
+	store := *app.store;
+
+	GUI.push_default_params(gui, GUI.default_params(gui).*);
+	GUI.default_params(gui).z = 26;
+	GUI.default_params(gui).align = .Top_Left;
+	GUI.default_params(gui).cursor = v2(aabb.min.x + 4, aabb.max.y - 8);
+	GUI.default_params(gui).direction = .Down;
+	defer GUI.pop_default_params(gui);
+
+	new_filter := GUI.labeled_input_text(
+		gui,
+		"Filter",
+		menu.create_instance.filter,
+		width(aabb) - 8,
+		16,
+		max_input_width = 256,
+		_z = 26,
+		_align = .Top_Left
+	);
+	if new_filter != menu.create_instance.filter {
+		free(menu.create_instance.filter);
+		menu.create_instance.filter = sprint("%", new_filter);
+		ask_list_terrain: Command.Ask_List_Terrain;
+		ask_list_terrain.filter = menu.create_instance.filter;
+		ask_list_terrain.correlation_id = 1;
+		send_web_message(platform, gui.controls.time, make_command(ask_list_terrain));
+	}
+	GUI.push_quad_screen(
+		gui,
+		GUI.default_params(gui).cursor,
+		v2(width(aabb) - 8, 1),
+		v3(GUI.GRAY_20),
+		z = 26
+	);
+
+	scroll_aabb := pos_size(
+		v2(aabb.min.x + 4, aabb.min.y + 40),
+		v2(width(aabb) - 8, height(aabb) - 80)
+	);
+
+	cursor := v2(scroll_aabb.min.x, scroll_aabb.max.y);
+	terrain_entry_row_height := 64.0;
+	terrain_entry_row_width := width(scroll_aabb);
+	PAGE_SIZE :: 8;
+	page_count := max((menu.create_instance.terrain_entries.count + PAGE_SIZE - 1) / PAGE_SIZE, 1);
+	menu.create_instance.terrain_page = clamp(
+		menu.create_instance.terrain_page,
+		0,
+		max((menu.create_instance.terrain_entries.count + PAGE_SIZE - 1) / PAGE_SIZE - 1, 0)
+	);
+
+	beg := menu.create_instance.terrain_page * PAGE_SIZE;
+	end := beg + PAGE_SIZE;
+	end = min(end, menu.create_instance.terrain_entries.count);
+	terrain_list_view: []Create_Instance.Terrain_Entry;
+	terrain_list_view.count = end - beg;
+	terrain_list_view.data = menu.create_instance.terrain_entries.data + beg;
+	for * terrain_list_view {
+		GUI.push_id(gui, it_index);
+		defer GUI.pop_id(gui);
+
+		row_aabb := pos_size(
+			cursor - v2(0.0, terrain_entry_row_height),
+			v2(terrain_entry_row_width, terrain_entry_row_height)
+		);
+
+		state, widget := GUI.widget(gui, "row_button", struct {});
+		widget.physical = .Mouse;
+		widget.aabb = row_aabb;
+
+		if widget.hovered {
+			GUI.push_quad_screen(gui, row_aabb, v3(GUI.GRAY_40), z = 26.1);
+		} else if it.selected {
+			GUI.push_quad_screen(gui, row_aabb, v3(GUI.GRAY_50), z = 26.1);
+		}
+		if widget.just_pressed {
+			if it.selected {
+				it.selected = false;
+				cursor := 0;
+				for x: menu.create_instance.roster_list {
+					if x.id == it.id
+						continue;
+					menu.create_instance.roster_list[cursor] = x;
+					cursor += 1;
+				}
+				menu.create_instance.roster_list.count = cursor;
+			} else {
+				it.selected = true;
+				array_add(*menu.create_instance.roster_list, it);
+			}
+		}
+
+		GUI.push_quad_screen(gui, row_aabb, v3(GUI.GRAY_90));
+
+		thumbnail_aabb: AABBf;
+		thumbnail_aabb.min = row_aabb.min + v2(4.0, 4);
+		thumbnail_aabb.max = thumbnail_aabb.min + v2(56.0, 56);
+		quad := GUI.push_late_quad_screen(gui, thumbnail_aabb, GUI.GRAY_70);
+		quad.custom_texture_idx = user_texture_idx_thumbnail_for(store, it.id);
+		if quad.custom_texture_idx >= 0 {
+			quad.texture_rect = v4(0.0, 1.0, 1, -1);
+		}
+
+		cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
+		date := tprint(
+			"%/% %:%",
+			cal.day_of_month_starting_at_0 + 1, cal.month_starting_at_0 + 1, cal.hour, cal.minute
+		);
+		GUI.atom_label(
+			gui,
+			it.name,
+			row_aabb.min + v2(72.0, 42.0),
+			scale = 16,
+			color = GUI.GRAY_10,
+			z = 26.2
+		);
+		GUI.atom_label(
+			gui,
+			ifx it.author.count == 0 then "Anonymous" else it.author,
+			row_aabb.min + v2(72.0, 12.0),
+			scale = 14,
+			color = GUI.GRAY_20,
+			z = 26.2
+		);
+		GUI.atom_label(
+			gui,
+			date,
+			row_aabb.min + v2(terrain_entry_row_width - 78, 12.0),
+			scale = 14,
+			color = GUI.GRAY_20,
+			align = .Bottom_Right,
+			z = 26.2
+		);
+
+		cursor.y -= terrain_entry_row_height;
+		cursor.y -= 8;
+	}
+	cursor.y = scroll_aabb.min.y;
+	cursor.y -= 8;
+	GUI.default_params(gui).cursor.x = cursor.x + terrain_entry_row_width - 4;
+	GUI.default_params(gui).cursor.y = cursor.y;
+	GUI.default_params(gui).direction = .Left;
+	GUI.default_params(gui).align = .Bottom_Right;
+
+	clicked := GUI._text_button(gui, ">", id = "load_dialog_next_page");
+	if clicked {
+		menu.create_instance.terrain_page = (menu.create_instance.terrain_page + 1) % page_count;
+	}
+	clicked = GUI._text_button(gui, "<", id = "load_dialog_prev_page");
+	if clicked {
+		menu.create_instance.terrain_page = (menu.create_instance.terrain_page + page_count - 1) % page_count;
+	}
 }

@@ -8,7 +8,7 @@ struct InstanceData {
 	z30sdf2: u32,
 	rotation: f32,
 	outline: f32,
-	padding2: u32,
+	use_custom_texture: u32,
 };
 
 struct UniformData {
@@ -28,6 +28,9 @@ struct VertexOutput {
 @group(0) @binding(3) var albedoSampler: sampler;
 @group(0) @binding(4) var sdfMap: texture_2d_array<f32>;
 @group(0) @binding(5) var sdfSampler: sampler;
+
+@group(1) @binding(0) var customTexture: texture_2d_array<f32>;
+@group(1) @binding(1) var customSampler: sampler;
 
 @vertex fn vs(
 	@builtin(vertex_index) vertexIndex : u32,
@@ -76,7 +79,7 @@ fn screenPxRange(uv: vec2f, scale: f32) -> f32 {
 	let instance = instanceData[instanceIndex];
 
 	var color = instance.color;
-	if (instance.texture_rect.z > 0.0 && instance.texture_rect.w > 0.0) {
+	if (abs(instance.texture_rect.z) > 0.0 && abs(instance.texture_rect.w) > 0.0) {
 		if ((instance.z30sdf2 % 4) > 0) {
 			var msd = textureSample(sdfMap, sdfSampler, uv, 0).rgb;
 			var sd = median(msd.r, msd.g, msd.b);
@@ -115,7 +118,11 @@ fn screenPxRange(uv: vec2f, scale: f32) -> f32 {
 
 		}
 		else {
-			color = textureSample(albedoMap, albedoSampler, uv, 0);
+			if (instance.use_custom_texture > 0) {
+				color = textureSample(customTexture, customSampler, uv, 0);
+			} else {
+				color = textureSample(albedoMap, albedoSampler, uv, 0);
+			}
 		}
 	}
 

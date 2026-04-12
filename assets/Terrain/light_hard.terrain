@@ -1,0 +1,384 @@
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXGGGGXXXXXXXXXXGGGGGGGGGGGXXXXXXXXXXXXXXXXXXXX
+XXXGGGGXXXXXXXXXXGGGGGGGGGGGXXXXXXXXXXXXXXXXXXXX
+XXXGGGIXXXXXXXXXXGGGGGGGGGGGXXXXXXXXXXXXXXXXXXXX
+XXXXiXIIXXXXXXXXIGGGGGGGGGGGXXXXXGGGGGGGGGGGGGGX
+XXXXiXIIIXXXXXIIIIGGGGGGGGGXXXIGGGGGGGGGGGGGGGGX
+XXXXiXIIIIIiIIIIIIIIXXXXXXXXXIIGGGGIIIIIIIIIXGGX
+XXXXiXXIIIIiIIIIIIXXXXXXXXXGIIIGGGGIIIIIIIIIXGGX
+XXXXiXXXIIIiIIIIXGGXXXXXXXXIIIIGGGGGGXXXXIIIXGGX
+XXXXiXXXIIIiIIIIXGGXXXXXXXIIIIXXXXGGGXIIIIIIXGGX
+XXXXiXIIIIIiIIIIXGGXXXXXGIIIIXIIIIXGGXIIIIIIXGGX
+XXGIiIIIIIIiIIIIXXXXXXXXIIIIXIIIIIIXXXIIIXXXXGGX
+XXGIiIIIIXXXXIIIIXXXXXXIIIIXIIIIIIIXGGIIIIIIXGGX
+XXGIiIIIXXXXXXIIIIXXXXXIIIXIIIGXIIIXGGIIIIIIXGGX
+XXXIiIIXXXXXXXXIIIIXXXXIIIIIIIXIIIIXXXXXXIIIXXXX
+XXXIiXXXXXXXXXXXIIIIXXXIIIIIIXIIIIXXXXIIIIIIXXXX
+XXXXiXXXXGGXXXXXXIIIIXXXIIIGXIIIIGXXXXIIIIIIXXXX
+XXXXiXXXXGGXXXXXXXIIIIXXXXXXIIIIXXXXXXIIIXXXXXXX
+XXXXiiiiiIIXXXXXXXXIIIIGGGGIIIIXXXXXXXIIIIIIGGXX
+XXXXXXXXXXXXXXXXXXXXIIIGGGGIIIGXXXXXGXIIIIIIGGXX
+XXXXXXXXXXXXXXXXXXXXXIIGGGGIIXXXXXXXGXXXXIIIXXXX
+XXXXXXXXXXXXXXXXGGXXXXIGGGGIXXGGXXXXGXIIIIIIXGGX
+XXXXXXXXXXXXXXXXGGXXXXXXXXXXXXGGXXXXGXIIIIIIXGGX
+XXXXXXXXXXIIIIIIIIIIIIIIIIIIIIIIIIiiIXIIIXXXXGGX
+XXXXXXGGGGIIIIIIIIIIIIIIIIIIIIIIIIiiIIGGGGGGGGGX
+XXXXXXGGGGIIIIIIIIIIIIIIIIIIIIIIIIiiIIGGGGGGGGGX
+XXXXXXGGGGIIIIXXXXIIIIIIIIIIIiiiiIiiIIGGGGIIIIXX
+XXXXXXGGGGIIIIIIIIXXXIIIIIIIIIIIIIiiIIGGGGIIIIXX
+XXXXXXXXXXIIIIIIIIIIIIXIIIIIIXXXXIiiIIXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXGGXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXGGXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+- night
+path
+- checkpoint: 32.5 -11.75 0
+- checkpoint: 28.75 -7 0
+path
+- checkpoint: 13 -8 0
+path
+- checkpoint: 13.25 -9.75 0
+path
+- checkpoint: 13.5 -9.75 0
+path
+- checkpoint: 13.25 -7 0
+- checkpoint: 13.25 -12 0
+path
+- checkpoint: 20.25 20.25 0
+- checkpoint: 20.25 -7 0
+- checkpoint: 18.5 -7.025 0
+- checkpoint: 18.5 20.275 0
+- closed
+path
+- checkpoint: 17.5 -7 0
+- checkpoint: 15.75 -7.025 0
+- checkpoint: 15.75 20.275 0
+- checkpoint: 17.75 20.25 0
+- closed
+spawn
+- position: -5 7 0
+- size: 0 0
+frame
+- position: -22.25 -16.75
+- size: 46.75 32.5
+- origin: 23 15.5
+flag
+- position: 17.5 -9.5 0
+- index: 0
+flag
+- position: 10 10.5 0
+- index: 0
+flag
+- position: 2 -2.25 0
+- index: 0
+trap
+- position: -4 -8 0
+- radius_hitbox: 0.5
+trap
+- position: -3.25 -7.25 0
+- radius_hitbox: 0.5
+trap
+- position: -1.75 -10 0
+- radius_hitbox: 0.5
+trap
+- position: -1 -11.25 0
+- radius_hitbox: 0.5
+trap
+- position: -0.75 -9 0
+- radius_hitbox: 0.5
+trap
+- position: 2.75 -11 0
+- radius_hitbox: 0.5
+trap
+- position: 2.75 -10 0
+- radius_hitbox: 0.5
+trap
+- position: 2.75 -9 0
+- radius_hitbox: 0.5
+trap
+- position: 2.75 -8 0
+- radius_hitbox: 0.5
+trap
+- position: 2.75 -7 0
+- radius_hitbox: 0.5
+trap
+- position: 4.75 -12.25 0
+- radius_hitbox: 0.5
+trap
+- position: 4.75 -10.25 0
+- radius_hitbox: 0.5
+trap
+- position: 4.75 -8.25 0
+- radius_hitbox: 0.5
+trap
+- position: 4.75 -7 0
+- radius_hitbox: 0.5
+trap
+- position: 5.5 -11.25 0
+- radius_hitbox: 0.5
+trap
+- position: 5.5 6.25 0
+- radius_hitbox: 0.5
+trap
+- position: 3.25 6 0
+- radius_hitbox: 0.5
+trap
+- position: 2.25 3 0
+- radius_hitbox: 0.5
+trap
+- position: 0.75 1.5 0
+- radius_hitbox: 0.5
+trap
+- position: 3 1.25 0
+- radius_hitbox: 0.5
+trap
+- position: 4.25 2.25 0
+- radius_hitbox: 0.5
+trap
+- position: 6.25 2 0
+- radius_hitbox: 0.5
+trap
+- position: 6.75 4.75 0
+- radius_hitbox: 0.5
+trap
+- position: 9.75 5.75 0
+- radius_hitbox: 0.5
+trap
+- position: 9.75 2.75 0
+- radius_hitbox: 0.5
+trap
+- position: 8.5 -0.25 0
+- radius_hitbox: 0.5
+trap
+- position: 6.25 -0.75 0
+- radius_hitbox: 0.5
+trap
+- position: 4.25 -3.75 0
+- radius_hitbox: 0.5
+trap
+- position: -10.75 9.8 0
+- radius_hitbox: 0.5
+trap
+- position: -10.75 8.3 0
+- radius_hitbox: 0.5
+trap
+- position: -10.75 7.25 0
+- radius_hitbox: 0.5
+trap
+- position: -10.75 5.25 0
+- radius_hitbox: 0.5
+trap
+- position: -4 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: -4 13.75 0
+- radius_hitbox: 0.5
+trap
+- position: -4 13 0
+- radius_hitbox: 0.5
+trap
+- position: -4 12.5 0
+- radius_hitbox: 0.5
+trap
+- position: -3.5 12.5 0
+- radius_hitbox: 0.5
+trap
+- position: -3 12.5 0
+- radius_hitbox: 0.5
+trap
+- position: -2.5 12.5 0
+- radius_hitbox: 0.5
+trap
+- position: -1.5 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: -1.5 13.75 0
+- radius_hitbox: 0.5
+trap
+- position: -1.5 13 0
+- radius_hitbox: 0.5
+trap
+- position: -1.5 12.5 0
+- radius_hitbox: 0.5
+trap
+- position: -0.75 12.5 0
+- radius_hitbox: 0.5
+trap
+- position: -1 13.5 0
+- radius_hitbox: 0.5
+trap
+- position: -1 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: -0.5 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: -0.25 12.5 0
+- radius_hitbox: 0.5
+trap
+- position: 0.75 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 0.75 14 0
+- radius_hitbox: 0.5
+trap
+- position: 0.75 13.5 0
+- radius_hitbox: 0.5
+trap
+- position: 0.75 13 0
+- radius_hitbox: 0.5
+trap
+- position: 0.75 12.5 0
+- radius_hitbox: 0.5
+trap
+- position: 1.25 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 1.75 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 1 13.5 0
+- radius_hitbox: 0.5
+trap
+- position: 1.25 13.5 0
+- radius_hitbox: 0.5
+trap
+- position: 3 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 3.5 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 4.25 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 4 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 3.75 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 3.75 14 0
+- radius_hitbox: 0.5
+trap
+- position: 4.5 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 3.25 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 3.75 13.5 0
+- radius_hitbox: 0.5
+trap
+- position: 3.75 12.75 0
+- radius_hitbox: 0.5
+trap
+- position: 3.75 12.5 0
+- radius_hitbox: 0.5
+trap
+- position: 3.75 13.25 0
+- radius_hitbox: 0.5
+trap
+- position: -10.75 6.15 0
+- radius_hitbox: 0.5
+trophy
+- position: -13 -0.5 0
+skull
+- path_id: 0
+- speed: 1
+- offset: 0
+skull
+- path_id: 0
+- speed: 1
+- offset: 0
+skull
+- path_id: 4
+- speed: 1
+- offset: 0.5
+skull
+- path_id: 4
+- speed: 1
+- offset: 0.2
+skull
+- path_id: 5
+- speed: 1.25
+- offset: 0.4
+skull
+- path_id: 5
+- speed: 1.25
+- offset: 0.2
+skull
+- path_id: 5
+- speed: 1.25
+- offset: 0.8
+skull
+- path_id: 5
+- speed: 1.25
+- offset: 0
+skull
+- path_id: 5
+- speed: 1.25
+- offset: 0.6
+skull
+- path_id: 6
+- speed: 1.25
+- offset: 0.1
+skull
+- path_id: 6
+- speed: 1.25
+- offset: 0.3
+skull
+- path_id: 6
+- speed: 1.25
+- offset: 0.5
+skull
+- path_id: 6
+- speed: 1.25
+- offset: 0.9
+skull
+- path_id: 6
+- speed: 1.25
+- offset: 0.7
+lantern
+- position: -6 -5 0
+- light_aabb: -13.25 -14.75 2.25 -5.25
+- button_id: 1
+lantern
+- position: 1 -14 0
+- light_aabb: -7.5 -12.5 9.25 -4.75
+- button_id: 2
+lantern
+- position: 8 -5 0
+- light_aabb: -0.25 -14.5 18.25 -5.25
+- button_id: 3
+lantern
+- position: 22.5 -2.5 0
+- light_aabb: 14.25 -7.75 22.75 5
+- button_id: 4
+lantern
+- position: 13.25 3.25 0
+- light_aabb: 12.75 -3.5 21.5 11.75
+- button_id: 5
+pressbutton
+- position: -6 -6 0
+- radio
+pressbutton
+- position: 1 -13.25 0
+- radio
+pressbutton
+- position: 8 -5.75 0
+- radio
+pressbutton
+- position: 21.5 -2.5 0
+- radio
+pressbutton
+- position: 14.25 3.5 0
+- radio
+turn_table
+- position: -18.5 -2 0
+- turning_speed: 0
+- turning_offset: 0

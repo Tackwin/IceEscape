@@ -1,0 +1,703 @@
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXIXXXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXIIXIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXGiiGXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXIXXXXXIIIIIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXGIIIGIIIGIIIXGGGIIIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXGIIIGIIIGIIIIGGGXXXXXXXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXGIIIGIIIGIIIXGGGXXXXXIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXiXXXXXXIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXIIIIIIIIIGIIIIIIIIIXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXIIIIIIIIIGIIIIIIIIIXXIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXIIIIIIIIIGIIIIIIIIIXXIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXIIIIIIIIIGIIIIIIIIIXXXXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXIIIIIIIIIGIIIIIIIIIXXIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXIIIIIIIIIGIIIIIIIIIXXIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXiXXXXXXXXXXXXXXXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXiXXXXXXXXXGGGXXXXIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXIIIIIIIIIIGGGXXXXIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXIIIIXXXXXXXGGGXXXXXXXIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXIIIXXXXXXXXXXXXXXXIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXIIIIIIIIIIIIIIIIIXXXXXIXXXXXXXGXXXGXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXIIIIIIIIIIIIIIIIIIIIIIIIXGGGIIIIXIGIXIGXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXIIIIIIIIIIIIIIIIIIIIIIIIIGGGIIXIXIXIXIXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXIIIIIIIIIIIIIIIIIIIIIIIIXGGGIIXIIIXIIIXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXIXXIIIIIIIIIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXGXGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXGGGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXGXGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXIXXIIIIIIIIIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXIIIIIIIIIIIIIIIIIIIIIIIXGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXIIIIIIIIIIIIIIIIIIIIIIIIGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXIIIIIIIIIIIIIIIIIIIIIIIXGGGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXIIIIIIIIIIIIIIIIIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+- name: Good Pounding
+
+path
+- checkpoint: 28.5 17 0
+- checkpoint: 28.5 34 0
+- checkpoint: 30.5 34 0
+- checkpoint: 30.5 17 0
+- checkpoint: 28.5 17.01 0
+path
+- checkpoint: 33.490002 16.99 0
+- checkpoint: 33.490002 34 0
+- checkpoint: 31.5 33.990002 0
+- checkpoint: 31.5 17 0
+- checkpoint: 33.5 17.01 0
+path
+- checkpoint: 17.75 28.25 0
+- checkpoint: 25.25 28.25 0
+- checkpoint: 25.25 23.75 0
+- checkpoint: 17.75 23.76 0
+- checkpoint: 17.75 28.25 0
+path
+- checkpoint: 7.76 28.24 0
+- checkpoint: 7.74 23.76 0
+- checkpoint: 15.25 23.75 0
+- checkpoint: 15.25 28.25 0
+- checkpoint: 7.75 28.26 0
+spawn
+- position: 28.5 4.5 0
+- size: 0.05 0.05
+frame
+- position: 5 5
+- size: 42.75 28.25
+- origin: 7 3
+flag
+- position: 30 14.5 0
+- index: 0
+flag
+- position: 22.5 31.5 0
+- index: 1
+present
+- position: 1.5 10.5 0
+- kind: A
+- refresh_cooldown: 10
+- depends_on_flag_id: -1
+present
+- position: 1.5 8.5 0
+- kind: B
+- refresh_cooldown: 10
+- depends_on_flag_id: -1
+present
+- position: 37.5 16.5 0
+- kind: A
+- refresh_cooldown: 10
+- depends_on_flag_id: 1
+present
+- position: 41.5 16.5 0
+- kind: B
+- refresh_cooldown: 10
+- depends_on_flag_id: 1
+present
+- position: 13.5 34.5 0
+- kind: A
+- refresh_cooldown: 10
+- depends_on_flag_id: 2
+present
+- position: 10.5 34.5 0
+- kind: B
+- refresh_cooldown: 10
+- depends_on_flag_id: 2
+trap
+- position: 29.5 22 0
+- radius_hitbox: 0.5
+trap
+- position: 29.5 23 0
+- radius_hitbox: 0.5
+trap
+- position: 32.5 25 0
+- radius_hitbox: 0.5
+trap
+- position: 32.5 26 0
+- radius_hitbox: 0.5
+trap
+- position: 29.5 28 0
+- radius_hitbox: 0.5
+trap
+- position: 29.5 29 0
+- radius_hitbox: 0.5
+trap
+- position: 32.5 31 0
+- radius_hitbox: 0.5
+trap
+- position: 32.5 32 0
+- radius_hitbox: 0.5
+trap
+- position: 32.5 19 0
+- radius_hitbox: 0.5
+trap
+- position: 32.5 20 0
+- radius_hitbox: 0.5
+trap
+- position: 14 20 0
+- radius_hitbox: 0.5
+trap
+- position: 18 21 0
+- radius_hitbox: 0.5
+trap
+- position: 15.5 4.5 0
+- radius_hitbox: 0.5
+trap
+- position: 15.5 2.5 0
+- radius_hitbox: 0.5
+trap
+- position: 15.5 6.5 0
+- radius_hitbox: 0.5
+trap
+- position: 19.5 3.5 0
+- radius_hitbox: 0.5
+trap
+- position: 19.5 5.5 0
+- radius_hitbox: 0.5
+trap
+- position: 23.5 4.5 0
+- radius_hitbox: 0.5
+trap
+- position: 23.5 2.5 0
+- radius_hitbox: 0.5
+trap
+- position: 23.5 6.5 0
+- radius_hitbox: 0.5
+trap
+- position: 11.5 3.5 0
+- radius_hitbox: 0.5
+trap
+- position: 11.5 5.5 0
+- radius_hitbox: 0.5
+trap
+- position: 7.5 4.5 0
+- radius_hitbox: 0.5
+trap
+- position: 7.5 2.5 0
+- radius_hitbox: 0.5
+trap
+- position: 7.5 6.5 0
+- radius_hitbox: 0.5
+trap
+- position: 15.5 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 15.5 12.5 0
+- radius_hitbox: 0.5
+trap
+- position: 15.5 16.5 0
+- radius_hitbox: 0.5
+trap
+- position: 19.5 13.5 0
+- radius_hitbox: 0.5
+trap
+- position: 19.5 15.5 0
+- radius_hitbox: 0.5
+trap
+- position: 23.5 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 23.5 12.5 0
+- radius_hitbox: 0.5
+trap
+- position: 23.5 16.5 0
+- radius_hitbox: 0.5
+trap
+- position: 11.5 13.5 0
+- radius_hitbox: 0.5
+trap
+- position: 11.5 15.5 0
+- radius_hitbox: 0.5
+trap
+- position: 7.5 14.5 0
+- radius_hitbox: 0.5
+trap
+- position: 7.5 12.5 0
+- radius_hitbox: 0.5
+trap
+- position: 7.5 16.5 0
+- radius_hitbox: 0.5
+trophy
+- position: 23 20.5 0
+skull
+- path_id: 0
+- speed: 3.5
+- offset: 0
+skull
+- path_id: 0
+- speed: 3.5
+- offset: 0.25
+skull
+- path_id: 0
+- speed: 3.5
+- offset: 0.5
+skull
+- path_id: 0
+- speed: 3.5
+- offset: 0.75
+skull
+- path_id: 1
+- speed: 3.5
+- offset: 0.125
+skull
+- path_id: 1
+- speed: 3.5
+- offset: 0.375
+skull
+- path_id: 1
+- speed: 3.5
+- offset: 0.625
+skull
+- path_id: 1
+- speed: 3.5
+- offset: 0.875
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.05
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.1
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.15
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.2
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.25
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.3
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.35
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.4
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.45
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.5
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.55
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.6
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.65
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.7
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.75
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.8
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.85
+skull
+- path_id: 2
+- speed: 1.5
+- offset: 0.9
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.05
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.1
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.15
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.2
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.25
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.3
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.35
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.4
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.45
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.5
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.55
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.6
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.7
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.75
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.8
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.85
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.9
+skull
+- path_id: 3
+- speed: 1.5
+- offset: 0.95
+
+
+
+robot
+- position: 7.75 22.5 0
+- start_target_aabb: 8 24
+- end_target_aabb: 15 28
+- shooting_cd: 2.0
+
+robot
+- position: 9.00 22.5 0
+- start_target_aabb: 8 24
+- end_target_aabb: 15 28
+- shooting_cd: 2.5
+
+robot
+- position: 10.25 22.5 0
+- start_target_aabb: 8 24
+- end_target_aabb: 15 28
+- shooting_cd: 2.25
+
+robot
+- position: 12.75 22.5 0
+- start_target_aabb: 8 24
+- end_target_aabb: 15 28
+- shooting_cd: 1.75
+
+robot
+- position: 14.00 22.5 0
+- start_target_aabb: 8 24
+- end_target_aabb: 15 28
+- shooting_cd: 1.89
+
+robot
+- position: 15.25 22.5 0
+- start_target_aabb: 8 24
+- end_target_aabb: 15 28
+- shooting_cd: 2.32
+
+
+push
+- antiair_offset_std: 0.75
+
+antiair
+- position: 6.0 -1.0 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 8.0 -0.5 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 10.0 -1.0 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 12.0 -0.5 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 14.0 -1.0 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 16.0 -0.5 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 18.0 -1.0 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 20.0 -0.5 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 22.0 -1.0 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 24.0 -0.5 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 26.0 -1.0 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 6.0 1.0 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 8.0 1.5 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 10.0 1.0 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 12.0 1.5 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 14.0 1.0 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 16.0 1.5 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 18.0 1.0 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 20.0 1.5 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 22.0 1.0 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 24.0 1.5 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 26.0 1.0 0.0
+- target: 15.5 4.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 8.0 9.5 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 10.0 9.0 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 12.0 9.5 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 14.0 9.0 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 16.0 9.5 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 18.0 9.0 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 20.0 9.5 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 22.0 9.0 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 24.0 9.5 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+
+antiair
+- position: 8.0 11.5 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 10.0 11.0 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 12.0 11.5 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 14.0 11.0 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 16.0 11.5 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 18.0 11.0 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 20.0 11.5 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 22.0 11.0 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+antiair
+- position: 24.0 11.5 0.0
+- target: 15.5 14.5 0.0
+- target_size: 16.0 4.0
+- cooldown: 2.25
+
+
+pop
+

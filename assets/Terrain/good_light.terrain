@@ -1,0 +1,253 @@
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXGGXGGGXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGGGXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXGGXGGGXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXIIIIIIIIXXXXiiXIIXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXIIIIIIIIIIIIXXiiXIIXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXIIIIIIIIIIIIIXiiXGGGGGGXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIIIXXXXXIIIIXiiXGGGGGGXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIIXXXXXXXIIIXiiXXXXXIIXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXGGGGIIIIXiiXXXXXIIXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXGGGGIIIXXiiXXXXXIIXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXGGGGIIXXXIIXXXXXIIXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXGGGGIXXXIIIXGGGGGGXXXXXXXXXXXXXX
+XXXXXXXXXXXXIIIXXXXXXXXXXXIIIXGGGGGGXXXXXXXXXXXXXX
+XXXXGGGGGXXXIIIIXXGGGGGXXXIIIXXXXXIIXXXXXXXXXXXXXX
+XXXXGGGGGXXXIIIIIXXXXGGXXIIIIXIIIIIIXXXXXXXXXXXXXX
+XXXXGGGGGXXXXIIIIIIIIIIIIIIIXXIIIIIIXXXXXXXXXXXXXX
+XXXXGGGGGXXXXIIIIIIIIIIIIIIIXXIIXXXXXXXXXXXXXXXXXX
+XXXXGGGGGXXXXXXIIIIIIIIIIIXXXXGGGGGGXXXXXXXXXXXXXX
+XXXXXXGXXXXXXXXXXXXXXXXXXXXXXXGGGGGGXXXXXXXXXXXXXX
+XXXXGGGGGXXXXXXXGGXXXXXXXXGGXXXXXXIIXXXXXXXXXXXXXX
+XXXXGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIXXXXXXXXXXXXXX
+XXXXGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIXXXXXXXXXXXXXX
+XXXXGGGGGIIIIIIIIIIIIIIIIIIIIIIIIIIIXXXXXXXXXXXXXX
+XXXXGGGGGXXGGXXXXXXXXGGXXXXXXXXGGXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+- name: Good Light
+- night
+
+path
+- checkpoint: 32.25 16 0
+- checkpoint: 43.5 16 0
+path
+- checkpoint: 42.5 16 0
+path
+- checkpoint: 43.25 16 0
+path
+- checkpoint: 43 16 0
+path
+- checkpoint: 10 4.25 0
+- checkpoint: 35 4.25 0
+path
+- checkpoint: 10 3.5 0
+- checkpoint: 35 3.5 0
+path
+- checkpoint: 10 2.75 0
+- checkpoint: 35 2.75 0
+spawn
+- position: 20 15 0
+- size: 0 0
+frame
+- position: 10 5
+- size: 25 15
+- origin: 0 0
+flag
+- position: 32.25 24.25 0
+- index: 0
+flag
+- position: 31.25 7 0
+- index: 1
+trap
+- position: 12.75 16.5 0
+- radius_hitbox: 0.5
+trap
+- position: 16.25 8.25 0
+- radius_hitbox: 0.5
+trap
+- position: 20.5 9.25 0
+- radius_hitbox: 0.5
+trap
+- position: 25 7.75 0
+- radius_hitbox: 0.5
+trap
+- position: 19.75 21.25 0
+- radius_hitbox: 0.5
+trap
+- position: 14.75 11.25 0
+- radius_hitbox: 0.5
+trap
+- position: 17.25 19.25 0
+- radius_hitbox: 0.5
+trap
+- position: 14 13.75 0
+- radius_hitbox: 0.5
+trap
+- position: 14.25 9 0
+- radius_hitbox: 0.5
+trap
+- position: 19.75 7.25 0
+- radius_hitbox: 0.5
+trap
+- position: 23 7.75 0
+- radius_hitbox: 0.5
+trap
+- position: 24 9.75 0
+- radius_hitbox: 0.5
+trap
+- position: 26.75 9.75 0
+- radius_hitbox: 0.5
+trap
+- position: 32 9.25 0
+- radius_hitbox: 0.5
+trap
+- position: 33.75 10.5 0
+- radius_hitbox: 0.5
+trophy
+- position: 5.5 9.5 0
+skull
+- path_id: 0
+- speed: 2
+- offset: 0.1
+skull
+- path_id: 0
+- speed: 2
+- offset: 0.2
+skull
+- path_id: 0
+- speed: 2
+- offset: 0.3
+skull
+- path_id: 0
+- speed: 2
+- offset: 0.4
+skull
+- path_id: 0
+- speed: 2
+- offset: 0.6
+skull
+- path_id: 0
+- speed: 2
+- offset: 0.5
+skull
+- path_id: 0
+- speed: 2
+- offset: 0.7
+skull
+- path_id: 0
+- speed: 2
+- offset: 0.8
+skull
+- path_id: 0
+- speed: 2
+- offset: 0.9
+skull
+- path_id: 4
+- speed: 2
+- offset: 0
+skull
+- path_id: 5
+- speed: 2
+- offset: 0
+skull
+- path_id: 6
+- speed: 2
+- offset: 0
+gate
+- position: 29.5 23.5 0
+- direction: 0 0 0
+- is_closed: true
+- wait_for_key_id: -1
+- wait_for_trigger_id: -1
+- wait_for_pressbutton_id: 5
+gate
+- position: 6.5 6.5 0
+- direction: 0 1 0
+- is_closed: true
+- wait_for_key_id: 1
+- wait_for_trigger_id: -1
+key
+- position: 35 7 0
+lantern
+- position: 21.5 16.5 0
+- light_aabb: 19.25 14 26.5 23
+- button_id: 2
+- intensity: 1
+lantern
+- position: 18.5 16.5 0
+- light_aabb: 11 13.75 19.75 23
+- button_id: 1
+- intensity: 1
+lantern
+- position: 18.5 13.5 0
+- light_aabb: 10.75 6 21 14.5
+- button_id: 4
+- intensity: 1
+lantern
+- position: 21.5 13.5 0
+- light_aabb: 20 6 30.75 15.75
+- button_id: 3
+- intensity: 1
+lantern
+- position: 20 16 0
+- light_aabb: 16.5 11.75 23.5 18.25
+- button_id: 95
+- intensity: 0.6
+lantern
+- position: 27.5 22.5 0
+- light_aabb: 10.25 5.5 30 25.25
+- button_id: 5
+- intensity: 1
+pressbutton
+- position: 19 16 0
+- radio
+pressbutton
+- position: 21 16 0
+- radio
+pressbutton
+- position: 21 14 0
+- radio
+pressbutton
+- position: 19 14 0
+- radio
+pressbutton
+- position: 28 23.5 0
+
+lantern
+- position: 33.5 7.5 0
+- light_aabb: 30 6 36 20
+- button_id: 6
+- intensity: 1
+pressbutton
+- position: 33.5 6.5 0
+- radio
+
+trap
+- position: 25 3 0
+trap
+- position: 15 3 0
+
+trap
+- position: 28 4 0
+trap
+- position: 18 4 0
+
+trap
+- position: 29 4 0
+trap
+- position: 26 2 0
+trap
+- position: 23 4 0
+trap
+- position: 19 5 0
+trap
+- position: 17 2 0
+trap
+- position: 12 4 0
+trap
+- position: 14 2 0

@@ -8,6 +8,7 @@
 
 RUNTIME :: true && OS != .WASM;
 
+
 embed_data :: ($name: string, $path: string, $root: string) -> string {
 	#if RUNTIME {
 format_runtime_text :: #string FORMAT
@@ -49,11 +50,13 @@ format_text :: #string FORMAT
 		return xx file;
 	}
 
-	return add_global_data(get_data("%"), .READ_ONLY);
+	data_got := get_data("%");
+	print("Loaded % KB from %\n", data_got.count / 1024);
+	return add_global_data(data_got, .READ_ONLY);
 };
 FORMAT;
 
-	return sprint(format_text, name, "%", "%", root, "%", "%", path);
+	return sprint(format_text, name, "%", "%", root, "%", "%", path, "%", name);
 }
 
 #insert #run embed_data("SKYBOX_VERTEX", "Shader/skybox.vert", #filepath);
@@ -83,35 +86,21 @@ FORMAT;
 #insert #run embed_data("PARTICLE_FRAGMENT", "Shader/particles.frag", #filepath);
 
 #insert #run embed_data("SNOWFLAKES_AND_LIGHTS_MP3", "Sound/Snowflakes and Lights.mp3", #filepath);
-#insert #run embed_data("tile_cliff_albedo_png", "Tile/cliff_albedo.png", #filepath);
-#insert #run embed_data("tile_cliff_normal_png", "Tile/cliff_normal.png", #filepath);
-#insert #run embed_data("tile_cliff_height_png", "Tile/cliff_height.png", #filepath);
-#insert #run embed_data("tile_snow_albedo_png", "Tile/snow_albedo.png", #filepath);
-#insert #run embed_data("tile_snow_normal_png", "Tile/snow_normal.png", #filepath);
-#insert #run embed_data("tile_snow_height_png", "Tile/snow_height.png", #filepath);
-#insert #run embed_data("tile_grass_albedo_png", "Tile/grass_albedo.png", #filepath);
-#insert #run embed_data("tile_grass_normal_png", "Tile/grass_normal.png", #filepath);
-#insert #run embed_data("tile_grass_height_png", "Tile/grass_height.png", #filepath);
-#insert #run embed_data("tile_slippy_albedo_png", "Tile/slippy_albedo.png", #filepath);
-#insert #run embed_data("tile_slippy_normal_png", "Tile/slippy_normal.png", #filepath);
-#insert #run embed_data("tile_slippy_height_png", "Tile/slippy_height.png", #filepath);
-#insert #run embed_data("tile_atlas_png", "Tile/atlas.png", #filepath);
-#insert #run embed_data("ztotez_atlas_png", "ZTOtez-Regular.png", #filepath);
 
 #insert #run embed_data("VEHICLE_RACER_OBJ", "Mesh/Vehicle_Racer.obj", #filepath);
-#insert #run embed_data("VEHICLE_SUV_OBJ", "vehicle-suv.obj", #filepath);
-#insert #run embed_data("VEHICLE_SPEEDSTER_OBJ", "vehicle-speedster.obj", #filepath);
-#insert #run embed_data("VEHICLE_MONSTER_TRUCK_OBJ", "vehicle-monster-truck.obj", #filepath);
-#insert #run embed_data("VEHICLE_VINTAGE_RACER_OBJ", "vehicle-vintage-racer.obj", #filepath);
-#insert #run embed_data("VEHICLE_DRAG_RACER_OBJ", "vehicle-drag-racer.obj", #filepath);
-#insert #run embed_data("BOAT_SAIL_OBJ", "boat_sail.obj", #filepath);
-#insert #run embed_data("BOAT_ROW_OBJ", "boat_row.obj", #filepath);
-#insert #run embed_data("BOAT_FISHING_OBJ", "boat_fishing.obj", #filepath);
-#insert #run embed_data("TAXI_OBJ", "taxi.obj", #filepath);
-#insert #run embed_data("POLICE_OBJ", "police.obj", #filepath);
-#insert #run embed_data("TRACTOR_OBJ", "tractor.obj", #filepath);
+#insert #run embed_data("VEHICLE_SUV_OBJ", "Mesh/Vehicle_Suv.obj", #filepath);
+#insert #run embed_data("VEHICLE_SPEEDSTER_OBJ", "Mesh/Vehicle_Speedster.obj", #filepath);
+#insert #run embed_data("VEHICLE_MONSTER_TRUCK_OBJ", "Mesh/Vehicle_Monster_Truck.obj", #filepath);
+#insert #run embed_data("VEHICLE_VINTAGE_RACER_OBJ", "Mesh/Vehicle_Vintage_Racer.obj", #filepath);
+#insert #run embed_data("VEHICLE_DRAG_RACER_OBJ", "Mesh/Vehicle_Drag_Racer.obj", #filepath);
+#insert #run embed_data("BOAT_SAIL_OBJ", "Mesh/Vehicle_Boat_Sail.obj", #filepath);
+#insert #run embed_data("BOAT_ROW_OBJ", "Mesh/Vehicle_Boat_Row.obj", #filepath);
+#insert #run embed_data("BOAT_FISHING_OBJ", "Mesh/Vehicle_Boat_Fishing.obj", #filepath);
+#insert #run embed_data("TAXI_OBJ", "Mesh/Vehicle_Taxi.obj", #filepath);
+#insert #run embed_data("POLICE_OBJ", "Mesh/Vehicle_Police.obj", #filepath);
+#insert #run embed_data("TRACTOR_OBJ", "Mesh/Vehicle_Tractor.obj", #filepath);
 #insert #run embed_data("PIRATE_SHIP_OBJ", "pirate_ship.obj", #filepath);
-#insert #run embed_data("AMBULANCE_OBJ", "ambulance.obj", #filepath);
+#insert #run embed_data("AMBULANCE_OBJ", "Mesh/Vehicle_Ambulance.obj", #filepath);
 #insert #run embed_data("SPACESHIP_OBJ", "spaceship.obj", #filepath);
 #insert #run embed_data("ANTIAIR_CAMION_OBJ", "antiair_camion.obj", #filepath);
 #insert #run embed_data("ANTIAIR_CANON_OBJ", "antiair_canon.obj", #filepath);
@@ -124,6 +113,7 @@ FORMAT;
 #insert #run embed_data("PRESSBUTTON_PRESSED_RADIO_OBJ", "Mesh/PressButton_Pressed_radio.obj", #filepath);
 #insert #run embed_data("BOMB_OBJ", "Mesh/Bomb.obj", #filepath);
 #insert #run embed_data("CRATE_OBJ", "Mesh/Crate.obj", #filepath);
+#insert #run embed_data("GRAVESTONE_OBJ", "Mesh/Gravestone.obj", #filepath);
 
 #insert #run embed_data("TROPHY_OBJ", "trophy.obj", #filepath);
 #insert #run embed_data("JUKEBOX_OBJ", "jukebox.obj", #filepath);
@@ -180,9 +170,7 @@ FORMAT;
 #insert #run embed_data("LOSER_MP3", "Sound/loser.mp3", #filepath);
 
 #insert #run embed_data("TILE_OBJ", "tile.obj", #filepath);
-#insert #run embed_data("CAR_OBJ", "car.obj", #filepath);
 #insert #run embed_data("TOMBSTONE_OBJ", "tombstone.obj", #filepath);
-#insert #run embed_data("SKULL_OBJ", "skull.obj", #filepath);
 #insert #run embed_data("COIN_OBJ", "coin.obj", #filepath);
 #insert #run embed_data("SPIRIT_OBJ", "spirit.obj", #filepath);
 #insert #run embed_data("KEY_OBJ", "key.obj", #filepath);
@@ -215,7 +203,6 @@ FORMAT;
 #insert #run embed_data("ROCK_MEDIUM", "Mesh/rock_medium.obj", #filepath);
 #insert #run embed_data("ROCK_LARGE", "Mesh/rock_large.obj", #filepath);
 #insert #run embed_data("PROP_COLORMAP", "Images/prop_colormap.png", #filepath);
-#insert #run embed_data("SKYBOX_SKI_PNG", "skybox_ski.png", #filepath);
 #insert #run embed_data("SKYBOX_OBJ", "skybox.obj", #filepath);
 #insert #run embed_data("END_HOOK_OBJ", "end_hook.obj", #filepath);
 
@@ -296,18 +283,6 @@ load_everything :: (platform: Platform) {
 			"QUAD_TEXTURE_VERTEX",
 			"QUAD_TEXTURE_FRAGMENT",
 			"SNOWFLAKES_AND_LIGHTS_MP3",
-			"tile_cliff_albedo_png",
-			"tile_cliff_normal_png",
-			"tile_cliff_height_png",
-			"tile_snow_albedo_png",
-			"tile_snow_normal_png",
-			"tile_snow_height_png",
-			"tile_grass_albedo_png",
-			"tile_grass_normal_png",
-			"tile_grass_height_png",
-			"tile_slippy_albedo_png",
-			"tile_slippy_normal_png",
-			"tile_slippy_height_png",
 			"ui_atlas_png",
 			"VEHICLE_RACER_OBJ",
 			"VEHICLE_SUV_OBJ",
@@ -344,9 +319,7 @@ load_everything :: (platform: Platform) {
 			"EXPLOSION_8_MP3",
 			"LOSER_MP3",
 			"TILE_OBJ",
-			"CAR_OBJ",
 			"TOMBSTONE_OBJ",
-			"SKULL_OBJ",
 			"COIN_OBJ",
 			"SPIRIT_OBJ",
 			"KEY_OBJ",
@@ -358,7 +331,6 @@ load_everything :: (platform: Platform) {
 			"SHURIKEN_OBJ",
 			"POSTPROCESS_VERTEX",
 			"POSTPROCESS_FRAGMENT",
-			"tile_atlas_png",
 			"SHADOW_VERTEX",
 			"SHADOW_FRAGMENT",
 			"SHADOW_INSTANCED_VERTEX",
@@ -385,7 +357,6 @@ load_everything :: (platform: Platform) {
 			"ROCK_SMALL",
 			"ROCK_LARGE",
 			"ROCK_MEDIUM",
-			"SKYBOX_SKI_PNG",
 			"SKYBOX_OBJ",
 			"END_HOOK_OBJ",
 			"SKYBOX_VERTEX",
@@ -411,6 +382,7 @@ load_everything :: (platform: Platform) {
 			"PRESSBUTTON_PRESSED_RADIO_OBJ",
 			"BOMB_OBJ",
 			"CRATE_OBJ",
+			"GRAVESTONE_OBJ",
 			"DRONE_BLADE_OBJ",
 			"TROPHY_OBJ",
 			"NUMBER_0_OBJ",
@@ -465,7 +437,6 @@ load_everything :: (platform: Platform) {
 			"COIN_LAUNCH_MP3",
 			"POINT_UP_MP3",
 			"JUKEBOX_OBJ",
-			"ztotez_atlas_png",
 			"verdana_csv",
 			"verdana_png",
 		];

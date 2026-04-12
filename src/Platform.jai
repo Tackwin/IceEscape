@@ -423,6 +423,7 @@ Platform :: struct {
 
 	list_files : #type (path: string, rec: bool) -> [] string = null;
 	read_entire_file: #type (path: string, data: [] u8) -> int = null;
+	write_file: #type (path: string, data: [] u8) -> bool = null;
 	load_image: #type (data: [] u8) -> Image = null;
 	free_image: #type (image: *Image) = null;
 

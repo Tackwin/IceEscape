@@ -11,6 +11,7 @@ Terrain :: #import "Terrain";
 #import "Common";
 #import "Hash_Table";
 #import "Profile";
+#import "Big_Asset";
 #import "Remap_Context"(false);
 RNG :: #import "Rand";
 Controls :: #import "Controls";
@@ -71,6 +72,8 @@ App_User :: struct {
 	graphics: WRender.Graphics;
 	app_context: *#Context;
 	gui_state: GUI.GUI_State;
+
+	counter := 0;
 }
 
 #program_export "app_update_loop" app_update_loop :: (app: *App) {
@@ -129,7 +132,9 @@ App_User :: struct {
 	commands := parse_web_message(*app_user.state, app_user.allocated_frame_info);
 	for command: commands {
 
-		while true {
+		processed := process_main(app_user, command);
+
+		while !processed {
 			before_screen_state := app_user.state.screen_state;
 
 			if app_user.state.screen_state == {
@@ -137,11 +142,11 @@ App_User :: struct {
 					if process_editor(app_user, command)
 						continue command;
 				case .Menu;
-					if process_menu(*app_user.state, command)
+					if process_menu(app_user, command)
 						continue command;
 				case .Game;
 					if process_game(
-						*app_user.state, command, app_user.controls, *app_user.process_response
+						app_user, command, app_user.controls, *app_user.process_response
 					)
 						continue command;
 			}
@@ -160,6 +165,77 @@ App_User :: struct {
 		case .Editor;
 			quit = editor_loop(app_user);
 	}
+
+	handle_sending_assets(app_user);
+}
+
+handle_sending_assets :: (app_user: *App_User) {
+	state := *app_user.state;
+
+	// pull the editor page's big assets
+	for state.editor_page.big_assets_sending {
+		array_add(*state.big_assets_sending, it);
+	}
+	state.editor_page.big_assets_sending.count = 0;
+	for state.menu.big_assets_sending {
+		array_add(*state.big_assets_sending, it);
+	}
+	state.menu.big_assets_sending.count = 0;
+
+	for * state.big_assets_sending {
+		if it.written < it.buffer.count {
+			send := min(Command.Asset_Chunk.CHUNK, it.buffer.count - it.written);
+			command: Command.Asset_Chunk;
+			command.asset.id = it.id;
+			command.offset = it.written;
+			command.data = NewArray(send, u8, false,, temp);
+			memcpy(command.data.data, it.buffer.data + it.written, command.data.count);
+			send_web_message(
+				app_user.app.platform, app_user.state.current_time, make_command(command)
+			);
+			it.written += command.data.count;
+			it.last_written = app_user.state.current_time;
+		} else {
+			free(it.buffer.data);
+			remove it;
+		}
+	}
+}
+
+handle_end_asset :: (app_user: *App_User, asset: *Big_Asset) {
+	state := *app_user.state;
+
+	for * state.pending_thumbnails {
+		if it.asset_id == asset.id {
+		}
+		it.* = .{};
+	}
+
+	free(asset.buffer.data);
+	table_remove(*state.pending_big_assets, asset.id);
+}
+
+process_main :: (app_user: *App_User, command: Command) -> bool {
+	state := *app_user.state;
+
+	asset_chunk := isa(command.payload, Command.Asset_Chunk);
+	if asset_chunk {
+		asset := table_find_pointer(*state.pending_big_assets, asset_chunk.asset.id);
+		if asset {
+			memcpy(
+				asset_chunk.data.data,
+				asset.buffer.data + asset_chunk.offset,
+				min(asset_chunk.data.count, asset.buffer.count - asset_chunk.offset)
+			);
+			asset.written += asset_chunk.data.count;
+			if asset.written >= asset.buffer.count {
+				handle_end_asset(app_user, asset);
+			}
+			asset.last_written = app_user.app.platform.get_current_time();
+		}
+	}
+
+	return false;
 }
 
 #program_export "app_init" app_init :: (app: *App) {
@@ -235,7 +311,25 @@ App_User :: struct {
 		WRender.init_framegraph(*app_user.framegraph, *app_user.store);
 	}
 
+	if app_user.store.texture_queues.count > 0 {
+		while true if (compare_and_swap(*app_user.framegraph.frame_lock, 0, 1)) break;
+		defer compare_and_swap(*app_user.framegraph.frame_lock, 1, 0);
+
+		for app_user.store.texture_queues {
+			if it.texture.gpu == null {
+				WRender.WTexture.make_blank("", it.texture);
+			}
+			WRender.WTexture.upload(it.buffer, 0, it.texture);
+			free(it.buffer.data);
+		}
+		app_user.store.texture_queues.count = 0;
+	}
+
 	to_present := WRender.present_frame(*app_user.framegraph, *app_user.store);
+	if app_user.framegraph.take_screenshot {
+		WRender.screenshot_frame(*app_user.framegraph, *app_user.store, _app.platform);
+		app_user.framegraph.take_screenshot = false;
+	}
 	if to_present
 		_app.platform.gpu.surfacePresent(app_user.graphics.surface);
 
@@ -255,10 +349,16 @@ launch_music :: (app_user: *App_User, platform: *Platform) {
 	platform.play_audio(app_user.store.snowflakes_and_lights_mp3, .{});
 }
 
+
 State :: struct {
 	current_time: Apollo_Time;
 
 	coommands_received: [..] Command;
+
+	big_assets_sending: [..] Big_Asset;
+
+	pending_big_assets: Table(int, Big_Asset);
+	pending_thumbnails: Table(int, Thumbnail_Pending);
 
 	menu: Menu;
 	game: Game_Page;
