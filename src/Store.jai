@@ -231,6 +231,9 @@ thumbnail_here_or_coming :: (store: *Store, terrain_id: int) -> bool {
 }
 
 user_texture :: (store: *Store, idx: int) -> *WRender.WTexture {
+	if idx < 0 || idx >= store.user_textures.count {
+		return null;
+	}
 	return *store.user_textures[idx];
 }
 

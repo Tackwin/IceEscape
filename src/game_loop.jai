@@ -544,7 +544,6 @@ respond :: (platform: Platform, time: Apollo_Time, response: Scene.Process_Respo
 
 handle_received_asset :: (app_user: *App_User, big_asset: *Big_Asset) {
 	store := *app_user.store;
-	print("Received asset id %\n", big_asset.id);
 
 	editor_page := *app_user.state.editor_page;
 	for editor_page.thumbnail_receiving {
@@ -559,7 +558,6 @@ handle_received_asset :: (app_user: *App_User, big_asset: *Big_Asset) {
 			thumbnail := thumbnail_for(store, it.terrain_id);
 			queue_user_texture(store, thumbnail, thumbnail4);
 
-			print("Matching thumbnail pending found for terrain id %\n", it.terrain_id);
 			remove it;
 
 			free(big_asset.buffer.data);

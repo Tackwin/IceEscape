@@ -116,27 +116,30 @@ push_left_main_menu :: (
 	cursor.x = 8.0;
 	cursor.y = gui.controls.window_size.y - 16.0 - 64.0;
 	GUI.default_params(gui).cursor = cursor;
-	GUI._atom_label(gui, "Stats", id = "stats_label", color = GUI.GRAY_00);
-	GUI._atom_label(
-		gui,
-		tprint("     Death count: %", menu.profile.stats.death_count),
-		id = "death_label",
-		color = GUI.GRAY_00
-	);
-	GUI._atom_label(
-		gui,
-		tprint("     Win count: %", menu.profile.stats.win_count),
-		id = "win_label",
-		color = GUI.GRAY_00
-	);
-	GUI._atom_label(
-		gui,
-		tprint("     Revive count: %", menu.profile.stats.revive_count),
-		id = "revive_label",
-		color = GUI.GRAY_00
-	);
+	GUI._atom_label(gui, "The terrible bug that messed up some people is gone", scale = 16, color = GUI.GRAY_00);
+	GUI._atom_label(gui, "I have only prayer to offer to my dear player base", scale = 16, color = GUI.GRAY_00);
+	GUI._atom_label(gui, "Sorry :'(", scale = 16, color = GUI.GRAY_00);
+	// GUI._atom_label(gui, "Stats", id = "stats_label", color = GUI.GRAY_00);
+	// GUI._atom_label(
+	// 	gui,
+	// 	tprint("     Death count: %", menu.profile.stats.death_count),
+	// 	id = "death_label",
+	// 	color = GUI.GRAY_00
+	// );
+	// GUI._atom_label(
+	// 	gui,
+	// 	tprint("     Win count: %", menu.profile.stats.win_count),
+	// 	id = "win_label",
+	// 	color = GUI.GRAY_00
+	// );
+	// GUI._atom_label(
+	// 	gui,
+	// 	tprint("     Revive count: %", menu.profile.stats.revive_count),
+	// 	id = "revive_label",
+	// 	color = GUI.GRAY_00
+	// );
 
-	GUI.space(gui, 24.0);
+	// GUI.space(gui, 24.0);
 
 
 	new_scene_name := GUI.labeled_input_text(
@@ -341,6 +344,12 @@ process_menu :: (app_user: *App_User, command: Command) -> bool {
 		
 		ask_list_terrain: Command.Ask_List_Terrain;
 		ask_list_terrain.filter = "";
+		ask_list_terrain.correlation_id = 0;
+		send_web_message(state.platform, state.current_time, make_command(ask_list_terrain));
+
+		ask_list_terrain = .{};
+		ask_list_terrain.filter = "";
+		ask_list_terrain.correlation_id = 1;
 		send_web_message(state.platform, state.current_time, make_command(ask_list_terrain));
 
 		return true;
@@ -365,7 +374,6 @@ process_menu :: (app_user: *App_User, command: Command) -> bool {
 	if asset_chunk {
 		big_asset := table_find_pointer(*state.menu.big_assets_receiving, asset_chunk.asset.id);
 		if big_asset {
-			print("Received asset chunk for asset id %, offset %, size %\n", asset_chunk.asset.id, asset_chunk.offset, asset_chunk.data.count);
 			memcpy(
 				big_asset.buffer.data + asset_chunk.offset,
 				asset_chunk.data.data,
@@ -403,20 +411,28 @@ process_menu :: (app_user: *App_User, command: Command) -> bool {
 	ans_list_terrain := isa(command.payload, Command.Ans_List_Terrain);
 	if ans_list_terrain {
 		if ans_list_terrain.correlation_id == 0 {
+			for * state.menu.terrain_entries {
+				free(it.name);
+				free(it.author);
+			}
 			array_resize(*state.menu.terrain_entries, ans_list_terrain.terrains_id.count);
 			for * state.menu.terrain_entries {
 				it.id = ans_list_terrain.terrains_id[it_index];
-				it.name = ans_list_terrain.terrains_name[it_index];
-				it.author = ans_list_terrain.authors_name[it_index];
+				it.name = sprint("%", ans_list_terrain.terrains_name[it_index]);
+				it.author = sprint("%", ans_list_terrain.authors_name[it_index]);
 			}
 		} else if ans_list_terrain.correlation_id == 1 {
+			for * state.menu.create_instance.roster_list {
+				free(it.name);
+				free(it.author);
+			}
 			array_resize(
 				*state.menu.create_instance.terrain_entries, ans_list_terrain.terrains_id.count
 			);
 			for * state.menu.create_instance.terrain_entries {
 				it.id = ans_list_terrain.terrains_id[it_index];
-				it.name = ans_list_terrain.terrains_name[it_index];
-				it.author = ans_list_terrain.authors_name[it_index];
+				it.name = sprint("%", ans_list_terrain.terrains_name[it_index]);
+				it.author = sprint("%", ans_list_terrain.authors_name[it_index]);
 				it.created_ms = ans_list_terrain.creation_time_ms[it_index];
 
 				if !thumbnail_here_or_coming(*app_user.store, it.id) {

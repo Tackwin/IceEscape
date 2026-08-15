@@ -594,7 +594,6 @@ const js_play_audio = (params) => {
 	
 	const buffer = audio_id_to_buffer[id];
 	if (!buffer) {
-		console.error(`Audio buffer with id ${id} not found`);
 		return;
 	}
 
@@ -3053,7 +3052,10 @@ jai_imports.jsDeviceCreateBindGroup = (params_ptr, returns_ptr) => {
 	const entries = [];
 	let cursor = 0;
 	for (let i = 0; i < entryCount; i++) {
-		entries.push(getBindGroupEntry(Number(entries_ptr) + Number(cursor)));
+		const entry = getBindGroupEntry(Number(entries_ptr) + Number(cursor));
+		if (entry) {
+			entries.push(entry);
+		}
 		cursor += 56;
 	}
 	

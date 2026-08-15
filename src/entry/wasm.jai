@@ -189,7 +189,6 @@ load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_r
 
 	out.id = audio_generation;
 	ret := js_load_audio(*params);
-	print("Loaded audio with id % and got back ref %\n", out.id, ret);
 	return ret;
 }
 

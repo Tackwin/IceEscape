@@ -360,8 +360,10 @@ win32_open_server :: (port: int) -> bool {
 win32_send_web_message :: (msg: [] u8, target: Connection) {
 	ws_send :: (uid: u64, data: *u8, count: u64) #foreign;
 
-	if target >= 0
+	if target >= 0 {
 		ws_send(target.(u64), msg.data, xx msg.count);
+	}
+	
 }
 
 win32_gather_web_messages :: () -> [] Web_Message {

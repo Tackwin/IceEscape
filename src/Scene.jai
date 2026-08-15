@@ -2609,6 +2609,22 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		}
 	}
 
+	// >RULE When all standins are retired, reload them
+	if scene.stand_in.count > 0 {
+		all := true;
+		for * scene.stand_in {
+			if !it.retired {
+				all = false;
+				break;
+			}
+		}
+		if all {
+			for * scene.stand_in {
+				it.retired = false;
+			}
+		}
+	}
+
 	// >RULE Player auto revive if the scene has ended
 	if scene.end_scene_countdown_started {
 		for * scene.players {

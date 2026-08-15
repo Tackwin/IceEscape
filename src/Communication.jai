@@ -512,7 +512,6 @@ Command :: struct {
 		}
 	}
 	Asset_Chunk :: struct {
-		CHUNK :: 2048;
 		data: [] u8;
 		offset: int;
 
@@ -682,9 +681,16 @@ serialize_generic :: (payload: *$T, data: [] u8) -> int {
 	#if info.type == .ARRAY {
 		memcpy(data.data + cursor, *payload.count, 8);
 		cursor += 8;
-		for 0..payload.count - 1 {
-			sub := subdata(data, cursor);
-			cursor += serialize_generic(payload.data + it, sub);
+		if info.element_type.type == .INTEGER {
+			memcpy(
+				data.data + cursor, payload.data, payload.count * info.element_type.runtime_size
+			);
+			cursor += payload.count * info.element_type.runtime_size;
+		} else {
+			for 0..payload.count - 1 {
+				sub := subdata(data, cursor);
+				cursor += serialize_generic(payload.data + it, sub);
+			}
 		}
 	}
 	return cursor;
@@ -746,9 +752,14 @@ deserialize_generic :: (data: [] u8, out: *$T) -> int {
 		memcpy(*out.count, data.data + cursor, 8);
 		cursor += 8;
 		out.data = talloc(out.count * info.element_type.runtime_size);
-		for 0..out.count - 1 {
-			sub := subdata(data, cursor);
-			cursor += deserialize_generic(sub, out.data + it);
+		if info.element_type.type == .INTEGER {
+			memcpy(out.data, data.data + cursor, out.count * info.element_type.runtime_size);
+			cursor += out.count * info.element_type.runtime_size;
+		} else {
+			for 0..out.count - 1 {
+				sub := subdata(data, cursor);
+				cursor += deserialize_generic(sub, out.data + it);
+			}
 		}
 	}
 	return cursor;

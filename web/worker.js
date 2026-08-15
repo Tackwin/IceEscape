@@ -61,7 +61,6 @@ jai_imports.js_connect_server = (
 	websocket = new WebSocket(uri);
 	websocket.binaryType = "arraybuffer";
 	websocket.onopen = () => {
-		console.log("Websocket server opened !");
 	}
 	websocket.onerror = (e) => {
 		console.error("Websocket error:", e);

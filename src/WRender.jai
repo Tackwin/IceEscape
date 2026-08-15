@@ -113,20 +113,6 @@ init_graphics :: (platform: Platform, _graphics: *Graphics) {
 		;
 	}
 
-	limits: WGPULimits = .{};
-	if platform.gpu.adapterGetLimits(graphics.adapter, *limits) == .Success {
-		print("WGPU limits: %\n", limits);
-	}
-
-	features: WGPUSupportedFeatures;
-	defer {
-		platform.gpu.supportedFeaturesFreeMembers(features);
-	}
-	platform.gpu.adapterGetFeatures(graphics.adapter, *features);
-	for 0..features.featureCount-1 {
-		print("Support %\n", features.features[it]);
-	}
-
 	graphics.done[0] = false;
 	deviceDesc: WGPUDeviceDescriptor = .{};
 	deviceDesc.uncapturedErrorCallbackInfo.userdata1 = xx graphics;
@@ -298,14 +284,18 @@ downscale :: (input: [] u8, width: int, height: int, new_width: int, new_height:
 }
 
 WTexture :: struct {
-	gpu: WGPUTexture;
-	view: WGPUTextureView;
-	sampler: WGPUSampler;
+	gpu: WGPUTexture = null;
+	view: WGPUTextureView = null;
+	sampler: WGPUSampler = null;
 
 	width: int;
 	height: int;
 	layers: int;
 	channels :: 4;
+
+	is_gpu_valid :: (using texture: WTexture) -> bool {
+		return gpu && view && sampler;
+	}
 
 	reserve :: (width: int, height: int, label := "unknown") -> WTexture {
 		texture: WTexture;
@@ -1858,15 +1848,10 @@ free :: (extra: *Extra) {
 }
 
 reserve_frame :: (frame: *Frame) {
-	print("A\n");
 	array_resize(*frame.cpu, 64 * 1024 * 1024);
-	print("B\n");
 	array_reserve(*frame.shadow.draws, 1024 * 1024);
-	print("C\n");
 	array_reserve(*frame.geometry.draws, 1024 * 1024);
-	print("D\n");
 	array_reserve(*frame.ui.draws, 1024 * 1024);
-	print("E\n");
 }
 
 reset_frame :: (frame: *Frame, current_time: Apollo_Time) {
@@ -1875,6 +1860,7 @@ reset_frame :: (frame: *Frame, current_time: Apollo_Time) {
 	frame.geometry.draws.count = 0;
 	frame.editor.draws.count = 0;
 	frame.ui.draws.count = 0;
+	frame.ui.current_custom_texture = null;
 	frame.current_time = current_time;
 }
 
@@ -2122,6 +2108,26 @@ present_frame_to :: (
 				continue;
 
 			if it.part_idx < 0 {
+				if it.model.indices_count <= 0
+					continue;
+				if it.instance_count <= 0
+					continue;
+				if it.model.indices_offset < 0
+					continue;
+				if it.model.base_vertex < 0
+					continue;
+				if it.instance_start < 0
+					continue;
+				if it.model.indices_count > 500000
+					continue;
+				if it.instance_count > 500000
+					continue;
+				if it.model.indices_offset > 500000
+					continue;
+				if it.model.base_vertex > 500000
+					continue;
+				if it.instance_start > 500000
+					continue;
 				graphics.gpu.renderPassEncoderDrawIndexed(
 					pass,
 					xx it.model.indices_count,
@@ -2132,6 +2138,26 @@ present_frame_to :: (
 				);
 			} else {
 				part := it.model.parts.data[it.part_idx];
+				if part.indices_count <= 0
+					continue;
+				if it.instance_count <= 0
+					continue;
+				if part.indices_offset < 0
+					continue;
+				if part.base_vertex < 0
+					continue;
+				if it.instance_start < 0
+					continue;
+				if part.indices_count > 500000
+					continue;
+				if it.instance_count > 500000
+					continue;
+				if part.indices_offset > 500000
+					continue;
+				if part.base_vertex > 500000
+					continue;
+				if it.instance_start > 500000
+					continue;
 				graphics.gpu.renderPassEncoderDrawIndexed(
 					pass,
 					xx part.indices_count,
@@ -2178,6 +2204,26 @@ present_frame_to :: (
 				continue;
 
 			if it.part_idx < 0 {
+				if it.model.indices_count <= 0
+					continue;
+				if it.instance_count <= 0
+					continue;
+				if it.model.indices_offset < 0
+					continue;
+				if it.model.base_vertex < 0
+					continue;
+				if it.instance_start < 0
+					continue;
+				if it.model.indices_count > 500000
+					continue;
+				if it.instance_count > 500000
+					continue;
+				if it.model.indices_offset > 500000
+					continue;
+				if it.model.base_vertex > 500000
+					continue;
+				if it.instance_start > 500000
+					continue;
 				graphics.gpu.renderPassEncoderDrawIndexed(
 					pass,
 					xx it.model.indices_count,
@@ -2188,6 +2234,26 @@ present_frame_to :: (
 				);
 			} else {
 				part := it.model.parts.data[it.part_idx];
+				if part.indices_count <= 0
+					continue;
+				if it.instance_count <= 0
+					continue;
+				if part.indices_offset < 0
+					continue;
+				if part.base_vertex < 0
+					continue;
+				if it.instance_start < 0
+					continue;
+				if part.indices_count > 500000
+					continue;
+				if it.instance_count > 500000
+					continue;
+				if part.indices_offset > 500000
+					continue;
+				if part.base_vertex > 500000
+					continue;
+				if it.instance_start > 500000
+					continue;
 				graphics.gpu.renderPassEncoderDrawIndexed(
 					pass,
 					xx part.indices_count,
@@ -2298,7 +2364,7 @@ present_frame_to :: (
 
 		for * frame.ui.draws {
 			if it.custom_texture != last_custom_texture {
-				if it.custom_texture {
+				if it.custom_texture && WTexture.is_gpu_valid(it.custom_texture) {
 					bg := ui_instance_custom_bind_group(
 						framegraph, frame, it.custom_texture, "UI Custom Texture"
 					);
@@ -2967,6 +3033,7 @@ render_gui :: (
 ) {
 	frame.ui.uniforms = .{};
 	frame.ui.uniforms.window_size = V2f.{ 1366, 768 };
+	frame.ui.current_custom_texture = null;
 
 	font := *store.verdana;
 
@@ -3022,7 +3089,7 @@ render_gui :: (
 
 		if it.custom_texture_idx != last_custom_texture {
 			user_texture := Store.user_texture(store, it.custom_texture_idx);
-			if user_texture.gpu {
+			if user_texture && user_texture.gpu {
 				quick_sort(instances, instance_sort);
 				commit_ui(frame, *frame.ui, instances.count);
 				instances = append_ui_instance_buffer(frame);

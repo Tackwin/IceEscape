@@ -50,7 +50,6 @@ jai_imports.js_play_audio = (params_ptr) => {
 
 	const buffer = audio_id_to_buffer[id];
 	if (!buffer) {
-		console.error(`Audio buffer with id ${id} not found`);
 		setU64(sound_id_ptr, 0, 0);
 		return;
 	}

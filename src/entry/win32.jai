@@ -1125,9 +1125,12 @@ platform_frame :: () {
 		total_recv += xx recv;
 	}
 
+	if total_recv > 0
+		print("Total received: % bytes\n", total_recv);
 	cursor := 0;
 	while cursor < (xx total_recv) {
 		next_message_length := (cast(*u64)(curl_buffer.data + cursor)).*;
+		print("Received message of length % at cursor %\n", next_message_length, cursor);
 
 		msg: Message;
 		array_resize(*msg.data, xx next_message_length);

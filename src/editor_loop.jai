@@ -107,7 +107,6 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 	if asset_chunk {
 		big_asset := table_find_pointer(*page.big_assets_receiving, asset_chunk.asset.id);
 		if big_asset {
-			print("Received asset chunk for asset id %, offset %, size %\n", asset_chunk.asset.id, asset_chunk.offset, asset_chunk.data.count);
 			memcpy(
 				big_asset.buffer.data + asset_chunk.offset,
 				asset_chunk.data.data,

@@ -1328,9 +1328,17 @@ server_send_tick :: (platform: *Platform, server: *Server) {
 	server.queue.count = 0;
 
 	// also handle the big assets that are pending to be sent
+	// but we have a maximum number of packet sent per tick to avoid flooding the network
 	cursor := 0;
+	sent := 0;
 	for 0..server.pending_big_assets_sending.count - 1 {
 		sending := *server.pending_big_assets_sending[it];
+		if sent >= 4 {
+			server.pending_big_assets_sending[cursor] = sending;
+			cursor += 1;
+			continue;
+		}
+
 		if sending.asset.buffer.count > 0 {
 			command: Command.Asset_Chunk;
 			command.asset.id = sending.user_asset_id;
@@ -1348,6 +1356,7 @@ server_send_tick :: (platform: *Platform, server: *Server) {
 			} else {
 				free(sending.asset.buffer.data);
 			}
+			sent += 1;
 		}
 	}
 	server.pending_big_assets_sending.count = cursor;

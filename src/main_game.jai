@@ -184,7 +184,7 @@ handle_sending_assets :: (app_user: *App_User) {
 
 	for * state.big_assets_sending {
 		if it.written < it.buffer.count {
-			send := min(Command.Asset_Chunk.CHUNK, it.buffer.count - it.written);
+			send := min(1024, it.buffer.count - it.written);
 			command: Command.Asset_Chunk;
 			command.asset.id = it.id;
 			command.offset = it.written;
