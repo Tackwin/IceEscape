@@ -67,6 +67,7 @@ Instance :: struct {
 	pick_scene_id: int;
 	playing_scene_id: int;
 	persons: [..] Person;
+
 	scenes: Xar(Scene.Scene, 2, 20);
 	scene_parameters: Scene.Scene_Parameters;
 
@@ -239,6 +240,22 @@ sync :: (instance: *Instance) {
 		}
 	}
 }
+
+set_bomberman_scene :: (instance: *Instance, terrain_text: string, info: Scene.Scene_Info) -> int {
+	scene := xar_add(*instance.scenes, .{});
+	Scene.make(scene);
+	scene.id = 0;
+	scene.is_server = true;
+	scene.server_rng.s[0] = 123456789;
+	scene.server_rng.s[1] = 987654321;
+	Scene.clear_scene_run(scene);
+	Terrain.parse_terrain(terrain_text, scene);
+	scene.params = instance.scene_parameters;
+	scene.auto_revive |= scene.params.auto_revive;
+	scene.info = info;
+	return scene.id;
+}
+
 add_scene :: (instance: *Instance, text: string, info: Scene.Scene_Info) -> int {
 	scene := xar_add(*instance.scenes, .{});
 	Scene.make(scene);

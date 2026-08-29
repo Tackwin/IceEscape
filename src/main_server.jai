@@ -1158,6 +1158,72 @@ init_instance_bomberman :: (
 	server.instance_generation += 1;
 	instance.mode = .Bomberman;
 	instance.last_activity_time = current_time_monotonic();
+
+	entries := load_database_custom(
+		platform,
+		server.db,
+		struct { terrain_id: int; },
+		tprint("SELECT terrain_id FROM terrain_infos WHERE max_players >= %1", max_player_count)
+	);
+
+	if entries.count == 0
+		return false;
+
+	pick_id := 100;
+	terrain_ascii := load_database_custom(
+		platform,
+		server.db,
+		DB_Terrain_Ascii,
+		tprint("SELECT * FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1", pick_id)
+	);
+	if terrain_ascii.count == 0
+		return false;
+	terrain_info := load_database(
+		platform,
+		server.db,
+		"terrain_infos",
+		DB_Terrain_Infos,
+		tprint("id = %", pick_id)
+	);
+	if terrain_info.count == 0
+		return false;
+
+	info: Scene.Scene_Info;
+	info.id = terrain_info[0].id;
+	info.author_profile_id = terrain_info[0].author_profile_id;
+	string_to_arr(terrain_info[0].name, info.name);
+
+	add_scene(instance, terrain_ascii[0].ascii, info); // Pick up scene
+
+	id := entries[0].terrain_id;
+	terrain_ascii = load_database_custom(
+		platform,
+		server.db,
+		DB_Terrain_Ascii,
+		tprint("SELECT * FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1", id)
+	);
+	if terrain_ascii.count == 0
+		return false;
+
+	terrain_info = load_database(
+		platform,
+		server.db,
+		"terrain_infos",
+		DB_Terrain_Infos,
+		tprint("id = %", id)
+	);
+	
+	if terrain_info.count == 0
+		return false;
+
+	info = .{};
+	info.id = terrain_info[0].id;
+	info.author_profile_id = terrain_info[0].author_profile_id;
+	string_to_arr(terrain_info[0].name, info.name);
+
+	set_bomberman_scene(instance, terrain_ascii[0].ascii, info);
+	instance.pick_scene_id = pick_id;
+	instance.playing_scene_id = id;
 	return true;
 }
 
