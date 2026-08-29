@@ -75,8 +75,13 @@ Sound_Trigger :: struct {
 	pitch := 0.0;
 }
 
+Scene_Mode :: enum {
+	Standard :: 0;
+	Bomberman :: 1;
+}
 Scene_Parameters :: struct {
 	auto_revive := false;
+	mode := Scene_Mode.Standard;
 }
 
 Scene_Info :: struct {

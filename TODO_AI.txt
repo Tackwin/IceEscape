@@ -14,3 +14,7 @@
 * Create a comprehensively exhaustive system for ai agents to manipulate the game. It would probably be opening a win32 pipe in the win32 entry file. Then polling every frame this pipe for "Control_Command" that would merge information into that frame's Frame_Info. The pipe needs to be bidirectional (or two pipes). The Control_Command needs to do the basic like key presses, mouse control, pause, resume, wait, and take screenshot. But in time it can have higher level concept like gameplay inputs. The agents would then probably write ps1 scripts or python script or directly use the cmd to manipulate the game.
 * Transform the current RHI into a more generic and bindless system. Get as close to Sebastian Aaltonen's No API blog post as possible (within webpgu constraints).
 * Add some quick shortcut to spawn a local server process. The platform's vtable would need new function like "create_process".
+* Add a SMALL png reader writer that a human can understand. QOI is too much friction.
+* Add an instrumentalised, introspective, profiling system, leveraging jai's metaprogramming. Also I have a pretty hard idea of an histogram GUI for the performance that Molecule already implemented.
+* Completely remove every trace of the Y flip that I did to have the bottom left be the origin. It was a mistake. The game should follow the standard convention of top left is origin. For eveything, texture gui rendering mouse controls.
+* Add support for gpu timing queries. Full webgpu.

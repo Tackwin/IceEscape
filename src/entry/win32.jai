@@ -1,4 +1,5 @@
 #import "Platform";
+Control :: #import "Control";
 #import "Window_Creation";
 #import "Input";
 #import "File_Watcher";
@@ -17,6 +18,7 @@ STB :: #import "stb_image";
 #import "Reflection";
 #import "Curl";
 Win32 :: #import "Windows";
+#load "Win32_Control.jai";
 
 sdl_window: *SDL_Window;
 sdl_gl_context: SDL_GLContext;
@@ -284,6 +286,7 @@ Platform_State :: struct {
 	frame_file_change_count := 0;
 }
 platform_state: Platform_State;
+win32_control: Win32_Control;
 
 win32_get_frame_info :: (info: *Frame_Info) {
 	info.* = .{};
@@ -343,6 +346,8 @@ win32_get_frame_info :: (info: *Frame_Info) {
 		);
 	}
 	platform_state.message_arrived_cursor_pulled = pushed;
+
+	Control.merge_into_frame_info(*win32_control.state, info);
 
 	// info.file_change_count = platform_state.frame_file_change_count;
 	// for 0..platform_state.frame_file_change_count-1 {
@@ -1159,6 +1164,10 @@ main :: () {
 
 	load_dll();
 	init(*dll_mutex);
+	if !win32_control_open(*win32_control) {
+		print("Failed to open \\\\.\\pipe\\ArenaControl\n");
+	}
+	defer win32_control_shutdown(*win32_control);
 
 	update_thread: Thread;
 	thread_init(*update_thread, update_thread_proc);
@@ -1167,32 +1176,53 @@ main :: () {
 	while !platform_state.want_quit {
 		FrameMarkStart();
 		platform_frame();
-
-		if dll {
-			file := Win32.CreateFileA("IceEscape.dll", Win32.FILE_GENERIC_READ);
-			defer Win32.CloseHandle(file);
-
-			time_struct: Win32.FILETIME;
-			Win32.GetFileTime(file, null, null, *time_struct);
-
-			if time_struct.QuadPart != dll_last_write {
-				print("Reloading DLL...\n");
-				reload_dll();
-				dll_last_write = time_struct.QuadPart;
-			}
+		win32_control_poll(*win32_control);
+		if win32_control.state.quit_requested {
+			platform_state.want_quit = true;
 		}
 
-		if dll {
-			// Get the function pointer of app_loop
-			app_update_loop := Win32.GetProcAddress(dll, "app_update_loop").(#type (app: *App) -> bool);
-			if app_update_loop {
-				app_update_loop(*app);
+		ticking := Control.should_tick(win32_control.state);
+		if ticking {
+			Control.consume_frame_line(*win32_control.state);
+			Control.begin_tick(*win32_control.state);
+
+			if dll {
+				file := Win32.CreateFileA("IceEscape.dll", Win32.FILE_GENERIC_READ);
+				defer Win32.CloseHandle(file);
+
+				time_struct: Win32.FILETIME;
+				Win32.GetFileTime(file, null, null, *time_struct);
+
+				if time_struct.QuadPart != dll_last_write {
+					print("Reloading DLL...\n");
+					reload_dll();
+					dll_last_write = time_struct.QuadPart;
+				}
 			}
 
-			// Get the function pointer of app_loop
-			app_loop := Win32.GetProcAddress(dll, "app_loop").(#type (app: *App) -> bool);
-			if app_loop {
-				loop = app_loop(*app);
+			if dll {
+				app_update_loop := Win32.GetProcAddress(dll, "app_update_loop").(#type (app: *App) -> bool);
+				if app_update_loop {
+					app_update_loop(*app);
+				}
+
+				app_loop := Win32.GetProcAddress(dll, "app_loop").(#type (app: *App) -> bool);
+				if app_loop {
+					loop = app_loop(*app);
+				}
+			}
+
+			capture_wrote := win32_control_note_capture(*win32_control);
+			Control.end_tick(*win32_control.state, capture_wrote);
+			Control.process_ready_lines(*win32_control.state);
+			if Control.batch_finished(win32_control.state) {
+				win32_control_reply_and_disconnect(*win32_control);
+			}
+		} else {
+			g_Time = SDL_GetPerformanceCounter();
+			Control.process_ready_lines(*win32_control.state);
+			if Control.batch_finished(win32_control.state) {
+				win32_control_reply_and_disconnect(*win32_control);
 			}
 		}
 		FrameMarkEnd();

@@ -109,6 +109,9 @@ Frame_Info :: struct {
 
 	mouse_wheel := 0;
 
+	capture_frame := false;
+	capture_serial: u64;
+
 	message_received: [1024] Web_Message;
 	message_received_count := 0;
 

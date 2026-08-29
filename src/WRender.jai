@@ -906,6 +906,12 @@ WFramegraph :: struct {
 	screenshot_data: [..] u8;
 	screenshot_data_generation := 0;
 
+	capture_requested := false;
+	capture_rgb: [..] u8;
+	capture_width: u32;
+	capture_height: u32;
+	capture_generation: u64;
+
 	rendering_frame_idx := -1;
 	working_frame_idx := -1;
 	ready_frame_idx := -1;
@@ -1326,6 +1332,7 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 	for * framegraph.frames
 		reserve_frame(it);
 	reserve_frame(*framegraph.screenshot_frame);
+	framegraph.capture_rgb.allocator = context.allocator;
 	{
 		desc: WGPUTextureDescriptor = .{};
 		desc.label = toWGPUStringView("Depth Texture");
@@ -1977,6 +1984,27 @@ screenshot_frame :: (framegraph: *WFramegraph, store: *Store.Store, platform: *P
 	framegraph.screenshot_data_generation += 1;
 }
 
+copy_capture_rgb :: (framegraph: *WFramegraph) {
+	width := 1366;
+	height := 768;
+	bytes_per_row := align_forward(4 * width, 256);
+	data := NewArray(bytes_per_row * height, u8,, temp);
+	graphics.gpu.myGpuToCpu(graphics.instance, framegraph.readback_buffer, data);
+	array_resize(*framegraph.capture_rgb, width * height * 3);
+	for y: 0..height-1 {
+		for x: 0..width-1 {
+			src := (y * bytes_per_row) + (x * 4);
+			dst := (y * width + x) * 3;
+			framegraph.capture_rgb[dst + 0] = data[src + 2];
+			framegraph.capture_rgb[dst + 1] = data[src + 1];
+			framegraph.capture_rgb[dst + 2] = data[src + 0];
+		}
+	}
+	framegraph.capture_width = xx width;
+	framegraph.capture_height = xx height;
+	framegraph.capture_generation += 1;
+}
+
 present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 	while true {
 		if (compare_and_swap(*framegraph.frame_lock, 0, 1))
@@ -2005,6 +2033,27 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 
 	present_frame_to(framegraph, frame, encoder, store, surfaceView);
 
+	if framegraph.capture_requested && framegraph.screenshotTexture.gpu && framegraph.readback_buffer {
+		source_info: WGPUTexelCopyTextureInfo = .{};
+		source_info.texture = framegraph.screenshotTexture.gpu;
+		source_info.aspect = .All;
+		source_info.mipLevel = 0;
+		source_info.origin = .{ 0, 0, 0 };
+
+		destination_info: WGPUTexelCopyBufferInfo = .{};
+		destination_info.buffer = framegraph.readback_buffer;
+		destination_info.layout.offset = 0;
+		destination_info.layout.bytesPerRow = xx align_forward(4 * 1366, 256);
+		destination_info.layout.rowsPerImage = 768;
+		size_info: WGPUExtent3D = .{};
+		size_info.width = 1366;
+		size_info.height = 768;
+		size_info.depthOrArrayLayers = 1;
+		graphics.gpu.commandEncoderCopyTextureToBuffer(
+			encoder, *source_info, *destination_info, *size_info
+		);
+	}
+
 	bufferDesc: WGPUCommandBufferDescriptor = .{};
 	bufferDesc.label = toWGPUStringView("Command Buffer");
 	present := graphics.gpu.commandEncoderFinish(encoder, *bufferDesc);
@@ -2012,6 +2061,10 @@ present_frame :: (framegraph: *WFramegraph, store: *Store.Store) -> bool {
 
 	submit: [] WGPUCommandBuffer = .[present];
 	graphics.gpu.queueSubmit(graphics.mainQueue, xx submit.count, submit.data);
+
+	if framegraph.capture_requested {
+		copy_capture_rgb(framegraph);
+	}
 
 	return true;
 }
@@ -2410,6 +2463,41 @@ present_frame_to :: (
 		graphics.gpu.renderPassEncoderEnd(presentPass);
 		graphics.gpu.renderPassEncoderRelease(presentPass);
 	}
+
+	if framegraph.capture_requested && framegraph.screenshotTexture.view {
+		captureAttachment: WGPURenderPassColorAttachment;
+		captureAttachment.view = framegraph.screenshotTexture.view;
+		captureAttachment.depthSlice = DEPTH_SLICE_UNDEFINED;
+		captureAttachment.loadOp = .Clear;
+		captureAttachment.storeOp = .Store;
+		captureAttachment.clearValue = .{ 0.3, 0.3, 0.3, 1.0 };
+
+		passDesc: WGPURenderPassDescriptor = .{};
+		passDesc.label = toWGPUStringView("Capture Present Pass");
+		passDesc.colorAttachments = *captureAttachment;
+		passDesc.colorAttachmentCount = 1;
+		passDesc.depthStencilAttachment = null;
+		capturePass := graphics.gpu.commandEncoderBeginRenderPass(encoder, *passDesc);
+		graphics.gpu.renderPassEncoderSetPipeline(capturePass, framegraph.presentPipeline);
+		presentUniform: WFramegraph.Present_Uniform = .{};
+		presentUniform.size = V2f.{ 1366, 768 };
+		presentUniform.exposure = 1.0;
+		presentUniform.gamma = 2.2;
+		captureBindGroup := present_bind_group(
+			framegraph,
+			frame,
+			presentUniform,
+			"Capture Present",
+			framegraph.hdrTexture,
+			framegraph.uiTexture
+		);
+		defer graphics.gpu.bindGroupRelease(captureBindGroup);
+		graphics.gpu.renderPassEncoderSetBindGroup(capturePass, 0, captureBindGroup, 0, null);
+		graphics.gpu.renderPassEncoderDraw(capturePass, 6, 1, 0, 0);
+		graphics.gpu.renderPassEncoderEnd(capturePass);
+		graphics.gpu.renderPassEncoderRelease(capturePass);
+	}
+
 	view: [] u8;
 	view.data = frame.cpu.data;
 	view.count = frame.cpu_cursor;

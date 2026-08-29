@@ -16,6 +16,7 @@ Terrain :: #import "Terrain";
 RNG :: #import "Rand";
 Controls :: #import "Controls";
 WRender :: #import "WRender";
+PNG :: #import "PNG";
 Scene :: #import "Scene";
 GUI :: #import "GUI";
 #import "gui_demo";
@@ -325,15 +326,32 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 		app_user.store.texture_queues.count = 0;
 	}
 
+	app_user.framegraph.capture_requested = app_user.allocated_frame_info.capture_frame;
 	to_present := WRender.present_frame(*app_user.framegraph, *app_user.store);
 	if app_user.framegraph.take_screenshot {
 		WRender.screenshot_frame(*app_user.framegraph, *app_user.store, _app.platform);
 		app_user.framegraph.take_screenshot = false;
 	}
+	if app_user.allocated_frame_info.capture_frame {
+		write_capture_png(app_user, _app.platform);
+	}
 	if to_present
 		_app.platform.gpu.surfacePresent(app_user.graphics.surface);
 
 	return true;
+}
+
+write_capture_png :: (app_user: *App_User, platform: *Platform) {
+	rgb := app_user.framegraph.capture_rgb;
+	width := app_user.framegraph.capture_width.(int);
+	height := app_user.framegraph.capture_height.(int);
+	if width <= 0 || height <= 0 return;
+	if rgb.count < width * height * 3 return;
+	encoded: [..] u8;
+	encoded.allocator = temp;
+	if !PNG.write_rgb(rgb, width, height, *encoded) return;
+	path := tprint("captures/frame_%.png", app_user.allocated_frame_info.capture_serial);
+	platform.write_file(path, encoded);
 }
 #load "menu_loop.jai";
 #load "game_loop.jai";
