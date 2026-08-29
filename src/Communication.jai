@@ -443,6 +443,22 @@ Command :: struct {
 		created_id: int;
 	}
 
+	Create_Bomberman :: struct {
+		name: [] u8;
+		password: [] u8;
+		private: bool;
+		max_players: int;
+	}
+	Ans_Create_Bomberman :: struct {
+		reason: enum {
+			Created;
+			Server_Full;
+			Rejected;
+			Bugged;
+		}
+		created_id: int;
+	}
+
 	Set_Username :: struct {
 		profile_id: int;
 		username: string;
@@ -530,7 +546,8 @@ Command :: struct {
 		Ask_Enter_Custom_Instance, Ans_Enter_Custom_Instance, Save_Terrain, Load_Terrain,
 		Ask_List_Terrain, Ans_List_Terrain, Login, Set_Passcode, Get_Profile_Stats, Set_Username,
 		Get_Username, Get_Terrain_Leaderboard, Signal_Pick, Get_Instance_Tab_Stats,
-		Ask_Enter_Quick_Instance, Set_Thumbnail, Get_Thumbnail, Asset_Chunk
+		Ask_Enter_Quick_Instance, Set_Thumbnail, Get_Thumbnail, Asset_Chunk, Create_Bomberman,
+		Ans_Create_Bomberman
 	);
 	payload: Payload_t;
 	sent_timestamp: float64;
@@ -823,6 +840,7 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Sync_Gate; #through;
 		case .Leave_Instance; #through;
 		case .Ans_Create_Instance; #through;
+		case .Ans_Create_Bomberman; #through;
 		case .Version_Info; #through;
 		case .Sync_Stats; #through;
 		case .Sync_Clock; #through;
@@ -847,6 +865,8 @@ serialize :: (cmd: Command, buffer: *[..] u8) {
 		case .Ask_Enter_Instance; #through;
 		case .Move_To_Play_World;
 			// Nothing
+		case .Create_Bomberman;
+			generic_case(Command.Create_Bomberman);
 		case .Create_Instance;
 			generic_case(Command.Create_Instance);
 		case .Get_Terrain_Leaderboard;
@@ -1165,6 +1185,7 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 		case .Respawn; #through;
 		case .Leave_Instance; #through;
 		case .Ans_Create_Instance; #through;
+		case .Ans_Create_Bomberman; #through;
 		case .Version_Info; #through;
 		case .Sync_Stats; #through;
 		case .Sync_Clock; #through;
@@ -1208,6 +1229,9 @@ deserialize :: (buffer: [] u8) -> Command, bool {
 			return cmd, true;
 		case .Create_Instance;
 			generic_case(Command.Create_Instance);
+			return cmd, true;
+		case .Create_Bomberman;
+			generic_case(Command.Create_Bomberman);
 			return cmd, true;
 		case .Set_Thumbnail;
 			generic_case(Command.Set_Thumbnail);

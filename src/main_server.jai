@@ -1031,6 +1031,29 @@ SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
 		return true;
 	}
 
+	create_bomberman := isa(cmd.payload, Command.Create_Bomberman);
+	if create_bomberman {
+		user := find_user_by_connection(server, sender);
+		if user {
+			if server.instance_count >= server.instances.count {
+				ans_create_instance: Command.Ans_Create_Bomberman;
+				ans_create_instance.reason = .Server_Full;
+				append_queue(server, ans_create_instance, sender);
+				return true;
+			}
+
+			instance := server.instances.data + server.instance_count;
+			created := init_instance_bomberman(
+				server, instance, create_bomberman.max_players, platform
+			);
+			ans_create_bomberman: Command.Ans_Create_Bomberman;
+			ans_create_bomberman.reason = .Created;
+			ans_create_bomberman.created_id = instance.id;
+			append_queue(server, ans_create_bomberman, sender);
+			return true;
+		}
+	}
+
 	create_inst := isa(cmd.payload, Command.Create_Instance);
 	if create_inst {
 		user := find_user_by_connection(server, sender);
@@ -1044,18 +1067,14 @@ SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
 
 			params: Scene.Scene_Parameters;
 			params.auto_revive = create_inst.auto_revive;
+			instance := server.instances.data + server.instance_count;
 			
 			created: bool;
 			if create_inst.roster.count == 0 {
-				created = init_instance_with_roster(
-					server, server.instances.data + server.instance_count, 2, platform
-				);
+				created = init_instance_with_roster(server, instance, 2, platform);
 			} else {
 				created = init_instance_with_terrain_ids(
-					server,
-					server.instances.data + server.instance_count,
-					create_inst.roster,
-					platform
+					server, instance, create_inst.roster, platform
 				);
 			}
 			if !created {
@@ -1064,29 +1083,25 @@ SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
 				append_queue(server, ans_create_instance, sender);
 				return true;
 			}
-			server.instances[server.instance_count].scene_parameters = params;
-			server.instances[server.instance_count].id = server.instance_generation;
+
+			instance.scene_parameters = params;
+			instance.id = server.instance_generation;
 			memcpy(
-				server.instances[server.instance_count].name.data,
+				instance.name.data,
 				create_inst.name.data,
-				min(create_inst.name.count, server.instances[server.instance_count].name.count)
+				min(create_inst.name.count, instance.name.count)
 			);
 			memcpy(
-				server.instances[server.instance_count].password.data,
+				instance.password.data,
 				create_inst.password.data,
-				min(
-					create_inst.password.count,
-					server.instances[server.instance_count].password.count
-				)
+				min(create_inst.password.count, instance.password.count)
 			);
-			server.instances[server.instance_count].private = create_inst.private;
-			server.instances[server.instance_count].user_created = true;
-			server.instance_count += 1;
-			server.instance_generation += 1;
+			instance.private = create_inst.private;
+			instance.user_created = true;
 
 			ans_create_instance: Command.Ans_Create_Instance;
 			ans_create_instance.reason = .Created;
-			ans_create_instance.created_id = server.instances[server.instance_count - 1].id;
+			ans_create_instance.created_id = instance.id;
 			append_queue(server, ans_create_instance, sender);
 			return true;
 		}
@@ -1132,6 +1147,17 @@ init_quick_instance :: (
 		}
 		instance.playing_scene_id = instance.scenes[0].next_id;
 	}
+	return true;
+}
+
+init_instance_bomberman :: (
+	server: *Server, instance: *Instance, max_player_count: int, platform: *Platform
+) -> bool {
+	instance.* = .{};
+	instance.id = server.instance_generation;
+	server.instance_generation += 1;
+	instance.mode = .Bomberman;
+	instance.last_activity_time = current_time_monotonic();
 	return true;
 }
 
@@ -1199,6 +1225,8 @@ init_instance_with_terrain_ids :: (
 		}
 		instance.playing_scene_id = instance.scenes[0].next_id;
 	}
+	instance.id = server.instance_generation;
+	server.instance_generation += 1;
 	return true;
 }
 
@@ -1592,8 +1620,22 @@ ensure_database :: (app: *App) {
 		QUERY
 	);
 
+	exec_database(
+		app.platform,
+		app_user.server.db,
+		#string QUERY
+			CREATE TABLE IF NOT EXISTS terrain_bomberman_entry (
+				id INTEGER PRIMARY KEY,
+				terrain_id INTEGER,
+				max_players INTEGER,
+				FOREIGN KEY(terrain_id) REFERENCES terrain_ids(id) ON DELETE CASCADE
+			);
+		QUERY
+	);
+
 	embed_database_default_terrains(app);
 	embed_database_default_rosters(app);
+	embed_database_default_terrain_bomberman_entry(app);
 }
 
 App_User :: struct {

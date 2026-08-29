@@ -2,6 +2,10 @@
 #import "Hash";
 #import "Terrain";
 
+embed_database_default_terrain_bomberman_entry :: (app: *App) {
+
+}
+
 embed_database_default_rosters :: (app: *App) {
 	app_user := app.user_data.(*App_User);
 	

@@ -1,0 +1,13 @@
+* Come up with a plan for the recurring pattern 
+		new_string := GUI.labeled_input_text(...);
+		if old_string != new_string {
+			free(old_string);
+			old_string = sprint("%", new_string);
+		}
+* Completely switch to  a generic function for serializing and deserializing the communication structs
+* Leverage fully jai's metaprogramming to write a better sql interface
+* Completely remake the gui system around a stack based flow global cursor state.
+* Come up with an architecture for lag compensation. Based around trusting a bit more client input and roling back simulation and fast forwarding with the timestamp of the user input.
+* Scene Frame_Result struct should be simply a few different list of Commands based on what the instance should do to them. Spelling out every different type of commands was a mistake.
+* Instance right now is a big struct containing inline all the data for the main gameplay mode. But also a sub struct for the bomberman mode. I want Instance to have at the root only the generic data, and then two different sub structs, one for each modes.
+* Use Jai's metaprogramming so that the struct in Database.jai are tagged and that a function make sure that every tagged struct has a corresponding table in the database.

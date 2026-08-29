@@ -23,6 +23,15 @@ Create_Instance :: struct {
 	roster_list: [..] Terrain_Entry;
 }
 
+Create_Bomberman :: struct {
+	open := false;
+
+	name: string;
+	password: string;
+	private: bool;
+	max_players: int;
+}
+
 Menu :: struct {
 	big_assets_sending: [..] Big_Asset;
 	big_assets_receiving: Table(int, Big_Asset);
@@ -35,6 +44,7 @@ Menu :: struct {
 	terrain_name_selected_leaderboard: string = "";
 
 	create_instance: Create_Instance;
+	create_bomberman: Create_Bomberman;
 
 	enter_instance_password: string = "";
 
@@ -610,6 +620,197 @@ menu_loop :: (_app: *App) -> bool {
 	return true;
 }
 
+push_create_instance_menu :: (
+	app_user: *App_User,
+	gui: *GUI.GUI_State,
+	menu: *Menu
+) {
+	popup := GUI.begin_window(
+		gui,
+		gui.controls.window_size / 2,
+		V2f.{ 1280, 720 },
+		GUI.Align.Center,
+		"create_instance_popup",
+		10
+	);
+
+	GUI.atom_label(
+		gui,
+		"Create Instance",
+		popup.pos + V2f.{ popup.size.x / 2, popup.size.y - 4 },
+		scale = 24,
+		z = 10.1,
+		align = GUI.Align.Top_Center,
+		color = V4f.{ 0, 0, 0, 1 }
+	);
+
+	GUI.push_quad_screen(
+		gui,
+		popup.pos + V2f.{ 0, popup.size.y - 32 },
+		V2f.{ popup.size.x, 1 },
+		v3(GUI.GRAY_10),
+		z = 10.1
+	);
+
+	cursor := popup.size.y - 32 - 8 - 8;
+
+	content_aabb := pos_size(popup.pos + V2f.{ 8, 8 }, popup.size - V2f.{ 16, 32 + 16 });
+
+	terrain_list_aabb := content_aabb;
+	terrain_list_aabb = span_x(terrain_list_aabb, 0.0, 0.5);
+
+	roster_list_aabb := content_aabb;
+	roster_list_aabb = span_x(roster_list_aabb, 0.5, 0.75);
+
+	param_aabb := content_aabb;
+	param_aabb = span_x(param_aabb, 0.75, 1.0);
+
+	draw_create_instance_terrain_panel(app_user, gui, menu, terrain_list_aabb);
+	draw_create_instance_roster_panel(app_user, gui, menu, roster_list_aabb);
+	draw_create_instance_param_panel(app_user, gui, menu, param_aabb);
+
+	GUI.end_window(gui, "create_instance_popup");
+}
+
+push_create_bomberman_menu :: (
+	app_user: *App_User,
+	gui: *GUI.GUI_State,
+	menu: *Menu
+) {
+	store := *app_user.store;
+	platform := app_user.app.platform;
+
+	popup := GUI.begin_window(
+		gui,
+		gui.controls.window_size / 2,
+		V2f.{ 480, 720 },
+		GUI.Align.Center,
+		"create_bomberman_popup",
+		10
+	);
+
+	GUI.atom_label(
+		gui,
+		"Create Bomberman",
+		popup.pos + V2f.{ popup.size.x / 2, popup.size.y - 4 },
+		scale = 24,
+		z = 10.1,
+		align = GUI.Align.Top_Center,
+		color = V4f.{ 0, 0, 0, 1 }
+	);
+
+	GUI.push_quad_screen(
+		gui,
+		popup.pos + V2f.{ 0, popup.size.y - 32 },
+		V2f.{ popup.size.x, 1 },
+		v3(GUI.GRAY_10),
+		z = 10.1
+	);
+
+	cursor := popup.size.y - 32 - 8 - 8;
+
+	content_aabb := pos_size(popup.pos + V2f.{ 8, 8 }, popup.size - V2f.{ 16, 32 + 16 });
+
+	GUI.push_id(gui, 456);
+	defer GUI.pop_id(gui);
+
+	GUI.atom_label(
+		gui,
+		"Parameters",
+		v2(content_aabb.min.x + 8, content_aabb.max.y - 8),
+		scale = 16,
+		color = GUI.GRAY_10,
+		z = 26.2,
+		align = .Top_Left
+	);
+	GUI.push_quad_screen(
+		gui,
+		pos = v2(content_aabb.min.x + 4, content_aabb.max.y - 32),
+		size = v2(width(content_aabb) - 8, 1),
+		color = v3(GUI.GRAY_20),
+		z = 26.1
+	);
+
+	GUI.push_default_params(gui, GUI.default_params(gui).*);
+	defer GUI.pop_default_params(gui);
+	GUI.default_params(gui).cursor = v2(content_aabb.min.x + 8, content_aabb.max.y - 40);
+	GUI.default_params(gui).direction = .Down;
+	GUI.default_params(gui).align = .Top_Left;
+	GUI.default_params(gui).z = 26.2;
+	
+	create_instance_name := GUI.labeled_input_text(
+		gui,
+		"Name",
+		menu.create_bomberman.name,
+		width(content_aabb) - 8,
+		24,
+		scale = 16,
+		max_chars = 8,
+		id = "instance_name_input",
+	);
+	if menu.create_bomberman.name != create_instance_name {
+		free(menu.create_bomberman.name);
+		menu.create_bomberman.name = sprint("%", create_instance_name);
+	}
+
+	menu.create_bomberman.private = GUI._labeled_checkbox(
+		gui, "Private Instance", width(content_aabb) - 8, 16, id = "private_instance_checkbox"
+	).checked;
+
+	if menu.create_bomberman.private {
+		create_instance_password := GUI.labeled_input_text(
+			gui,
+			"Password",
+			menu.create_bomberman.password,
+			width(content_aabb) - 8,
+			24,
+			scale = 16,
+			placeholder = "****",
+			max_chars = 8,
+			id = "private_instance_password_input",
+		);
+		if menu.create_bomberman.password != create_instance_password {
+			free(menu.create_bomberman.password);
+			menu.create_bomberman.password = sprint("%", create_instance_password);
+		}
+	}
+
+	menu.create_bomberman.max_players = GUI.labeled_int_input(
+		gui,
+		"Max players",
+		width(content_aabb) - 8,
+		24,
+		menu.create_bomberman.max_players,
+		1,
+		64,
+		id = "max_players_input"
+	).value;
+
+	GUI.default_params(gui).direction = .Left;
+	GUI.default_params(gui).align = .Bottom_Right;
+	GUI.default_params(gui).cursor = v2(content_aabb.max.x - 8, content_aabb.min.y + 8);
+	create_clicked, create_button, create_widget := GUI._text_button(
+		gui, "Create", id = "create_bomberman_button"
+	);
+	if create_clicked {
+		command: Command.Create_Bomberman;
+		string_to_array(menu.create_bomberman.name, command.name);
+		string_to_array(menu.create_bomberman.password, command.password);
+		command.private = menu.create_bomberman.private;
+		command.max_players = menu.create_bomberman.max_players;
+		send_web_message(platform, gui.controls.time, make_command(command));
+		menu.create_bomberman.open = false;
+	}
+
+	cancel_clicked := GUI._text_button(
+		gui, "Cancel", id = "cancel_create_instance_button"
+	);
+	if cancel_clicked
+		menu.create_bomberman.open = false;
+
+	GUI.end_window(gui, "create_bomberman_popup");
+}
+
 push_main_menu :: (
 	app_user: *App_User,
 	gui: *GUI.GUI_State,
@@ -708,6 +909,13 @@ push_main_menu :: (
 	if create_instance_clicked {
 		menu.create_instance.open = !menu.create_instance.open;
 	}
+	cursor.x += GUI.widget_width(gui, "create_instance") + 4;
+	cretate_bomberman_clicked:, text_button_state = GUI.text_button(
+		gui, "Create Bomberman", cursor, 1, id = "create_bomberman", align = GUI.Align.Center_Left
+	);
+	if cretate_bomberman_clicked {
+		menu.create_bomberman.open = !menu.create_bomberman.open;
+	}
 
 	input_text_aabb := pos_size(v2(0.0), v2(128.0, 24.0));
 	input_text_aabb = GUI.align_aabb(
@@ -733,53 +941,11 @@ push_main_menu :: (
 	cursor =  .{ 16, gui.controls.window_size.y - 64 - 16 };
 
 	if menu.create_instance.open {
-		popup := GUI.begin_window(
-			gui,
-			gui.controls.window_size / 2,
-			V2f.{ 1280, 720 },
-			GUI.Align.Center,
-			"create_instance_popup",
-			10
-		);
-
-		GUI.atom_label(
-			gui,
-			"Create Instance",
-			popup.pos + V2f.{ popup.size.x / 2, popup.size.y - 4 },
-			scale = 24,
-			z = 10.1,
-			align = GUI.Align.Top_Center,
-			color = V4f.{ 0, 0, 0, 1 }
-		);
-
-		GUI.push_quad_screen(
-			gui,
-			popup.pos + V2f.{ 0, popup.size.y - 32 },
-			V2f.{ popup.size.x, 1 },
-			v3(GUI.GRAY_10),
-			z = 10.1
-		);
-
-		cursor := popup.size.y - 32 - 8 - 8;
-
-		content_aabb := pos_size(popup.pos + V2f.{ 8, 8 }, popup.size - V2f.{ 16, 32 + 16 });
-
-		terrain_list_aabb := content_aabb;
-		terrain_list_aabb = span_x(terrain_list_aabb, 0.0, 0.5);
-
-		roster_list_aabb := content_aabb;
-		roster_list_aabb = span_x(roster_list_aabb, 0.5, 0.75);
-
-		param_aabb := content_aabb;
-		param_aabb = span_x(param_aabb, 0.75, 1.0);
-
-		draw_create_instance_terrain_panel(app_user, gui, menu, terrain_list_aabb);
-		draw_create_instance_roster_panel(app_user, gui, menu, roster_list_aabb);
-		draw_create_instance_param_panel(app_user, gui, menu, param_aabb);
-
-		GUI.end_window(gui, "create_instance_popup");
+		push_create_instance_menu(app_user, gui, menu);
 	}
-
+	if menu.create_bomberman.open {
+		push_create_bomberman_menu(app_user, gui, menu);
+	}
 }
 
 draw_create_instance_param_panel :: (

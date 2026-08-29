@@ -66,6 +66,12 @@ DB_Terrain_Roster :: struct {
 	terrain_ids: [] int; @json_array
 }
 
+DB_Terrain_Bomberman_Entry :: struct {
+	id: int;
+	terrain_id: int;
+	max_players: int;
+}
+
 get_wr_info :: (platform: *Platform, db: DB_query.Handle, terrain_id: int) -> DB_Time_Entry {
 	query := tprint(
 		"SELECT * FROM time_entries WHERE terrain_id = %1 ORDER BY time_ms ASC LIMIT 1", terrain_id

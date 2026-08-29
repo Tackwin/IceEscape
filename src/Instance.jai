@@ -44,9 +44,16 @@ Terrain_Roster :: struct {
 	terrain_ids: [128] int;
 }
 
+Instance_Mode :: enum {
+	Standard;
+	Bomberman;
+}
+
 Instance :: struct {
 	id: int;
 	id_generation := 0;
+
+	mode: Instance_Mode;
 
 	hidden := false;
 	private := false;
@@ -64,8 +71,6 @@ Instance :: struct {
 	scene_parameters: Scene.Scene_Parameters;
 
 	sync_count_player: Counter(1);
-	sync_count_skull: Counter(20);
-	sync_moving_frame: Counter(10);
 	sync_count_key: Counter(50);
 	sync_count_bomb: Counter(50);
 
@@ -93,6 +98,10 @@ Instance :: struct {
 	names_to_scene_id: Table(string, int);
 
 	end_scene_events: [..] End_Scene_Event;
+
+	Bomberman :: struct {
+		max_player_count: int;
+	}
 }
 
 reload :: (instance: *Instance) {
@@ -370,27 +379,6 @@ process :: (
 		}
 	}
 
-	// request_score: *Command.Request_Score = isa(command.payload, Command.Request_Score);
-	// if request_score {
-	// 	sender := find_person_by_user_id(instance, sender_user_id);
-	// 	if sender {
-	// 		for request_score.player_ids {
-	// 			if it < 0
-	// 				continue;
-				
-	// 			person := find_person_by_player_id(instance, it);
-	// 			if person {
-	// 				sync_score: Command.Sync_Score;
-	// 				sync_score.player_id = it;
-	// 				sync_score.score = person.server.souls;
-	// 				Scene.add_single_reply(response, sender.player_id, sync_score);
-	// 			}
-	// 		}
-	// 	}
-
-	// 	return true;
-	// }
-
 	ntp: *Command.NTP = isa(command.payload, Command.NTP);
 	if ntp {
 		is_over := false;
@@ -425,96 +413,8 @@ process :: (
 		if send_back && response
 			Scene.add(response, -1, reply);
 
-		// if is_over
-		// 	process_complete_ntp(state, reply);
-
 		return true;
 	}
-
-	// connect: *Command.Connect = isa(command.payload, Command.Connect);
-	// if connect {
-	// 	state.user_generation += 1;
-
-	// 	if connect.token < 0 {
-	// 		// The client didn't provide a token, so we generate one for him.
-	// 		connect.token = state.user_generation;
-	// 	}
-
-	// 	// Let's check the token to see if the user has an history here.
-	// 	user: *User = null;
-	// 	for * u: state.users {
-	// 		if u.token == connect.token {
-	// 			// We are going to hijack this user to point to the new connection.
-	// 			u.websocket = socket;
-	// 			u.last_ping = current_time_monotonic();
-	// 			user = u;
-	// 			break;
-	// 		}
-	// 	}
-
-	// 	// If we didn't find a user with the same token, we need to create a new one.
-	// 	if !user {
-	// 		state.player_generation += 1;
-
-	// 		new_user: User;
-	// 		new_user.token = connect.token;
-	// 		new_user.person_id = state.instance.persons.count;
-	// 		new_user.player_id = state.player_generation;
-	// 		new_user.scene_id = state.pick_scene_id;
-	// 		new_user.last_ping = current_time_monotonic();
-	// 		new_user.websocket = socket;
-	// 		array_add(*state.users, new_user);
-	// 		user = *state.users[state.users.count - 1];
-
-	// 		person: Instance.Person;
-	// 		person.person_id = new_user.person_id;
-	// 		person.score = .{};
-	// 		array_add(*state.instance.persons, person);
-
-	// 		for state.users {
-	// 			// Notify the existing player of a new player
-	// 			if it.scene_id != user.scene_id
-	// 				continue;
-	// 			// Don't notify the new player about themselves
-	// 			if it.player_id == user.player_id
-	// 				continue;
-
-	// 			spawn: Command.Spawn;
-	// 			spawn.player_id = user.player_id;
-	// 			spawn.its_you = false;
-	// 			spawn.scene_id = it.scene_id;
-	// 			append_queue(spawn, it.websocket);
-	// 		}
-
-	// 		// Also let's do a virtual message to tell the server a new guy just connected
-	// 		spawn: Command.Spawn;
-	// 		spawn.player_id = user.player_id;
-	// 		spawn.its_you = false;
-	// 		spawn.scene_id = user.scene_id;
-	// 		append_received_sync(make_command(spawn), null);
-	// 	}
-
-	// 	// Then we serve the state of the scene to the new player.
-	// 	scene := find_by_scene_id(user.scene_id);
-	// 	if scene
-	// 		append_queue(Scene.make_sync(scene), user.websocket);
-
-	// 	// We also need to tell the new player about their own spawn
-	// 	spawn: Command.Spawn;
-	// 	spawn.player_id = user.player_id;
-	// 	spawn.its_you = true;
-	// 	spawn.scene_id = user.scene_id;
-	// 	append_queue(spawn, user.websocket);
-
-	// 	// And finally we can respond to the user with the connection token
-	// 	connect_response: Command.Connect;
-	// 	connect_response.token = connect.token;
-	// 	append_queue(connect_response, user.websocket);
-
-	// 	// bookkeep the socket to token mapping
-	// 	table_set(*state.socket_to_token_id, socket, connect.token);
-	// 	return true;
-	// }
 
 	return false;
 }
