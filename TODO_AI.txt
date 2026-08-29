@@ -18,3 +18,4 @@
 * Add an instrumentalised, introspective, profiling system, leveraging jai's metaprogramming. Also I have a pretty hard idea of an histogram GUI for the performance that Molecule already implemented.
 * Completely remove every trace of the Y flip that I did to have the bottom left be the origin. It was a mistake. The game should follow the standard convention of top left is origin. For eveything, texture gui rendering mouse controls.
 * Add support for gpu timing queries. Full webgpu.
+* There are multiple versions of a struct holding the current keyboard's state of the frame. Like at least one for the gui and one for the platform. I'd like to factorzie all of this.
