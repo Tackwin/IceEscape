@@ -1060,10 +1060,14 @@ app: App;
 dll_mutex: Mutex;
 
 load_dll :: () {
-	Win32.CopyFileA(identity_cstr(GAME_DLL), identity_cstr(GAME_TEMP_DLL), 0);
-	Win32.CopyFileA(identity_cstr(GAME_PDB), identity_cstr(GAME_TEMP_PDB), 0);
+	dll_src := identity_cstr(GAME_DLL);
+	dll_dst := identity_cstr(GAME_TEMP_DLL);
+	pdb_src := identity_cstr(GAME_PDB);
+	pdb_dst := identity_cstr(GAME_TEMP_PDB);
+	Win32.CopyFileA(dll_src, dll_dst, 0);
+	Win32.CopyFileA(pdb_src, pdb_dst, 0);
 
-	dll = Win32.LoadLibraryA(identity_cstr(GAME_TEMP_DLL));
+	dll = Win32.LoadLibraryA(dll_dst);
 	if dll == null {
 		print("Failed to load %\n", GAME_DLL);
 		return;
