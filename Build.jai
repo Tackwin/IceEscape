@@ -9,6 +9,17 @@
 
 #load "src/Identity.jai";
 
+pdb_link_arg :: (pdb_file: string) -> string {
+	return tprint("/PDB:./bin/%", pdb_file);
+}
+
+assign_pdb_link :: (opts: *Build_Options, pdb_file: string) {
+	args := NewArray(1, string);
+	args[0] = pdb_link_arg(pdb_file);
+	args.count = 1;
+	opts.additional_linker_arguments = args;
+}
+
 build_game :: () -> Workspace {
 	w := compiler_create_workspace("Game");
 
@@ -19,6 +30,7 @@ build_game :: () -> Workspace {
 	opts.output_type = .DYNAMIC_LIBRARY;
 	opts.output_path = "./bin/";
 	opts.output_executable_name = GAME_NAME;
+	assign_pdb_link(*opts, GAME_PDB);
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -45,6 +57,7 @@ build_server :: () -> Workspace {
 	opts.output_type = .DYNAMIC_LIBRARY;
 	opts.output_path = "./bin/";
 	opts.output_executable_name = GAME_SERVER_NAME;
+	assign_pdb_link(*opts, GAME_SERVER_PDB);
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -79,7 +92,7 @@ build_win32_client :: () -> Workspace {
 	array_add(*paths, "./lib/");
 	array_add(*paths, "./modules/");
 	array_add(*paths, ..opts.import_path);
-	opts.additional_linker_arguments = NewArray(9, string);
+	opts.additional_linker_arguments = NewArray(10, string);
 	opts.additional_linker_arguments[0] = "Userenv.lib";
 	opts.additional_linker_arguments[1] = "Ntdll.lib";
 	opts.additional_linker_arguments[2] = "Propsys.lib";
@@ -89,7 +102,8 @@ build_win32_client :: () -> Workspace {
 	opts.additional_linker_arguments[6] = "OleAut32.lib";
 	opts.additional_linker_arguments[7] = "d3dcompiler.lib";
 	opts.additional_linker_arguments[8] = "RuntimeObject.lib";
-	opts.additional_linker_arguments.count = 9;
+	opts.additional_linker_arguments[9] = pdb_link_arg(GAME_EXE_PDB);
+	opts.additional_linker_arguments.count = 10;
 	opts.import_path = paths;
 
 	#if #exists(JAILS_DIAGNOSTICS_BUILD) {
@@ -116,7 +130,7 @@ build_win32 :: () -> Workspace {
 	array_add(*paths, "./src/");
 	array_add(*paths, "./lib/");
 	array_add(*paths, ..opts.import_path);
-	opts.additional_linker_arguments = NewArray(8, string);
+	opts.additional_linker_arguments = NewArray(9, string);
 	opts.additional_linker_arguments[0] = "Userenv.lib";
 	opts.additional_linker_arguments[1] = "Ntdll.lib";
 	opts.additional_linker_arguments[2] = "Propsys.lib";
@@ -126,7 +140,8 @@ build_win32 :: () -> Workspace {
 	opts.additional_linker_arguments[5] = "OleAut32.lib";
 	opts.additional_linker_arguments[6] = "d3dcompiler.lib";
 	opts.additional_linker_arguments[7] = "RuntimeObject.lib";
-	opts.additional_linker_arguments.count = 8;
+	opts.additional_linker_arguments[8] = pdb_link_arg(GAME_EXE_PDB);
+	opts.additional_linker_arguments.count = 9;
 	opts.import_path = paths;
 
 	#if #exists(JAILS_DIAGNOSTICS_BUILD) {
@@ -146,14 +161,17 @@ build_platform_server :: (os: Operating_System_Tag) -> Workspace {
 	opts.Commonly_Propagated = seed.Commonly_Propagated;
 	opts.output_type = .EXECUTABLE;
 	opts.output_path = "./bin/";
-	opts.additional_linker_arguments = NewArray(1, string);
+	opts.additional_linker_arguments = NewArray(2, string);
 	if os == .WINDOWS {
 		opts.output_executable_name = GAME_SERVER_NAME;
 		opts.additional_linker_arguments[0] = "src/c/wsserver.lib";
+		opts.additional_linker_arguments[1] = pdb_link_arg(GAME_SERVER_EXE_PDB);
+		opts.additional_linker_arguments.count = 2;
 	}
 	else if os == .LINUX {
 		opts.output_executable_name = GAME_LINUX_SERVER_NAME;
 		opts.additional_linker_arguments[0] = "src/c/wsserver.o";
+		opts.additional_linker_arguments.count = 1;
 	}
 	opts.os_target = os;
 
@@ -350,6 +368,7 @@ build_game_dll_2 :: () {
 	opts.output_type = .DYNAMIC_LIBRARY;
 	opts.output_path = "./bin/";
 	opts.output_executable_name = GAME_NAME;
+	assign_pdb_link(*opts, GAME_PDB);
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -393,6 +412,7 @@ build_server_dll_2 :: () {
 	opts.output_type = .DYNAMIC_LIBRARY;
 	opts.output_path = "./bin/";
 	opts.output_executable_name = GAME_SERVER_NAME;
+	assign_pdb_link(*opts, GAME_SERVER_PDB);
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -439,7 +459,7 @@ build_game_win32_2 :: () {
 	array_add(*paths, "./lib/");
 	array_add(*paths, "./modules/");
 	array_add(*paths, ..opts.import_path);
-	opts.additional_linker_arguments = NewArray(9, string);
+	opts.additional_linker_arguments = NewArray(10, string);
 	opts.additional_linker_arguments[0] = "Userenv.lib";
 	opts.additional_linker_arguments[1] = "Ntdll.lib";
 	opts.additional_linker_arguments[2] = "Propsys.lib";
@@ -449,7 +469,8 @@ build_game_win32_2 :: () {
 	opts.additional_linker_arguments[6] = "OleAut32.lib";
 	opts.additional_linker_arguments[7] = "d3dcompiler.lib";
 	opts.additional_linker_arguments[8] = "RuntimeObject.lib";
-	opts.additional_linker_arguments.count = 9;
+	opts.additional_linker_arguments[9] = pdb_link_arg(GAME_EXE_PDB);
+	opts.additional_linker_arguments.count = 10;
 	opts.import_path = paths;
 
 	#if #exists(JAILS_DIAGNOSTICS_BUILD) {
@@ -479,18 +500,21 @@ build_server_platform_2 :: (os: Operating_System_Tag) {
 	opts.Commonly_Propagated = seed.Commonly_Propagated;
 	opts.text_output_flags = xx 0;
 	opts.output_path = "./bin/";
-	opts.additional_linker_arguments = NewArray(1, string);
+	opts.additional_linker_arguments = NewArray(2, string);
 	if os == .WINDOWS {
 		opts.output_type = .EXECUTABLE;
 		opts.intermediate_path = ".build_server_win";
 		opts.output_executable_name = GAME_SERVER_NAME;
 		opts.additional_linker_arguments[0] = "src/c/wsserver.lib";
+		opts.additional_linker_arguments[1] = pdb_link_arg(GAME_SERVER_EXE_PDB);
+		opts.additional_linker_arguments.count = 2;
 	}
 	else if os == .LINUX {
 		opts.output_type = .EXECUTABLE;
 		opts.intermediate_path = ".build_server_linux";
 		opts.output_executable_name = GAME_LINUX_SERVER_NAME;
 		opts.additional_linker_arguments[0] = "src/c/wsserver.o";
+		opts.additional_linker_arguments.count = 1;
 		opts.use_custom_link_command = true;
 	}
 	opts.os_target = os;

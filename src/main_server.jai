@@ -1504,14 +1504,16 @@ server_send_tick :: (platform: *Platform, server: *Server) {
 }
 
 prefill_fixed_instances :: (server: *Server, platform: *Platform) {
-	server.instances[0].id = server.instance_generation;
-	string_to_array("Hades", server.instances[0].name);
 	init_instance_with_roster(server, *server.instances[0], 2, platform);
+	string_to_array("Hades", server.instances[0].name);
 
-	server.instances[1].id = server.instance_generation;
+	init_instance_with_roster(server, *server.instances[1], 2, platform);
 	server.instances[1].scene_parameters.auto_revive = true;
 	string_to_array("Olympus", server.instances[1].name);
-	init_instance_with_roster(server, *server.instances[1], 2, platform);
+	
+	init_instance_bomberman(server, *server.instances[2], 64, platform);
+	server.instances[2].scene_parameters.mode = .Bomberman;
+	string_to_array("Bomberman", server.instances[2].name);
 }
 
 gc_instances :: (server: *Server) {

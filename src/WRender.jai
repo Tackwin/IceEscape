@@ -4566,10 +4566,10 @@ render_terrain :: (
 	instanced := append_instance_buffer(frame);
 	VP := pass.uniforms.P * pass.uniforms.V;
 
-	min_x := scene.camera.target.x - 15;
-	max_x := scene.camera.target.x + 15;
-	min_y := scene.camera.target.y - 15;
-	max_y := scene.camera.target.y + 15;
+	min_x := scene.camera.target.x - 16;
+	max_x := scene.camera.target.x + 16;
+	min_y := scene.camera.target.y - 16;
+	max_y := scene.camera.target.y + 16;
 
 	min_tiles := Scene.position_to_tile(scene, v3(min_x, min_y, 0));
 	max_tiles := Scene.position_to_tile(scene, v3(max_x, max_y, 0)) + V2i.{ 1, 1 };
@@ -4676,7 +4676,7 @@ cull :: (VP: M4f, M: M4f, safety := 1.0) -> bool {
 	pos := M4f.col(M, 3);
 	return cull(VP, v3(pos), safety);
 }
-cull_rough :: (target: V3f, _pos: V3f, safety := 12) -> bool {
+cull_rough :: (target: V3f, _pos: V3f, safety := 16) -> bool {
 	if target.x < _pos.x - safety || target.x > _pos.x + safety
 		return true;
 	if target.y < _pos.y - safety || target.y > _pos.y + safety

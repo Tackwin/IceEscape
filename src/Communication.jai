@@ -227,9 +227,14 @@ Command :: struct {
 		bomb_spawner_id: int;
 		holder_id: int;
 		last_holder_id: int;
+		chain_bomb: bool;
+		cross_length: int;
 
 		position: V3f;
 		time: float;
+
+		bomberman_bomb: bool;
+		holdable: bool;
 	}
 	Sync_Robot :: struct {
 		robot_id: int;
@@ -289,6 +294,7 @@ Command :: struct {
 		position: V3f;
 		max_size: float;
 		lifetime: float;
+		trigger_bombs: bool;
 	}
 	Wipe_Scene :: struct {
 	}

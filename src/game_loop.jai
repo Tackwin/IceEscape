@@ -125,6 +125,7 @@ process_game :: (
 		state.scene.end_scene_countdown_started = false;
 		state.scene.params = sync_scene.params;
 		state.scene.auto_revive |= sync_scene.params.auto_revive;
+		Scene.init_camera(*state.scene);
 		// Remove all players not present in the sync.
 		for * state.scene.players {
 			found := false;
