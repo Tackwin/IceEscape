@@ -564,6 +564,79 @@ win32_wait :: (promise: Platform.extern_ref) {
 	// no op
 }
 
+Win32_Process_Slot :: struct {
+	occupied := false;
+	process: Win32.HANDLE;
+}
+
+win32_process_slots: [32] Win32_Process_Slot;
+STILL_ACTIVE :: 259;
+
+win32_create_process :: (path: string) -> Platform.extern_ref {
+	push_context,defer_pop launcher_context;
+	if path.count == 0 return 0;
+	slot := -1;
+	for win32_process_slots {
+		if !it.occupied {
+			slot = it_index;
+			break;
+		}
+	}
+	if slot < 0 return 0;
+
+	cmd := tprint("%\0", path);
+	startup: Win32.STARTUPINFOA;
+	startup.cb = size_of(Win32.STARTUPINFOA);
+	info: Win32.PROCESS_INFORMATION;
+	ok := Win32.CreateProcessA(
+		null,
+		cmd.data,
+		null,
+		null,
+		0,
+		.CREATE_NEW_CONSOLE,
+		null,
+		null,
+		*startup,
+		*info
+	);
+	if !ok return 0;
+	Win32.CloseHandle(info.hThread);
+	win32_process_slots[slot].occupied = true;
+	win32_process_slots[slot].process = info.hProcess;
+	return xx (slot + 1);
+}
+
+win32_query_process_status :: (ref: Platform.extern_ref) -> Process_Status {
+	if ref <= 0 || ref > win32_process_slots.count return .Invalid;
+	slot := *win32_process_slots[ref - 1];
+	if !slot.occupied return .Invalid;
+	code: u32;
+	if Win32.GetExitCodeProcess(slot.process, *code) == 0 return .Invalid;
+	if code == STILL_ACTIVE return .Running;
+	return .Exited;
+}
+
+win32_close_process :: (ref: Platform.extern_ref) {
+	push_context,defer_pop launcher_context;
+	if ref <= 0 || ref > win32_process_slots.count return;
+	slot := *win32_process_slots[ref - 1];
+	if !slot.occupied return;
+	code: u32;
+	if Win32.GetExitCodeProcess(slot.process, *code) != 0 && code == STILL_ACTIVE {
+		Win32.TerminateProcess(slot.process, 1);
+	}
+	Win32.CloseHandle(slot.process);
+	slot.occupied = false;
+	slot.process = null;
+}
+
+win32_close_all_processes :: () {
+	for i: 1..win32_process_slots.count {
+		win32_close_process(xx i);
+	}
+}
+
 watcher: File_Watcher(Platform);
 
 audio_engine: ma_engine;
@@ -604,7 +677,7 @@ init_platform :: () -> Platform {
 	curl_buffer = NewArray(1024*1024*32, u8, false);
 
 	sdl_window = SDL_CreateWindow(
-		tprint("Ice Escape %\0", win32_get_token()).data,
+		tprint("Arena %\0", win32_get_token()).data,
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
 		1366,
@@ -619,6 +692,9 @@ init_platform :: () -> Platform {
 	platform.spawn = win32_spawn;
 	platform.join = win32_join;
 	platform.wait = win32_wait;
+	platform.create_process = win32_create_process;
+	platform.query_process_status = win32_query_process_status;
+	platform.close_process = win32_close_process;
 	platform.connect_server = win32_connect_server;
 	platform.is_server_connected = win32_is_server_connected;
 	platform.write_file = win32_write_file;
@@ -969,6 +1045,7 @@ init_platform :: () -> Platform {
 
 exit_platform :: (platform: Platform) {
 	push_context,defer_pop launcher_context;
+	win32_close_all_processes();
 	SDL_GL_DeleteContext(sdl_gl_context);
 	SDL_DestroyWindow(sdl_window);
 	SDL_Quit();
@@ -983,12 +1060,12 @@ app: App;
 dll_mutex: Mutex;
 
 load_dll :: () {
-	Win32.CopyFileA("IceEscape.dll", "IceEscape_temp.dll", 0);
-	Win32.CopyFileA("IceEscape.pdb", "IceEscape_temp.pdb", 0);
+	Win32.CopyFileA("Arena.dll", "Arena_temp.dll", 0);
+	Win32.CopyFileA("Arena.pdb", "Arena_temp.pdb", 0);
 
-	dll = Win32.LoadLibraryA("IceEscape_temp.dll");
+	dll = Win32.LoadLibraryA("Arena_temp.dll");
 	if dll == null {
-		print("Failed to load IceEscape.dll\n");
+		print("Failed to load Arena.dll\n");
 		return;
 	}
 
@@ -1015,23 +1092,22 @@ reload_dll :: () {
 	}
 
 	dll_generation += 1;
-	dll_name := tprint("IceEscape_temp_%.dll\0", dll_generation);
-	pdb_name := tprint("IceEscape_temp_%.pdb\0", dll_generation);
-	print("Copying IceEscape to %\n", dll_name);
-	if !Win32.CopyFileA("IceEscape.dll", dll_name.data, 0)
+	dll_name := tprint("Arena_temp_%.dll\0", dll_generation);
+	pdb_name := tprint("Arena_temp_%.pdb\0", dll_generation);
+	if !Win32.CopyFileA("Arena.dll", dll_name.data, 0)
 	{
-		print("Failed to copy IceEscape.dll\n");
+		print("Failed to copy Arena.dll\n");
 		return;
 	}
-	if !Win32.CopyFileA("IceEscape.pdb", pdb_name.data, 0)
+	if !Win32.CopyFileA("Arena.pdb", pdb_name.data, 0)
 	{
-		print("Failed to copy IceEscape.pdb\n");
+		print("Failed to copy Arena.pdb\n");
 		return;
 	}
 
 	dll_reloaded := Win32.LoadLibraryA(dll_name.data);
 	if dll_reloaded == null {
-		print("Failed to reload IceEscape.dll\n");
+		print("Failed to reload Arena.dll\n");
 		return;
 	}
 	// Now we can safely reload the DLL
@@ -1187,7 +1263,7 @@ main :: () {
 			Control.begin_tick(*win32_control.state);
 
 			if dll {
-				file := Win32.CreateFileA("IceEscape.dll", Win32.FILE_GENERIC_READ);
+				file := Win32.CreateFileA("Arena.dll", Win32.FILE_GENERIC_READ);
 				defer Win32.CloseHandle(file);
 
 				time_struct: Win32.FILETIME;

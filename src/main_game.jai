@@ -129,6 +129,7 @@ App_User :: struct {
 	}
 
 	GUI.begin_frame(*app_user.gui_state, app_user.allocated_frame_info, *app_user.controls, app_user.state.keyboard_layout);
+	handle_debug_local_server(app_user);
 
 	commands := parse_web_message(*app_user.state, app_user.allocated_frame_info);
 	for command: commands {
@@ -341,6 +342,19 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	return true;
 }
 
+handle_debug_local_server :: (app_user: *App_User) {
+	if !app_user.gui_state.controls.just_pressed[Key.F9] return;
+	platform := app_user.app.platform;
+	ref := app_user.state.local_server;
+	if query_process_status(platform, ref) == .Running {
+		close_process(platform, ref);
+		app_user.state.local_server = 0;
+		return;
+	}
+	if ref != 0 close_process(platform, ref);
+	app_user.state.local_server = create_process(platform, LOCAL_SERVER_PROCESS);
+}
+
 write_capture_png :: (app_user: *App_User, platform: *Platform) {
 	rgb := app_user.framegraph.capture_rgb;
 	width := app_user.framegraph.capture_width.(int);
@@ -393,6 +407,7 @@ State :: struct {
 
 	is_connected := false;
 	is_communication_established := false;
+	local_server: Platform.extern_ref = 0;
 
 	ntp_period: Period(0.15);
 	NTP_Result :: struct {

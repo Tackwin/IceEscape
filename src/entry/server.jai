@@ -130,12 +130,12 @@ app: App;
 load_dll :: () {
 	Win32.FreeLibrary(dll);
 
-	Win32.DeleteFileA("IceEscapeServer_temp.dll");
-	Win32.CopyFileA("IceEscapeServer.dll", "IceEscapeServer_temp.dll", 0);
+	Win32.DeleteFileA("ArenaServer_temp.dll");
+	Win32.CopyFileA("ArenaServer.dll", "ArenaServer_temp.dll", 0);
 
-	dll = Win32.LoadLibraryA("IceEscapeServer_temp.dll");
+	dll = Win32.LoadLibraryA("ArenaServer_temp.dll");
 	if dll == null {
-		print("Failed to load IceEscape.dll\n");
+		print("Failed to load ArenaServer.dll\n");
 		return;
 	}
 
@@ -149,12 +149,12 @@ load_dll :: () {
 reload_dll :: () {
 	Win32.FreeLibrary(dll);
 
-	Win32.DeleteFileA("IceEscapeServer_temp.dll");
-	Win32.CopyFileA("IceEscapeServer.dll", "IceEscapeServer_temp.dll", 0);
+	Win32.DeleteFileA("ArenaServer_temp.dll");
+	Win32.CopyFileA("ArenaServer.dll", "ArenaServer_temp.dll", 0);
 
-	dll_reloaded := Win32.LoadLibraryA("IceEscapeServer_temp.dll");
+	dll_reloaded := Win32.LoadLibraryA("ArenaServer_temp.dll");
 	if dll_reloaded == null {
-		print("Failed to reload IceEscapeServer.dll\n");
+		print("Failed to reload ArenaServer.dll\n");
 		return;
 	}
 	dll = dll_reloaded;
@@ -182,7 +182,7 @@ main :: () {
 	loop := true;
 	while (loop) {
 		if dll {
-			file := Win32.CreateFileA("IceEscapeServer.dll", Win32.FILE_GENERIC_READ);
+			file := Win32.CreateFileA("ArenaServer.dll", Win32.FILE_GENERIC_READ);
 			defer Win32.CloseHandle(file);
 
 			time_struct: Win32.FILETIME;

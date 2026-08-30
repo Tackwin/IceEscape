@@ -16,7 +16,7 @@ build_game :: () -> Workspace {
 	opts.Commonly_Propagated = seed.Commonly_Propagated;
 	opts.output_type = .DYNAMIC_LIBRARY;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "IceEscape";
+	opts.output_executable_name = "Arena";
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -42,7 +42,7 @@ build_server :: () -> Workspace {
 	opts.Commonly_Propagated = seed.Commonly_Propagated;
 	opts.output_type = .DYNAMIC_LIBRARY;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "IceEscapeServer";
+	opts.output_executable_name = "ArenaServer";
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -69,7 +69,7 @@ build_win32_client :: () -> Workspace {
 	opts.Commonly_Propagated = seed.Commonly_Propagated;
 	opts.output_type = .EXECUTABLE;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "Win32";
+	opts.output_executable_name = "Arena";
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -107,7 +107,7 @@ build_win32 :: () -> Workspace {
 	opts.Commonly_Propagated = seed.Commonly_Propagated;
 	opts.output_type = .EXECUTABLE;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "IceEscape";
+	opts.output_executable_name = "Arena";
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -146,11 +146,11 @@ build_platform_server :: (os: Operating_System_Tag) -> Workspace {
 	opts.output_path = "./bin/";
 	opts.additional_linker_arguments = NewArray(1, string);
 	if os == .WINDOWS {
-		opts.output_executable_name = "Win32Server";
+		opts.output_executable_name = "ArenaServer";
 		opts.additional_linker_arguments[0] = "src/c/wsserver.lib";
 	}
 	else if os == .LINUX {
-		opts.output_executable_name = "LinuxServer";
+		opts.output_executable_name = "ArenaLinuxServer";
 		opts.additional_linker_arguments[0] = "src/c/wsserver.o";
 	}
 	opts.os_target = os;
@@ -185,7 +185,7 @@ build_wasm :: () -> Workspace {
 	opts.emit_debug_info                     = .DWARF;
 	opts.backtrace_on_crash                  = .OFF; // Runtime_Support_Crash_Handler doesn’t support WASM (yet?)
 	opts.output_path                         = "web/";
-	opts.output_executable_name              = "IceEscape";
+	opts.output_executable_name              = "Arena";
 	opts.llvm_options.target_system_features = "+bulk-memory"; // "This options is needed so that "memcpy" and "memset" are mapped to "memory.copy" and "memory.fill" instructions in WASM.
 	opts.llvm_options.enable_split_modules   = false;
 	opts.llvm_options.function_sections      = true; // To get around "LLVM ERROR: section already has a defining function: .text"
@@ -322,9 +322,9 @@ build :: () {
 			"-O",
 			"-g",
 			"--asyncify",
-			"./web/IceEscape.wasm",
+			"./web/Arena.wasm",
 			"-o",
-			"./web/IceEscape.wasm"
+			"./web/Arena.wasm"
 		);
 	}
 
@@ -347,7 +347,7 @@ build_game_dll_2 :: () {
 	opts.text_output_flags = xx 0;
 	opts.output_type = .DYNAMIC_LIBRARY;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "IceEscape";
+	opts.output_executable_name = "Arena";
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -390,7 +390,7 @@ build_server_dll_2 :: () {
 	opts.intermediate_path = ".build_server_dll";
 	opts.output_type = .DYNAMIC_LIBRARY;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "IceEscapeServer";
+	opts.output_executable_name = "ArenaServer";
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -429,7 +429,7 @@ build_game_win32_2 :: () {
 	opts.intermediate_path = ".build_game_win32";
 	opts.output_type = .EXECUTABLE;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "Win32";
+	opts.output_executable_name = "Arena";
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -481,13 +481,13 @@ build_server_platform_2 :: (os: Operating_System_Tag) {
 	if os == .WINDOWS {
 		opts.output_type = .EXECUTABLE;
 		opts.intermediate_path = ".build_server_win";
-		opts.output_executable_name = "Win32Server";
+		opts.output_executable_name = "ArenaServer";
 		opts.additional_linker_arguments[0] = "src/c/wsserver.lib";
 	}
 	else if os == .LINUX {
 		opts.output_type = .EXECUTABLE;
 		opts.intermediate_path = ".build_server_linux";
-		opts.output_executable_name = "LinuxServer";
+		opts.output_executable_name = "ArenaLinuxServer";
 		opts.additional_linker_arguments[0] = "src/c/wsserver.o";
 		opts.use_custom_link_command = true;
 	}
@@ -557,7 +557,7 @@ build_wasm_2 :: () {
 	opts.emit_debug_info                     = .DWARF;
 	opts.backtrace_on_crash                  = .OFF; // Runtime_Support_Crash_Handler doesn’t support WASM (yet?)
 	opts.output_path                         = "web/";
-	opts.output_executable_name              = "IceEscape";
+	opts.output_executable_name              = "Arena";
 	opts.llvm_options.target_system_features = "+bulk-memory,+atomics,+simd128"; // "This options is needed so that "memcpy" and "memset" are mapped to "memory.copy" and "memory.fill" instructions in WASM.
 	opts.llvm_options.enable_split_modules   = false;
 	opts.llvm_options.function_sections      = true; // To get around "LLVM ERROR: section already has a defining function: .text"
@@ -612,9 +612,9 @@ build_wasm_2 :: () {
 	// 	"-O2",
 	// 	"-g",
 	// 	"--asyncify",
-	// 	"./web/IceEscape.wasm",
+	// 	"./web/Arena.wasm",
 	// 	"-o",
-	// 	"./web/IceEscape.wasm"
+	// 	"./web/Arena.wasm"
 	// ];
 	// print("Running wasm opt: %\n", join(..args, " "));
 	// run_command(..args);
@@ -715,23 +715,23 @@ build_2 :: () {
 		res, stdout, stderr := run_command(
 			"sexec",
 			"-profile=tools/ssh.tlp",
-			"-cmd=sudo systemctl stop linuxserver.service"
+			"-cmd=sudo systemctl stop arenaserver.service"
 		);
 		run_command(
 			"sftpc",
 			"-profile=tools/ssh.tlp",
 			"put",
 			"-o",
-			"./bin/LinuxServer.exe",
-			"bin/LinuxServer"
+			"./bin/ArenaLinuxServer.exe",
+			"bin/ArenaLinuxServer"
 		);
 		run_command(
 			"sftpc",
 			"-profile=tools/ssh.tlp",
 			"put",
 			"-o",
-			"./bin/IceEscapeServer.db",
-			"bin/IceEscapeServerDev.db"
+			"./bin/ArenaServer.db",
+			"bin/ArenaServerDev.db"
 		);
 		run_command(
 			"sftpc",
@@ -739,7 +739,7 @@ build_2 :: () {
 			"put",
 			"-o",
 			"./web/*",
-			"www/tackwin"
+			"www/arena"
 		);
 		run_command(
 			"sftpc",
@@ -753,7 +753,7 @@ build_2 :: () {
 		run_command(
 			"sexec",
 			"-profile=tools/ssh.tlp",
-			"-cmd=sudo systemctl start linuxserver.service"
+			"-cmd=sudo systemctl start arenaserver.service"
 		);
 	}
 }

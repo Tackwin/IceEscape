@@ -10,6 +10,15 @@ Layout :: enum s32 {
 	Unknown :: 2;
 }
 
+LOCAL_SERVER_PORT :: 2468;
+LOCAL_SERVER_PROCESS :: "ArenaServer.exe";
+
+Process_Status :: enum s32 {
+	Invalid;
+	Running;
+	Exited;
+}
+
 Key :: enum s32 {
 	A :: 0;
 	B;
@@ -432,11 +441,30 @@ Platform :: struct {
 
 	db_query: #type (query: *DB_query) = null;
 
+	create_process: #type (path: string) -> extern_ref = null;
+	query_process_status: #type (ref: extern_ref) -> Process_Status = null;
+	close_process: #type (ref: extern_ref) = null;
+
 	Thread_F :: #type (data: *void);
 	spawn: #type (func: Thread_F, data: *void) -> int = null;
 	join: #type (thread_id: int) = null;
 
 	allocator: Allocator;
+}
+
+create_process :: (platform: *Platform, path: string) -> Platform.extern_ref {
+	if platform.create_process == null return 0;
+	return platform.create_process(path);
+}
+
+query_process_status :: (platform: *Platform, ref: Platform.extern_ref) -> Process_Status {
+	if platform.query_process_status == null return .Invalid;
+	return platform.query_process_status(ref);
+}
+
+close_process :: (platform: *Platform, ref: Platform.extern_ref) {
+	if platform.close_process == null return;
+	platform.close_process(ref);
 }
 
 App :: struct {

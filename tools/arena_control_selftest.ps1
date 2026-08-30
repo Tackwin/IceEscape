@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 $repository = Split-Path -Parent $PSScriptRoot
 $bin = Join-Path $repository "bin"
 $control = Join-Path $PSScriptRoot "arena_control.ps1"
-$game = Join-Path $bin "Win32.exe"
+$game = Join-Path $bin "Arena.exe"
 
 function Invoke-ArenaControl {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]] $Command)
@@ -17,7 +17,7 @@ if (-not (Test-Path -LiteralPath $game)) {
     throw "Missing $game. Build with: jai Build.jai - game    and    jai Build.jai - win32"
 }
 
-Get-Process Win32, IceEscape -ErrorAction SilentlyContinue | ForEach-Object {
+Get-Process Arena -ErrorAction SilentlyContinue | ForEach-Object {
     throw "A game process is already running ($($_.Name)). Close it first."
 }
 
@@ -37,7 +37,7 @@ try {
         }
         catch {
             if ($proc.HasExited) {
-                throw "Win32.exe exited before the control pipe came up."
+                throw "Arena.exe exited before the control pipe came up."
             }
             Start-Sleep -Milliseconds 200
         }

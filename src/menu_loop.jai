@@ -545,7 +545,7 @@ menu_loop :: (_app: *App) -> bool {
 		if no_connection_ret.retry_localhost_clicked {
 			if !state.is_communication_established {
 				connection:, state.is_communication_established = _app.platform.connect_server(
-					"localhost", 2356, "ws"
+					"localhost", LOCAL_SERVER_PORT, "ws"
 				);
 			}
 

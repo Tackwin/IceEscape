@@ -1542,7 +1542,7 @@ gc_instances :: (server: *Server) {
 
 ensure_database :: (app: *App) {
 	app_user := app.user_data.(*App_User);
-	app_user.server.db = open_database(app.platform, "IceEscapeServer.db");
+	app_user.server.db = open_database(app.platform, "ArenaServer.db");
 	exec_database(app.platform, app_user.server.db, "PRAGMA journal_mode=WAL;");
 	exec_database(app.platform, app_user.server.db, "PRAGMA synchronous=NORMAL;");
 
@@ -1719,9 +1719,9 @@ WATCH_CHANGE :: true;
 	app_user := New(App_User);
 	app.user_data = app_user;
 
-	ok := app.platform.open_server(2356);
+	ok := app.platform.open_server(LOCAL_SERVER_PORT);
 	if !ok {
-		print("Failed to open server on port 2356\n");
+		print("Failed to open server on port %\n", LOCAL_SERVER_PORT);
 		return;
 	}
 
