@@ -605,13 +605,13 @@ draw_mode_picker :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
 	panel_width := ifx page.mode == .Scene then 300.0 else 180.0;
 	panel_height := ifx page.mode == .Tiles then 320.0 else 500.0;
 	panel_x := 10.0;
-	panel_y := gui.controls.window_size.y - 64 - panel_height;
+	panel_y := 64.0;
 
 	GUI.push_quad_screen(gui, V2f.{ panel_x, panel_y }, V2f.{ panel_width, panel_height }, V3f.{ 0.2, 0.2, 0.2 }, z = 50);
 	GUI.push_quad_screen(gui, V2f.{ panel_x + 2, panel_y + 2 }, V2f.{ panel_width - 4, panel_height - 4 }, V3f.{ 0.1, 0.1, 0.1 }, z = 51);
 
 	// Mode tabs at top
-	tab_y := panel_y + panel_height - 30;
+	tab_y := panel_y;
 	tab_width := (panel_width - 20) / 3;
 
 	// Tiles tab
@@ -619,7 +619,7 @@ draw_mode_picker :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
 	tiles_color := ifx tiles_selected then V3f.{ 0.3, 0.5, 0.7 } else V3f.{ 0.25, 0.25, 0.25 };
 	tiles_pos := V2f.{ panel_x + 5, tab_y };
 	GUI.push_quad_screen(gui, tiles_pos, V2f.{ tab_width, 25 }, tiles_color, z = 52);
-	GUI.atom_label(gui, "Tiles", tiles_pos + V2f.{ 7, 6 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 });
+	GUI.atom_label(gui, "Tiles", tiles_pos + V2f.{ 7, 12.5 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 }, align = .Center_Left);
 	if point_aabb(gui.controls.mouse_pos, tiles_pos, tiles_pos + V2f.{ tab_width, 25 }) {
 		if gui.controls.just_pressed[Key.MouseLeft] {
 			page.mode = .Tiles;
@@ -632,7 +632,7 @@ draw_mode_picker :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
 	entities_color := ifx entities_selected then V3f.{ 0.3, 0.5, 0.7 } else V3f.{ 0.25, 0.25, 0.25 };
 	entities_pos := V2f.{ panel_x + 5 + tab_width + 5, tab_y };
 	GUI.push_quad_screen(gui, entities_pos, V2f.{ tab_width, 25 }, entities_color, z = 52);
-	GUI.atom_label(gui, "Entities", entities_pos + V2f.{ 2, 6 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 });
+	GUI.atom_label(gui, "Entities", entities_pos + V2f.{ 2, 12.5 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 }, align = .Center_Left);
 	if point_aabb(gui.controls.mouse_pos, entities_pos, entities_pos + V2f.{ tab_width, 25 }) {
 		if gui.controls.just_pressed[Key.MouseLeft] {
 			page.mode = .Entities;
@@ -645,7 +645,7 @@ draw_mode_picker :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
 	scene_color := ifx scene_selected then V3f.{ 0.3, 0.5, 0.7 } else V3f.{ 0.25, 0.25, 0.25 };
 	scene_pos := V2f.{ panel_x + 5 + (tab_width + 5) * 2, tab_y };
 	GUI.push_quad_screen(gui, scene_pos, V2f.{ tab_width, 25 }, scene_color, z = 52);
-	GUI.atom_label(gui, "Scene", scene_pos + V2f.{ 2, 6 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 });
+	GUI.atom_label(gui, "Scene", scene_pos + V2f.{ 2, 12.5 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 }, align = .Center_Left);
 	if point_aabb(gui.controls.mouse_pos, scene_pos, scene_pos + V2f.{ tab_width, 25 }) {
 		if gui.controls.just_pressed[Key.MouseLeft] {
 			page.mode = .Scene;
@@ -664,7 +664,7 @@ draw_mode_picker :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
 			gui,
 			pos_size(
 				gui.controls.window_size.x - 256 - 64 - 4,
-				4,
+				gui.controls.window_size.y - 512 - 4,
 				256 + 64,
 				512
 			)
@@ -697,9 +697,9 @@ draw_tile_picker_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_x: floa
 		.{ 0.9, 0.7, 1.0 }    // Funny Ice
 	];
 
-	button_y := panel_y + panel_height - 65;
+	button_y := panel_y + 35;
 	for i: 0..tile_kinds.count - 1 {
-		button_pos := V2f.{ panel_x + 10, button_y - i * 35 };
+		button_pos := V2f.{ panel_x + 10, button_y + i * 35 };
 		button_size := V2f.{ panel_width - 20, 30 };
 
 		// Highlight selected
@@ -712,7 +712,7 @@ draw_tile_picker_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_x: floa
 		GUI.push_quad_screen(gui, button_pos + V2f.{ 5, 5 }, V2f.{ 20, 20 }, tile_colors[i], z = 53);
 
 		// Label
-		GUI.atom_label(gui, tile_names[i], button_pos + V2f.{ 30, 8 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 });
+		GUI.atom_label(gui, tile_names[i], button_pos + V2f.{ 30, 15 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 }, align = .Center_Left);
 
 		// Check for click
 		if point_aabb(gui.controls.mouse_pos, button_pos, button_pos + button_size) {
@@ -729,7 +729,7 @@ draw_scene_edit_content :: (
 ) {
 	GUI.default_params(gui).direction = .Down;
 	GUI.default_params(gui).cursor.x = content_aabb.min.x + 8.0;
-	GUI.default_params(gui).cursor.y = content_aabb.max.y - 24.0;
+	GUI.default_params(gui).cursor.y = content_aabb.min.y + 24.0;
 	GUI.default_params(gui).align = .Top_Left;
 	GUI.default_params(gui).z = 52;
 
@@ -857,12 +857,12 @@ draw_scene_edit_content :: (
 
 draw_entity_picker_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, panel_x: float, panel_y: float, panel_width: float, panel_height: float) {
 	// Tile type buttons
-	button_y := panel_y + panel_height - 65;
+	button_y := panel_y + 35;
 	for i: 0..editable_entities_type.count - 1 {
 		T := editable_entities_type[i];
 		info := T.(*Type_Info_Struct);
 		
-		button_pos := V2f.{ panel_x + 10, button_y - i * 25 };
+		button_pos := V2f.{ panel_x + 10, button_y + i * 25 };
 		button_size := V2f.{ panel_width - 20, 20 };
 
 		// Highlight selected
@@ -873,7 +873,8 @@ draw_entity_picker_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GU
 
 		// Label
 		GUI.atom_label(
-			gui, info.name, button_pos + V2f.{ 30, 4 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 }
+			gui, info.name, button_pos + V2f.{ 8, 10 }, scale = 14, z = 53, color = V4f.{ 1, 1, 1, 1 },
+			align = .Center_Left
 		);
 
 		// Check for click
@@ -920,14 +921,14 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 	GUI.push_quad_screen(gui, panel_aabb, V3f.{ 0.15, 0.15, 0.15 }, z = 50);
 
 	panel_width := panel_aabb.max.x - panel_aabb.min.x;
-	cursor := panel_aabb.min + v2(8.0, panel_aabb.max.y - panel_aabb.min.y - 24);
+	cursor := panel_aabb.min + v2(8.0, 8.0);
 
 	// Entity type name
-	GUI.atom_label(gui, get_intersection_name(page), cursor, scale = 16, z = 51, id = 1);
+	GUI.atom_label(gui, get_intersection_name(page), cursor, scale = 16, z = 51, id = 1, align = .Top_Left);
 	cursor.x += GUI.widget_width(gui, 1) + 8;
 
 	// Remove button
-	remove_clicked, _, _ := GUI.text_button(gui, "Remove", cursor, z = 51, id = "remove_button");
+	remove_clicked, _, _ := GUI.text_button(gui, "Remove", cursor, z = 51, id = "remove_button", align = .Top_Left);
 	if remove_clicked {
 		// Find and remove the entity from its array
 		entities := get_scene_placeable_entities();
@@ -946,7 +947,7 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 
 	// Position editing
 	cursor.x = panel_aabb.min.x + 8;
-	cursor.y -= 32;
+	cursor.y += 32;
 
 	GUI.default_params(gui).direction = .Down;
 	GUI.default_params(gui).cursor = cursor;
@@ -1473,7 +1474,7 @@ draw_editor_toolbar :: (
 ) {
 	// Top toolbar
 	toolbar_height := 40.0;
-	toolbar_y := gui.controls.window_size.y - toolbar_height;
+	toolbar_y := 0.0;
 
 	GUI.push_quad_screen(gui, V2f.{ 0, toolbar_y }, V2f.{ gui.controls.window_size.x, toolbar_height }, V3f.{ 0.15, 0.15, 0.15 }, z = 50);
 
@@ -1528,12 +1529,12 @@ draw_editor_toolbar :: (
 	size_x := 620.0;
 
 	// Width controls
-	GUI.atom_label(gui, "W:", V2f.{ size_x, toolbar_y + 12 }, scale = 14, z = 51, color = V4f.{ 0.8, 0.8, 0.8, 1 });
+	GUI.atom_label(gui, "W:", V2f.{ size_x, toolbar_y + 20 }, scale = 14, z = 51, color = V4f.{ 0.8, 0.8, 0.8, 1 }, align = .Center_Left);
 	w_minus_clicked, _, _ := GUI._text_button(gui, tprint("W: %-", editor.terrain_width), id = "w_minus");
 	if w_minus_clicked && editor.terrain_width > 10 {
 		resize_terrain(editor, editor.terrain_width - 5, editor.terrain_height);
 	}
-	GUI.atom_label(gui, tprint("%", editor.terrain_width), V2f.{ size_x + 50, toolbar_y + 12 }, scale = 14, z = 51, color = V4f.{ 1, 1, 1, 1 });
+	GUI.atom_label(gui, tprint("%", editor.terrain_width), V2f.{ size_x + 50, toolbar_y + 20 }, scale = 14, z = 51, color = V4f.{ 1, 1, 1, 1 }, align = .Center_Left);
 	w_plus_clicked, _, _ := GUI._text_button(gui, tprint("W: %+", editor.terrain_width), id = "w_plus");
 	if w_plus_clicked && editor.terrain_width < 200 {
 		resize_terrain(editor, editor.terrain_width + 5, editor.terrain_height);
@@ -1638,7 +1639,7 @@ draw_load_dialog :: (
 		gui, v2(dialog_x + 2, dialog_y + 2), v2(dialog_width - 4, dialog_height - 4), V3f.{ 0.1, 0.1, 0.1 }, z = 100
 	);
 
-	GUI.default_params(gui).cursor = v2(dialog_x + 8, dialog_y + dialog_height - 8);
+	GUI.default_params(gui).cursor = v2(dialog_x + 8, dialog_y + 8);
 	GUI.default_params(gui).direction = .Down;
 	GUI.default_params(gui).align = .Top_Left;
 	GUI.default_params(gui).z = 101;
@@ -1774,7 +1775,7 @@ draw_load_terrain_list :: (app_user: *App_User, page: *Editor_Page, gui: *GUI.GU
 		defer GUI.pop_id(gui);
 
 		row_aabb := pos_size(
-			cursor - v2(0.0, terrain_entry_row_height),
+			cursor,
 			v2(terrain_entry_row_width, terrain_entry_row_height)
 		);
 		GUI.push_quad_screen(gui, row_aabb, v3(GUI.GRAY_90), z = z);
@@ -1785,7 +1786,7 @@ draw_load_terrain_list :: (app_user: *App_User, page: *Editor_Page, gui: *GUI.GU
 		quad := GUI.push_late_quad_screen(gui, thumbnail_aabb, GUI.GRAY_70, z = z + 1);
 		quad.custom_texture_idx = user_texture_idx_thumbnail_for(store, it.id);
 		if quad.custom_texture_idx >= 0 {
-			quad.texture_rect = v4(0.0, 1.0, 1, -1);
+			quad.texture_rect = v4(0.0, 0.0, 1, 1);
 		}
 
 		cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
@@ -1796,27 +1797,29 @@ draw_load_terrain_list :: (app_user: *App_User, page: *Editor_Page, gui: *GUI.GU
 		GUI.atom_label(
 			gui,
 			it.name,
-			row_aabb.min + v2(72.0, 42.0),
+			row_aabb.min + v2(72.0, 10.0),
 			z = z + 1,
 			scale = 16,
-			color = GUI.GRAY_10
+			color = GUI.GRAY_10,
+			align = .Top_Left
 		);
 		GUI.atom_label(
 			gui,
 			ifx it.author.count == 0 then "Anonymous" else it.author,
-			row_aabb.min + v2(72.0, 12.0),
+			row_aabb.min + v2(72.0, 36.0),
 			z = z + 1,
 			scale = 14,
-			color = GUI.GRAY_20
+			color = GUI.GRAY_20,
+			align = .Top_Left
 		);
 		GUI.atom_label(
 			gui,
 			date,
-			row_aabb.min + v2(terrain_entry_row_width - 78, 12.0),
+			row_aabb.min + v2(terrain_entry_row_width - 78, 36.0),
 			z = z + 1,
 			scale = 14,
 			color = GUI.GRAY_20,
-			align = .Bottom_Right
+			align = .Top_Right
 		);
 
 		load_clicked := GUI.text_button(
@@ -1836,11 +1839,11 @@ draw_load_terrain_list :: (app_user: *App_User, page: *Editor_Page, gui: *GUI.GU
 			page.show_load_dialog = false;
 		}
 
-		cursor.y -= terrain_entry_row_height;
-		cursor.y -= 8;
+		cursor.y += terrain_entry_row_height;
+		cursor.y += 8;
 	}
 
-	cursor.y -= 16;
+	cursor.y += 16;
 	GUI.default_params(gui).cursor.x = cursor.x + terrain_entry_row_width;
 	GUI.default_params(gui).cursor.y = cursor.y;
 	GUI.default_params(gui).direction = .Left;
@@ -1879,15 +1882,16 @@ draw_save_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 	GUI.atom_label(
 		gui,
 		"Save Terrain",
-		V2f.{ dialog_x + 20, dialog_y + dialog_height - 30 },
+		V2f.{ dialog_x + 20, dialog_y + 20 },
 		scale = 18,
 		z = 101,
-		color = V4f.{ 1, 1, 1, 1 }
+		color = V4f.{ 1, 1, 1, 1 },
+		align = .Top_Left
 	);
 
 	// Filename input area
 	input_x := dialog_x + 20;
-	input_y := dialog_y + dialog_height - 80;
+	input_y := dialog_y + 50;
 	input_width := dialog_width - 40;
 	input_height := 30.0;
 
@@ -1901,7 +1905,7 @@ draw_save_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 		input_width,
 		_z = 102,
 		_pos = .{ input_x, input_y },
-		_align = .Bottom_Left,
+		_align = .Top_Left,
 		id = GUI.string_id("save_dialog_input")
 	);
 	if new_save_dialog_input != page.save_dialog_input {
@@ -1910,7 +1914,7 @@ draw_save_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 	}
 
 	// Save button
-	save_clicked, _, _ := GUI.text_button(gui, "Save", V2f.{ dialog_x + dialog_width - 140, dialog_y + 20 }, z = 101, id = "dialog_save");
+	save_clicked, _, _ := GUI.text_button(gui, "Save", V2f.{ dialog_x + dialog_width - 140, dialog_y + 20 }, z = 101, id = "dialog_save", align = .Top_Left);
 	if save_clicked {
 		content := Scene.serialize(editor.scene,, temp);
 
@@ -1926,7 +1930,7 @@ draw_save_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 	}
 
 	// Cancel button
-	cancel_clicked, _, _ := GUI.text_button(gui, "Cancel", V2f.{ dialog_x + dialog_width - 70, dialog_y + 20 }, z = 101, id = "dialog_cancel");
+	cancel_clicked, _, _ := GUI.text_button(gui, "Cancel", V2f.{ dialog_x + dialog_width - 70, dialog_y + 20 }, z = 101, id = "dialog_cancel", align = .Top_Left);
 	if cancel_clicked || gui.controls.just_pressed[Key.Escape] {
 		page.show_save_dialog = false;
 	}

@@ -3594,7 +3594,7 @@ render_antiairs :: (
 		particle.M =
 		M4f.translate(v3(it.client.next_target - V2f.{ it.radius, it.radius } / 2, 0.05))
 		* scale_matrix(V3f.{ it.radius, it.radius, 1.0 });
-		particle.texture_rect = V4f.{ 0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
+		particle.texture_rect = V4f.{ 0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
 		particle.color = V4f.{ 1.0, 1.0, 1.0, 0.5 };
 		array_add(*extra.quads, particle);
 	}
@@ -3942,7 +3942,7 @@ render_robots :: (
 				particle: Extra.Quad;
 				particle.M = M4f.translate(target + V3f.{ -1.0, -1.0, 0.01 });
 				particle.M *= scale_matrix(V3f.{ 2.0, 2.0, 1.0 });
-				particle.texture_rect = V4f.{ 0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
+				particle.texture_rect = V4f.{ 0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
 				particle.color = V4f.{ 1.0, 0.0, 0.0, 1.0 };
 				array_add(*extra.quads, particle);
 			}

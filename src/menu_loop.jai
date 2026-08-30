@@ -77,7 +77,7 @@ push_left_main_menu :: (
 	menu: *Menu,
 	platform: *Platform
 ) {
-	cursor := v2(8.0, gui.controls.window_size.y - 8);
+	cursor := v2(8.0, 8.0);
 	GUI.default_params(gui).cursor = cursor;
 	GUI.default_params(gui).direction = .Down;
 	GUI.default_params(gui).align = .Top_Left;
@@ -124,7 +124,7 @@ push_left_main_menu :: (
 	}
 
 	cursor.x = 8.0;
-	cursor.y = gui.controls.window_size.y - 16.0 - 64.0;
+	cursor.y = 16.0 + 64.0;
 	GUI.default_params(gui).cursor = cursor;
 	GUI._atom_label(gui, "The terrible bug that messed up some people is gone", scale = 16, color = GUI.GRAY_00);
 	GUI._atom_label(gui, "I have only prayer to offer to my dear player base", scale = 16, color = GUI.GRAY_00);
@@ -278,7 +278,7 @@ push_left_main_menu :: (
 		}
 
 		GUI.space(gui, 64.0);
-		GUI.default_params(gui).cursor = window.pos + v2(window.size.x, 0.0) - v2(8.0, -8.0);
+		GUI.default_params(gui).cursor = window.pos + v2(window.size.x - 8.0, window.size.y - 8.0);
 		GUI.default_params(gui).align = .Bottom_Right;
 		GUI.default_params(gui).direction = .Left;
 
@@ -589,7 +589,7 @@ menu_loop :: (_app: *App) -> bool {
 		// 	version_string :: "0.0.1 (1 March 2026, 23:13:10)";
 		// }
 		GUI.default_params(*app_user.gui_state).cursor.x = controls.window_size.x - 12.0;
-		GUI.default_params(*app_user.gui_state).cursor.y = controls.window_size.y - 8.0;
+		GUI.default_params(*app_user.gui_state).cursor.y = 8.0;
 		GUI.default_params(*app_user.gui_state).align = .Top_Right;
 		GUI._atom_label(
 			*app_user.gui_state,
@@ -604,7 +604,7 @@ menu_loop :: (_app: *App) -> bool {
 		editor_clicked, _, _ := GUI.text_button(
 			*app_user.gui_state,
 			"Level Editor",
-			V2f.{ 20, 20 },
+			V2f.{ 20, controls.window_size.y - 40 },
 			z = 5,
 			id = "editor_btn"
 		);
@@ -637,7 +637,7 @@ push_create_instance_menu :: (
 	GUI.atom_label(
 		gui,
 		"Create Instance",
-		popup.pos + V2f.{ popup.size.x / 2, popup.size.y - 4 },
+		popup.pos + V2f.{ popup.size.x / 2, 4 },
 		scale = 24,
 		z = 10.1,
 		align = GUI.Align.Top_Center,
@@ -646,15 +646,15 @@ push_create_instance_menu :: (
 
 	GUI.push_quad_screen(
 		gui,
-		popup.pos + V2f.{ 0, popup.size.y - 32 },
+		popup.pos + V2f.{ 0, 32 },
 		V2f.{ popup.size.x, 1 },
 		v3(GUI.GRAY_10),
 		z = 10.1
 	);
 
-	cursor := popup.size.y - 32 - 8 - 8;
+	cursor := 32.0 + 8 + 8;
 
-	content_aabb := pos_size(popup.pos + V2f.{ 8, 8 }, popup.size - V2f.{ 16, 32 + 16 });
+	content_aabb := pos_size(popup.pos + V2f.{ 8, 40 }, popup.size - V2f.{ 16, 32 + 16 });
 
 	terrain_list_aabb := content_aabb;
 	terrain_list_aabb = span_x(terrain_list_aabb, 0.0, 0.5);
@@ -692,7 +692,7 @@ push_create_bomberman_menu :: (
 	GUI.atom_label(
 		gui,
 		"Create Bomberman",
-		popup.pos + V2f.{ popup.size.x / 2, popup.size.y - 4 },
+		popup.pos + V2f.{ popup.size.x / 2, 4 },
 		scale = 24,
 		z = 10.1,
 		align = GUI.Align.Top_Center,
@@ -701,15 +701,15 @@ push_create_bomberman_menu :: (
 
 	GUI.push_quad_screen(
 		gui,
-		popup.pos + V2f.{ 0, popup.size.y - 32 },
+		popup.pos + V2f.{ 0, 32 },
 		V2f.{ popup.size.x, 1 },
 		v3(GUI.GRAY_10),
 		z = 10.1
 	);
 
-	cursor := popup.size.y - 32 - 8 - 8;
+	cursor := 32.0 + 8 + 8;
 
-	content_aabb := pos_size(popup.pos + V2f.{ 8, 8 }, popup.size - V2f.{ 16, 32 + 16 });
+	content_aabb := pos_size(popup.pos + V2f.{ 8, 40 }, popup.size - V2f.{ 16, 32 + 16 });
 
 	GUI.push_id(gui, 456);
 	defer GUI.pop_id(gui);
@@ -717,7 +717,7 @@ push_create_bomberman_menu :: (
 	GUI.atom_label(
 		gui,
 		"Parameters",
-		v2(content_aabb.min.x + 8, content_aabb.max.y - 8),
+		v2(content_aabb.min.x + 8, content_aabb.min.y + 8),
 		scale = 16,
 		color = GUI.GRAY_10,
 		z = 26.2,
@@ -725,7 +725,7 @@ push_create_bomberman_menu :: (
 	);
 	GUI.push_quad_screen(
 		gui,
-		pos = v2(content_aabb.min.x + 4, content_aabb.max.y - 32),
+		pos = v2(content_aabb.min.x + 4, content_aabb.min.y + 32),
 		size = v2(width(content_aabb) - 8, 1),
 		color = v3(GUI.GRAY_20),
 		z = 26.1
@@ -733,7 +733,7 @@ push_create_bomberman_menu :: (
 
 	GUI.push_default_params(gui, GUI.default_params(gui).*);
 	defer GUI.pop_default_params(gui);
-	GUI.default_params(gui).cursor = v2(content_aabb.min.x + 8, content_aabb.max.y - 40);
+	GUI.default_params(gui).cursor = v2(content_aabb.min.x + 8, content_aabb.min.y + 40);
 	GUI.default_params(gui).direction = .Down;
 	GUI.default_params(gui).align = .Top_Left;
 	GUI.default_params(gui).z = 26.2;
@@ -788,7 +788,7 @@ push_create_bomberman_menu :: (
 
 	GUI.default_params(gui).direction = .Left;
 	GUI.default_params(gui).align = .Bottom_Right;
-	GUI.default_params(gui).cursor = v2(content_aabb.max.x - 8, content_aabb.min.y + 8);
+	GUI.default_params(gui).cursor = v2(content_aabb.max.x - 8, content_aabb.max.y - 8);
 	create_clicked, create_button, create_widget := GUI._text_button(
 		gui, "Create", id = "create_bomberman_button"
 	);
@@ -829,7 +829,7 @@ push_main_menu :: (
 	GUI.atom_label(
 		gui,
 		"Name game",
-		.{ gui.controls.window_size.x / 2, gui.controls.window_size.y - 16 },
+		.{ gui.controls.window_size.x / 2, 16 },
 		32,
 		z = 1,
 		align = .Top_Center,
@@ -837,7 +837,7 @@ push_main_menu :: (
 	);
 	GUI.push_quad_screen(
 		gui,
-		.{ 16, gui.controls.window_size.y - 64 },
+		.{ 16, 64 },
 		.{ gui.controls.window_size.x - 32, 1 },
 		v3(GUI.GRAY_10),
 		z = 0.02
@@ -865,7 +865,7 @@ push_main_menu :: (
 
 	table := GUI.atom_table(
 		gui,
-		.{ gui.controls.window_size.x - 16, gui.controls.window_size.y - 64 - 16 },
+		.{ gui.controls.window_size.x - 16, 64 + 16 },
 		.{ 512 + 128, gui.controls.window_size.y - 64 - 16 - 16 - 32 },
 		rows,
 		id = "table",
@@ -878,13 +878,13 @@ push_main_menu :: (
 	}
 
 	lower_input_aabb := pos_size(
-		V2f.{ table.aabb_min.x, table.aabb_min.y - 4 - 32 },
+		V2f.{ table.aabb_min.x, table.aabb_max.y + 4 },
 		V2f.{ table.aabb_max.x - table.aabb_min.x, 32 }
 	);
 	GUI.push_quad_screen(gui, lower_input_aabb, v3(GUI.GRAY_70), z = 0.02);
 
 	text_button_state: GUI.Text_Button;
-	cursor := V2f.{ table.aabb_min.x + 8, table.aabb_min.y - 4 - 32 + 16 };
+	cursor := V2f.{ table.aabb_min.x + 8, table.aabb_max.y + 4 + 16 };
 	reload_instances_clicked:, text_button_state = GUI.text_button(
 		gui, "Reload", cursor, 1, id = "reload", align = GUI.Align.Center_Left
 	);
@@ -938,7 +938,7 @@ push_main_menu :: (
 		menu.enter_instance_password = sprint("%", enter_instance_password);
 	}
 
-	cursor =  .{ 16, gui.controls.window_size.y - 64 - 16 };
+	cursor =  .{ 16, 64 + 16 };
 
 	if menu.create_instance.open {
 		push_create_instance_menu(app_user, gui, menu);
@@ -971,7 +971,7 @@ draw_create_instance_param_panel :: (
 	GUI.atom_label(
 		gui,
 		"Parameters",
-		v2(aabb.min.x + 8, aabb.max.y - 8),
+		v2(aabb.min.x + 8, aabb.min.y + 8),
 		scale = 16,
 		color = GUI.GRAY_10,
 		z = 26.2,
@@ -979,7 +979,7 @@ draw_create_instance_param_panel :: (
 	);
 	GUI.push_quad_screen(
 		gui,
-		pos = v2(aabb.min.x + 4, aabb.max.y - 32),
+		pos = v2(aabb.min.x + 4, aabb.min.y + 32),
 		size = v2(width(aabb) - 8, 1),
 		color = v3(GUI.GRAY_20),
 		z = 26.1
@@ -987,7 +987,7 @@ draw_create_instance_param_panel :: (
 
 	GUI.push_default_params(gui, GUI.default_params(gui).*);
 	defer GUI.pop_default_params(gui);
-	GUI.default_params(gui).cursor = v2(aabb.min.x + 8, aabb.max.y - 40);
+	GUI.default_params(gui).cursor = v2(aabb.min.x + 8, aabb.min.y + 40);
 	GUI.default_params(gui).direction = .Down;
 	GUI.default_params(gui).align = .Top_Left;
 	GUI.default_params(gui).z = 26.2;
@@ -1039,7 +1039,7 @@ draw_create_instance_param_panel :: (
 
 	GUI.default_params(gui).direction = .Left;
 	GUI.default_params(gui).align = .Bottom_Right;
-	GUI.default_params(gui).cursor = v2(aabb.max.x - 8, aabb.min.y + 8);
+	GUI.default_params(gui).cursor = v2(aabb.max.x - 8, aabb.max.y - 8);
 	create_clicked, create_button, create_widget := GUI._text_button(
 		gui, "Create", id = "create_instance_button"
 	);
@@ -1089,7 +1089,7 @@ draw_create_instance_roster_panel :: (
 	GUI.atom_label(
 		gui,
 		"Roster",
-		v2(aabb.min.x + 8, aabb.max.y - 8),
+		v2(aabb.min.x + 8, aabb.min.y + 8),
 		scale = 16,
 		color = GUI.GRAY_10,
 		z = 26.2,
@@ -1097,14 +1097,14 @@ draw_create_instance_roster_panel :: (
 	);
 	GUI.push_quad_screen(
 		gui,
-		pos = v2(aabb.min.x + 4, aabb.max.y - 32),
+		pos = v2(aabb.min.x + 4, aabb.min.y + 32),
 		size = v2(width(aabb) - 8, 1),
 		color = v3(GUI.GRAY_20),
 		z = 26.1
 	);
 
-	cursor := v2(aabb.min.x, aabb.max.y);
-	cursor.y -= 40;
+	cursor := v2(aabb.min.x, aabb.min.y);
+	cursor.y += 40;
 	terrain_entry_row_height := 64.0;
 	terrain_entry_row_width := width(aabb);
 
@@ -1113,7 +1113,7 @@ draw_create_instance_roster_panel :: (
 		defer GUI.pop_id(gui);
 
 		row_aabb := pos_size(
-			cursor - v2(0.0, terrain_entry_row_height),
+			cursor,
 			v2(terrain_entry_row_width, terrain_entry_row_height)
 		);
 
@@ -1125,7 +1125,7 @@ draw_create_instance_roster_panel :: (
 		quad := GUI.push_late_quad_screen(gui, thumbnail_aabb, GUI.GRAY_70);
 		quad.custom_texture_idx = user_texture_idx_thumbnail_for(store, it.id);
 		if quad.custom_texture_idx >= 0 {
-			quad.texture_rect = v4(0.0, 1.0, 1, -1);
+			quad.texture_rect = v4(0.0, 0.0, 1, 1);
 		}
 
 		cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
@@ -1136,26 +1136,28 @@ draw_create_instance_roster_panel :: (
 		GUI.atom_label(
 			gui,
 			it.name,
-			row_aabb.min + v2(72.0, 42.0),
+			row_aabb.min + v2(72.0, 10.0),
 			scale = 16,
 			color = GUI.GRAY_10,
-			z = 26.2
+			z = 26.2,
+			align = .Top_Left
 		);
 		GUI.atom_label(
 			gui,
 			ifx it.author.count == 0 then "Anonymous" else it.author,
-			row_aabb.min + v2(72.0, 12.0),
+			row_aabb.min + v2(72.0, 36.0),
 			scale = 14,
 			color = GUI.GRAY_20,
-			z = 26.2
+			z = 26.2,
+			align = .Top_Left
 		);
 		GUI.atom_label(
 			gui,
 			date,
-			row_aabb.min + v2(terrain_entry_row_width - 78, 12.0),
+			row_aabb.min + v2(terrain_entry_row_width - 78, 36.0),
 			scale = 14,
 			color = GUI.GRAY_20,
-			align = .Bottom_Right,
+			align = .Top_Right,
 			z = 26.2
 		);
 
@@ -1165,7 +1167,7 @@ draw_create_instance_roster_panel :: (
 			clicked := GUI.text_button(
 				gui,
 				"Down",
-				v2(row_aabb.max.x - 8, row_aabb.min.y + 12.0),
+				v2(row_aabb.max.x - 8, row_aabb.max.y - 12.0),
 				id = "down_btn",
 				z = 26.2,
 				align = .Bottom_Right
@@ -1182,7 +1184,7 @@ draw_create_instance_roster_panel :: (
 			clicked := GUI.text_button(
 				gui,
 				"Up",
-				v2(row_aabb.max.x - 8, row_aabb.max.y - 12.0),
+				v2(row_aabb.max.x - 8, row_aabb.min.y + 12.0),
 				id = "up_btn",
 				z = 26.2,
 				align = .Top_Right
@@ -1195,8 +1197,8 @@ draw_create_instance_roster_panel :: (
 			}
 		}
 
-		cursor.y -= terrain_entry_row_height;
-		cursor.y -= 8;
+		cursor.y += terrain_entry_row_height;
+		cursor.y += 8;
 	}
 }
 
@@ -1212,7 +1214,7 @@ draw_create_instance_terrain_panel :: (
 	GUI.push_default_params(gui, GUI.default_params(gui).*);
 	GUI.default_params(gui).z = 26;
 	GUI.default_params(gui).align = .Top_Left;
-	GUI.default_params(gui).cursor = v2(aabb.min.x + 4, aabb.max.y - 8);
+	GUI.default_params(gui).cursor = v2(aabb.min.x + 4, aabb.min.y + 8);
 	GUI.default_params(gui).direction = .Down;
 	defer GUI.pop_default_params(gui);
 
@@ -1247,7 +1249,7 @@ draw_create_instance_terrain_panel :: (
 		v2(width(aabb) - 8, height(aabb) - 80)
 	);
 
-	cursor := v2(scroll_aabb.min.x, scroll_aabb.max.y);
+	cursor := v2(scroll_aabb.min.x, scroll_aabb.min.y);
 	terrain_entry_row_height := 64.0;
 	terrain_entry_row_width := width(scroll_aabb);
 	PAGE_SIZE :: 8;
@@ -1269,7 +1271,7 @@ draw_create_instance_terrain_panel :: (
 		defer GUI.pop_id(gui);
 
 		row_aabb := pos_size(
-			cursor - v2(0.0, terrain_entry_row_height),
+			cursor,
 			v2(terrain_entry_row_width, terrain_entry_row_height)
 		);
 
@@ -1307,7 +1309,7 @@ draw_create_instance_terrain_panel :: (
 		quad := GUI.push_late_quad_screen(gui, thumbnail_aabb, GUI.GRAY_70);
 		quad.custom_texture_idx = user_texture_idx_thumbnail_for(store, it.id);
 		if quad.custom_texture_idx >= 0 {
-			quad.texture_rect = v4(0.0, 1.0, 1, -1);
+			quad.texture_rect = v4(0.0, 0.0, 1, 1);
 		}
 
 		cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
@@ -1318,34 +1320,36 @@ draw_create_instance_terrain_panel :: (
 		GUI.atom_label(
 			gui,
 			it.name,
-			row_aabb.min + v2(72.0, 42.0),
+			row_aabb.min + v2(72.0, 10.0),
 			scale = 16,
 			color = GUI.GRAY_10,
-			z = 26.2
+			z = 26.2,
+			align = .Top_Left
 		);
 		GUI.atom_label(
 			gui,
 			ifx it.author.count == 0 then "Anonymous" else it.author,
-			row_aabb.min + v2(72.0, 12.0),
+			row_aabb.min + v2(72.0, 36.0),
 			scale = 14,
 			color = GUI.GRAY_20,
-			z = 26.2
+			z = 26.2,
+			align = .Top_Left
 		);
 		GUI.atom_label(
 			gui,
 			date,
-			row_aabb.min + v2(terrain_entry_row_width - 78, 12.0),
+			row_aabb.min + v2(terrain_entry_row_width - 78, 36.0),
 			scale = 14,
 			color = GUI.GRAY_20,
-			align = .Bottom_Right,
+			align = .Top_Right,
 			z = 26.2
 		);
 
-		cursor.y -= terrain_entry_row_height;
-		cursor.y -= 8;
+		cursor.y += terrain_entry_row_height;
+		cursor.y += 8;
 	}
-	cursor.y = scroll_aabb.min.y;
-	cursor.y -= 8;
+	cursor.y = scroll_aabb.max.y;
+	cursor.y += 8;
 	GUI.default_params(gui).cursor.x = cursor.x + terrain_entry_row_width - 4;
 	GUI.default_params(gui).cursor.y = cursor.y;
 	GUI.default_params(gui).direction = .Left;

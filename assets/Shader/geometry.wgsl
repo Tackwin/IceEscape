@@ -330,6 +330,7 @@ fn flaggedSample(
 		);
 		true_uv = wrapped_uv;
 	}
+	true_uv.y = 1.0 - true_uv.y;
 	true_uv = true_uv * instanceData[instanceIndex].texture_rect.zw;
 	true_uv += instanceData[instanceIndex].texture_rect.xy;
 

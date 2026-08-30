@@ -328,9 +328,9 @@ space :: (state: *GUI_State, amount: float) {
 	} else if default_params(state).direction == .Left {
 		default_params(state).cursor.x -= amount;
 	} else if default_params(state).direction == .Down {
-		default_params(state).cursor.y -= amount;
-	} else if default_params(state).direction == .Up {
 		default_params(state).cursor.y += amount;
+	} else if default_params(state).direction == .Up {
+		default_params(state).cursor.y -= amount;
 	}
 }
 move_cursor :: (state: *GUI_State, delta: float) {
@@ -339,9 +339,9 @@ move_cursor :: (state: *GUI_State, delta: float) {
 	} else if default_params(state).direction == .Left {
 		default_params(state).cursor.x -= delta;
 	} else if default_params(state).direction == .Down {
-		default_params(state).cursor.y -= delta;
-	} else if default_params(state).direction == .Up {
 		default_params(state).cursor.y += delta;
+	} else if default_params(state).direction == .Up {
+		default_params(state).cursor.y -= delta;
 	}
 }
 advance_cursor :: (gui: *GUI_State, origin: V2f, dir: GUI_State.Direction, aabb: AABBf) {
@@ -350,11 +350,11 @@ advance_cursor :: (gui: *GUI_State, origin: V2f, dir: GUI_State.Direction, aabb:
 		case .Right;
 			default_params(gui).cursor.x += aabb_width(aabb) + default_params(gui).padding.x;
 		case .Down;
-			default_params(gui).cursor.y -= aabb_height(aabb) + default_params(gui).padding.y;
+			default_params(gui).cursor.y += aabb_height(aabb) + default_params(gui).padding.y;
 		case .Left;
 			default_params(gui).cursor.x -= aabb_width(aabb) + default_params(gui).padding.x;
 		case .Up;
-			default_params(gui).cursor.y += aabb_height(aabb) + default_params(gui).padding.y;
+			default_params(gui).cursor.y -= aabb_height(aabb) + default_params(gui).padding.y;
 	}
 }
 
@@ -767,7 +767,7 @@ push_quad_texture :: (state: *GUI_State, pos: V2f, size: V2f, color: V3f, tex_sl
 	quad.size.y = size.y;
 	quad.color = .{ color.x, color.y, color.z, 1.0 };
 	quad.texture_rect.x = tex_slot.x / 16.0;
-	quad.texture_rect.y = tex_slot.y / 16.0;
+	quad.texture_rect.y = (15.0 - tex_slot.y) / 16.0;
 	quad.texture_rect.z = 1.0 / 16.0;
 	quad.texture_rect.w = 1.0 / 16.0;
 	quad.z = z;
@@ -864,8 +864,8 @@ push_buy_prompt :: (state: *GUI_State, scene: *Scene.Scene) {
 						pos.x * (state.controls.window_size.x) / 2 +
 						state.controls.window_size.x / 2;
 					screen_p.y =
-						pos.y * (state.controls.window_size.y) / 2 +
-						state.controls.window_size.y / 2;
+						state.controls.window_size.y / 2 -
+						pos.y * (state.controls.window_size.y) / 2;
 
 					atom_label(state, prompt, screen_p, 24, z=10, align = .Center, outline = true);
 				}
@@ -875,7 +875,7 @@ push_buy_prompt :: (state: *GUI_State, scene: *Scene.Scene) {
 }
 
 push_breaking_news :: (state: *GUI_State, news: [] Scene.Breaking_News) {
-	cursor := V2f.{ state.controls.window_size.x / 2, state.controls.window_size.y - 16};
+	cursor := V2f.{ state.controls.window_size.x / 2, 16};
 	for news {
 		t := to_float64_seconds(state.controls.time - it.time).(float);
 		t = clamp(t / 5, 0.0, 1.0);
@@ -887,7 +887,7 @@ push_breaking_news :: (state: *GUI_State, news: [] Scene.Breaking_News) {
 			color = V4f.{ 1.0, 1.0, 1.0, alpha }
 		);
 
-		cursor.y -= label.aabb_max.y - label.aabb_min.y + 4;
+		cursor.y += label.aabb_max.y - label.aabb_min.y + 4;
 	}
 }
 
@@ -898,7 +898,7 @@ push_app_loop_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] flo
 	avg /= data.count;
 
 	ms_text := tprint("app_loop: %.2f ms, Avg %.2f ms", 1000 * data[current_idx], 1000 * avg);
-	atom_label(state, ms_text, .{ pos.x + 4, pos.y + size.y - 20 }, 16, z=11);
+	atom_label(state, ms_text, .{ pos.x + 4, pos.y + 4 }, 16, z=11, align = .Top_Left);
 
 	push_quad_screen(
 		state,
@@ -934,7 +934,7 @@ push_app_loop_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] flo
 		}
 		push_quad_screen(
 			state,
-			pos = .{ pos.x + x, pos.y + 5 },
+			pos = .{ pos.x + x, pos.y + size.y - 5 - h },
 			size = .{ w, h },
 			color = color,
 			z = 11
@@ -946,7 +946,7 @@ push_app_loop_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] flo
 		h := project(8.33); // 120 fps target
 		push_quad_screen(
 			state,
-			pos = .{ pos.x, pos.y + 5 + h },
+			pos = .{ pos.x, pos.y + size.y - 5 - h },
 			size = .{ size.x, 1 },
 			color = .{ 0.0, 0.0, 1.0 },
 			z = 12
@@ -956,7 +956,7 @@ push_app_loop_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] flo
 		h := project(16.67); // 60 fps target
 		push_quad_screen(
 			state,
-			pos = .{ pos.x, pos.y + 5 + h },
+			pos = .{ pos.x, pos.y + size.y - 5 - h },
 			size = .{ size.x, 1 },
 			color = .{ 0.0, 1.0, 0.0 },
 			z = 12
@@ -966,7 +966,7 @@ push_app_loop_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] flo
 		h := project(33.33); // 30 fps target
 		push_quad_screen(
 			state,
-			pos = .{ pos.x, pos.y + 5 + h },
+			pos = .{ pos.x, pos.y + size.y - 5 - h },
 			size = .{ size.x, 1 },
 			color = .{ 1.0, 0.0, 0.0 },
 			z = 12
@@ -981,7 +981,7 @@ push_ping_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32
 	avg /= data.count;
 
 	fps_text := tprint("Ping: %, Avg % (ms)", (1000 * data[current_idx]).(s64), (1000 * avg).(s64));
-	atom_label(state, fps_text, .{ pos.x + 4, pos.y + size.y - 20 }, 16, z=11);
+	atom_label(state, fps_text, .{ pos.x + 4, pos.y + 4 }, 16, z=11, align = .Top_Left);
 
 	push_quad_screen(
 		state,
@@ -1016,7 +1016,7 @@ push_ping_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32
 		}
 		push_quad_screen(
 			state,
-			pos = .{ pos.x + x, pos.y + 5 },
+			pos = .{ pos.x + x, pos.y + size.y - 5 - h },
 			size = .{ w, h },
 			color = color,
 			z = 11
@@ -1027,7 +1027,7 @@ push_ping_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32
 		h := project(20);
 		push_quad_screen(
 			state,
-			pos = .{ pos.x, pos.y + 5 + h },
+			pos = .{ pos.x, pos.y + size.y - 5 - h },
 			size = .{ size.x, 1 },
 			color = .{ 0.0, 0.0, 1.0 },
 			z = 12
@@ -1037,7 +1037,7 @@ push_ping_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32
 		h := project(80);
 		push_quad_screen(
 			state,
-			pos = .{ pos.x, pos.y + 5 + h },
+			pos = .{ pos.x, pos.y + size.y - 5 - h },
 			size = .{ size.x, 1 },
 			color = .{ 0.0, 1.0, 0.0 },
 			z = 12
@@ -1047,7 +1047,7 @@ push_ping_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32
 		h := project(200);
 		push_quad_screen(
 			state,
-			pos = .{ pos.x, pos.y + 5 + h },
+			pos = .{ pos.x, pos.y + size.y - 5 - h },
 			size = .{ size.x, 1 },
 			color = .{ 1.0, 0.0, 0.0 },
 			z = 12
@@ -1069,7 +1069,7 @@ push_ms_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, 
 		(1000 * avg).(s64),
 		(10000 * avg).(s64) % 10
 	);
-	atom_label(state, ms_text, .{ pos.x + 4, pos.y + size.y - 20 }, 16, z=11);
+	atom_label(state, ms_text, .{ pos.x + 4, pos.y + 4 }, 16, z=11, align = .Top_Left);
 
 	push_quad_screen(
 		state,
@@ -1105,7 +1105,7 @@ push_ms_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, 
 		}
 		push_quad_screen(
 			state,
-			pos = .{ pos.x + x, pos.y + 5 },
+			pos = .{ pos.x + x, pos.y + size.y - 5 - h },
 			size = .{ w, h },
 			color = color,
 			z = 11
@@ -1117,7 +1117,7 @@ push_ms_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, 
 		h := project(8.33); // 120 fps target
 		push_quad_screen(
 			state,
-			pos = .{ pos.x, pos.y + 5 + h },
+			pos = .{ pos.x, pos.y + size.y - 5 - h },
 			size = .{ size.x, 1 },
 			color = .{ 0.0, 0.0, 1.0 },
 			z = 12
@@ -1127,7 +1127,7 @@ push_ms_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, 
 		h := project(16.67); // 60 fps target
 		push_quad_screen(
 			state,
-			pos = .{ pos.x, pos.y + 5 + h },
+			pos = .{ pos.x, pos.y + size.y - 5 - h },
 			size = .{ size.x, 1 },
 			color = .{ 0.0, 1.0, 0.0 },
 			z = 12
@@ -1137,7 +1137,7 @@ push_ms_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, 
 		h := project(33.33); // 30 fps target
 		push_quad_screen(
 			state,
-			pos = .{ pos.x, pos.y + 5 + h },
+			pos = .{ pos.x, pos.y + size.y - 5 - h },
 			size = .{ size.x, 1 },
 			color = .{ 1.0, 0.0, 0.0 },
 			z = 12
@@ -1146,7 +1146,7 @@ push_ms_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, 
 }
 
 push_point_ui :: (state: *GUI_State, player: Scene.Player) {
-	cursor := V2f.{ 4, state.controls.window_size.y - 32 - 12 };
+	cursor := V2f.{ 4, 32 + 12 };
 
 	score_label := atom_label(
 		state,
@@ -1193,7 +1193,7 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 			z = z + 0.3
 		);
 	}
-	center := v2(state.controls.window_size.x / 2, 3 * state.controls.window_size.y / 4);
+	center := v2(state.controls.window_size.x / 2, state.controls.window_size.y / 4);
 	size   := v2(1024.0 - 128, 258.0);
 
 	window_aabb := pos_size(center - size / 2.0, size);
@@ -1203,7 +1203,7 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 	atom_label(
 		state,
 		"Level cleared",
-		v2(center.x, top(window_aabb) - 8),
+		v2(center.x, top(window_aabb) + 8),
 		z = 11.0,
 		align=.Top_Center,
 		scale=24,
@@ -1215,7 +1215,7 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 	atom_label(
 		state,
 		text,
-		v2(center.x, top(window_aabb) - 32 - 8),
+		v2(center.x, top(window_aabb) + 32 + 8),
 		z = 11.0,
 		align=.Top_Center,
 		scale=16,
@@ -1224,32 +1224,32 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 
 	push_quad_screen(
 		state,
-		pos_size(window_aabb.min.x, window_aabb.max.y - 64, width(window_aabb), 1),
+		pos_size(window_aabb.min.x, window_aabb.min.y + 64, width(window_aabb), 1),
 		v3(GRAY_20),
 		z = 10.2
 	);
 	atom_label(
 		state,
 		"Winner:",
-		v2(center.x - 8, top(window_aabb) - 64 - 32),
+		v2(center.x - 8, top(window_aabb) + 64 + 32),
 		z = 11.0,
 		align=.Center_Right,
 		scale=24,
 		color = GRAY_00
 	);
 	display_player_icon(
-		scene.client.end_level.winner_id, .{ center.x + 8 + 24, top(window_aabb) - 64 - 32 }, z = 10
+		scene.client.end_level.winner_id, .{ center.x + 8 + 24, top(window_aabb) + 64 + 32 }, z = 10
 	);
 	push_quad_screen(
 		state,
-		pos_size(window_aabb.min.x, window_aabb.max.y - 64 - 64, width(window_aabb), 1),
+		pos_size(window_aabb.min.x, window_aabb.min.y + 64 + 64, width(window_aabb), 1),
 		v3(GRAY_20),
 		z = 10.2
 	);
 	atom_label(
 		state,
 		"Most deaths",
-		v2(window_aabb.min.x + width(window_aabb) / 4, top(window_aabb) - 64 - 64 - 16),
+		v2(window_aabb.min.x + width(window_aabb) / 4, top(window_aabb) + 64 + 64 + 16),
 		z = 11.0,
 		align=.Center,
 		scale=16,
@@ -1257,14 +1257,14 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 	);
 	push_quad_screen(
 		state,
-		pos_size(center.x, window_aabb.max.y - 64 - 64 - 64 - 32, 1, 64 + 32),
+		pos_size(center.x, window_aabb.min.y + 64 + 32, 1, 64 + 32),
 		v3(GRAY_20),
 		z = 10.2
 	);
 	atom_label(
 		state,
 		"Most revives",
-		v2(window_aabb.min.x + 3 * width(window_aabb) / 4, top(window_aabb) - 64 - 64 - 16),
+		v2(window_aabb.min.x + 3 * width(window_aabb) / 4, top(window_aabb) + 64 + 64 + 16),
 		z = 11.0,
 		align=.Center,
 		scale=16,
@@ -1272,7 +1272,7 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 	);
 	push_quad_screen(
 		state,
-		pos_size(window_aabb.min.x, window_aabb.max.y - 64 - 64 - 64 - 32, width(window_aabb), 1),
+		pos_size(window_aabb.min.x, window_aabb.min.y + 64 + 64 + 64 + 32, width(window_aabb), 1),
 		v3(GRAY_20),
 		z = 10.2
 	);
@@ -1288,7 +1288,7 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 			formatInt(seconds.(int), minimum_digits = 2, padding = #char "_"),
 			formatInt(milliseconds.(int), minimum_digits = 3, padding = #char "_")
 		),
-		v2(window_aabb.min.x + 1 * width(window_aabb) / 4, top(window_aabb) - 64 - 64 - 64 - 32 - 16),
+		v2(window_aabb.min.x + 1 * width(window_aabb) / 4, top(window_aabb) + 64 + 64 + 64 + 32 + 16),
 		z = 11.0,
 		align=.Center,
 		scale=16,
@@ -1318,7 +1318,7 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 	atom_label(
 		state,
 		wr_string,
-		v2(window_aabb.min.x + 3 * width(window_aabb) / 4, top(window_aabb) - 64 - 64 - 64 - 32 - 16),
+		v2(window_aabb.min.x + 3 * width(window_aabb) / 4, top(window_aabb) + 64 + 64 + 64 + 32 + 16),
 		z = 11.0,
 		align=.Center,
 		scale=16,
@@ -1326,7 +1326,7 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 	);
 	push_quad_screen(
 		state,
-		pos_size(window_aabb.min.x, window_aabb.max.y - 64 - 64 - 64 - 32 - 32 - 2, width(window_aabb), 1),
+		pos_size(window_aabb.min.x, window_aabb.min.y + 64 + 64 + 64 + 32 + 32 + 2, width(window_aabb), 1),
 		v3(GRAY_20),
 		z = 10.2
 	);
@@ -1366,12 +1366,12 @@ push_death_indicator :: (state: *GUI_State, scene: Scene.Scene) {
 						indicator_dt = V2f.{ 5, 0 };
 					}
 				else
-					if dy < 0 {
-						indicator = BUBBLE_INDICATOR_SLOT_DOWN;
+					if dy > 0 {
+						indicator = BUBBLE_INDICATOR_SLOT_UP;
 						indicator_dt = V2f.{ 0, -5 };
 					}
 					else {
-						indicator = BUBBLE_INDICATOR_SLOT_UP;
+						indicator = BUBBLE_INDICATOR_SLOT_DOWN;
 						indicator_dt = V2f.{ 0, 5 };
 					}
 			}
@@ -1380,17 +1380,18 @@ push_death_indicator :: (state: *GUI_State, scene: Scene.Scene) {
 			screen_p2.x =
 				p2.x * (state.controls.window_size.x - 50) / 2 + state.controls.window_size.x / 2;
 			screen_p2.y =
-				p2.y * (state.controls.window_size.y - 50) / 2 + state.controls.window_size.y / 2;
+				state.controls.window_size.y / 2 -
+				p2.y * (state.controls.window_size.y - 50) / 2;
 
 			// Check if too close to the bottom left ui palette
 			action_palette_safety := V2f.{ 168 + 25, 168 + 25 };
-			if screen_p2.x < action_palette_safety.x && screen_p2.y < action_palette_safety.y {
+			if screen_p2.x < action_palette_safety.x && screen_p2.y > state.controls.window_size.y - action_palette_safety.y {
 				dx := abs(screen_p2.x - action_palette_safety.x);
-				dy := abs(screen_p2.y - action_palette_safety.y);
+				dy := abs(screen_p2.y - (state.controls.window_size.y - action_palette_safety.y));
 				if dx < dy
 					screen_p2.x = action_palette_safety.x;
 				else
-					screen_p2.y = action_palette_safety.y;
+					screen_p2.y = state.controls.window_size.y - action_palette_safety.y;
 			}
 
 			push_quad_texture(
@@ -1421,14 +1422,20 @@ COLOR_HIGHLIGHT_A :: V3f.{ 54/255.0, 189/255.0, 247/255.0 };
 COLOR_BACK_A :: V3f.{ 3/255.0, 60/255.0, 84/255.0 };
 
 push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
+	palette_h := 168.0;
+	palette_y := state.controls.window_size.y - palette_h;
 
 	push_quad_screen(
 		state,
-		pos = .{ 0, 0 },
+		pos = .{ 0, palette_y },
 		size = .{ 168, 168 },
 		color = .{ 218/255.0, 220/255.0, 231/255.0 },
 		1
 	);
+
+	cell_y :: (y: int) -> float32 #expand {
+		return palette_y + (3 - y) * 42.0;
+	}
 
 	render_square_at :: (x: int, y: int, key_code: int) #expand {
 		color := COLOR_BRIGHT_A;
@@ -1436,7 +1443,7 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 			color = COLOR_HIGHLIGHT_A;
 		push_quad_screen(
 			state,
-			pos = .{ x * 42.0 + 1, y * 42.0 + 1 },
+			pos = .{ x * 42.0 + 1, cell_y(y) + 1 },
 			size = .{ 40, 40 },
 			color = color,
 			z = 2
@@ -1462,7 +1469,7 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 	render_texture_at :: (x: int, y: int, tex_slot: V2f, color := V3f.{ 1.0, 1.0, 1.0 }) #expand {
 		push_quad_texture(
 			state,
-			pos = .{ (x * 42 + 4).(float32), (y * 42 + 4).(float32) },
+			pos = .{ (x * 42 + 4).(float32), cell_y(y) + 4 },
 			size = .{ 34, 34 },
 			tex_slot = tex_slot,
 			color = color,
@@ -1472,7 +1479,7 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 	render_hint_at :: (x: int, y: int, tex_slot: V2f)  #expand {
 		push_quad_texture(
 			state,
-			pos = .{ (x * 42 + 42 - 18).(float32), (y * 42 + 42 - 18).(float32) },
+			pos = .{ (x * 42 + 42 - 18).(float32), cell_y(y) + 42 - 18 },
 			size = .{ 18, 18 },
 			tex_slot = tex_slot,
 			color = .{ 1.0, 1.0, 1.0 },
@@ -1851,7 +1858,7 @@ push_no_connection :: (state: *GUI_State) -> No_Connection_Ret {
 	atom_label(
 		state,
 		"No connection to the server :(",
-		.{ state.controls.window_size.x / 2, state.controls.window_size.y / 2 + 24 },
+		.{ state.controls.window_size.x / 2, state.controls.window_size.y / 2 - 24 },
 		32,
 		z=1,
 		align = .Center,
@@ -1861,7 +1868,7 @@ push_no_connection :: (state: *GUI_State) -> No_Connection_Ret {
 	ret.retry_clicked = text_button(
 		state,
 		"Retry",
-		.{ state.controls.window_size.x / 2, state.controls.window_size.y / 2 - 24 },
+		.{ state.controls.window_size.x / 2, state.controls.window_size.y / 2 + 24 },
 		1,
 		align = .Center,
 	);
@@ -1869,7 +1876,7 @@ push_no_connection :: (state: *GUI_State) -> No_Connection_Ret {
 	ret.retry_localhost_clicked = text_button(
 		state,
 		"Retry localhost",
-		.{ state.controls.window_size.x / 2, state.controls.window_size.y / 2 - 72 },
+		.{ state.controls.window_size.x / 2, state.controls.window_size.y / 2 + 72 },
 		1,
 		id = "retry_localhost",
 		align = .Center,
@@ -1933,7 +1940,7 @@ push_main_menu :: (
 	atom_label(
 		state,
 		"Name game",
-		.{ state.controls.window_size.x / 2, state.controls.window_size.y - 16 },
+		.{ state.controls.window_size.x / 2, 16 },
 		32,
 		z = 1,
 		align = .Top_Center,
@@ -1941,7 +1948,7 @@ push_main_menu :: (
 	);
 	push_quad_screen(
 		state,
-		.{ 16, state.controls.window_size.y - 64 },
+		.{ 16, 64 },
 		.{ state.controls.window_size.x - 32, 1 },
 		v3(GRAY_10),
 		z = 0.02
@@ -1968,7 +1975,7 @@ push_main_menu :: (
 
 	table := atom_table(
 		state,
-		.{ state.controls.window_size.x - 16, state.controls.window_size.y - 64 - 16 },
+		.{ state.controls.window_size.x - 16, 64 + 16 },
 		.{ 512 + 128, state.controls.window_size.y - 64 - 16 - 16 - 32 },
 		rows,
 		id = "table",
@@ -1980,13 +1987,13 @@ push_main_menu :: (
 	}
 
 	lower_input_aabb := pos_size(
-		V2f.{ table.aabb_min.x, table.aabb_min.y - 4 - 32 },
+		V2f.{ table.aabb_min.x, table.aabb_max.y + 4 },
 		V2f.{ table.aabb_max.x - table.aabb_min.x, 32 }
 	);
 	push_quad_screen(state, lower_input_aabb, v3(GRAY_70), z = 0.02);
 
 	text_button_state: Text_Button;
-	cursor := V2f.{ table.aabb_min.x + 8, table.aabb_min.y - 4 - 32 + 16 };
+	cursor := V2f.{ table.aabb_min.x + 8, table.aabb_max.y + 4 + 16 };
 	ret.reload_instances_clicked, text_button_state = text_button(
 		state, "Reload", cursor, 1, id = "reload", align = Align.Center_Left
 	);
@@ -2015,7 +2022,7 @@ push_main_menu :: (
 		_align = Align.Bottom_Left
 	);
 
-	cursor =  .{ 16, state.controls.window_size.y - 64 - 16 };
+	cursor =  .{ 16, 64 + 16 };
 
 	if args.create_instance_popup_open {
 		popup := begin_window(
@@ -2030,7 +2037,7 @@ push_main_menu :: (
 		atom_label(
 			state,
 			"Create Instance",
-			popup.pos + V2f.{ popup.size.x / 2, popup.size.y - 4 },
+			popup.pos + V2f.{ popup.size.x / 2, 4 },
 			scale = 24,
 			z = 10.1,
 			align = .Top_Center,
@@ -2039,13 +2046,13 @@ push_main_menu :: (
 
 		push_quad_screen(
 			state,
-			popup.pos + V2f.{ 0, popup.size.y - 32 },
+			popup.pos + V2f.{ 0, 32 },
 			V2f.{ popup.size.x, 1 },
 			v3(GRAY_10),
 			z = 10.1
 		);
 
-		cursor := popup.size.y - 32 - 8 - 8;
+		cursor := 32.0 + 8 + 8;
 
 		ret.create_instance_private = labeled_checkbox(
 			state,
@@ -2057,7 +2064,7 @@ push_main_menu :: (
 			align = .Center_Left,
 			id = "private_instance_checkbox"
 		).checked;
-		cursor -= 24;
+		cursor += 24;
 
 		if ret.create_instance_private {
 			ret.temp_create_instance_password = labeled_input_text(
@@ -2074,7 +2081,7 @@ push_main_menu :: (
 				max_chars = 8,
 				id = "private_instance_password_input",
 			);
-			cursor -= 24;
+			cursor += 24;
 		}
 
 		ret.create_instance_auto_revive = labeled_checkbox(
@@ -2087,7 +2094,7 @@ push_main_menu :: (
 			align = .Center_Left,
 			id = "auto_revive_checkbox"
 		).checked;
-		cursor -= 24;
+		cursor += 24;
 
 		ret.temp_create_instance_name = labeled_input_text(
 			state,
@@ -2103,12 +2110,12 @@ push_main_menu :: (
 			max_chars = 16,
 			id = "instance_name_input",
 		);
-		cursor -= 24;
+		cursor += 24;
 
 		create_clicked, create_button, create_widget := text_button(
 			state,
 			"Create",
-			popup.pos + v2(popup.size.x, 0) + v2(-14.0, 15),
+			popup.pos + v2(popup.size.x, popup.size.y) + v2(-14.0, -15),
 			align = .Bottom_Right,
 			id = "create_instance_button",
 			z = 10.1
@@ -2118,7 +2125,7 @@ push_main_menu :: (
 		cancel_clicked := text_button(
 			state,
 			"Cancel",
-			popup.pos + v2(popup.size.x, 0) + v2(-14.0, 15) - v2(width(create_widget.aabb) + 8.0, 0),
+			popup.pos + v2(popup.size.x, popup.size.y) + v2(-14.0, -15) - v2(width(create_widget.aabb) + 8.0, 0),
 			z = 10.1,
 			id = "cancel_create_instance_button",
 			align = .Bottom_Right
@@ -2178,7 +2185,7 @@ begin_window :: (
 	state.size = size;
 
 	push_default_params(gui);
-	default_params(gui).cursor = lower_left + v2(8.0, size.y - 8.0);
+	default_params(gui).cursor = lower_left + v2(8.0, 8.0);
 	default_params(gui).align = Align.Top_Left;
 	default_params(gui).z = z + 0.02;
 	default_params(gui).direction = .Down;
@@ -2275,7 +2282,7 @@ atom_label :: (
 		char: GUI_State.Char;
 		char.id = it;
 		char.pos.x = cursor.x + glyph.planex * scale;
-		char.pos.y = cursor.y + glyph.planey * scale;
+		char.pos.y = cursor.y - glyph.planeh * scale;
 		char.size.x = (glyph.planew - glyph.planex) * scale;
 		char.size.y = (glyph.planeh - glyph.planey) * scale;
 		char.z = z + (it / 256.0 / 1000.0);
@@ -2305,10 +2312,13 @@ atom_label :: (
 			char.pos.x -= (cursor.x - pos.x);
 		}
 		if (align & Align.VCenter) == Align.VCenter {
-			char.pos.y -= (aabb_max.y - pos.y) / 2;
+			char.pos.y -= (aabb_min.y + aabb_max.y) / 2 - pos.y;
+		}
+		else if (align & Align.Bottom) == Align.Bottom {
+			char.pos.y -= aabb_max.y - pos.y;
 		}
 		else if (align & Align.Top) == Align.Top {
-			char.pos.y -= (aabb_max.y - pos.y);
+			char.pos.y -= aabb_min.y - pos.y;
 		}
 	}
 
@@ -2324,12 +2334,17 @@ atom_label :: (
 	}
 
 	if (align & Align.VCenter) == Align.VCenter {
-		shift := (aabb_max.y + pos.y) / 2 - pos.y;
+		shift := (aabb_min.y + aabb_max.y) / 2 - pos.y;
+		aabb_min.y -= shift;
+		aabb_max.y -= shift;
+	}
+	else if (align & Align.Bottom) == Align.Bottom {
+		shift := aabb_max.y - pos.y;
 		aabb_min.y -= shift;
 		aabb_max.y -= shift;
 	}
 	else if (align & Align.Top) == Align.Top {
-		shift := aabb_max.y - pos.y;
+		shift := aabb_min.y - pos.y;
 		aabb_min.y -= shift;
 		aabb_max.y -= shift;
 	}
@@ -2355,9 +2370,9 @@ atom_label_replace :: (gui: *GUI_State, label: *Atom_Label, aabb: AABBf, align: 
 
 	if (align & Align.VCenter) == Align.VCenter {
 		pos.y = (aabb.min.y + aabb.max.y) / 2 - size.y / 2;
-	} else if (align & Align.Bottom) == Align.Bottom {
-		pos.y = aabb.min.y;
 	} else if (align & Align.Top) == Align.Top {
+		pos.y = aabb.min.y;
+	} else if (align & Align.Bottom) == Align.Bottom {
 		pos.y = aabb.max.y - size.y;
 	}
 
@@ -2383,7 +2398,7 @@ align_pos :: (pos: V2f, size: V2f, align: Align) -> V2f {
 	if (align & Align.VCenter) == Align.VCenter {
 		ret.y -= size.y / 2;
 	}
-	else if (align & Align.Top) == Align.Top {
+	else if (align & Align.Bottom) == Align.Bottom {
 		ret.y -= size.y;
 	}
 	return ret;
@@ -2409,7 +2424,7 @@ anchor_aabb :: (zone: AABBf, align: Align) -> V2f {
 
 	if (align & Align.VCenter) == Align.VCenter
 		ret.y = (zone.min.y + zone.max.y) / 2;
-	else if (align & Align.Top) == Align.Top
+	else if (align & Align.Bottom) == Align.Bottom
 		ret.y = zone.max.y;
 	else
 		ret.y = zone.min.y;
@@ -2430,9 +2445,9 @@ align_aabb :: (to_align: AABBf, zone: AABBf, align: Align) -> AABBf {
 
 	if (align & Align.VCenter) == Align.VCenter {
 		pos.y = (zone.min.y + zone.max.y) / 2 - size.y / 2;
-	} else if (align & Align.Bottom) == Align.Bottom {
-		pos.y = zone.min.y;
 	} else if (align & Align.Top) == Align.Top {
+		pos.y = zone.min.y;
+	} else if (align & Align.Bottom) == Align.Bottom {
 		pos.y = zone.max.y - size.y;
 	}
 
@@ -2675,7 +2690,7 @@ atom_table :: (
 	push_quad_screen(gui, lower_left, .{ 4, size.y }, v3(GRAY_70), z + 0.2);
 	atom_dash_quad(
 		gui,
-		.{ lower_left.x + 4, lower_left.y + size.y - 2 },
+		.{ lower_left.x + 4, lower_left.y },
 		.{ size.x - 4, 2 },
 		.{ 2, 2 },
 		.{ 4, 2 },
@@ -2722,7 +2737,7 @@ atom_table :: (
 		}
 	}
 
-	cursor := V2f.{ lower_left.x + 4, lower_left.y + size.y - row_height / 2 };
+	cursor := V2f.{ lower_left.x + 4, lower_left.y + row_height / 2 };
 	push_id(gui, "col");
 	for * cols {
 		cursor.x += 4;
@@ -2753,7 +2768,7 @@ atom_table :: (
 	}
 	pop_id(gui);
 
-	cursor = V2f.{ lower_left.x + 4, lower_left.y + size.y - row_height / 2 - row_height };
+	cursor = V2f.{ lower_left.x + 4, lower_left.y + row_height / 2 + row_height };
 	for row, row_index: rows {
 		push_id(gui, row_index);
 		defer pop_id(gui);
@@ -2830,10 +2845,10 @@ atom_table :: (
 		}
 
 
-		cursor.y -= row_height;
+		cursor.y += row_height;
 		push_quad_screen(
 			gui,
-			.{ lower_left.x + 4, cursor.y + row_height / 2 },
+			.{ lower_left.x + 4, cursor.y - row_height / 2 },
 			.{ size.x - 4, 1 },
 			v3(GRAY_40),
 			z + 0.20
@@ -2842,7 +2857,7 @@ atom_table :: (
 
 	push_quad_screen(
 		gui,
-		.{ lower_left.x + 4, lower_left.y + size.y - row_height - 1 },
+		.{ lower_left.x + 4, lower_left.y + row_height - 1 },
 		.{ size.x - 4, 1 },
 		v3(GRAY_00),
 		z + 0.25
@@ -2941,7 +2956,7 @@ text_button :: (
 	// and the bottom of the button is always the same
 	// After adjusting the bottom, we will need to 
 	if label.baseline_y_from_bottom < state.aabb_padding.y {
-		label.aabb_min.y -= state.aabb_padding.y - label.baseline_y_from_bottom;
+		label.aabb_max.y += state.aabb_padding.y - label.baseline_y_from_bottom;
 	}
 	widget.aabb.min = label.aabb_min - state.aabb_padding;
 	widget.aabb.max = label.aabb_max + state.aabb_padding;
@@ -3801,7 +3816,7 @@ scroll_list_begin :: (
 		visible_ratio := height / state.content_height;
 		thumb_height := max(20.0, scrollbar_track_height * visible_ratio);
 		scroll_ratio := state.scroll_offset / max_scroll;
-		thumb_y := lower_left.y + 2 + (scrollbar_track_height - thumb_height) * (1.0 - scroll_ratio);
+		thumb_y := lower_left.y + 2 + (scrollbar_track_height - thumb_height) * scroll_ratio;
 
 		// Thumb
 		thumb_color := ifx state.is_scrolling then v3(GREEN_BRIGHT) else v3(GRAY_20);
@@ -3824,7 +3839,7 @@ scroll_list_begin :: (
 			gui.controls.captured_mouse = true;
 			// Map mouse Y position to scroll offset
 			mouse_y_normalized := (gui.controls.mouse_pos.y - lower_left.y - 2 - thumb_height / 2) / (scrollbar_track_height - thumb_height);
-			mouse_y_normalized = 1.0 - clamp(mouse_y_normalized, 0.0, 1.0);
+			mouse_y_normalized = clamp(mouse_y_normalized, 0.0, 1.0);
 			state.scroll_offset = mouse_y_normalized * max_scroll;
 		}
 	}
@@ -3837,15 +3852,15 @@ scroll_list_begin :: (
 
 // Helper to check if an item is visible within the scroll list
 scroll_list_item_visible :: (scroll_list: *Scroll_List, item_y: float, item_height: float) -> bool {
-	item_top := item_y + item_height;
-	item_bottom := item_y;
-	return item_top > scroll_list.visible_min_y && item_bottom < scroll_list.visible_max_y;
+	item_top := item_y;
+	item_bottom := item_y + item_height;
+	return item_top < scroll_list.visible_max_y && item_bottom > scroll_list.visible_min_y;
 }
 
 // Get the adjusted Y position for an item accounting for scroll offset
 scroll_list_item_y :: (scroll_list: *Scroll_List, item_index: int, item_height: float, padding := 2.0) -> float {
-	base_y := scroll_list.aabb.max.y - (item_index + 1).(float) * (item_height + padding) - padding;
-	return base_y + scroll_list.scroll_offset;
+	base_y := scroll_list.aabb.min.y + padding + item_index.(float) * (item_height + padding);
+	return base_y - scroll_list.scroll_offset;
 }
 
 scroll_list_end :: (gui: *GUI_State) {

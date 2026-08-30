@@ -1830,13 +1830,13 @@ add_dirt_particles :: (scene: *Scene, dt: float32) {
 		if tile.kind == .Grass {
 			p.color = V4f.{ 0.5, 0.2, 0.0, 1 };
 			texture_idx := Rand.random_uniform(*scene.client_rng, 1, 3);
-			p.texture_rec = V4f.{ texture_idx / 4.0, 2 / 4.0, 1 / 4.0, 1 / 4.0 };
+			p.texture_rec = V4f.{ texture_idx / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
 		}
 		else {
 			p.color = V4f.{ 0.8, 0.8, 1.0, 1 };
 			p.size *= 1.5;
 			texture_idx := Rand.random_uniform(*scene.client_rng, 1, 4);
-			p.texture_rec = V4f.{ texture_idx / 4.0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
+			p.texture_rec = V4f.{ texture_idx / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
 		}
 		array_add(*scene.particles, p);
 		n -= 1.0;
@@ -1866,7 +1866,7 @@ add_snow :: (scene: *Scene, dt: float32) {
 		};
 
 		texture_idx := Rand.random_uniform(*scene.client_rng, 1, 4);
-		p.texture_rec = V4f.{ texture_idx / 4.0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
+		p.texture_rec = V4f.{ texture_idx / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
 		p.velocity = normalize(p.velocity) * Rand.random_uniform(*scene.client_rng, 0.09, 0.11);
 		p.size = Rand.random_uniform(*scene.client_rng, 0.06, 0.15);
 		p.rotation_speed = Rand.random_uniform(*scene.client_rng, -2.0, 2.0);
@@ -1972,7 +1972,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 			r := unproject_ndc(
 				.{
 					controls.mouse_pos.x / controls.window_size.x * 2 - 1,
-					controls.mouse_pos.y / controls.window_size.y * 2 - 1
+					1 - controls.mouse_pos.y / controls.window_size.y * 2
 				},
 				V,
 				P
@@ -2005,7 +2005,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 			r := unproject_ndc(
 				.{
 					controls.mouse_pos.x / controls.window_size.x * 2 - 1,
-					controls.mouse_pos.y / controls.window_size.y * 2 - 1
+					1 - controls.mouse_pos.y / controls.window_size.y * 2
 				},
 				V,
 				P

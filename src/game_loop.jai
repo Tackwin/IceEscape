@@ -202,7 +202,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		label := GUI.atom_label(
 			*app_user.gui_state,
 			name,
-			V2f.{ 4, controls.window_size.y - 4 },
+			V2f.{ 4, 4 },
 			24,
 			1,
 			align = .Top_Left,
@@ -230,7 +230,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 				formatInt(seconds.(int), minimum_digits = 2, padding = #char "_"),
 				formatInt(milliseconds.(int), minimum_digits = 3, padding = #char "_")
 			),
-			app_user.gui_state.controls.window_size,
+			.{ app_user.gui_state.controls.window_size.x, 0 },
 			scale=18,
 			z=1,
 			align = .Top_Right,
@@ -351,7 +351,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 			r := Scene.unproject_ndc(
 				.{
 					gui_state.controls.mouse_pos.x / gui_state.controls.window_size.x * 2 - 1,
-					gui_state.controls.mouse_pos.y / gui_state.controls.window_size.y * 2 - 1
+					1 - gui_state.controls.mouse_pos.y / gui_state.controls.window_size.y * 2
 				},
 				V,
 				P
@@ -361,7 +361,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 				GUI.atom_label(
 					*gui_state,
 					tprint("Mouse under square % %", target.x.(int), target.y.(int)),
-					pos = V2f.{ 4, gui_state.controls.window_size.y - 4 },
+					pos = V2f.{ 4, 4 },
 					scale = 14,
 					z = 5,
 					GUI.Align.Top_Left,
@@ -375,7 +375,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		// gui_demo_page(*gui_state, .{ 200, 500 }, 1024 );
 		GUI.push_ms_histogram(
 			*gui_state,
-			.{ 10, 10 },
+			.{ 10, gui_state.controls.window_size.y - 160 },
 			.{ 600, 150 },
 			state.history_app_render_loop_dt,
 			state.history_app_render_cursor,
@@ -383,7 +383,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		);
 		GUI.push_ms_histogram(
 			*gui_state,
-			.{ 10, 170 },
+			.{ 10, gui_state.controls.window_size.y - 320 },
 			.{ 600, 150 },
 			state.history_app_update_loop_dt,
 			state.history_app_update_cursor,
@@ -395,7 +395,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 			it.* = xx state.ntp_history[it_index].ping;
 		}
 		ping_cursor := (state.ntp_history_cursor + history_ping.count - 1) % history_ping.count;
-		GUI.push_ping_histogram(*gui_state, .{ 10, 330 }, .{ 300, 150 }, history_ping, ping_cursor);
+		GUI.push_ping_histogram(*gui_state, .{ 10, gui_state.controls.window_size.y - 480 }, .{ 300, 150 }, history_ping, ping_cursor);
 	}
 }
 
@@ -434,7 +434,7 @@ input_game_loop :: (app_user: *App_User) {
 			r := Scene.unproject_ndc(
 				.{
 					controls.mouse_pos.x / controls.window_size.x * 2 - 1,
-					controls.mouse_pos.y / controls.window_size.y * 2 - 1
+					1 - controls.mouse_pos.y / controls.window_size.y * 2
 				},
 				V,
 				P
@@ -772,7 +772,7 @@ sounding :: (
 
 push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) {
 	scoreboard_center := state.controls.window_size / 2;
-	scoreboard_center.y += state.controls.window_size.y / 12;
+	scoreboard_center.y -= state.controls.window_size.y / 12;
 	scoreboard_size := V2f.{ 600, 400 };
 	header_height := 32.0;
 
@@ -792,7 +792,7 @@ push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) 
 	GUI._atom_label(
 		state,
 		string_from_arr(scene.info.name),
-		_pos = .{ cursor.x + scoreboard_size.x / 2, cursor.y + scoreboard_size.y - header_height / 2 },
+		_pos = .{ cursor.x + scoreboard_size.x / 2, cursor.y + header_height / 2 },
 		_z = 10,
 		_align = .Center
 	);
@@ -814,7 +814,7 @@ push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) 
 		GUI._atom_label(
 			state,
 			wr_string,
-			_pos = .{ cursor.x + 16, cursor.y - header_height / 2 + 1 },
+			_pos = .{ cursor.x + 16, cursor.y + header_height / 2 },
 			_z = 100,
 			_align = .Center_Left
 		);
@@ -823,38 +823,36 @@ push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) 
 	GUI._atom_label(
 		state,
 		tprint("Next up: %", page.next_terrain_name),
-		_pos = .{ cursor.x + scoreboard_size.x - 16, cursor.y - header_height / 2 + 1 },
+		_pos = .{ cursor.x + scoreboard_size.x - 16, cursor.y + header_height / 2 },
 		_z = 100,
 		_align = .Center_Right
 	);
 
-	cursor += V2f.{ 0, scoreboard_size.y };
 	GUI.push_quad_screen(
 		state,
-		pos = .{ cursor.x, cursor.y - header_height },
+		pos = cursor,
 		size = .{ scoreboard_size.x, header_height },
 		color = GUI.COLOR_SOMBER_A,
 		z = 6
 	);
 	GUI.push_quad_screen(
 		state,
-		pos = .{ cursor.x, cursor.y - scoreboard_size.y - header_height },
+		pos = .{ cursor.x, cursor.y + scoreboard_size.y },
 		size = .{ scoreboard_size.x, header_height },
 		color = GUI.COLOR_SOMBER_A,
 		z = 6
 	);
 	GUI.push_quad_screen(
 		state,
-		pos = .{ cursor.x, cursor.y - scoreboard_size.y },
+		pos = .{ cursor.x, cursor.y + scoreboard_size.y },
 		size = .{ scoreboard_size.x, 1 },
 		color = .{ 1.0, 1.0, 1.0 },
 		z = 7
 	);
 
-	cursor -= V2f.{ 0, header_height };
 	GUI.push_quad_screen(
 		state,
-		pos = .{ cursor.x, cursor.y - 1 },
+		pos = .{ cursor.x, cursor.y + header_height },
 		size = .{ scoreboard_size.x, 1 },
 		color = .{ 1.0, 1.0, 1.0 },
 		z = 7
@@ -869,10 +867,10 @@ push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) 
 		
 		cursor := scoreboard_center;
 		cursor.x -= scoreboard_size.x / 2;
-		cursor.y += scoreboard_size.y / 2;
-		cursor.y -= header_height + 1;
+		cursor.y -= scoreboard_size.y / 2;
+		cursor.y += header_height + 1;
 		cursor.x += x * scoreline_size.x;
-		cursor.y -= (y + 1) * scoreline_size.y;
+		cursor.y += y * scoreline_size.y;
 
 		model_size :: V2f.{ 48, 48 };
 		icon_size :: V2f.{ 24, 24 };

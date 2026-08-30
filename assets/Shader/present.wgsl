@@ -29,9 +29,10 @@ struct VertexOutput {
 		vec2f(-1.0,  1.0),
 	);
 
+	let clip = pos[vertexIndex];
 	return VertexOutput(
-		vec4f(pos[vertexIndex], 0.0, 1.0),
-		vec2f(pos[vertexIndex] * 0.5 + 0.5)
+		vec4f(clip, 0.0, 1.0),
+		vec2f(clip.x * 0.5 + 0.5, 0.5 - clip.y * 0.5)
 	);
 }
 
@@ -148,7 +149,6 @@ fn sampleTexture(uv: vec2f) -> vec4f {
 ) -> @location(0) vec4f {
 
 	var uuv = uv;
-	uuv.y = 1.0 - uv.y;
 
 	var color = sampleTexture(uuv);
 	if uuv.y > 10 {

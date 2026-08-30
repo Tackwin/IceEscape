@@ -479,6 +479,11 @@ load_font :: (csv: string) -> Font {
 			continue;
 		}
 
+		atlas_h := 1024.0;
+		old_y := g.atlasy;
+		g.atlasy = atlas_h - g.atlash;
+		g.atlash = atlas_h - old_y;
+
 		font.glyphs[g.unicode] = g;
 	}
 
@@ -532,7 +537,7 @@ load_qoi :: (data: [] u8) -> Image {
 		if !(0 <= y && y < header.height)
 			print("Weird\n");
 		
-		return pixel_loc(x, header.height - 1 - y);
+		return pixel_loc(x, y);
 	}
 	to_u32 :: (r: u32, g: u32, b: u32, a: u32) -> u32 {
 		return r | (g << 8) | (b << 16) | (a << 24);

@@ -129,7 +129,7 @@ win32_get_frame_info :: (info: *Frame_Info) {
 	mx, my: s32;
 	mouseMask := SDL_GetMouseState(*mx, *my);
 	info.mouse_position.x = xx mx;
-	info.mouse_position.y = xx (info.window_size.y - my);
+	info.mouse_position.y = xx my;
 	info.window_focused =  (SDL_GetWindowFlags(sdl_window) & SDL_WINDOW_MOUSE_FOCUS) > 0;
 
 	event: SDL_Event;

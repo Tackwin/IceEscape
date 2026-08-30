@@ -11,15 +11,17 @@ Scene :: #import "Scene";
 
 #scope_export
 
+// Cells are in texture space (V=0 at the top of the image). The sheet was
+// authored with OpenGL V=0 at the bottom, so these Ys are 1 - old_y - 1/4.
 Colormaps_Rect :: struct {
-	prop       :: V4f.{ 0 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
-	vehicle    :: V4f.{ 1 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
-	pirate     :: V4f.{ 0 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
-	conveyor   :: V4f.{ 1 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
-	car        :: V4f.{ 2 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
-	watercraft :: V4f.{ 2 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
-	down_arrow :: V4f.{ 3 / 4.0, 0 / 4.0, 1 / 4.0, 1 / 4.0 };
-	safe_zone  :: V4f.{ 3 / 4.0, 1 / 4.0, 1 / 4.0, 1 / 4.0 };
+	prop       :: V4f.{ 0 / 4.0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
+	vehicle    :: V4f.{ 1 / 4.0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
+	pirate     :: V4f.{ 0 / 4.0, 2 / 4.0, 1 / 4.0, 1 / 4.0 };
+	conveyor   :: V4f.{ 1 / 4.0, 2 / 4.0, 1 / 4.0, 1 / 4.0 };
+	car        :: V4f.{ 2 / 4.0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
+	watercraft :: V4f.{ 2 / 4.0, 2 / 4.0, 1 / 4.0, 1 / 4.0 };
+	down_arrow :: V4f.{ 3 / 4.0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
+	safe_zone  :: V4f.{ 3 / 4.0, 2 / 4.0, 1 / 4.0, 1 / 4.0 };
 }
 
 
@@ -447,17 +449,17 @@ get_tile_rect :: (id: Scene.Tile.Kind) -> V4f {
 	rect: V4f;
 	if #complete id == {
 		case .None;
-			rect = V4f.{ 0.0, 0.0, 0.0, 0.0 } / 4.0;
+			rect = V4f.{ 0.0, 3.0, 0.0, 0.0 } / 4.0;
 		case .Ice;
-			rect = V4f.{ 1.0, 3.0, 1.0, 1.0 } / 4.0;
+			rect = V4f.{ 1.0, 0.0, 1.0, 1.0 } / 4.0;
 		case .Slippy_Ice;
-			rect = V4f.{ 0.0, 2.0, 1.0, 1.0 } / 4.0;
+			rect = V4f.{ 0.0, 1.0, 1.0, 1.0 } / 4.0;
 		case .Grass;
-			rect = V4f.{ 0.0, 3.0, 1.0, 1.0 } / 4.0;
+			rect = V4f.{ 0.0, 0.0, 1.0, 1.0 } / 4.0;
 		case .Dirt;
-			rect = V4f.{ 1.0, 1.0, 1.0, 1.0 } / 4.0;
-		case .Funny_Ice;
 			rect = V4f.{ 1.0, 2.0, 1.0, 1.0 } / 4.0;
+		case .Funny_Ice;
+			rect = V4f.{ 1.0, 1.0, 1.0, 1.0 } / 4.0;
 	}
 	rect.x += 0.5 / 512.0;
 	rect.y += 0.5 / 512.0;
@@ -465,20 +467,21 @@ get_tile_rect :: (id: Scene.Tile.Kind) -> V4f {
 	rect.w -= 1.0 / 512.0;
 	return rect;
 }
+// Array layers are packed top-to-bottom, left-to-right from tile_albedo.png.
 get_tile_idx :: (id: Scene.Tile.Kind) -> int {
 	if #complete id == {
 		case .None;
-			return 0;
-		case .Ice;
-			return 13;
-		case .Slippy_Ice;
-			return 8;
-		case .Grass;
 			return 12;
+		case .Ice;
+			return 1;
+		case .Slippy_Ice;
+			return 4;
+		case .Grass;
+			return 0;
 		case .Dirt;
-			return 5;
-		case .Funny_Ice;
 			return 9;
+		case .Funny_Ice;
+			return 5;
 	}
 }
 

@@ -49,6 +49,7 @@ struct VertexOutput {
 
 	var p = pos[vertexIndex] * instance.size + instance.pos;
 	p = p / uniforms.size * 2.0 - 1.0;
+	p.y = -p.y;
 
 	var uv = pos[vertexIndex];
 	uv = uv * instance.texture_rect.zw + instance.texture_rect.xy;

@@ -185,7 +185,6 @@ win32_load_image :: (data: [] u8) -> Image {
 	x: s32;
 	y: s32;
 	c: s32;
-	STB.stbi_set_flip_vertically_on_load(1);
 	image.data.data = STB.stbi_load_from_memory(
 		xx data.data, xx data.count, *x, *y, *c, 4
 	);
@@ -310,7 +309,7 @@ win32_get_frame_info :: (info: *Frame_Info) {
 	mouseMask := SDL_GetMouseState(*mx, *my);
 	info.time = current_time_monotonic();
 	info.mouse_position.x = xx mx;
-	info.mouse_position.y = xx (info.window_size.y - my);
+	info.mouse_position.y = xx my;
 	info.window_focused =  (SDL_GetWindowFlags(sdl_window) & SDL_WINDOW_MOUSE_FOCUS) > 0;
 	info.quit = platform_state.want_quit;
 	info.mouse_wheel = platform_state.mouse_wheel;

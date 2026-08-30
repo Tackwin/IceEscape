@@ -90,7 +90,6 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	info.window_size = .{
 		xx (controls_buffer.data + Window_W).(*u32).*, xx (controls_buffer.data + Window_H).(*u32).*
 	};
-	info.mouse_position.y = info.window_size.y - info.mouse_position.y;
 	for 0..Key_COUNT-1 {
 		info.key_pressed[it] = controls_buffer.data[it] > 0;
 	}

@@ -72,7 +72,7 @@ screen_to_world :: (editor: *Editor, screen_pos: V2f, window_size: V2f) -> V3f {
 	// Convert screen coordinates to normalized device coordinates
 	ndc: V2f;
 	ndc.x = (screen_pos.x / window_size.x) * 2.0 - 1.0;
-	ndc.y = (screen_pos.y / window_size.y) * 2.0 - 1.0;
+	ndc.y = 1.0 - (screen_pos.y / window_size.y) * 2.0;
 
 	// Create ray from camera through the screen point
 	inv_P := inverse(P);

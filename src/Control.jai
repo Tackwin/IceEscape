@@ -483,20 +483,12 @@ capture_path :: (serial: u64) -> string {
 	return tprint("captures/frame_%.png", serial);
 }
 
-// Canonical mouse is top-left, Y down. Frame_Info is still bottom-left until that TODO lands.
-mouse_to_frame_info :: (top_left: V2f, window_size: V2f) -> V2f {
-	return .{ top_left.x, window_size.y - top_left.y };
-}
-
 merge_into_frame_info :: (state: *State, info: *Platform.Frame_Info) {
 	for i: 0..state.key_down.count-1 {
 		info.key_pressed[i] = info.key_pressed[i] || state.key_down[i];
 	}
 	if state.has_mouse {
-		info.mouse_position = mouse_to_frame_info(
-			.{ xx state.mouse_x, xx state.mouse_y },
-			info.window_size
-		);
+		info.mouse_position = .{ xx state.mouse_x, xx state.mouse_y };
 	}
 	info.mouse_wheel += state.wheel;
 	state.wheel = 0;

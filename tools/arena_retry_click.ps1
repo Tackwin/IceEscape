@@ -5,8 +5,7 @@ $control = Join-Path $PSScriptRoot "arena_control.ps1"
 . (Join-Path $PSScriptRoot "identity.ps1")
 $captures = Join-Path $bin "captures"
 
-# Retry is centered at (window.x/2, window.y/2 - 24) in Frame_Info (bottom-left).
-# Protocol mouse is top-left, Y down: y = 768 - (768/2 - 24) = 408.
+# Retry is centered at (window.x/2, window.y/2 + 24) in Frame_Info (top-left, Y down).
 $RetryX = 683
 $RetryY = 408
 

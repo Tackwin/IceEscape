@@ -7,8 +7,7 @@ $game = Join-Path $bin $GameExe
 $server = Join-Path $bin $GameServerExe
 $captures = Join-Path $bin "captures"
 
-# Retry localhost is centered at (window.x/2, window.y/2 - 72) in Frame_Info (bottom-left).
-# Protocol mouse is top-left, Y down: y = 768 - (768/2 - 72) = 456.
+# Retry localhost is centered at (window.x/2, window.y/2 + 72) in Frame_Info (top-left, Y down).
 $RetryLocalhostX = 683
 $RetryLocalhostY = 456
 

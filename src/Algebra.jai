@@ -96,6 +96,9 @@ height :: (aabb: AABB($T)) -> T {
 }
 aabb_height :: height;
 top :: (aabb: AABB($T)) -> T {
+	return aabb.min.y;
+}
+bottom :: (aabb: AABB($T)) -> T {
 	return aabb.max.y;
 }
 uv :: (aabb: AABB($T), uv: V2(T)) -> T {
