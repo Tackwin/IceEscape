@@ -4,8 +4,8 @@
 #scope_export
 
 // Change the game here. Everything else is derived.
-GAME_NAME :: "Arena";
-LOCAL_SERVER_PORT :: 2468;
+GAME_NAME :: "IceEscape";
+LOCAL_SERVER_PORT :: 2356;
 
 ident :: (suffix: string) -> string {
 	return copy_string(join(GAME_NAME, suffix));

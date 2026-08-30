@@ -61,6 +61,7 @@ HOOK_SLOT :: V2f.{ 8, 15 };
 HAND_OPEN_SLOT :: V2f.{ 6, 12 };
 STAR_SLOT :: V2f.{ 7, 12 };
 RESURRECT_SLOT :: V2f.{ 7, 11 };
+BOMB_SLOT :: V2f.{ 9, 12 };
 
 PLAYER_ICON_SLOT :: V2f.{ 0, 10 };
 AMBULANCE_SLOT :: V2f.{ 0, 10 };
@@ -263,6 +264,8 @@ Action_Key :: enum {
 	Drop :: Square31;
 	Safe :: Square22;
 	Hook :: Square02;
+
+	Bomberman_Drop :: Square22;
 }
 
 action_to_platform :: (action: Action_Key, layout: Platform.Layout) -> Platform.Key {
@@ -1477,79 +1480,90 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 		);
 	}
 
-	render_texture_at(0, 1, LEFT_SLOT);
-	render_hint_at(0, 1, action_to_icon(Action_Key.Square01, state.controls.layout));
+	if scene.params.mode == {
+		case .Standard;
+		render_texture_at(0, 1, LEFT_SLOT);
+		render_hint_at(0, 1, action_to_icon(Action_Key.Square01, state.controls.layout));
 
-	render_texture_at(1, 1, DOWN_SLOT);
-	render_hint_at(1, 1, action_to_icon(Action_Key.Square11, state.controls.layout));
+		render_texture_at(1, 1, DOWN_SLOT);
+		render_hint_at(1, 1, action_to_icon(Action_Key.Square11, state.controls.layout));
 
-	render_texture_at(2, 1, RIGHT_SLOT);
-	render_hint_at(2, 1, action_to_icon(Action_Key.Square21, state.controls.layout));
+		render_texture_at(2, 1, RIGHT_SLOT);
+		render_hint_at(2, 1, action_to_icon(Action_Key.Square21, state.controls.layout));
 
-	render_texture_at(1, 2, UP_SLOT);
-	render_hint_at(1, 2, action_to_icon(Action_Key.Square12, state.controls.layout));
-	
-	render_texture_at(2, 0, COIN_SLOT);
-	render_hint_at(2, 0, action_to_icon(Action_Key.Square20, state.controls.layout));
+		render_texture_at(1, 2, UP_SLOT);
+		render_hint_at(1, 2, action_to_icon(Action_Key.Square12, state.controls.layout));
+		
+		render_texture_at(2, 0, COIN_SLOT);
+		render_hint_at(2, 0, action_to_icon(Action_Key.Square20, state.controls.layout));
 
-	render_texture_at(1, 0, KLAXON_SLOT);
-	render_hint_at(1, 0, action_to_icon(Action_Key.Square10, state.controls.layout));
-	
+		render_texture_at(1, 0, KLAXON_SLOT);
+		render_hint_at(1, 0, action_to_icon(Action_Key.Square10, state.controls.layout));
 
-	if scene.camera_locked
-		render_texture_at(0, 0, UNLOCKED_SLOT);
-	else
-		render_texture_at(0, 0, LOCKED_SLOT);
-	render_hint_at(0, 0, action_to_icon(Action_Key.Square00, state.controls.layout));
+		if scene.camera_locked
+			render_texture_at(0, 0, UNLOCKED_SLOT);
+		else
+			render_texture_at(0, 0, LOCKED_SLOT);
+		render_hint_at(0, 0, action_to_icon(Action_Key.Square00, state.controls.layout));
 
-	player := Scene.find_by_player_id(scene, scene.controlled_player_id);
-	if player {
-		if Scene.find_bomb_by_holder_id(scene, player.id) {
-			render_texture_at(3, 1, DROP_SLOT);
-			render_hint_at(3, 1, action_to_icon(Action_Key.Square31, state.controls.layout));
-		}
-		if player.server.has_safe_present {
-			render_texture_at(2, 2, SAFE_ZONE_SLOT, .{ 0.5, 1.0, 0.5 });
-			render_hint_at(2, 2, action_to_icon(Action_Key.Square22, state.controls.layout));
-		}
-		if player.server.has_hook_present {
-			render_texture_at(0, 2, HOOK_SLOT, .{ 0.5, 1.0, 0.5 });
-			render_hint_at(0, 2, action_to_icon(Action_Key.Square02, state.controls.layout));
+		player := Scene.find_by_player_id(scene, scene.controlled_player_id);
+		if player {
+			if Scene.find_bomb_by_holder_id(scene, player.id) {
+				render_texture_at(3, 1, DROP_SLOT);
+				render_hint_at(3, 1, action_to_icon(Action_Key.Square31, state.controls.layout));
+			}
+			if player.server.has_safe_present {
+				render_texture_at(2, 2, SAFE_ZONE_SLOT, .{ 0.5, 1.0, 0.5 });
+				render_hint_at(2, 2, action_to_icon(Action_Key.Square22, state.controls.layout));
+			}
+			if player.server.has_hook_present {
+				render_texture_at(0, 2, HOOK_SLOT, .{ 0.5, 1.0, 0.5 });
+				render_hint_at(0, 2, action_to_icon(Action_Key.Square02, state.controls.layout));
 
-			for 0..player.server.has_hook_present-1 {
-				push_quad_screen(
-					state,
-					pos = .{ (0 * 42 + 3 + it * 6).(float32), (2 * 42 + 3).(float32) },
-					size = .{ 4, 4 },
-					color = .{ 1.0, 1.0, 1.0 },
-					z = 6
-				);
+				for 0..player.server.has_hook_present-1 {
+					push_quad_screen(
+						state,
+						pos = .{ (0 * 42 + 3 + it * 6).(float32), (2 * 42 + 3).(float32) },
+						size = .{ 4, 4 },
+						color = .{ 1.0, 1.0, 1.0 },
+						z = 6
+					);
+				}
+			}
+
+			if player.server.dead {
+				render_texture_at(3, 0, RESURRECT_SLOT, .{ 0.5, 1.0, 0.5 });
+				render_hint_at(3, 0, action_to_icon(Action_Key.Square30, state.controls.layout));
+
+				dt := scene.client.clock - player.server.dead_time;
+				t := clamp(dt / player.server.dead_cooldown, 0.0, 1.0).(float32);
+
+				if t > 0 {
+					push_quad_screen(
+						state,
+						pos = .{ 3 * 42.0 + 1, 0 * 42.0 + 1 + 40 * t },
+						size = .{ 40, 40 * (1 - t) },
+						color = COLOR_SOMBER_A,
+						z = 3,
+						a = 0.5
+					);
+				}
 			}
 		}
 
-		if player.server.dead {
-			render_texture_at(3, 0, RESURRECT_SLOT, .{ 0.5, 1.0, 0.5 });
-			render_hint_at(3, 0, action_to_icon(Action_Key.Square30, state.controls.layout));
+		
+		render_texture_at(3, 2, HAND_OPEN_SLOT, .{ 0.5, 1.0, 0.5 });
+		render_hint_at(3, 2, action_to_icon(Action_Key.Square32, state.controls.layout));
+		case .Bomberman;
+		render_texture_at(1, 0, KLAXON_SLOT);
+		render_hint_at(1, 0, action_to_icon(Action_Key.Square10, state.controls.layout));
 
-			dt := scene.client.clock - player.server.dead_time;
-			t := clamp(dt / player.server.dead_cooldown, 0.0, 1.0).(float32);
-
-			if t > 0 {
-				push_quad_screen(
-					state,
-					pos = .{ 3 * 42.0 + 1, 0 * 42.0 + 1 + 40 * t },
-					size = .{ 40, 40 * (1 - t) },
-					color = COLOR_SOMBER_A,
-					z = 3,
-					a = 0.5
-				);
-			}
-		}
+		render_texture_at(2, 2, BOMB_SLOT);
+		render_hint_at(2, 2, action_to_icon(Action_Key.Square22, state.controls.layout));
 	}
-
 	
-	render_texture_at(3, 2, HAND_OPEN_SLOT, .{ 0.5, 1.0, 0.5 });
-	render_hint_at(3, 2, action_to_icon(Action_Key.Square32, state.controls.layout));
+
+
 }
 
 Escape_Menu_Args :: struct {

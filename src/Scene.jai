@@ -538,6 +538,10 @@ make_sync :: (bomb: *Bomb) -> Command.Sync_Bomb {
 	sync.last_holder_id = bomb.last_holder;
 	sync.position = bomb.server.position;
 	sync.time = bomb.server.time;
+	sync.bomberman_bomb = bomb.server.bomberman_bomb;
+	sync.holdable = bomb.server.holdable;
+	sync.chain_bomb = bomb.server.chain_bomb;
+	sync.cross_length = bomb.server.cross_length;
 	return sync;
 }
 
@@ -735,6 +739,11 @@ Bomb :: struct {
 	last_holder: int = -1;
 
 	server: struct {
+		holdable := true;
+		bomberman_bomb := false;
+		chain_bomb := false;
+		cross_length := 0;
+
 		position: V3f;
 		radius_hitbox := 0.25;
 		time := 0.0;
@@ -861,6 +870,7 @@ Explosion :: struct {
 	age: float = 0.0;
 	lifetime: float = 1.0;
 	max_size: float = 1.0;
+	trigger_bombs := false;
 }
 
 Robot :: struct {
@@ -1107,7 +1117,7 @@ init_camera :: (scene: *Scene) {
 	}
 
 	scene.camera.position = .{ 0, -4, 8 };
-	scene.camera.target = .{ 0, 0, 0 };
+	scene.camera.target = scene.spawn.position;
 	scene.camera.target_target = scene.camera.target;
 	scene.camera.delta_unit = normalize(scene.camera.position - scene.camera.target);
 	scene.camera.nominal_distance = norm(scene.camera.position - scene.camera.target);
@@ -1117,20 +1127,35 @@ init_camera :: (scene: *Scene) {
 	scene.camera.max_distance = scene.camera.locked_nominal_distance;
 }
 init_camera_bomberman :: (scene: *Scene) {
-	camera_dt := V3f.{ 0, -1, 8 };
+	camera_dt := V3f.{ 0, -2, 8 };
 	camera_dt = normalize(camera_dt);
 	width := scene.camera_max.x - scene.camera_min.x;
 	height := scene.camera_max.y - scene.camera_min.y;
 	size := max(width, height);
-	scene.camera.nominal_distance = size * 0.75;
+	scene.camera.nominal_distance = size * 0.85;
+	scene.camera.target.x = (scene.camera_min + scene.camera_max).x / 2;
+	scene.camera.target.y = (scene.camera_min + scene.camera_max).y / 2 - 1;
+	scene.camera.target.z = 0;
 	scene.camera.position = scene.camera.target + camera_dt * scene.camera.nominal_distance;
-	scene.camera.target = .{ 0, 0, 0 };
 	scene.camera.target_target = scene.camera.target;
 	scene.camera.delta_unit = normalize(scene.camera.position - scene.camera.target);
 	scene.camera.distance_target = scene.camera.nominal_distance;
 	scene.camera.locked_nominal_distance = scene.camera.nominal_distance;
 	scene.camera.max_distance = scene.camera.locked_nominal_distance;
 	scene.camera.fov = 55;
+}
+
+init_player :: (scene: Scene, player: *Player) {
+	if scene.params.mode == .Bomberman {
+		player.server.turning_speed *= 1.5;
+		player.server.speed /= 1.25;
+		player.server.radius_hitbox_rock = 0.65;
+	}
+}
+
+init_bomb :: (scene: Scene, bomb: *Bomb) {
+	bomb.* = .{};
+	bomb.id = scene.bombs.count + 1;
 }
 
 reset_camera_zoom :: (camera: *Camera) {
@@ -1509,6 +1534,7 @@ Player :: struct {
 		radius_hurtbox_shuriken := 0.25;
 		radius_hitbox_key := 0.55;
 		radius_hitbox_confirmed := 0.15;
+		radius_hitbox_rock := 0.6;
 
 		confirmed_tile := Tile.Kind.Grass;
 
@@ -1869,21 +1895,54 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 	if controls.mouse_wheel < 0 {
 		scene.camera.distance_target *= (1.0 / 0.9);
 	}
-	if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Left) {
-		dt.x -= scene.camera.speed * controls.delta_time;
-		any_camera_move = true;
-	}
-	if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Right) {
-		dt.x += scene.camera.speed * controls.delta_time;
-		any_camera_move = true;
-	}
-	if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Down) {
-		dt.y -= scene.camera.speed * controls.delta_time;
-		any_camera_move = true;
-	}
-	if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Up) {
-		dt.y += scene.camera.speed * controls.delta_time;
-		any_camera_move = true;
+	if #complete scene.params.mode == {
+		case .Standard;
+			if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Left) {
+				dt.x -= scene.camera.speed * controls.delta_time;
+				any_camera_move = true;
+			}
+			if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Right) {
+				dt.x += scene.camera.speed * controls.delta_time;
+				any_camera_move = true;
+			}
+			if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Down) {
+				dt.y -= scene.camera.speed * controls.delta_time;
+				any_camera_move = true;
+			}
+			if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Up) {
+				dt.y += scene.camera.speed * controls.delta_time;
+				any_camera_move = true;
+			}
+			if Controls.is_action_just_pressed(controls, GUI.Action_Key.Camera_Locked) {
+				scene.camera_locked = !scene.camera_locked;
+			}
+
+			if scene.camera_locked {
+				scene.camera.locked = !controls.pressed[Platform.Key.Space];
+			} else {
+				scene.camera.locked =  controls.pressed[Platform.Key.Space];
+			}
+			scene.camera.target_target += dt;
+			if scene.camera.locked {
+				scene.camera.target += dt;
+			}
+			if Controls.is_action_just_pressed(controls, GUI.Action_Key.Drop) {
+				player := find_by_player_id(scene, scene.controlled_player_id);
+				if player && !player.server.dead {
+					command: Command.Drop;
+					command.player_id = player.id;
+					add(result, scene.id, command);
+				}
+			}
+		case .Bomberman;
+			if Controls.is_action_just_pressed(controls, GUI.Action_Key.Bomberman_Drop) {
+				player := find_by_player_id(scene, scene.controlled_player_id);
+				if player && !player.server.dead {
+					command: Command.Drop;
+					command.player_id = player.id;
+					add(result, scene.id, command);
+				}
+			}
 	}
 	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Buy_Ask) {
 		buy_ask(scene, scene.controlled_player_id, result);
@@ -1900,19 +1959,6 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 		// }
 	}
 
-	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Camera_Locked) {
-		scene.camera_locked = !scene.camera_locked;
-	}
-
-	if scene.camera_locked {
-		scene.camera.locked = !controls.pressed[Platform.Key.Space];
-	} else {
-		scene.camera.locked =  controls.pressed[Platform.Key.Space];
-	}
-	scene.camera.target_target += dt;
-	if scene.camera.locked {
-		scene.camera.target += dt;
-	}
 
 	// if !any_camera_move {
 	// 	scene.camera.target_target = scene.camera.target;
@@ -1990,15 +2036,6 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 			add(result, scene.id, command);
 		}
 	}
-	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Drop) {
-		player := find_by_player_id(scene, scene.controlled_player_id);
-		if player && !player.server.dead {
-			command: Command.Drop;
-			command.player_id = player.id;
-			add(result, scene.id, command);
-		}
-	}
-
 	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Safe) {
 		player := find_by_player_id(scene, scene.controlled_player_id);
 		if player && !player.server.dead {
@@ -2504,6 +2541,8 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		p := player.server.position;
 
 		for * bomb: scene.bombs {
+			if !bomb.server.holdable
+				continue;
 			if bomb.holder != -1
 				continue;
 
@@ -2554,12 +2593,10 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			d := norm(p - q);
 			if d < 0.5 {
 				bomb: Bomb;
-				bomb.id = scene.bombs.count + 1;
+				init_bomb(scene, *bomb);
 				bomb.spawner_id = spawner.id;
 				bomb.holder = player.id;
 				bomb.last_holder = player.id;
-				bomb.server.time = 0;
-				bomb.client.time = 0;
 				bomb.server.position = player.server.position;
 				bomb.client.position = player.client.position;
 				array_add(*scene.bombs, bomb);
@@ -2571,7 +2608,6 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	// >RULE bombs explode on time, killing their holder
 	for * bomb: scene.bombs {
 		if bomb.server.time > bomb.server.explosion_time {
-
 			player, player_idx := find_by_player_id(scene, bomb.holder);
 			if player {
 				should_die[player_idx].soft_die = true;
@@ -2588,6 +2624,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			cmd.lifetime = explosion.lifetime;
 			cmd.max_size = explosion.max_size;
 			cmd.position = explosion.position;
+			cmd.trigger_bombs = bomb.server.chain_bomb;
 			array_add(*result.explode, cmd);
 			remove bomb;
 		}
@@ -3249,6 +3286,10 @@ drop_bomb :: (scene: *Scene, bomb: *Bomb) {
 	bomb.server.time = 0;
 	bomb.client.time = 0;
 	bomb.server.dropped_clock = xx scene.server.clock;
+	if scene.params.mode == .Bomberman {
+		bomb.server.bomberman_bomb = true;
+		bomb.server.holdable = false;
+	}
 }
 drop_bombs :: (scene: *Scene, player: *Player) {
 	for * scene.bombs {
@@ -3761,6 +3802,8 @@ update_camera_locked :: (scene: Scene, camera: *Camera, player_locked: *Player, 
 }
 
 update :: (scene: Scene, camera: *Camera, dt: float32) {
+	if scene.params.mode == .Bomberman
+		return; // Camera is fixed in Bomberman mode
 	player_locked := find_by_player_id(scene, camera.locked_to);
 	curr_distance := norm(camera.position - camera.target);
 
@@ -3985,7 +4028,7 @@ can_execute_player_motion :: (scene: Scene, a: V3f, b: V3f, player: *Player) -> 
 			continue;
 		d := norm(b - it.position);
 
-		if d < 0.6 {
+		if d < player.server.radius_hitbox_rock {
 			return false;
 		}
 	}
@@ -4094,11 +4137,31 @@ process_server_only :: (
 
 	drop: *Command.Drop = isa(command.payload, Command.Drop);
 	if drop {
-		bomb := find_bomb_by_holder_id(scene, drop.player_id);
-		if bomb {
-			drop_bomb(scene, bomb);
-			add(response, scene.id, drop.*);
-			return true;
+		if #complete scene.params.mode == {
+			case .Standard;
+				bomb := find_bomb_by_holder_id(scene, drop.player_id);
+				if bomb {
+					drop_bomb(scene, bomb);
+					add(response, scene.id, drop.*);
+					return true;
+				}
+			case .Bomberman;
+				player := find_by_player_id(scene, drop.player_id);
+				if player {
+					bomb: Bomb;
+					init_bomb(scene, *bomb);
+					bomb.server.position = player.server.position;
+					bomb.server.holdable = false;
+					bomb.server.bomberman_bomb = true;
+					bomb.server.chain_bomb = true;
+					bomb.server.cross_length = 0;
+					drop_bomb(scene, *bomb);
+					array_add(*scene.bombs, bomb);
+
+					sync_bomb := make_sync(*bomb);
+					add(response, scene.id, sync_bomb);
+				}
+				return true;
 		}
 	}
 
@@ -4393,14 +4456,19 @@ process_client_only :: (
 
 	sync_bomb: *Command.Sync_Bomb = isa(command.payload, Command.Sync_Bomb);
 	if sync_bomb {
+		print("Sync Bomb: %\n", sync_bomb.bomb_id);
 		bomb := find_by_bomb_id(scene, sync_bomb.bomb_id);
 		if bomb {
+			print("Updating existing bomb: %\n", bomb.id);
 			bomb.server.position = sync_bomb.position;
 			bomb.server.time = sync_bomb.time;
 			bomb.holder = sync_bomb.holder_id;
 			bomb.last_holder = sync_bomb.last_holder_id;
+			bomb.server.bomberman_bomb = sync_bomb.bomberman_bomb;
+			bomb.server.holdable = sync_bomb.holdable;
 			return true;
 		} else {
+			print("Creating new bomb: %\n", sync_bomb.bomb_id);
 			new_bomb: Bomb;
 			new_bomb.id = sync_bomb.bomb_id;
 			new_bomb.spawner_id = sync_bomb.bomb_spawner_id;
@@ -4410,6 +4478,10 @@ process_client_only :: (
 			new_bomb.client.position = sync_bomb.position;
 			new_bomb.server.time = sync_bomb.time;
 			new_bomb.client.time = sync_bomb.time;
+			new_bomb.server.bomberman_bomb = sync_bomb.bomberman_bomb;
+			new_bomb.server.holdable = sync_bomb.holdable;
+			new_bomb.server.cross_length = sync_bomb.cross_length;
+			new_bomb.server.chain_bomb = sync_bomb.chain_bomb;
 			array_add(*scene.bombs, new_bomb);
 			return true;
 		}
@@ -4480,10 +4552,25 @@ process_client_only :: (
 
 	drop: *Command.Drop = isa(command.payload, Command.Drop);
 	if drop {
-		bomb := find_bomb_by_holder_id(scene, drop.player_id);
-		if bomb {
-			drop_bomb(scene, bomb);
-			return true;
+		if #complete scene.params.mode == {
+			case .Standard;
+				bomb := find_bomb_by_holder_id(scene, drop.player_id);
+				if bomb {
+					drop_bomb(scene, bomb);
+					return true;
+				}
+			case .Bomberman;
+				player := find_by_player_id(scene, drop.player_id);
+				if player {
+					bomb: Bomb;
+					init_bomb(scene, *bomb);
+					bomb.server.position = player.server.position;
+					bomb.server.holdable = false;
+					bomb.server.bomberman_bomb = true;
+					drop_bomb(scene, *bomb);
+					array_add(*scene.bombs, bomb);
+				}
+				return true;
 		}
 	}
 	return false;
@@ -4497,7 +4584,9 @@ spawn_player :: (scene: *Scene, player_id: int, model_id: int) {
 		array_add(*scene.players, new_player);
 		player = *scene.players[scene.players.count - 1];
 	}
-	player.server.model_id = model_id;
+	if model_id >= 0
+		player.server.model_id = model_id;
+	init_player(scene, player);
 	spawn_into(player, scene);
 }
 
@@ -4515,13 +4604,7 @@ process :: (scene: *Scene, command: Command, time: Apollo_Time, response: *Proce
 			player := find_by_player_id(scene, spawn.player_id);
 
 			if !player {
-				new_player: Player;
-				new_player.id = spawn.player_id;
-				if spawn.model_id >= 0
-					new_player.server.model_id = spawn.model_id;
-				array_add(*scene.players, new_player);
-				player = *scene.players[scene.players.count - 1];
-				spawn_into(player, scene);
+				spawn_player(scene, spawn.player_id, spawn.model_id);
 			}
 
 			if spawn.its_you {
