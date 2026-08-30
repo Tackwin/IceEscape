@@ -1,6 +1,7 @@
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]] $Arguments,
+    [string[]] $Command,
     [Parameter(ValueFromPipeline = $true)]
     [string] $Body
 )
@@ -15,12 +16,18 @@ process {
 }
 end {
     $pipeName = "ArenaControl"
-    $text = $null
-    if ($Arguments -and $Arguments.Count -gt 0) {
-        $text = ($Arguments -join " ").Trim()
+    $parts = [System.Collections.Generic.List[string]]::new()
+    if ($piped.Count -gt 0) {
+        foreach ($line in $piped) {
+            $parts.Add($line)
+        }
     }
-    elseif ($piped.Count -gt 0) {
-        $text = ($piped -join "`n").TrimEnd()
+    if ($Command -and $Command.Count -gt 0) {
+        $parts.Add(($Command -join " ").Trim())
+    }
+    $text = $null
+    if ($parts.Count -gt 0) {
+        $text = ($parts -join "`n").TrimEnd()
     }
     elseif ([Console]::IsInputRedirected) {
         $text = [Console]::In.ReadToEnd().TrimEnd()
