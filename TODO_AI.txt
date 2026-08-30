@@ -19,3 +19,7 @@
 * Completely remove every trace of the Y flip that I did to have the bottom left be the origin. It was a mistake. The game should follow the standard convention of top left is origin. For eveything, texture gui rendering mouse controls.
 * Add support for gpu timing queries. Full webgpu.
 * There are multiple versions of a struct holding the current keyboard's state of the frame. Like at least one for the gui and one for the platform. I'd like to factorzie all of this.
+* Add a full log system that is inspectable, taggable, filterable. Do not output it to stdout.
+* WebTransport implementation BIG
+* Dynamic asset loading and requesting. Do not embed everything into the binary.
+* Landing html page

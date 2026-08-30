@@ -1046,6 +1046,8 @@ SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
 			created := init_instance_bomberman(
 				server, instance, create_bomberman.max_players, platform
 			);
+			instance.private = create_bomberman.private;
+			instance.user_created = true;
 			ans_create_bomberman: Command.Ans_Create_Bomberman;
 			ans_create_bomberman.reason = .Created;
 			ans_create_bomberman.created_id = instance.id;
@@ -1163,7 +1165,10 @@ init_instance_bomberman :: (
 		platform,
 		server.db,
 		struct { terrain_id: int; },
-		tprint("SELECT terrain_id FROM terrain_infos WHERE max_players >= %1", max_player_count)
+		tprint(
+			"SELECT terrain_id FROM terrain_bomberman_entry WHERE max_players >= %1",
+			max_player_count
+		)
 	);
 
 	if entries.count == 0
@@ -1193,8 +1198,7 @@ init_instance_bomberman :: (
 	info.author_profile_id = terrain_info[0].author_profile_id;
 	string_to_arr(terrain_info[0].name, info.name);
 
-	add_scene(instance, terrain_ascii[0].ascii, info); // Pick up scene
-
+	pick_scene_id := add_scene(instance, terrain_ascii[0].ascii, info); // Pick up scene
 	id := entries[0].terrain_id;
 	terrain_ascii = load_database_custom(
 		platform,
@@ -1221,9 +1225,10 @@ init_instance_bomberman :: (
 	info.author_profile_id = terrain_info[0].author_profile_id;
 	string_to_arr(terrain_info[0].name, info.name);
 
-	set_bomberman_scene(instance, terrain_ascii[0].ascii, info);
-	instance.pick_scene_id = pick_id;
-	instance.playing_scene_id = id;
+	playing_scene_id := set_bomberman_scene(instance, terrain_ascii[0].ascii, info);
+	instance.pick_scene_id = pick_scene_id;
+	instance.playing_scene_id = playing_scene_id;
+	server.instance_count += 1;
 	return true;
 }
 
@@ -1293,6 +1298,7 @@ init_instance_with_terrain_ids :: (
 	}
 	instance.id = server.instance_generation;
 	server.instance_generation += 1;
+	server.instance_count += 1;
 	return true;
 }
 
@@ -1498,18 +1504,14 @@ server_send_tick :: (platform: *Platform, server: *Server) {
 }
 
 prefill_fixed_instances :: (server: *Server, platform: *Platform) {
-	server.instance_count = 2;
-
 	server.instances[0].id = server.instance_generation;
 	string_to_array("Hades", server.instances[0].name);
 	init_instance_with_roster(server, *server.instances[0], 2, platform);
-	server.instance_generation += 1;
 
 	server.instances[1].id = server.instance_generation;
 	server.instances[1].scene_parameters.auto_revive = true;
 	string_to_array("Olympus", server.instances[1].name);
 	init_instance_with_roster(server, *server.instances[1], 2, platform);
-	server.instance_generation += 1;
 }
 
 gc_instances :: (server: *Server) {

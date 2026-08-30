@@ -253,6 +253,7 @@ set_bomberman_scene :: (instance: *Instance, terrain_text: string, info: Scene.S
 	scene.params = instance.scene_parameters;
 	scene.auto_revive |= scene.params.auto_revive;
 	scene.info = info;
+	scene.mode = .Bomberman;
 	return scene.id;
 }
 
