@@ -353,7 +353,7 @@ init_platform :: () -> Platform {
 	curl_buffer = NewArray(1024*1024*32, u8, false);
 
 	sdl_window = SDL_CreateWindow(
-		tprint("Arena %\0", win32_get_token()).data,
+		tprint("% %\0", GAME_NAME, win32_get_token()).data,
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
 		1366,

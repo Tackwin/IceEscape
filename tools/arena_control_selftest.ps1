@@ -2,13 +2,14 @@ $ErrorActionPreference = "Stop"
 $repository = Split-Path -Parent $PSScriptRoot
 $bin = Join-Path $repository "bin"
 $control = Join-Path $PSScriptRoot "arena_control.ps1"
-$game = Join-Path $bin "Arena.exe"
+. (Join-Path $PSScriptRoot "identity.ps1")
+$game = Join-Path $bin $GameExe
 
-function Invoke-ArenaControl {
+function Invoke-Control {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]] $Command)
     $response = & $control @Command
     if ($LASTEXITCODE -ne 0) {
-        throw "Arena control failed: $($Command -join ' ')`n$response"
+        throw "control failed: $($Command -join ' ')`n$response"
     }
     return $response
 }
@@ -17,7 +18,7 @@ if (-not (Test-Path -LiteralPath $game)) {
     throw "Missing $game. Build with: jai Build.jai - game    and    jai Build.jai - win32"
 }
 
-Get-Process Arena -ErrorAction SilentlyContinue | ForEach-Object {
+Get-Process $GameName -ErrorAction SilentlyContinue | ForEach-Object {
     throw "A game process is already running ($($_.Name)). Close it first."
 }
 
@@ -31,32 +32,32 @@ try {
     $connected = $false
     while ([DateTime]::UtcNow -lt $deadline) {
         try {
-            Invoke-ArenaControl status | Out-Null
+            Invoke-Control status | Out-Null
             $connected = $true
             break
         }
         catch {
             if ($proc.HasExited) {
-                throw "Arena.exe exited before the control pipe came up."
+                throw "$GameExe exited before the control pipe came up."
             }
             Start-Sleep -Milliseconds 200
         }
     }
     if (-not $connected) {
-        throw "Timed out waiting for ArenaControl."
+        throw "Timed out waiting for $GameControlPipe."
     }
 
-    $pause = Invoke-ArenaControl pause
+    $pause = Invoke-Control pause
     if ($pause -notmatch "ok paused") {
         throw "pause failed: $pause"
     }
-    $status = Invoke-ArenaControl status
+    $status = Invoke-Control status
     if ($status -notmatch "paused=true") {
         throw "status after pause: $status"
     }
 
-    Invoke-ArenaControl wait 1 | Out-Null
-    $capture = Invoke-ArenaControl capture once
+    Invoke-Control wait 1 | Out-Null
+    $capture = Invoke-Control capture once
     if ($capture -notmatch "ok capture path=captures/frame_(\d+)\.png") {
         throw "capture once failed: $capture"
     }
@@ -70,25 +71,25 @@ try {
         throw "Capture is not a PNG: $png"
     }
 
-    $mouse = Invoke-ArenaControl mouse 100 50
+    $mouse = Invoke-Control mouse 100 50
     if ($mouse -notmatch "ok") {
         throw "mouse failed: $mouse"
     }
-    $afterMouse = Invoke-ArenaControl status
+    $afterMouse = Invoke-Control status
     if ($afterMouse -notmatch "mouse=100 50") {
         throw "status mouse: $afterMouse"
     }
 
-    Invoke-ArenaControl key w down | Out-Null
-    Invoke-ArenaControl wait 1 | Out-Null
-    Invoke-ArenaControl key w up | Out-Null
+    Invoke-Control key w down | Out-Null
+    Invoke-Control wait 1 | Out-Null
+    Invoke-Control key w up | Out-Null
 
     Write-Output "arena control selftest passed ($png)"
 }
 finally {
     if (-not $proc.HasExited) {
         try {
-            Invoke-ArenaControl quit | Out-Null
+            Invoke-Control quit | Out-Null
             if (-not $proc.WaitForExit(5000)) {
                 Stop-Process -Id $proc.Id -Force
             }

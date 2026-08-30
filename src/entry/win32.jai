@@ -677,7 +677,7 @@ init_platform :: () -> Platform {
 	curl_buffer = NewArray(1024*1024*32, u8, false);
 
 	sdl_window = SDL_CreateWindow(
-		tprint("Arena %\0", win32_get_token()).data,
+		tprint("% %\0", GAME_NAME, win32_get_token()).data,
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
 		1366,
@@ -1060,12 +1060,12 @@ app: App;
 dll_mutex: Mutex;
 
 load_dll :: () {
-	Win32.CopyFileA("Arena.dll", "Arena_temp.dll", 0);
-	Win32.CopyFileA("Arena.pdb", "Arena_temp.pdb", 0);
+	Win32.CopyFileA(identity_cstr(GAME_DLL), identity_cstr(GAME_TEMP_DLL), 0);
+	Win32.CopyFileA(identity_cstr(GAME_PDB), identity_cstr(GAME_TEMP_PDB), 0);
 
-	dll = Win32.LoadLibraryA("Arena_temp.dll");
+	dll = Win32.LoadLibraryA(identity_cstr(GAME_TEMP_DLL));
 	if dll == null {
-		print("Failed to load Arena.dll\n");
+		print("Failed to load %\n", GAME_DLL);
 		return;
 	}
 
@@ -1092,22 +1092,22 @@ reload_dll :: () {
 	}
 
 	dll_generation += 1;
-	dll_name := tprint("Arena_temp_%.dll\0", dll_generation);
-	pdb_name := tprint("Arena_temp_%.pdb\0", dll_generation);
-	if !Win32.CopyFileA("Arena.dll", dll_name.data, 0)
+	dll_name := tprint("%_temp_%.dll\0", GAME_NAME, dll_generation);
+	pdb_name := tprint("%_temp_%.pdb\0", GAME_NAME, dll_generation);
+	if !Win32.CopyFileA(identity_cstr(GAME_DLL), dll_name.data, 0)
 	{
-		print("Failed to copy Arena.dll\n");
+		print("Failed to copy %\n", GAME_DLL);
 		return;
 	}
-	if !Win32.CopyFileA("Arena.pdb", pdb_name.data, 0)
+	if !Win32.CopyFileA(identity_cstr(GAME_PDB), pdb_name.data, 0)
 	{
-		print("Failed to copy Arena.pdb\n");
+		print("Failed to copy %\n", GAME_PDB);
 		return;
 	}
 
 	dll_reloaded := Win32.LoadLibraryA(dll_name.data);
 	if dll_reloaded == null {
-		print("Failed to reload Arena.dll\n");
+		print("Failed to reload %\n", GAME_DLL);
 		return;
 	}
 	// Now we can safely reload the DLL
@@ -1241,7 +1241,7 @@ main :: () {
 	load_dll();
 	init(*dll_mutex);
 	if !win32_control_open(*win32_control) {
-		print("Failed to open \\\\.\\pipe\\ArenaControl\n");
+		print("Failed to open \\\\.\\pipe\\%\n", GAME_CONTROL_PIPE);
 	}
 	defer win32_control_shutdown(*win32_control);
 
@@ -1263,7 +1263,7 @@ main :: () {
 			Control.begin_tick(*win32_control.state);
 
 			if dll {
-				file := Win32.CreateFileA("Arena.dll", Win32.FILE_GENERIC_READ);
+				file := Win32.CreateFileA(identity_cstr(GAME_DLL), Win32.FILE_GENERIC_READ);
 				defer Win32.CloseHandle(file);
 
 				time_struct: Win32.FILETIME;

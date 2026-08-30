@@ -1,6 +1,7 @@
 #import "Basic";
 #import "String";
 #import "Algebra";
+#load "Identity.jai";
 
 #scope_export
 
@@ -10,8 +11,7 @@ Layout :: enum s32 {
 	Unknown :: 2;
 }
 
-LOCAL_SERVER_PORT :: 2468;
-LOCAL_SERVER_PROCESS :: "ArenaServer.exe";
+LOCAL_SERVER_PROCESS :: GAME_SERVER_EXE;
 
 Process_Status :: enum s32 {
 	Invalid;

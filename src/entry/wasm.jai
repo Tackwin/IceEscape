@@ -293,7 +293,7 @@ wasm_is_released :: () -> bool {
 
 init_platform :: () -> Platform {
 
-	// window := create_window(1366, 768, "Arena");
+	// window := create_window(1366, 768, GAME_NAME);
 	for * pressed
 		it.* = false;
 	// js_webgl_swap_buffers :: (window: Window_Type, vsync: bool) #foreign;

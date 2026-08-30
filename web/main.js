@@ -4,7 +4,7 @@ let audio_context = null;
 
 window.addEventListener("load", async () => {
 	audio_context = new AudioContext();
-    await initialize_wasm_module("Arena.wasm", 1024 * 16);
+    await initialize_wasm_module(GAME_WASM, 1024 * 16);
 });
 
 const create_fullscreen_canvas = (text) => {
