@@ -1101,6 +1101,11 @@ Camera :: struct {
 }
 
 init_camera :: (scene: *Scene) {
+	if scene.params.mode == .Bomberman {
+		init_camera_bomberman(scene);
+		return;
+	}
+
 	scene.camera.position = .{ 0, -4, 8 };
 	scene.camera.target = .{ 0, 0, 0 };
 	scene.camera.target_target = scene.camera.target;
@@ -1110,6 +1115,22 @@ init_camera :: (scene: *Scene) {
 	scene.camera.locked_nominal_distance = scene.camera.nominal_distance * 1.05;
 	scene.camera.fov = 55;
 	scene.camera.max_distance = scene.camera.locked_nominal_distance;
+}
+init_camera_bomberman :: (scene: *Scene) {
+	camera_dt := V3f.{ 0, -1, 8 };
+	camera_dt = normalize(camera_dt);
+	width := scene.camera_max.x - scene.camera_min.x;
+	height := scene.camera_max.y - scene.camera_min.y;
+	size := max(width, height);
+	scene.camera.nominal_distance = size * 0.75;
+	scene.camera.position = scene.camera.target + camera_dt * scene.camera.nominal_distance;
+	scene.camera.target = .{ 0, 0, 0 };
+	scene.camera.target_target = scene.camera.target;
+	scene.camera.delta_unit = normalize(scene.camera.position - scene.camera.target);
+	scene.camera.distance_target = scene.camera.nominal_distance;
+	scene.camera.locked_nominal_distance = scene.camera.nominal_distance;
+	scene.camera.max_distance = scene.camera.locked_nominal_distance;
+	scene.camera.fov = 55;
 }
 
 reset_camera_zoom :: (camera: *Camera) {
