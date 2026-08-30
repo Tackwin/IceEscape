@@ -15,7 +15,8 @@ process {
     }
 }
 end {
-    $pipeName = "ArenaControl"
+    . (Join-Path $PSScriptRoot "identity.ps1")
+    $pipeName = $GameControlPipe
     $parts = [System.Collections.Generic.List[string]]::new()
     if ($piped.Count -gt 0) {
         foreach ($line in $piped) {
@@ -59,7 +60,7 @@ end {
             }
         }
         if (-not $pipe.IsConnected) {
-            throw "Could not connect to the ArenaControl pipe within five seconds."
+            throw "Could not connect to the $GameControlPipe pipe within five seconds."
         }
         $writer = [System.IO.StreamWriter]::new($pipe, [System.Text.UTF8Encoding]::new($false))
         $writer.AutoFlush = $true
@@ -67,7 +68,7 @@ end {
         $reader = [System.IO.StreamReader]::new($pipe, [System.Text.UTF8Encoding]::new($false))
         $response = $reader.ReadToEnd()
         if ($null -eq $response -or $response.Length -eq 0) {
-            throw "ArenaControl closed without a response."
+            throw "$GameControlPipe closed without a response."
         }
         Write-Output $response.TrimEnd()
         if ($response.Contains("error ")) {

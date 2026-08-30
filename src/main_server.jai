@@ -1544,7 +1544,7 @@ gc_instances :: (server: *Server) {
 
 ensure_database :: (app: *App) {
 	app_user := app.user_data.(*App_User);
-	app_user.server.db = open_database(app.platform, "ArenaServer.db");
+	app_user.server.db = open_database(app.platform, GAME_SERVER_DB);
 	exec_database(app.platform, app_user.server.db, "PRAGMA journal_mode=WAL;");
 	exec_database(app.platform, app_user.server.db, "PRAGMA synchronous=NORMAL;");
 

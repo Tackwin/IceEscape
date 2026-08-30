@@ -36,7 +36,7 @@ CloseHandle :: (object: HANDLE) -> BOOL #foreign kernel32;
 GetLastError :: () -> DWORD #foreign kernel32;
 CreateDirectoryA :: (path: *u8, security: *void) -> BOOL #foreign kernel32;
 
-ARENA_CONTROL_PIPE_NAME :: "\\\\.\\pipe\\ArenaControl\0";
+ARENA_CONTROL_PIPE_NAME :: GAME_CONTROL_PIPE_PATH;
 
 Win32_Control :: struct {
 	pipe: HANDLE = INVALID_HANDLE_VALUE;

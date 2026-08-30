@@ -7,6 +7,8 @@
 #import "Sort";
 #import "File_Utilities";
 
+#load "src/Identity.jai";
+
 build_game :: () -> Workspace {
 	w := compiler_create_workspace("Game");
 
@@ -16,7 +18,7 @@ build_game :: () -> Workspace {
 	opts.Commonly_Propagated = seed.Commonly_Propagated;
 	opts.output_type = .DYNAMIC_LIBRARY;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "Arena";
+	opts.output_executable_name = GAME_NAME;
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -42,7 +44,7 @@ build_server :: () -> Workspace {
 	opts.Commonly_Propagated = seed.Commonly_Propagated;
 	opts.output_type = .DYNAMIC_LIBRARY;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "ArenaServer";
+	opts.output_executable_name = GAME_SERVER_NAME;
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -69,7 +71,7 @@ build_win32_client :: () -> Workspace {
 	opts.Commonly_Propagated = seed.Commonly_Propagated;
 	opts.output_type = .EXECUTABLE;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "Arena";
+	opts.output_executable_name = GAME_NAME;
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -107,7 +109,7 @@ build_win32 :: () -> Workspace {
 	opts.Commonly_Propagated = seed.Commonly_Propagated;
 	opts.output_type = .EXECUTABLE;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "Arena";
+	opts.output_executable_name = GAME_NAME;
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -146,11 +148,11 @@ build_platform_server :: (os: Operating_System_Tag) -> Workspace {
 	opts.output_path = "./bin/";
 	opts.additional_linker_arguments = NewArray(1, string);
 	if os == .WINDOWS {
-		opts.output_executable_name = "ArenaServer";
+		opts.output_executable_name = GAME_SERVER_NAME;
 		opts.additional_linker_arguments[0] = "src/c/wsserver.lib";
 	}
 	else if os == .LINUX {
-		opts.output_executable_name = "ArenaLinuxServer";
+		opts.output_executable_name = GAME_LINUX_SERVER_NAME;
 		opts.additional_linker_arguments[0] = "src/c/wsserver.o";
 	}
 	opts.os_target = os;
@@ -185,7 +187,7 @@ build_wasm :: () -> Workspace {
 	opts.emit_debug_info                     = .DWARF;
 	opts.backtrace_on_crash                  = .OFF; // Runtime_Support_Crash_Handler doesn’t support WASM (yet?)
 	opts.output_path                         = "web/";
-	opts.output_executable_name              = "Arena";
+	opts.output_executable_name              = GAME_NAME;
 	opts.llvm_options.target_system_features = "+bulk-memory"; // "This options is needed so that "memcpy" and "memset" are mapped to "memory.copy" and "memory.fill" instructions in WASM.
 	opts.llvm_options.enable_split_modules   = false;
 	opts.llvm_options.function_sections      = true; // To get around "LLVM ERROR: section already has a defining function: .text"
@@ -322,9 +324,9 @@ build :: () {
 			"-O",
 			"-g",
 			"--asyncify",
-			"./web/Arena.wasm",
+			join("./web/", GAME_WASM),
 			"-o",
-			"./web/Arena.wasm"
+			join("./web/", GAME_WASM)
 		);
 	}
 
@@ -347,7 +349,7 @@ build_game_dll_2 :: () {
 	opts.text_output_flags = xx 0;
 	opts.output_type = .DYNAMIC_LIBRARY;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "Arena";
+	opts.output_executable_name = GAME_NAME;
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -390,7 +392,7 @@ build_server_dll_2 :: () {
 	opts.intermediate_path = ".build_server_dll";
 	opts.output_type = .DYNAMIC_LIBRARY;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "ArenaServer";
+	opts.output_executable_name = GAME_SERVER_NAME;
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -429,7 +431,7 @@ build_game_win32_2 :: () {
 	opts.intermediate_path = ".build_game_win32";
 	opts.output_type = .EXECUTABLE;
 	opts.output_path = "./bin/";
-	opts.output_executable_name = "Arena";
+	opts.output_executable_name = GAME_NAME;
 
 	paths: [..] string;
 	paths.allocator = temp;
@@ -481,13 +483,13 @@ build_server_platform_2 :: (os: Operating_System_Tag) {
 	if os == .WINDOWS {
 		opts.output_type = .EXECUTABLE;
 		opts.intermediate_path = ".build_server_win";
-		opts.output_executable_name = "ArenaServer";
+		opts.output_executable_name = GAME_SERVER_NAME;
 		opts.additional_linker_arguments[0] = "src/c/wsserver.lib";
 	}
 	else if os == .LINUX {
 		opts.output_type = .EXECUTABLE;
 		opts.intermediate_path = ".build_server_linux";
-		opts.output_executable_name = "ArenaLinuxServer";
+		opts.output_executable_name = GAME_LINUX_SERVER_NAME;
 		opts.additional_linker_arguments[0] = "src/c/wsserver.o";
 		opts.use_custom_link_command = true;
 	}
@@ -557,7 +559,7 @@ build_wasm_2 :: () {
 	opts.emit_debug_info                     = .DWARF;
 	opts.backtrace_on_crash                  = .OFF; // Runtime_Support_Crash_Handler doesn’t support WASM (yet?)
 	opts.output_path                         = "web/";
-	opts.output_executable_name              = "Arena";
+	opts.output_executable_name              = GAME_NAME;
 	opts.llvm_options.target_system_features = "+bulk-memory,+atomics,+simd128"; // "This options is needed so that "memcpy" and "memset" are mapped to "memory.copy" and "memory.fill" instructions in WASM.
 	opts.llvm_options.enable_split_modules   = false;
 	opts.llvm_options.function_sections      = true; // To get around "LLVM ERROR: section already has a defining function: .text"
@@ -612,9 +614,9 @@ build_wasm_2 :: () {
 	// 	"-O2",
 	// 	"-g",
 	// 	"--asyncify",
-	// 	"./web/Arena.wasm",
+	// 	join("./web/", GAME_WASM),
 	// 	"-o",
-	// 	"./web/Arena.wasm"
+	// 	join("./web/", GAME_WASM)
 	// ];
 	// print("Running wasm opt: %\n", join(..args, " "));
 	// run_command(..args);
@@ -659,8 +661,33 @@ build_bindings :: () {
 	generate_bindings(opts, "./src/webgpu_dawn.jai");
 }
 
+write_identity_sidecars :: () {
+	ps1 := tprint(
+		"# Generated from src/Identity.jai. Do not edit.\n$GameName = \"%\"\n$GameServerName = \"%\"\n$GamePort = %\n$GameExe = \"%\"\n$GameServerExe = \"%\"\n$GameControlPipe = \"%\"\n",
+		GAME_NAME,
+		GAME_SERVER_NAME,
+		LOCAL_SERVER_PORT,
+		GAME_EXE,
+		GAME_SERVER_EXE,
+		GAME_CONTROL_PIPE
+	);
+	js := tprint(
+		"// Generated from src/Identity.jai. Do not edit.\nconst GAME_WASM = \"%\";\n",
+		GAME_WASM
+	);
+	old_ps1, ps1_ok := read_entire_file("tools/identity.ps1");
+	if !ps1_ok || old_ps1 != ps1 {
+		write_entire_file("tools/identity.ps1", ps1);
+	}
+	old_js, js_ok := read_entire_file("web/identity.js");
+	if !js_ok || old_js != js {
+		write_entire_file("web/identity.js", js);
+	}
+}
+
 build_2 :: () {
 	set_build_options_dc(.{ do_output = false });
+	write_identity_sidecars();
 
 	args := get_build_options().compile_time_command_line;
 
@@ -715,23 +742,23 @@ build_2 :: () {
 		res, stdout, stderr := run_command(
 			"sexec",
 			"-profile=tools/ssh.tlp",
-			"-cmd=sudo systemctl stop arenaserver.service"
+			tprint("-cmd=sudo systemctl stop %", GAME_SYSTEMD_SERVICE)
 		);
 		run_command(
 			"sftpc",
 			"-profile=tools/ssh.tlp",
 			"put",
 			"-o",
-			"./bin/ArenaLinuxServer.exe",
-			"bin/ArenaLinuxServer"
+			join("./bin/", GAME_LINUX_SERVER_NAME, ".exe"),
+			join("bin/", GAME_LINUX_SERVER_NAME)
 		);
 		run_command(
 			"sftpc",
 			"-profile=tools/ssh.tlp",
 			"put",
 			"-o",
-			"./bin/ArenaServer.db",
-			"bin/ArenaServerDev.db"
+			join("./bin/", GAME_SERVER_DB),
+			join("bin/", GAME_SERVER_DEV_DB)
 		);
 		run_command(
 			"sftpc",
@@ -739,7 +766,7 @@ build_2 :: () {
 			"put",
 			"-o",
 			"./web/*",
-			"www/arena"
+			GAME_WEB_ROOT
 		);
 		run_command(
 			"sftpc",
@@ -753,7 +780,7 @@ build_2 :: () {
 		run_command(
 			"sexec",
 			"-profile=tools/ssh.tlp",
-			"-cmd=sudo systemctl start arenaserver.service"
+			tprint("-cmd=sudo systemctl start %", GAME_SYSTEMD_SERVICE)
 		);
 	}
 }

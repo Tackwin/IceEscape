@@ -434,12 +434,12 @@ app: App;
 	load_dll :: () {
 		Win32.FreeLibrary(dll);
 
-		Win32.DeleteFileA("ArenaServer_temp.dll");
-		Win32.CopyFileA("ArenaServer.dll", "ArenaServer_temp.dll", 0);
+		Win32.DeleteFileA(identity_cstr(GAME_SERVER_TEMP_DLL));
+		Win32.CopyFileA(identity_cstr(GAME_SERVER_DLL), identity_cstr(GAME_SERVER_TEMP_DLL), 0);
 
-		dll = Win32.LoadLibraryA("ArenaServer_temp.dll");
+		dll = Win32.LoadLibraryA(identity_cstr(GAME_SERVER_TEMP_DLL));
 		if dll == null {
-			print("Failed to load ArenaServer.dll\n");
+			print("Failed to load %\n", GAME_SERVER_DLL);
 			return;
 		}
 
@@ -453,12 +453,12 @@ app: App;
 	reload_dll :: () {
 		Win32.FreeLibrary(dll);
 
-		Win32.DeleteFileA("ArenaServer_temp.dll");
-		Win32.CopyFileA("ArenaServer.dll", "ArenaServer_temp.dll", 0);
+		Win32.DeleteFileA(identity_cstr(GAME_SERVER_TEMP_DLL));
+		Win32.CopyFileA(identity_cstr(GAME_SERVER_DLL), identity_cstr(GAME_SERVER_TEMP_DLL), 0);
 
-		dll_reloaded := Win32.LoadLibraryA("ArenaServer_temp.dll");
+		dll_reloaded := Win32.LoadLibraryA(identity_cstr(GAME_SERVER_TEMP_DLL));
 		if dll_reloaded == null {
-			print("Failed to reload ArenaServer.dll\n");
+			print("Failed to reload %\n", GAME_SERVER_DLL);
 			return;
 		}
 		dll = dll_reloaded;
@@ -493,7 +493,7 @@ main :: () {
 	while (loop) {
 		#if OS == .WINDOWS {
 			if dll {
-				file := Win32.CreateFileA("ArenaServer.dll", Win32.FILE_GENERIC_READ);
+				file := Win32.CreateFileA(identity_cstr(GAME_SERVER_DLL), Win32.FILE_GENERIC_READ);
 				defer Win32.CloseHandle(file);
 
 				time_struct: Win32.FILETIME;
