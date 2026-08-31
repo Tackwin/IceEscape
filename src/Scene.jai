@@ -73,6 +73,7 @@ Sound_Trigger :: struct {
 
 	count := 1;
 	pitch := 0.0;
+	// >TODO add a delay.
 }
 
 Scene_Mode :: enum {
@@ -829,6 +830,8 @@ Present :: struct {
 		time_since_taken := 0.0;
 		available := false;
 		depends_on_flag_id := -1; @edit
+		cross_length := 0;
+		explosion_time := 0.0;
 	};
 }
 
@@ -871,6 +874,7 @@ Explosion :: struct {
 	lifetime: float = 1.0;
 	max_size: float = 1.0;
 	trigger_bombs := false;
+	delay := 0.0;
 }
 
 Robot :: struct {
@@ -2613,8 +2617,15 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				should_die[player_idx].soft_die = true;
 			}
 
+			explosion_center := bomb.server.position;
+			if bomb.server.bomberman_bomb {
+				explosion_tile := position_to_tile(scene, bomb.server.position);
+				explosion_center = tile_center(scene, explosion_tile);
+			}
+
+
 			explosion: Explosion;
-			explosion.position = bomb.server.position;
+			explosion.position = explosion_center;
 			explosion.lifetime = 0.75;
 			explosion.max_size = bomb.server.explosion_radius * 2;
 			array_add(*scene.explosions, explosion);
@@ -2625,7 +2636,33 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			cmd.max_size = explosion.max_size;
 			cmd.position = explosion.position;
 			cmd.trigger_bombs = bomb.server.chain_bomb;
+			cmd.delay = 0.0;
 			array_add(*result.explode, cmd);
+
+			if bomb.server.chain_bomb for 1..bomb.server.cross_length {
+				explosion.delay = 0.1 * it;
+				cmd.delay = explosion.delay;
+
+				explosion.position = explosion_center + V3f.{ it.(float), 0.0, 0.0 };
+				cmd.position = explosion.position;
+				array_add(*scene.explosions, explosion);
+				array_add(*result.explode, cmd);
+
+				explosion.position = explosion_center - V3f.{ it.(float), 0.0, 0.0 };
+				cmd.position = explosion.position;
+				array_add(*scene.explosions, explosion);
+				array_add(*result.explode, cmd);
+				
+				explosion.position = explosion_center + V3f.{ 0.0, it.(float), 0.0 };
+				cmd.position = explosion.position;
+				array_add(*scene.explosions, explosion);
+				array_add(*result.explode, cmd);
+
+				explosion.position = explosion_center - V3f.{ 0.0, it.(float), 0.0 };
+				cmd.position = explosion.position;
+				array_add(*scene.explosions, explosion);
+				array_add(*result.explode, cmd);
+			}
 			remove bomb;
 		}
 	}
@@ -2897,15 +2934,14 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	// >RULE Player die on contact with an explosion
 	for *expl: scene.explosions {
 		p := expl.position;
-		t := ease_out_quad(clamp(expl.age / expl.lifetime, 0.0, 1.0));
-		dt := t * expl.max_size / 2;
+		r := explosion_radius(scene, expl);
 
 		for * player, player_idx: scene.players {
 			if !player.server.dead {
 				q := player.server.position;
 
 				d := norm(p - q);
-				if d < dt {
+				if d < r {
 					should_die[player_idx].soft_die = true;
 					should_die_source = p;
 					should_die_strength = 3.0;
@@ -2972,6 +3008,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				cmd.lifetime = explosion.lifetime;
 				cmd.max_size = explosion.max_size;
 				cmd.position = explosion.position;
+				cmd.delay = 0.0;
 				array_add(*result.explode, cmd);
 			}
 		}
@@ -2990,6 +3027,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			{
 				cmd: Command.Explode;
 				cmd.id = 0;
+				cmd.delay = 0.0;
 				cmd.lifetime = explosion.lifetime;
 				cmd.max_size = explosion.max_size;
 				cmd.position = explosion.position;
@@ -3073,7 +3111,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 update_explosions :: (scene: *Scene, dt: float32) {
 	for * scene.explosions {
 		it.age += dt;
-		if it.age > it.lifetime {
+		if it.age > (it.lifetime + it.delay) {
 			remove it;
 		}
 	}
@@ -3296,6 +3334,12 @@ drop_bombs :: (scene: *Scene, player: *Player) {
 		if it.holder == player.id
 			drop_bomb(scene, it);
 	}
+}
+
+explosion_radius :: (scene: Scene, explosion: Explosion) -> float32 {
+	t := ease_out_quad(clamp((explosion.age - explosion.delay) / explosion.lifetime, 0.0, 1.0));
+	r := t * explosion.max_size / 2;
+	return r;
 }
 
 client_die :: (scene: *Scene, player: *Player, at: V3f, die_source: V3f, die_strength: float32) {
@@ -4154,7 +4198,7 @@ process_server_only :: (
 					bomb.server.holdable = false;
 					bomb.server.bomberman_bomb = true;
 					bomb.server.chain_bomb = true;
-					bomb.server.cross_length = 0;
+					bomb.server.cross_length = 2;
 					drop_bomb(scene, *bomb);
 					array_add(*scene.bombs, bomb);
 
@@ -4456,10 +4500,8 @@ process_client_only :: (
 
 	sync_bomb: *Command.Sync_Bomb = isa(command.payload, Command.Sync_Bomb);
 	if sync_bomb {
-		print("Sync Bomb: %\n", sync_bomb.bomb_id);
 		bomb := find_by_bomb_id(scene, sync_bomb.bomb_id);
 		if bomb {
-			print("Updating existing bomb: %\n", bomb.id);
 			bomb.server.position = sync_bomb.position;
 			bomb.server.time = sync_bomb.time;
 			bomb.holder = sync_bomb.holder_id;
@@ -4529,6 +4571,7 @@ process_client_only :: (
 		explosion.position = explode.position;
 		explosion.lifetime = explode.lifetime;
 		explosion.max_size = explode.max_size;
+		explosion.delay = explode.delay;
 		array_add(*scene.explosions, explosion);
 
 		sound_trigger: Sound_Trigger;

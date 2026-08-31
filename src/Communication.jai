@@ -295,6 +295,7 @@ Command :: struct {
 		max_size: float;
 		lifetime: float;
 		trigger_bombs: bool;
+		delay: float;
 	}
 	Wipe_Scene :: struct {
 	}
