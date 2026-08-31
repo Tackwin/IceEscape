@@ -2,7 +2,6 @@
 #import "String";
 #import "Compiler";
 #import "Platform";
-#import "Bit_Operations";
 
 #scope_export
 
@@ -245,12 +244,12 @@ FORMAT;
 
 #insert #run embed_data("verdana_csv", "Font/verdana.csv", #filepath);
 
-#insert #run embed_data("verdana_png", "Font/verdana.qoi", #filepath);
-#insert #run embed_data("COLORMAPS_PNG", "images/colormaps.qoi", #filepath);
-#insert #run embed_data("TERRAIN_TILE_ALBEDO_PNG", "Images/tile_albedo.qoi", #filepath);
-#insert #run embed_data("TERRAIN_TILE_NORMAL_PNG", "Images/tile_normal.qoi", #filepath);
-#insert #run embed_data("PARTICLE_TEXTURE_PNG", "Images/particle_texture.qoi", #filepath);
-#insert #run embed_data("ui_atlas_png", "UI/ui_atlas.qoi", #filepath);
+#insert #run embed_data("verdana_png", "Font/verdana.png", #filepath);
+#insert #run embed_data("COLORMAPS_PNG", "images/colormaps.png", #filepath);
+#insert #run embed_data("TERRAIN_TILE_ALBEDO_PNG", "Images/tile_albedo.png", #filepath);
+#insert #run embed_data("TERRAIN_TILE_NORMAL_PNG", "Images/tile_normal.png", #filepath);
+#insert #run embed_data("PARTICLE_TEXTURE_PNG", "Images/particle_texture.png", #filepath);
+#insert #run embed_data("ui_atlas_png", "UI/ui_atlas.png", #filepath);
 
 Prop_Id :: enum {
 	TERRAIN_TREE_SNOW_A :: 0;
@@ -490,157 +489,21 @@ load_font :: (csv: string) -> Font {
 	return font;
 }
 
-load_qoi :: (data: [] u8) -> Image {
-	Header :: struct {
-		magic: [4] u8;
-		width: u32;
-		height: u32;
-		channels: u8;
-		colorspace: u8;
-	} #no_padding;
-	OP_INDEX :: 0;
-	OP_DIFF  :: 1;
-	OP_LUMA  :: 2;
-	OP_OTHER :: 3;
+load_png :: (data: [] u8) -> Image {
+	PNG :: #import "PNG";
 
-	header : Header;
-	header = data.data.(*Header).*;
-	if header.magic[0] != #char "q"
+	rgba: [..] u8;
+	width: int;
+	height: int;
+	if data.count == 0 || !PNG.read_rgba(data, *rgba, *width, *height) {
+		print("Failed to decode PNG (% bytes)\n", data.count);
 		return .{};
-	if header.magic[1] != #char "o"
-		return .{};
-	if header.magic[2] != #char "i"
-		return .{};
-	if header.magic[3] != #char "f"
-		return .{};
-	header.width = byte_swap(header.width);
-	header.height = byte_swap(header.height);
-
-	cache: [64] u32;
-
-	hash :: (r: u32, g: u32, b: u32, a: u32) -> u32 {
-		return (r * 3 + g * 5 + b * 7 + a * 11) % 64;
-	}
-	hash :: (pixel: u32) -> u32 {
-		return hash(
-			(pixel >> 0) & 0xFF, (pixel >> 8) & 0xFF, (pixel >> 16) & 0xFF, (pixel >> 24) & 0xFF
-		);
-	}
-	pixel_loc :: (x: u32, y: u32) -> u32 #expand {
-		return x + y * header.width;
-	}
-	pixel_loc :: (cursor: u32) -> u32 #expand {
-		x := cursor % header.width;
-		y := cursor / header.width;
-		if !(0 <= x && x < header.width)
-			print("Weird\n");
-		if !(0 <= y && y < header.height)
-			print("Weird\n");
-		
-		return pixel_loc(x, y);
-	}
-	to_u32 :: (r: u32, g: u32, b: u32, a: u32) -> u32 {
-		return r | (g << 8) | (b << 16) | (a << 24);
 	}
 
 	image: Image;
-	image.data = NewArray(header.width * header.height * 4, u8, false);
-	image.width = header.width;
-	image.height = header.height;
+	image.width = xx width;
+	image.height = xx height;
 	image.channels = 4;
-	data32: [] u32 = cast, force([]u32) image.data;
-
-	data_cursor := size_of(Header);
-	pixel_cursor : u32 = 0;
-	last_pixel: u32 = 0xFF000000;
-	while data_cursor < data.count {
-		end_mark := (data.data + data_cursor).(*u64).*;
-		if end_mark == 1
-			break;
-
-		chunk := data[data_cursor];
-		data_cursor += 1;
-
-		curr_pixel: u32;
-		run_pixel := 1;
-
-		if (chunk >> 6) == OP_INDEX {
-			curr_pixel = cache[chunk & 63];
-		}
-		if (chunk >> 6) == OP_DIFF {
-			dr := ((chunk >> 4) & 3).(u8);
-			dg := ((chunk >> 2) & 3).(u8);
-			db := ((chunk >> 0) & 3).(u8);
-
-			r := ((last_pixel >> 0) & 0xFF).(u8);
-			r = r + dr - 2;
-			
-			g := ((last_pixel >> 8) & 0xFF).(u8);
-			g += dg - 2;
-
-			b := ((last_pixel >> 16) & 0xFF).(u8);
-			b += db - 2;
-
-			curr_pixel = to_u32(r, g, b, last_pixel >> 24);
-		}
-		if (chunk >> 6) == OP_LUMA {
-			chunk1 := data[data_cursor + 0];
-			data_cursor += 1;
-
-			dg := (chunk & 63).(u8);
-			dg -= 32;
-
-			drg := ((chunk1 >> 4) & 15).(u8);
-			dr := drg + dg - 8;
-
-			dbg := (chunk1 & 15).(u8);
-			db := dbg + dg - 8;
-
-			r := ((last_pixel >> 0) & 0xFF).(u8);
-			r += dr;
-
-			g := ((last_pixel >> 8) & 0xFF).(u8);
-			g += dg;
-
-			b := ((last_pixel >> 16) & 0xFF).(u8);
-			b += db;
-
-			curr_pixel = to_u32(r, g, b, last_pixel >> 24);
-		}
-		if (chunk >> 6) == OP_OTHER {
-			run := chunk & 63;
-			if run == 62 {
-				// RGB
-				r := data[data_cursor + 0];
-				g := data[data_cursor + 1];
-				b := data[data_cursor + 2];
-				data_cursor += 3;
-
-				curr_pixel = to_u32(r, g, b, last_pixel >> 24);
-			}
-			else if run == 63 {
-				r := data[data_cursor + 0];
-				g := data[data_cursor + 1];
-				b := data[data_cursor + 2];
-				a := data[data_cursor + 3];
-				data_cursor += 4;
-
-				curr_pixel = to_u32(r, g, b, a);
-			} else {
-				run_pixel = run + 1;
-				curr_pixel = last_pixel;
-			}
-		}
-
-		cache[hash(curr_pixel)] = curr_pixel;
-		last_pixel = curr_pixel;
-		for 0..run_pixel-1 {
-			if pixel_cursor >= header.width * header.height
-				break;
-			data32[pixel_loc(pixel_cursor)] = curr_pixel;
-			pixel_cursor += 1;
-		}
-	}
-
+	image.data = rgba;
 	return image;
 }

@@ -1,6 +1,6 @@
-// Small PNG reader/writer. RGB8, top-left origin, no interlacing.
+// Small PNG reader/writer. Top-left origin, no interlacing.
 // Writer uses zlib stored blocks (no compression) so the bytes stay readable.
-// Reader accepts filter 0-4 and stored zlib. Deflate-compressed IDATs are rejected.
+// Reader accepts RGB8/RGBA8, filter 0-4, and zlib (stored or deflate).
 
 #import "Basic";
 #import "String";
@@ -44,7 +44,56 @@ write_rgb :: (rgb: [] u8, width: int, height: int, out: *[..] u8) -> bool {
 	return true;
 }
 
+write_rgba :: (rgba: [] u8, width: int, height: int, out: *[..] u8) -> bool {
+	if width <= 0 || height <= 0 return false;
+	expected := width * height * 4;
+	if rgba.count < expected return false;
+
+	out.count = 0;
+	for PNG_SIGNATURE array_add(out, it);
+
+	ihdr: [13] u8;
+	png_put_u32be(*ihdr[0], xx width);
+	png_put_u32be(*ihdr[4], xx height);
+	ihdr[8] = 8;
+	ihdr[9] = 6;
+	ihdr[10] = 0;
+	ihdr[11] = 0;
+	ihdr[12] = 0;
+	png_write_chunk(out, "IHDR", ihdr);
+
+	row_bytes := 1 + width * 4;
+	raw_count := row_bytes * height;
+	raw := NewArray(raw_count, u8,, temp);
+	for y: 0..height-1 {
+		row := y * row_bytes;
+		raw[row] = 0;
+		src := y * width * 4;
+		memcpy(raw.data + row + 1, rgba.data + src, width * 4);
+	}
+
+	zlib := png_zlib_store(raw,, temp);
+	png_write_chunk(out, "IDAT", zlib);
+	iend: [] u8;
+	png_write_chunk(out, "IEND", iend);
+	return true;
+}
+
 read_rgb :: (data: [] u8, rgb: *[..] u8, width: *int, height: *int) -> bool {
+	rgba: [..] u8;
+	rgba.allocator = rgb.allocator;
+	if !read_rgba(data, *rgba, width, height) return false;
+	count := width.* * height.*;
+	array_resize(rgb, count * 3);
+	for x: 0..count-1 {
+		rgb.data[x * 3 + 0] = rgba[x * 4 + 0];
+		rgb.data[x * 3 + 1] = rgba[x * 4 + 1];
+		rgb.data[x * 3 + 2] = rgba[x * 4 + 2];
+	}
+	return true;
+}
+
+read_rgba :: (data: [] u8, rgba: *[..] u8, width: *int, height: *int) -> bool {
 	if data.count < 8 return false;
 	for 0..7 if data[it] != PNG_SIGNATURE[it] return false;
 
@@ -93,14 +142,14 @@ read_rgb :: (data: [] u8, rgb: *[..] u8, width: *int, height: *int) -> bool {
 	if bit_depth != 8 return false;
 	if color_type != 2 && color_type != 6 return false;
 
-	raw, ok := png_zlib_read_stored(idat);
+	raw, ok := png_zlib_inflate(idat);
 	if !ok return false;
 
 	channels := ifx color_type == 2 then 3 else 4;
 	row_bytes := 1 + w * channels;
 	if raw.count != row_bytes * h return false;
 
-	array_resize(rgb, w * h * 3);
+	array_resize(rgba, w * h * 4);
 	prev: [] u8;
 	for y: 0..h-1 {
 		row := raw.data + y * row_bytes;
@@ -109,14 +158,15 @@ read_rgb :: (data: [] u8, rgb: *[..] u8, width: *int, height: *int) -> bool {
 		pixel_bytes := w * channels;
 		if !png_unfilter(filter, pixels, prev, pixel_bytes, channels) return false;
 		prev = .{ data = pixels, count = pixel_bytes };
-		dst := rgb.data + y * w * 3;
-		if channels == 3 {
-			memcpy(dst, pixels, w * 3);
+		dst := rgba.data + y * w * 4;
+		if channels == 4 {
+			memcpy(dst, pixels, w * 4);
 		} else {
 			for x: 0..w-1 {
-				dst[x * 3 + 0] = pixels[x * 4 + 0];
-				dst[x * 3 + 1] = pixels[x * 4 + 1];
-				dst[x * 3 + 2] = pixels[x * 4 + 2];
+				dst[x * 4 + 0] = pixels[x * 3 + 0];
+				dst[x * 4 + 1] = pixels[x * 3 + 1];
+				dst[x * 4 + 2] = pixels[x * 3 + 2];
+				dst[x * 4 + 3] = 255;
 			}
 		}
 	}
@@ -231,7 +281,260 @@ png_zlib_store :: (raw: [] u8, allocator := context.allocator) -> [] u8 {
 	return out;
 }
 
-png_zlib_read_stored :: (zlib: [] u8) -> [] u8, bool {
+PNG_DEFLATE_MAXBITS :: 15;
+
+Png_Deflate :: struct {
+	data: [] u8;
+	byte_i: int;
+	bitbuf: u32;
+	bitcnt: int;
+	out: [..] u8;
+}
+
+Png_Huff :: struct {
+	count: [16] int;
+	symbol: [288] int;
+}
+
+png_deflate_bit :: (s: *Png_Deflate) -> u32, bool {
+	if s.bitcnt == 0 {
+		if s.byte_i >= s.data.count return 0, false;
+		s.bitbuf = s.data[s.byte_i];
+		s.byte_i += 1;
+		s.bitcnt = 8;
+	}
+	bit := s.bitbuf & 1;
+	s.bitbuf = s.bitbuf / 2;
+	s.bitcnt -= 1;
+	return bit, true;
+}
+
+png_deflate_bits :: (s: *Png_Deflate, n: int) -> u32, bool {
+	value: u32 = 0;
+	for i: 0..n-1 {
+		bit, ok := png_deflate_bit(s);
+		if !ok return 0, false;
+		value |= bit << i;
+	}
+	return value, true;
+}
+
+png_deflate_align_byte :: (s: *Png_Deflate) {
+	s.bitcnt = 0;
+}
+
+png_huff_construct :: (h: *Png_Huff, length: [] u8) -> bool {
+	for i: 0..15 h.count[i] = 0;
+	for length {
+		if it > PNG_DEFLATE_MAXBITS return false;
+		h.count[it] += 1;
+	}
+	if h.count[0] == length.count return true;
+
+	left := 1;
+	for len: 1..PNG_DEFLATE_MAXBITS {
+		left *= 2;
+		left -= h.count[len];
+		if left < 0 return false;
+	}
+
+	offs: [16] int;
+	offs[1] = 0;
+	for len: 1..PNG_DEFLATE_MAXBITS-1 {
+		offs[len + 1] = offs[len] + h.count[len];
+	}
+	for symbol: 0..length.count-1 {
+		len := length[symbol].(int);
+		if len == 0 continue;
+		h.symbol[offs[len]] = symbol;
+		offs[len] += 1;
+	}
+	return true;
+}
+
+png_huff_decode :: (s: *Png_Deflate, h: *Png_Huff) -> int, bool {
+	code := 0;
+	first := 0;
+	index := 0;
+	for len: 1..PNG_DEFLATE_MAXBITS {
+		bit, ok := png_deflate_bit(s);
+		if !ok return 0, false;
+		code |= xx bit;
+		count := h.count[len];
+		if code - first < count return h.symbol[index + (code - first)], true;
+		index += count;
+		first += count;
+		first *= 2;
+		code *= 2;
+	}
+	return 0, false;
+}
+
+png_len_base :: u16.[
+	3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
+	35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258
+];
+png_len_extra :: u8.[
+	0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2,
+	3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0
+];
+png_dist_base :: u16.[
+	1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
+	257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577
+];
+png_dist_extra :: u8.[
+	0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6,
+	7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13
+];
+png_clen_order :: u8.[16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+
+png_deflate_copy :: (s: *Png_Deflate, dist: int, length: int) -> bool {
+	if dist < 1 || dist > s.out.count return false;
+	for 0..length-1 {
+		array_add(*s.out, s.out[s.out.count - dist]);
+	}
+	return true;
+}
+
+png_deflate_codes :: (s: *Png_Deflate, lit: *Png_Huff, dist: *Png_Huff) -> bool {
+	while true {
+		symbol, ok := png_huff_decode(s, lit);
+		if !ok return false;
+		if symbol < 256 {
+			array_add(*s.out, xx symbol);
+			continue;
+		}
+		if symbol == 256 return true;
+		if symbol > 285 return false;
+
+		len_i := symbol - 257;
+		length := png_len_base[len_i].(int);
+		extra := png_len_extra[len_i].(int);
+		if extra > 0 {
+			add, extra_ok := png_deflate_bits(s, extra);
+			if !extra_ok return false;
+			length += xx add;
+		}
+
+		dsymbol, dist_ok := png_huff_decode(s, dist);
+		if !dist_ok return false;
+		if dsymbol > 29 return false;
+		distance := png_dist_base[dsymbol].(int);
+		dextra := png_dist_extra[dsymbol].(int);
+		if dextra > 0 {
+			add, extra_ok := png_deflate_bits(s, dextra);
+			if !extra_ok return false;
+			distance += xx add;
+		}
+		if !png_deflate_copy(s, distance, length) return false;
+	}
+	return false;
+}
+
+png_deflate_stored :: (s: *Png_Deflate) -> bool {
+	png_deflate_align_byte(s);
+	if s.byte_i + 4 > s.data.count return false;
+	len := cast(int) s.data[s.byte_i] + (cast(int) s.data[s.byte_i + 1]) * 256;
+	nlen := cast(int) s.data[s.byte_i + 2] + (cast(int) s.data[s.byte_i + 3]) * 256;
+	s.byte_i += 4;
+	if nlen != 65535 - len return false;
+	if s.byte_i + len > s.data.count return false;
+	for 0..len-1 {
+		array_add(*s.out, s.data[s.byte_i]);
+		s.byte_i += 1;
+	}
+	return true;
+}
+
+png_deflate_fixed :: (s: *Png_Deflate) -> bool {
+	length: [288] u8;
+	for i: 0..143 length[i] = 8;
+	for i: 144..255 length[i] = 9;
+	for i: 256..279 length[i] = 7;
+	for i: 280..287 length[i] = 8;
+	lit: Png_Huff;
+	if !png_huff_construct(*lit, length) return false;
+
+	dlength: [32] u8;
+	for i: 0..31 dlength[i] = 5;
+	dist: Png_Huff;
+	if !png_huff_construct(*dist, dlength) return false;
+
+	return png_deflate_codes(s, *lit, *dist);
+}
+
+png_deflate_dynamic :: (s: *Png_Deflate) -> bool {
+	hlit, hlit_ok := png_deflate_bits(s, 5);
+	hdist, hdist_ok := png_deflate_bits(s, 5);
+	hclen, hclen_ok := png_deflate_bits(s, 4);
+	if !hlit_ok || !hdist_ok || !hclen_ok return false;
+	nlit := 257 + xx hlit;
+	ndist := 1 + xx hdist;
+	nclen := 4 + xx hclen;
+	if nlit > 288 || ndist > 32 || nclen > 19 return false;
+
+	clen_len: [19] u8;
+	for i: 0..nclen-1 {
+		bits, ok := png_deflate_bits(s, 3);
+		if !ok return false;
+		clen_len[png_clen_order[i]] = xx bits;
+	}
+	clen: Png_Huff;
+	if !png_huff_construct(*clen, clen_len) return false;
+
+	lengths: [320] u8;
+	n := nlit + ndist;
+	i := 0;
+	while i < n {
+		symbol, ok := png_huff_decode(s, *clen);
+		if !ok return false;
+		if symbol < 16 {
+			lengths[i] = xx symbol;
+			i += 1;
+			continue;
+		}
+		fill: u8 = 0;
+		rep := 0;
+		if symbol == 16 {
+			if i == 0 return false;
+			fill = lengths[i - 1];
+			extra, extra_ok := png_deflate_bits(s, 2);
+			if !extra_ok return false;
+			rep = 3 + xx extra;
+		} else if symbol == 17 {
+			extra, extra_ok := png_deflate_bits(s, 3);
+			if !extra_ok return false;
+			rep = 3 + xx extra;
+		} else if symbol == 18 {
+			extra, extra_ok := png_deflate_bits(s, 7);
+			if !extra_ok return false;
+			rep = 11 + xx extra;
+		} else {
+			return false;
+		}
+		if i + rep > n return false;
+		for 0..rep-1 {
+			lengths[i] = fill;
+			i += 1;
+		}
+	}
+
+	lit: Png_Huff;
+	lit_len: [] u8;
+	lit_len.data = xx *lengths[0];
+	lit_len.count = nlit;
+	if !png_huff_construct(*lit, lit_len) return false;
+
+	dist: Png_Huff;
+	dist_len: [] u8;
+	dist_len.data = xx *lengths[nlit];
+	dist_len.count = ndist;
+	if !png_huff_construct(*dist, dist_len) return false;
+
+	return png_deflate_codes(s, *lit, *dist);
+}
+
+png_zlib_inflate :: (zlib: [] u8) -> [] u8, bool {
 	if zlib.count < 6 return .{}, false;
 	cmf := zlib[0];
 	flg := zlib[1];
@@ -239,34 +542,31 @@ png_zlib_read_stored :: (zlib: [] u8) -> [] u8, bool {
 	if ((cast(int) cmf * 256 + cast(int) flg) % 31) != 0 return .{}, false;
 	if (flg & 0x20) != 0 return .{}, false;
 
-	cursor := 2;
-	out: [..] u8;
-	out.allocator = temp;
-	while cursor < zlib.count - 4 {
-		header := zlib[cursor];
-		cursor += 1;
-		btype := (header >> 1) & 3;
-		if btype != 0 return .{}, false;
-		if cursor + 4 > zlib.count - 4 return .{}, false;
-		len := cast(int) zlib[cursor] + (cast(int) zlib[cursor + 1]) * 256;
-		nlen := cast(int) zlib[cursor + 2] + (cast(int) zlib[cursor + 3]) * 256;
-		cursor += 4;
-		nlen_lo := 255 - (len - (len / 256) * 256);
-		nlen_hi := 255 - (len / 256);
-		if nlen != nlen_lo + nlen_hi * 256 return .{}, false;
-		if cursor + len > zlib.count - 4 return .{}, false;
-		old := out.count;
-		array_resize(*out, old + len);
-		memcpy(out.data + old, zlib.data + cursor, len);
-		cursor += len;
-		if (header & 1) != 0 {
-			if cursor != zlib.count - 4 return .{}, false;
-			adler := png_get_u32be(zlib, cursor);
-			if png_adler32(out) != adler return .{}, false;
-			return out, true;
+	s: Png_Deflate;
+	s.data.data = zlib.data + 2;
+	s.data.count = zlib.count - 6;
+	s.out.allocator = temp;
+
+	last := false;
+	while !last {
+		bfinal, final_ok := png_deflate_bits(*s, 1);
+		btype, type_ok := png_deflate_bits(*s, 2);
+		if !final_ok || !type_ok return .{}, false;
+		last = bfinal != 0;
+		ok := false;
+		if btype == 0 {
+			ok = png_deflate_stored(*s);
+		} else if btype == 1 {
+			ok = png_deflate_fixed(*s);
+		} else if btype == 2 {
+			ok = png_deflate_dynamic(*s);
 		}
+		if !ok return .{}, false;
 	}
-	return .{}, false;
+
+	adler := png_get_u32be(zlib, zlib.count - 4);
+	if png_adler32(s.out) != adler return .{}, false;
+	return s.out, true;
 }
 
 png_abs :: (v: int) -> int {

@@ -566,25 +566,25 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.quad_shader.code = xx Assets.QUAD_WGSL;
 	store.quad_shader.input = .{};
 
-	prop_colormap_png := Assets.load_qoi(Assets.COLORMAPS_PNG,, temp);
+	prop_colormap_png := Assets.load_png(Assets.COLORMAPS_PNG,, temp);
 	store.colormaps = WRender.WTexture.make_from_image(prop_colormap_png, "colormaps");
 
-	terrain_tile_albedo_png := Assets.load_qoi(Assets.TERRAIN_TILE_ALBEDO_PNG,, temp);
+	terrain_tile_albedo_png := Assets.load_png(Assets.TERRAIN_TILE_ALBEDO_PNG,, temp);
 	store.terrain_tile_albedo =
 		WRender.WTexture.make_from_image(terrain_tile_albedo_png, "terrain_tile_albedo", .{ 4, 4 });
 
-	terrain_tile_normal_png := Assets.load_qoi(Assets.TERRAIN_TILE_NORMAL_PNG,, temp);
+	terrain_tile_normal_png := Assets.load_png(Assets.TERRAIN_TILE_NORMAL_PNG,, temp);
 	store.terrain_tile_normal =
 		WRender.WTexture.make_from_image(terrain_tile_normal_png, "terrain_tile_normal", .{ 4, 4 });
 		
-	particle_texture_png := Assets.load_qoi(Assets.PARTICLE_TEXTURE_PNG,, temp);
+	particle_texture_png := Assets.load_png(Assets.PARTICLE_TEXTURE_PNG,, temp);
 	store.particle_texture =
 		WRender.WTexture.make_from_image(particle_texture_png, "particle_texture");
 
-	ui_atlas_png := Assets.load_qoi(Assets.ui_atlas_png,, temp);
+	ui_atlas_png := Assets.load_png(Assets.ui_atlas_png,, temp);
 	store.ui_atlas = WRender.WTexture.make_from_image(ui_atlas_png, "ui_atlas");
 
-	verdana_atlas_png := Assets.load_qoi(Assets.verdana_png,, temp);
+	verdana_atlas_png := Assets.load_png(Assets.verdana_png,, temp);
 	store.verdana_atlas = WRender.WTexture.make_from_image(verdana_atlas_png, "verdana_atlas");
 	store.verdana = Assets.load_font(xx Assets.verdana_csv);
 

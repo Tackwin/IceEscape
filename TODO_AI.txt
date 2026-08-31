@@ -19,12 +19,12 @@
 * WebTransport implementation BIG
 * Dynamic asset loading and requesting. Do not embed everything into the binary.
 * Landing html page
-* Convert everything to png, remove qoi implementation and assets.
 * Built in, inspectable timeline of every messages received, with tracking id, searchable, filterable, taggable, and inspectable. This is for debugging the network.
 * Use a tagging system of the field of a struct to automatically create the Sync_XXXX messages.
 * Evaluate the use of a RPC protocol instead of the current message passing system. The only worry would be around packet dropping and loss of metadata like time of flight. But it would be a lot more ergonomic to use.
 
 ===== DONE ========
+* Convert everything to png, remove qoi implementation and assets.
 * Completely remove every trace of the Y flip that I did to have the bottom left be the origin. It was a mistake. The game should follow the standard convention of top left is origin. For eveything, texture gui rendering mouse controls.
 * Create a comprehensively exhaustive system for ai agents to manipulate the game. It would probably be opening a win32 pipe in the win32 entry file. Then polling every frame this pipe for "Control_Command" that would merge information into that frame's Frame_Info. The pipe needs to be bidirectional (or two pipes). The Control_Command needs to do the basic like key presses, mouse control, pause, resume, wait, and take screenshot. But in time it can have higher level concept like gameplay inputs. The agents would then probably write ps1 scripts or python script or directly use the cmd to manipulate the game.
 * Add some quick shortcut to spawn a local server process. The platform's vtable would need new function like "create_process".
