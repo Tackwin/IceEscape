@@ -3460,10 +3460,10 @@ render_explosions :: (
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
-		ts := ease_out_quad(clamp(it.age / it.lifetime, 0.0, 1.0)) * it.max_size;
+		r := Scene.explosion_radius(scene, it) * 2;
 
 		instance.M = M4f.translate(it.position);
-		instance.M *= scale_matrix(V3f.{ ts, ts, ts });
+		instance.M *= scale_matrix(V3f.{ r, r, r });
 	}
 	if instanced.count == 0
 		return;
