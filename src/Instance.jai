@@ -555,86 +555,57 @@ update_instance :: (instance: *Instance, dt: float32) {
 		Scene.clear_frame_result_frame(*instance.frame_result);
 		Scene.update(scene, time, dt, *instance.frame_result);
 
+		should_end_level := false;
+
 		for instance.frame_result.broadcast {
 			queue_scene_scoped_broadcast(instance, scene.id, it);
-		}
 
-		for instance.frame_result.end_level {
-			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));
-		}
-
-		for instance.frame_result.move_to_player_world {
-			move_player_to_currently_playing_world(
-				instance, it.player_id, instance.playing_scene_id, it.model_id, it.standin_id
-			);
-		}
-
-		for instance.frame_result.died {
-			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));
-		}
-		for instance.frame_result.respawn {
-			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));
-		}
-		for instance.frame_result.sync_gate {
-			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));
-		}
-		for instance.frame_result.wipe_scene {
-			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));
-		}
-		for instance.frame_result.explode {
-			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));
-		}
-		for instance.frame_result.antiair_shoot {
-			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));
-		}
-		for instance.frame_result.sync_present {
-			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));
-		}
-		for instance.frame_result.sync_player {
-			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));
-		}
-		for instance.frame_result.sync_safe_zone {
-			queue_scene_scoped_broadcast(instance, scene.id, make_command(it));
-		}
-		for instance.frame_result.died_player_id {
-			person := find_person_by_player_id(instance, it);
-			if person {
-				person.run_stats.death_count += 1;
-
-				player := Scene.find_by_player_id(scene, it);
-				if player {
-					sync_score: Command.Sync_Score;
-					sync_score.player_id = it;
-					sync_score.souls = player.server.souls;
-
-					queue_send(instance, make_command(sync_score), person.user_id);
-				}
-			}
-		}
-		for instance.frame_result.revived_someone_player_id {
-			person := find_person_by_player_id(instance, it);
-			if person {
-				person.run_stats.revive_count += 1;
-
-				player := Scene.find_by_player_id(scene, it);
-				if player {
-					sync_score: Command.Sync_Score;
-					sync_score.player_id = it;
-					sync_score.souls = player.server.souls;
-
-					queue_send(instance, make_command(sync_score), person.user_id);
+			die := isa(it.payload, Command.Die);
+			if die {
+				person := find_person_by_player_id(instance, die.player_id);
+				if person {
+					person.run_stats.death_count += 1;
+					player := Scene.find_by_player_id(scene, die.player_id);
+					if player {
+						sync_score: Command.Sync_Score;
+						sync_score.player_id = die.player_id;
+						sync_score.souls = player.server.souls;
+						queue_send(instance, make_command(sync_score), person.user_id);
+					}
 				}
 			}
 
+			respawn := isa(it.payload, Command.Respawn);
+			if respawn && respawn.cause_player_id >= 0 {
+				person := find_person_by_player_id(instance, respawn.cause_player_id);
+				if person {
+					person.run_stats.revive_count += 1;
+					player := Scene.find_by_player_id(scene, respawn.cause_player_id);
+					if player {
+						sync_score: Command.Sync_Score;
+						sync_score.player_id = respawn.cause_player_id;
+						sync_score.souls = player.server.souls;
+						queue_send(instance, make_command(sync_score), person.user_id);
+					}
+				}
+			}
+
+			end_level := isa(it.payload, Command.End_Level);
+			if end_level {
+				person := find_person_by_player_id(instance, end_level.winner_id);
+				if person {
+					should_end_level = true;
+					person.run_stats.win_count += 1;
+				}
+			}
 		}
 
-		should_end_level := false;
-		for instance.frame_result.win_player_id {
-			person := find_person_by_player_id(instance, it);
-			if person {
-				should_end_level = true;
-
-				person.run_stats.win_count += 1;
+		for instance.frame_result.to_instance {
+			move := isa(it.payload, Command.Move_To_Play_World);
+			if move {
+				move_player_to_currently_playing_world(
+					instance, move.player_id, instance.playing_scene_id, move.model_id, move.standin_id
+				);
 			}
 		}
 
