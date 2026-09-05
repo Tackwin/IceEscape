@@ -1,10 +1,3 @@
-* Come up with a plan for the recurring pattern 
-		new_string := GUI.labeled_input_text(...);
-		if old_string != new_string {
-			free(old_string);
-			old_string = sprint("%", new_string);
-		}
-* Completely switch to  a generic function for serializing and deserializing the communication structs
 * Leverage fully jai's metaprogramming to write a better sql interface
 * Completely remake the gui system around a stack based flow global cursor state.
 * Come up with an architecture for lag compensation. Based around trusting a bit more client input and roling back simulation and fast forwarding with the timestamp of the user input.
@@ -24,8 +17,15 @@
 * Evaluate the use of a RPC protocol instead of the current message passing system. The only worry would be around packet dropping and loss of metadata like time of flight. But it would be a lot more ergonomic to use.
 
 ===== DONE ========
+* Come up with a plan for the recurring pattern 
+		new_string := GUI.labeled_input_text(...);
+		if old_string != new_string {
+			free(old_string);
+			old_string = sprint("%", new_string);
+		}
 * Convert everything to png, remove qoi implementation and assets.
 * Completely remove every trace of the Y flip that I did to have the bottom left be the origin. It was a mistake. The game should follow the standard convention of top left is origin. For eveything, texture gui rendering mouse controls.
 * Create a comprehensively exhaustive system for ai agents to manipulate the game. It would probably be opening a win32 pipe in the win32 entry file. Then polling every frame this pipe for "Control_Command" that would merge information into that frame's Frame_Info. The pipe needs to be bidirectional (or two pipes). The Control_Command needs to do the basic like key presses, mouse control, pause, resume, wait, and take screenshot. But in time it can have higher level concept like gameplay inputs. The agents would then probably write ps1 scripts or python script or directly use the cmd to manipulate the game.
 * Add some quick shortcut to spawn a local server process. The platform's vtable would need new function like "create_process".
 * Add a SMALL png reader writer that a human can understand. QOI is too much friction.
+* Completely switch to  a generic function for serializing and deserializing the communication structs

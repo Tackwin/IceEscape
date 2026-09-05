@@ -596,6 +596,22 @@ make_command :: (cmd: $T) -> Command {
 
 serialize_generic :: (payload: *$T, data: [] u8) -> int {
 	info :: type_info(T);
+	is_fixed_array :: #run -> bool {
+		ti := type_info(T);
+		if ti.type != .ARRAY return false;
+		return ti.(*Type_Info_Array).array_type == .FIXED;
+	};
+	fixed_element_is_pod :: #run -> bool {
+		ti := type_info(T);
+		if ti.type != .ARRAY return false;
+		el := ti.(*Type_Info_Array).element_type.type;
+		return el == .INTEGER || el == .FLOAT || el == .BOOL || el == .ENUM;
+	};
+	fixed_array_count :: #run -> s64 {
+		ti := type_info(T);
+		if ti.type != .ARRAY return 0;
+		return ti.(*Type_Info_Array).array_count;
+	};
 	if !payload {
 		return 0;
 	}
@@ -623,11 +639,23 @@ serialize_generic :: (payload: *$T, data: [] u8) -> int {
 
 			return size;
 		} else #if info.type == .ARRAY {
-			size := 8; // The count
-			for 0..payload.count - 1 {
-				size += serialize_generic(payload.data + it, .[]);
+			#if is_fixed_array {
+				#if fixed_element_is_pod {
+					return info.runtime_size;
+				} else {
+					size := 0;
+					for 0..fixed_array_count - 1 {
+						size += serialize_generic(payload.data + it, .[]);
+					}
+					return size;
+				}
+			} else {
+				size := 8; // The count
+				for 0..payload.count - 1 {
+					size += serialize_generic(payload.data + it, .[]);
+				}
+				return size;
 			}
-			return size;
 		} else #if info.type == .INTEGER {
 			return info.runtime_size;
 		} else #if info.type == .FLOAT {
@@ -703,17 +731,30 @@ serialize_generic :: (payload: *$T, data: [] u8) -> int {
 		};
 	}
 	#if info.type == .ARRAY {
-		memcpy(data.data + cursor, *payload.count, 8);
-		cursor += 8;
-		if info.element_type.type == .INTEGER {
-			memcpy(
-				data.data + cursor, payload.data, payload.count * info.element_type.runtime_size
-			);
-			cursor += payload.count * info.element_type.runtime_size;
+		#if is_fixed_array {
+			#if fixed_element_is_pod {
+				memcpy(data.data, payload, info.runtime_size);
+				cursor += info.runtime_size;
+			} else {
+				for 0..fixed_array_count - 1 {
+					sub := subdata(data, cursor);
+					cursor += serialize_generic(payload.data + it, sub);
+				}
+			}
 		} else {
-			for 0..payload.count - 1 {
-				sub := subdata(data, cursor);
-				cursor += serialize_generic(payload.data + it, sub);
+			memcpy(data.data + cursor, *payload.count, 8);
+			cursor += 8;
+			element := info.element_type.type;
+			if element == .INTEGER || element == .FLOAT || element == .BOOL || element == .ENUM {
+				memcpy(
+					data.data + cursor, payload.data, payload.count * info.element_type.runtime_size
+				);
+				cursor += payload.count * info.element_type.runtime_size;
+			} else {
+				for 0..payload.count - 1 {
+					sub := subdata(data, cursor);
+					cursor += serialize_generic(payload.data + it, sub);
+				}
 			}
 		}
 	}
@@ -722,6 +763,22 @@ serialize_generic :: (payload: *$T, data: [] u8) -> int {
 
 deserialize_generic :: (data: [] u8, out: *$T) -> int {
 	info :: type_info(T);
+	is_fixed_array :: #run -> bool {
+		ti := type_info(T);
+		if ti.type != .ARRAY return false;
+		return ti.(*Type_Info_Array).array_type == .FIXED;
+	};
+	fixed_element_is_pod :: #run -> bool {
+		ti := type_info(T);
+		if ti.type != .ARRAY return false;
+		el := ti.(*Type_Info_Array).element_type.type;
+		return el == .INTEGER || el == .FLOAT || el == .BOOL || el == .ENUM;
+	};
+	fixed_array_count :: #run -> s64 {
+		ti := type_info(T);
+		if ti.type != .ARRAY return 0;
+		return ti.(*Type_Info_Array).array_count;
+	};
 	cursor := 0;
 	subdata :: (data: [] u8, cursor: int) -> [] u8 {
 		out: [] u8;
@@ -773,650 +830,99 @@ deserialize_generic :: (data: [] u8, out: *$T) -> int {
 		};
 	}
 	#if info.type == .ARRAY {
-		memcpy(*out.count, data.data + cursor, 8);
-		cursor += 8;
-		out.data = talloc(out.count * info.element_type.runtime_size);
-		if info.element_type.type == .INTEGER {
-			memcpy(out.data, data.data + cursor, out.count * info.element_type.runtime_size);
-			cursor += out.count * info.element_type.runtime_size;
+		#if is_fixed_array {
+			#if fixed_element_is_pod {
+				memcpy(out, data.data, info.runtime_size);
+				cursor += info.runtime_size;
+			} else {
+				for 0..fixed_array_count - 1 {
+					sub := subdata(data, cursor);
+					cursor += deserialize_generic(sub, out.data + it);
+				}
+			}
 		} else {
-			for 0..out.count - 1 {
-				sub := subdata(data, cursor);
-				cursor += deserialize_generic(sub, out.data + it);
+			memcpy(*out.count, data.data + cursor, 8);
+			cursor += 8;
+			out.data = talloc(out.count * info.element_type.runtime_size);
+			element := info.element_type.type;
+			if element == .INTEGER || element == .FLOAT || element == .BOOL || element == .ENUM {
+				memcpy(out.data, data.data + cursor, out.count * info.element_type.runtime_size);
+				cursor += out.count * info.element_type.runtime_size;
+			} else {
+				for 0..out.count - 1 {
+					sub := subdata(data, cursor);
+					cursor += deserialize_generic(sub, out.data + it);
+				}
 			}
 		}
 	}
 	return cursor;
 }
 
-serialize :: (cmd: Command, buffer: *[..] u8) {
-	// Serialize the command into the buffer
-	dry_size := size_of(type_of(cmd)) + 8;
-	array_reserve(buffer, dry_size);
-	memcpy(buffer.data + 8, *cmd, size_of(type_of(cmd)));
-	buffer.count = dry_size;
-	defer {
-		buffer.data.(*s64).* = buffer.count;
-	}
+COMMAND_HEADER_SIZE :: 8 + 8 + size_of(Command.Payload_t.Kind);
 
-	generic_case :: (T: $Type) #expand {
-		typed := isa(cmd.payload, T);
-		if !typed {
-			print("Weirdge\n");
-			break `label;
+serialize_payload :: (cmd: Command, data: [] u8) -> int {
+	#insert #run -> string {
+		sb: String_Builder;
+		print(*sb, "if #complete cmd.payload.kind == {\n");
+		for Command.Payload_t.All_Types {
+			print(*sb, "    case .%;\n", it);
+			print(*sb, "        typed := isa(cmd.payload, Command.%);\n", it);
+			print(*sb, "        return serialize_generic(typed, data);\n");
 		}
+		print(*sb, "}\n");
+		return builder_to_string(*sb);
+	};
+	return 0;
+}
 
-		additional_data_size := serialize_generic(typed, .[]);
-		array_reserve(buffer, dry_size + additional_data_size);
-		cursor := dry_size;
-		subdata: [] u8;
-		subdata.data = buffer.data + cursor;
-		subdata.count = additional_data_size;
-		cursor += serialize_generic(typed, subdata);
-		buffer.count = cursor;
-	}
-
-	for label: 0.. 0 if #complete cmd.payload.kind == {
-		case .Wipe_Scene; #through;
-		case .End_Level; #through;
-		case .Move; #through;
-		case .Spawn; #through;
-		case .Connect; #through;
-		case .Spawn_Coin; #through;
-		case .Despawn_Coin; #through;
-		case .Respawn; #through;
-		case .Die; #through;
-		case .Quit; #through;
-		case .Buy_Ask; #through;
-		case .Buy_Response; #through;
-		case .Give_Control; #through;
-		case .Request_Stats; #through;
-		case .Login; #through;
-		case .Get_Profile_Stats; #through;
-		case .Set_Passcode; #through;
-		case .Retire; #through;
-		case .Ask_Respawn; #through;
-		case .Sync_Tombstone; #through;
-		case .New_Terrain; #through;
-		case .Cheat_Action; #through;
-		case .Sync_Player; #through;
-		case .Sync_Safe_Zone; #through;
-		case .Sync_Skull; #through;
-		case .Sync_Score; #through;
-		case .Sync_Key; #through;
-		case .Sync_Gate; #through;
-		case .Leave_Instance; #through;
-		case .Ans_Create_Instance; #through;
-		case .Ans_Create_Bomberman; #through;
-		case .Version_Info; #through;
-		case .Sync_Stats; #through;
-		case .Sync_Clock; #through;
-		case .AntiAir_Shoot; #through;
-		case .Sync_Robot; #through;
-		case .Sync_Present; #through;
-		case .Sync_Hook; #through;
-		case .Active_Item; #through;
-		case .Sync_AntiAir; #through;
-		case .Klaxon; #through;
-		case .Drop; #through;
-		case .Sync_Moving_Frame; #through;
-		case .Note_Played; #through;
-		case .Sync_Bomb; #through;
-		case .Sync_Bomb_Spawner; #through;
-		case .NTP; #through;
-		case .Sync_Stand_In; #through;
-		case .Hooked_Player; #through;
-		case .Explode; #through;
-		case .Ask_Instance_List; #through;
-		case .Ans_Enter_Instance; #through;
-		case .Ask_Enter_Instance; #through;
-		case .Move_To_Play_World;
-			// Nothing
-		case .Create_Bomberman;
-			generic_case(Command.Create_Bomberman);
-		case .Create_Instance;
-			generic_case(Command.Create_Instance);
-		case .Get_Terrain_Leaderboard;
-			generic_case(Command.Get_Terrain_Leaderboard);
-		case .Set_Username;
-			generic_case(Command.Set_Username);
-		case .Get_Username;
-			generic_case(Command.Get_Username);
-		case .Signal_Pick;
-			generic_case(Command.Signal_Pick);
-		case .Get_Instance_Tab_Stats;
-			generic_case(Command.Get_Instance_Tab_Stats);
-		case .Ask_Enter_Quick_Instance;
-			generic_case(Command.Ask_Enter_Quick_Instance);
-		case .Set_Thumbnail;
-			generic_case(Command.Set_Thumbnail);
-		case .Asset_Chunk;
-			generic_case(Command.Asset_Chunk);
-		case .Get_Thumbnail;
-			generic_case(Command.Get_Thumbnail);
-		case .Load_Terrain;
-			load_terrain := isa(cmd.payload, Command.Load_Terrain);
-			if !load_terrain {
-				print("Weirdge\n");
-				break label;
-			}
-
-			additional_data_size := load_terrain.ascii.count;
-			array_reserve(buffer, dry_size + additional_data_size);
-
-			cursor := dry_size;
-			memcpy(
-				buffer.data + cursor,
-				load_terrain.ascii.data,
-				load_terrain.ascii.count
-			);
-			cursor += load_terrain.ascii.count;
-			buffer.count = cursor;
-		case .Save_Terrain;
-			save_terrain := isa(cmd.payload, Command.Save_Terrain);
-			if !save_terrain {
-				print("Weirdge\n");
-				break label;
-			}
-
-			additional_data_size := save_terrain.ascii.count;
-			array_reserve(buffer, dry_size + additional_data_size);
-
-			cursor := dry_size;
-			memcpy(
-				buffer.data + cursor,
-				save_terrain.ascii.data,
-				save_terrain.ascii.count
-			);
-			cursor += save_terrain.ascii.count;
-			buffer.count = cursor;
-		case .Ask_List_Terrain;
-			ask_list_terrain := isa(cmd.payload, Command.Ask_List_Terrain);
-			if !ask_list_terrain {
-				print("Weirdge\n");
-				break label;
-			}
-
-			additional_data_size := ask_list_terrain.filter.count;
-			array_reserve(buffer, dry_size + additional_data_size);
-
-			cursor := dry_size;
-			memcpy(
-				buffer.data + cursor, ask_list_terrain.filter.data, ask_list_terrain.filter.count
-			);
-			cursor += ask_list_terrain.filter.count;
-			buffer.count = cursor;
-		case .Ans_List_Terrain;
-			ans_list_terrain := isa(cmd.payload, Command.Ans_List_Terrain);
-			if !ans_list_terrain {
-				print("Weirdge\n");
-				break label;
-			}
-
-			additional_data_size := 0;
-			additional_data_size += ans_list_terrain.terrains_id.count * size_of(int);
-			additional_data_size += ans_list_terrain.creation_time_ms.count * size_of(int);
-			for ans_list_terrain.terrains_name {
-				additional_data_size += size_of(u64); // Size prefix
-				additional_data_size += it.count;
-			}
-			for ans_list_terrain.authors_name {
-				additional_data_size += size_of(u64); // Size prefix
-				additional_data_size += it.count;
-			}
-			array_reserve(buffer, dry_size + additional_data_size);
-
-			cursor := dry_size;
-			memcpy(
-				buffer.data + cursor,
-				ans_list_terrain.terrains_id.data,
-				ans_list_terrain.terrains_id.count * size_of(int)
-			);
-			cursor += ans_list_terrain.terrains_id.count * size_of(int);
-			memcpy(
-				buffer.data + cursor,
-				ans_list_terrain.creation_time_ms.data,
-				ans_list_terrain.creation_time_ms.count * size_of(int)
-			);
-			cursor += ans_list_terrain.creation_time_ms.count * size_of(int);
-			for ans_list_terrain.terrains_name {
-				// Write size prefix
-				size_prefix := it.count.(u64);
-				memcpy(buffer.data + cursor, *size_prefix, size_of(u64));
-				cursor += size_of(u64);
-
-				// Write data
-				memcpy(buffer.data + cursor, it.data, it.count);
-				cursor += it.count;
-			}
-			for ans_list_terrain.authors_name {
-				// Write size prefix
-				size_prefix := it.count.(u64);
-				memcpy(buffer.data + cursor, *size_prefix, size_of(u64));
-				cursor += size_of(u64);
-
-				// Write data
-				memcpy(buffer.data + cursor, it.data, it.count);
-				cursor += it.count;
-			}
-			buffer.count = cursor;
-		case .Ans_Enter_Custom_Instance;
-			ans_enter_custom_instance := isa(cmd.payload, Command.Ans_Enter_Custom_Instance);
-			if !ans_enter_custom_instance {
-				print("Weirdge\n");
-				break label;
-			}
-
-			additional_data_size := ans_enter_custom_instance.terrain.count;
-			array_reserve(buffer, dry_size + additional_data_size);
-
-			cursor := dry_size;
-			memcpy(
-				buffer.data + cursor,
-				ans_enter_custom_instance.terrain.data,
-				ans_enter_custom_instance.terrain.count
-			);
-			cursor += ans_enter_custom_instance.terrain.count;
-			buffer.count = cursor;
-		case .Ask_Enter_Custom_Instance;
-			ask_enter_custom_instance := isa(cmd.payload, Command.Ask_Enter_Custom_Instance);
-			if !ask_enter_custom_instance {
-				print("Weirdge\n");
-				break label;
-			}
-
-			additional_data_size := ask_enter_custom_instance.terrain.count;
-			array_reserve(buffer, dry_size + additional_data_size);
-
-			cursor := dry_size;
-			memcpy(
-				buffer.data + cursor,
-				ask_enter_custom_instance.terrain.data,
-				ask_enter_custom_instance.terrain.count
-			);
-			cursor += ask_enter_custom_instance.terrain.count;
-			buffer.count = cursor;
-		case .Ans_Instance_List;
-			ans_instance_list := isa(cmd.payload, Command.Ans_Instance_List);
-			if !ans_instance_list {
-				print("Weirdge\n");
-				break label;
-			}
-
-			additional_data_size := 0;
-			size := size_of(type_of(ans_instance_list.instances.data.*));
-			additional_data_size += size * ans_instance_list.instances.count;
-			array_reserve(buffer, dry_size + additional_data_size);
-
-			cursor := dry_size;
-			memcpy(
-				buffer.data + cursor,
-				ans_instance_list.instances.data,
-				size * ans_instance_list.instances.count
-			);
-			cursor += size * ans_instance_list.instances.count;
-			buffer.count = cursor;
-
-		case .Sync_Scene;
-			sync_scene := isa(cmd.payload, Command.Sync_Scene);
-			if !sync_scene {
-				print("Weirdge\n");
-				break label;
-			}
-			additional_data_size := 0;
-			additional_data_size += sync_scene.terrain.count;
-			additional_data_size +=
-				size_of(type_of(sync_scene.players.data.*)) * sync_scene.players.count;
-			additional_data_size +=
-				size_of(type_of(sync_scene.skulls.data.*)) * sync_scene.skulls.count;
-			additional_data_size +=
-				size_of(type_of(sync_scene.moving_frames.data.*)) * sync_scene.moving_frames.count;
-			additional_data_size +=
-				size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count;
-			additional_data_size +=
-				size_of(type_of(sync_scene.antiairs.data.*)) * sync_scene.antiairs.count;
-			additional_data_size +=
-				size_of(type_of(sync_scene.tombstones.data.*)) * sync_scene.tombstones.count;
-			additional_data_size +=
-				size_of(type_of(sync_scene.presents.data.*)) * sync_scene.presents.count;
-			additional_data_size +=
-				size_of(type_of(sync_scene.safe_zones.data.*)) * sync_scene.safe_zones.count;
-			additional_data_size +=
-				size_of(type_of(sync_scene.standins.data.*)) * sync_scene.standins.count;
-
-			array_reserve(buffer, dry_size + additional_data_size);
-
-			cursor := dry_size;
-			memcpy(
-				buffer.data + cursor,
-				sync_scene.terrain.data,
-				sync_scene.terrain.count
-			);
-			cursor += sync_scene.terrain.count;
-			memcpy(
-				buffer.data + cursor,
-				sync_scene.players.data,
-				size_of(type_of(sync_scene.players.data.*)) * sync_scene.players.count
-			);
-			cursor += size_of(type_of(sync_scene.players.data.*)) * sync_scene.players.count;
-			memcpy(
-				buffer.data + cursor,
-				sync_scene.skulls.data,
-				size_of(type_of(sync_scene.skulls.data.*)) * sync_scene.skulls.count
-			);
-			cursor += size_of(type_of(sync_scene.skulls.data.*)) * sync_scene.skulls.count;
-			memcpy(
-				buffer.data + cursor,
-				sync_scene.moving_frames.data,
-				size_of(type_of(sync_scene.moving_frames.data.*)) * sync_scene.moving_frames.count
-			);
-			cursor +=
-				size_of(type_of(sync_scene.moving_frames.data.*)) * sync_scene.moving_frames.count;
-			memcpy(
-				buffer.data + cursor,
-				sync_scene.robots.data,
-				size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count
-			);
-			cursor += size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count;
-			memcpy(
-				buffer.data + cursor,
-				sync_scene.antiairs.data,
-				size_of(type_of(sync_scene.antiairs.data.*)) * sync_scene.antiairs.count
-			);
-			cursor += size_of(type_of(sync_scene.antiairs.data.*)) * sync_scene.antiairs.count;
-			memcpy(
-				buffer.data + cursor,
-				sync_scene.tombstones.data,
-				size_of(type_of(sync_scene.tombstones.data.*)) * sync_scene.tombstones.count
-			);
-			cursor += size_of(type_of(sync_scene.tombstones.data.*)) * sync_scene.tombstones.count;
-			memcpy(
-				buffer.data + cursor,
-				sync_scene.presents.data,
-				size_of(type_of(sync_scene.presents.data.*)) * sync_scene.presents.count
-			);
-			cursor += size_of(type_of(sync_scene.presents.data.*)) * sync_scene.presents.count;
-			memcpy(
-				buffer.data + cursor,
-				sync_scene.safe_zones.data,
-				size_of(type_of(sync_scene.safe_zones.data.*)) * sync_scene.safe_zones.count
-			);
-			cursor += size_of(type_of(sync_scene.safe_zones.data.*)) * sync_scene.safe_zones.count;
-			memcpy(
-				buffer.data + cursor,
-				sync_scene.standins.data,
-				size_of(type_of(sync_scene.standins.data.*)) * sync_scene.standins.count
-			);
-			cursor += size_of(type_of(sync_scene.standins.data.*)) * sync_scene.standins.count;
-			buffer.count = cursor;
-	}
+serialize :: (cmd: Command, buffer: *[..] u8) {
+	extra := serialize_payload(cmd, .[]);
+	total := COMMAND_HEADER_SIZE + extra;
+	array_reserve(buffer, total);
+	buffer.count = total;
+	buffer.data.(*s64).* = total;
+	memcpy(buffer.data + 8, *cmd.sent_timestamp, 8);
+	memcpy(buffer.data + 16, *cmd.payload.kind, size_of(Command.Payload_t.Kind));
+	subdata: [] u8;
+	subdata.data = buffer.data + COMMAND_HEADER_SIZE;
+	subdata.count = extra;
+	serialize_payload(cmd, subdata);
 }
 
 deserialize :: (buffer: [] u8) -> Command, bool {
-	expected_size := buffer.data.(*s64).*;
-	if buffer.count < expected_size {
+	if buffer.count < 8 {
 		print("Buffer too small\n");
 		return .{}, false;
 	}
 
-	cmd := Command.{};
-	memcpy(*cmd, buffer.data + 8, size_of(type_of(cmd)));
-	cursor := 8 + size_of(type_of(cmd));
+	expected_size := buffer.data.(*s64).*;
+	if buffer.count < expected_size || expected_size < COMMAND_HEADER_SIZE {
+		print("Buffer too small\n");
+		return .{}, false;
+	}
 
-	generic_case :: (T: $Type) #expand {
-		typed := isa(cmd.payload, T);
-		if !typed {
-			print("Weirdge\n");
-			break `label;
+	cmd: Command;
+	memcpy(*cmd.sent_timestamp, buffer.data + 8, 8);
+	kind: Command.Payload_t.Kind;
+	memcpy(*kind, buffer.data + 16, size_of(Command.Payload_t.Kind));
+
+	remaining: [] u8;
+	remaining.data = buffer.data + COMMAND_HEADER_SIZE;
+	remaining.count = expected_size - COMMAND_HEADER_SIZE;
+
+	#insert #run -> string {
+		sb: String_Builder;
+		print(*sb, "if #complete kind == {\n");
+		for Command.Payload_t.All_Types {
+			print(*sb, "    case .%;\n", it);
+			print(*sb, "        set(*cmd.payload, Command.%.{});\n", it);
+			print(*sb, "        typed := isa(cmd.payload, Command.%);\n", it);
+			print(*sb, "        deserialize_generic(remaining, typed);\n");
 		}
+		print(*sb, "}\n");
+		return builder_to_string(*sb);
+	};
 
-		remaining_size := expected_size - 8 - size_of(Command);
-		subdata: [] u8;
-		subdata.data = buffer.data + 8 + size_of(Command);
-		subdata.count = remaining_size;
-
-		cursor = 8 + deserialize_generic(subdata, typed);
-	}
-
-	for label: 0..0 if #complete cmd.payload.kind == {
-		case .Active_Item; #through;
-		case .Wipe_Scene; #through;
-		case .Move; #through;
-		case .End_Level; #through;
-		case .Spawn; #through;
-		case .Connect; #through;
-		case .Sync_Score; #through;
-		case .Spawn_Coin; #through;
-		case .Despawn_Coin; #through;
-		case .Cheat_Action; #through;
-		case .Respawn; #through;
-		case .Leave_Instance; #through;
-		case .Ans_Create_Instance; #through;
-		case .Ans_Create_Bomberman; #through;
-		case .Version_Info; #through;
-		case .Sync_Stats; #through;
-		case .Sync_Clock; #through;
-		case .Request_Stats; #through;
-		case .Get_Profile_Stats; #through;
-		case .Login; #through;
-		case .Set_Passcode; #through;
-		case .Die; #through;
-		case .Give_Control; #through;
-		case .Hooked_Player; #through;
-		case .Quit; #through;
-		case .Buy_Ask; #through;
-		case .Buy_Response; #through;
-		case .Klaxon; #through;
-		case .Drop; #through;
-		case .New_Terrain; #through;
-		case .Sync_Player; #through;
-		case .Ask_Respawn; #through;
-		case .Sync_Stand_In; #through;
-		case .Sync_Skull; #through;
-		case .Sync_Key; #through;
-		case .Sync_Gate; #through;
-		case .Sync_Hook; #through;
-		case .Note_Played; #through;
-		case .Sync_Bomb; #through;
-		case .Sync_Bomb_Spawner; #through;
-		case .Sync_Tombstone; #through;
-		case .Retire; #through;
-		case .AntiAir_Shoot; #through;
-		case .Sync_Robot; #through;
-		case .Sync_Moving_Frame; #through;
-		case .Sync_AntiAir; #through;
-		case .NTP; #through;
-		case .Sync_Present; #through;
-		case .Explode; #through;
-		case .Sync_Safe_Zone; #through;
-		case .Ask_Enter_Instance; #through;
-		case .Ans_Enter_Instance; #through;
-		case .Ask_Instance_List; #through;
-		case .Move_To_Play_World;
-			return cmd, true;
-		case .Create_Instance;
-			generic_case(Command.Create_Instance);
-			return cmd, true;
-		case .Create_Bomberman;
-			generic_case(Command.Create_Bomberman);
-			return cmd, true;
-		case .Set_Thumbnail;
-			generic_case(Command.Set_Thumbnail);
-			return cmd, true;
-		case .Asset_Chunk;
-			generic_case(Command.Asset_Chunk);
-			asset := isa(cmd.payload, Command.Asset_Chunk);
-			return cmd, true;
-		case .Get_Thumbnail;
-			generic_case(Command.Get_Thumbnail);
-			return cmd, true;
-		case .Signal_Pick;
-			generic_case(Command.Signal_Pick);
-			return cmd, true;
-		case .Get_Instance_Tab_Stats;
-			generic_case(Command.Get_Instance_Tab_Stats);
-			return cmd, true;
-		case .Get_Terrain_Leaderboard;
-			generic_case(Command.Get_Terrain_Leaderboard);
-			return cmd, true;
-		case .Set_Username;
-			generic_case(Command.Set_Username);
-			return cmd, true;
-		case .Get_Username;
-			generic_case(Command.Get_Username);
-			return cmd, true;
-		case .Ask_Enter_Quick_Instance;
-			generic_case(Command.Ask_Enter_Quick_Instance);
-			return cmd, true;
-		case .Ask_List_Terrain;
-			ask_list_terrain := isa(cmd.payload, Command.Ask_List_Terrain);
-			if !ask_list_terrain {
-				print("Weirdge\n");
-				return cmd, false;
-			}
-
-			remaining_size := expected_size - cursor;
-			ask_list_terrain.filter.data = (buffer.data + cursor).(*u8);
-			ask_list_terrain.filter.count = remaining_size;
-			cursor += remaining_size;
-
-			return cmd, true;
-		case .Ans_List_Terrain;
-			ans_list_terrain := isa(cmd.payload, Command.Ans_List_Terrain);
-			if !ans_list_terrain {
-				print("Weirdge\n");
-				return cmd, false;
-			}
-
-			ans_list_terrain.terrains_id.data = (buffer.data + cursor).(*int);
-			cursor += size_of(int) * ans_list_terrain.terrains_id.count;
-			ans_list_terrain.creation_time_ms.data = (buffer.data + cursor).(*int);
-			cursor += size_of(int) * ans_list_terrain.creation_time_ms.count;
-
-			terrains_name: [..] string;
-			terrains_name.allocator = temp;
-			for 0..ans_list_terrain.terrains_id.count-1 {
-				size_prefix: u64;
-				memcpy(*size_prefix, buffer.data + cursor, size_of(u64));
-				cursor += size_of(u64);
-
-				new_terrain: string;
-				new_terrain.count = size_prefix.(int);
-				new_terrain.data = (buffer.data + cursor).(*u8);
-				cursor += new_terrain.count;
-
-				array_add(*terrains_name, new_terrain);
-			}
-			ans_list_terrain.terrains_name = terrains_name;
-
-			authors_name: [..] string;
-			authors_name.allocator = temp;
-			for 0..ans_list_terrain.terrains_id.count-1 {
-				size_prefix: u64;
-				memcpy(*size_prefix, buffer.data + cursor, size_of(u64));
-				cursor += size_of(u64);
-
-				new_author: string;
-				new_author.count = size_prefix.(int);
-				new_author.data = (buffer.data + cursor).(*u8);
-				cursor += new_author.count;
-
-				array_add(*authors_name, new_author);
-			}
-			ans_list_terrain.authors_name = authors_name;
-
-			return cmd, true;
-		case .Load_Terrain;
-			load_terrain := isa(cmd.payload, Command.Load_Terrain);
-			if !load_terrain {
-				print("Weirdge\n");
-				return cmd, false;
-			}
-
-			remaining_size := expected_size - cursor;
-			load_terrain.ascii.data = (buffer.data + cursor).(*u8);
-			load_terrain.ascii.count = remaining_size;
-			cursor += remaining_size;
-
-			return cmd, true;
-		case .Save_Terrain;
-			save_terrain := isa(cmd.payload, Command.Save_Terrain);
-			if !save_terrain {
-				print("Weirdge\n");
-				return cmd, false;
-			}
-
-			remaining_size := expected_size - cursor;
-			save_terrain.ascii.data = (buffer.data + cursor).(*u8);
-			save_terrain.ascii.count = remaining_size;
-			cursor += remaining_size;
-
-			return cmd, true;
-		case .Ans_Enter_Custom_Instance;
-			ans_enter_custom_instance := isa(cmd.payload, Command.Ans_Enter_Custom_Instance);
-			if !ans_enter_custom_instance {
-				print("Weirdge\n");
-				return cmd, false;
-			}
-
-			remaining_size := expected_size - cursor;
-			ans_enter_custom_instance.terrain.data = (buffer.data + cursor).(*u8);
-			ans_enter_custom_instance.terrain.count = remaining_size;
-			cursor += remaining_size;
-		case .Ask_Enter_Custom_Instance;
-			ask_enter_custom_instance := isa(cmd.payload, Command.Ask_Enter_Custom_Instance);
-			if !ask_enter_custom_instance {
-				print("Weirdge\n");
-				return cmd, false;
-			}
-
-			remaining_size := expected_size - cursor;
-			ask_enter_custom_instance.terrain.data = (buffer.data + cursor).(*u8);
-			ask_enter_custom_instance.terrain.count = remaining_size;
-			cursor += remaining_size;
-
-			return cmd, true;
-		case .Ans_Instance_List;
-			list := isa(cmd.payload, Command.Ans_Instance_List);
-			if !list {
-				print("Weirdge\n");
-				return cmd, false;
-			}
-
-			list.instances.data = (buffer.data + cursor).(*Command.Ans_Instance_List.Instance_Info);
-			cursor += size_of(type_of(list.instances.data.*)) * list.instances.count;
-
-			return cmd, true;
-		case .Sync_Scene;
-			sync_scene := isa(cmd.payload, Command.Sync_Scene);
-			if !sync_scene {
-				print("Weirdge\n");
-				return cmd, false;
-			}
-
-			sync_scene.terrain.data = (buffer.data + cursor).(*u8);
-			cursor += size_of(type_of(sync_scene.terrain.data.*)) * sync_scene.terrain.count;
-			sync_scene.players.data = (buffer.data + cursor).(*Command.Sync_Player);
-			cursor += size_of(type_of(sync_scene.players.data.*)) * sync_scene.players.count;
-			sync_scene.skulls.data = (buffer.data + cursor).(*Command.Sync_Skull);
-			cursor += size_of(type_of(sync_scene.skulls.data.*)) * sync_scene.skulls.count;
-			sync_scene.moving_frames.data = (buffer.data + cursor).(*Command.Sync_Moving_Frame);
-			cursor +=
-				size_of(type_of(sync_scene.moving_frames.data.*)) * sync_scene.moving_frames.count;
-			sync_scene.robots.data = (buffer.data + cursor).(*Command.Sync_Robot);
-			cursor += size_of(type_of(sync_scene.robots.data.*)) * sync_scene.robots.count;
-			sync_scene.antiairs.data = (buffer.data + cursor).(*Command.Sync_AntiAir);
-			cursor += size_of(type_of(sync_scene.antiairs.data.*)) * sync_scene.antiairs.count;
-			sync_scene.tombstones.data = (buffer.data + cursor).(*Command.Sync_Tombstone);
-			cursor += size_of(type_of(sync_scene.tombstones.data.*)) * sync_scene.tombstones.count;
-			sync_scene.presents.data = (buffer.data + cursor).(*Command.Sync_Present);
-			cursor += size_of(type_of(sync_scene.presents.data.*)) * sync_scene.presents.count;
-			sync_scene.safe_zones.data = (buffer.data + cursor).(*Command.Sync_Safe_Zone);
-			cursor += size_of(type_of(sync_scene.safe_zones.data.*)) * sync_scene.safe_zones.count;
-			sync_scene.standins.data = (buffer.data + cursor).(*Command.Sync_Stand_In);
-			cursor += size_of(type_of(sync_scene.standins.data.*)) * sync_scene.standins.count;
-
-			return cmd, true;
-	}
 	return cmd, true;
 }
