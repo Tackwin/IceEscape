@@ -3,9 +3,9 @@
 Create_Instance :: struct {
 	open := false;
 
-	filter: string;
-	name: string;
-	password: string;
+	filter: GUI.String;
+	name: GUI.String;
+	password: GUI.String;
 	auto_revive: bool;
 	private: bool;
 
@@ -26,8 +26,8 @@ Create_Instance :: struct {
 Create_Bomberman :: struct {
 	open := false;
 
-	name: string;
-	password: string;
+	name: GUI.String;
+	password: GUI.String;
 	private: bool;
 	max_players: int;
 }
@@ -38,15 +38,15 @@ Menu :: struct {
 	thumbnail_receiving: [..] Thumbnail_Pending;
 
 	login_popup_open: bool = false;
-	login_popup_password: string = "";
+	login_popup_password: GUI.String;
 
-	scene_name_leadeboard: string = "";
+	scene_name_leadeboard: GUI.String;
 	terrain_name_selected_leaderboard: string = "";
 
 	create_instance: Create_Instance;
 	create_bomberman: Create_Bomberman;
 
-	enter_instance_password: string = "";
+	enter_instance_password: GUI.String;
 
 	instances_list: [..] Command.Ans_Instance_List.Instance_Info;
 
@@ -69,6 +69,9 @@ Menu :: struct {
 	passstring: string = "";
 
 	profile: Profile;
+
+	string_pool: GUI.String_Pool;
+	username: GUI.String;
 }
 
 
@@ -109,17 +112,13 @@ push_left_main_menu :: (
 	}
 	GUI.space(gui, 24.0);
 
-	new_username := GUI.labeled_input_text(
-		gui, "Username:", menu.profile.username, 256, 24, id = "username_input"
+	input := GUI.labeled_input_text(
+		gui, "Username:", *menu.username, 256, 24, id = "username_input"
 	);
-	if new_username != menu.profile.username {
-		if menu.profile.username.count > 0 && menu.profile.username.data
-			free(menu.profile.username);
-		menu.profile.username = sprint("%", new_username);
-
+	if input.changed {
 		set_username: Command.Set_Username;
 		set_username.profile_id = menu.profile.id;
-		set_username.username = tprint("%", menu.profile.username);
+		set_username.username = GUI.view(*menu.username);
 		send_web_message(platform, gui.controls.time, make_command(set_username));
 	}
 
@@ -152,15 +151,11 @@ push_left_main_menu :: (
 	// GUI.space(gui, 24.0);
 
 
-	new_scene_name := GUI.labeled_input_text(
-		gui, "Scene name:", menu.scene_name_leadeboard, 256, 24, id = "scene_name_leaderboard_input"
-	);
-	if new_scene_name != menu.scene_name_leadeboard {
-		free(menu.scene_name_leadeboard);
-		menu.scene_name_leadeboard = sprint("%", new_scene_name);
-
+	if GUI.labeled_input_text(
+		gui, "Scene name:", *menu.scene_name_leadeboard, 256, 24, id = "scene_name_leaderboard_input"
+	).changed {
 		ask_list_terrain: Command.Ask_List_Terrain;
-		ask_list_terrain.filter = menu.scene_name_leadeboard;
+		ask_list_terrain.filter = GUI.view(*menu.scene_name_leadeboard);
 		ask_list_terrain.correlation_id = 0;
 		send_web_message(platform, gui.controls.time, make_command(ask_list_terrain));
 	}
@@ -262,20 +257,15 @@ push_left_main_menu :: (
 		);
 		defer GUI.end_window(gui, id = "login_window");
 
-		new_passcode := GUI.labeled_input_text(
+		GUI.labeled_input_text(
 			gui,
 			"Passcode:",
-			menu.login_popup_password,
+			*menu.login_popup_password,
 			400 - 16,
 			24,
 			id = "login_passcode_input",
 			placeholder = "0123456789A"
 		);
-		if new_passcode != menu.login_popup_password {
-			if menu.login_popup_password.count > 0 && menu.login_popup_password.data
-				free(menu.login_popup_password);
-			menu.login_popup_password = sprint("%", new_passcode);
-		}
 
 		GUI.space(gui, 64.0);
 		GUI.default_params(gui).cursor = window.pos + v2(window.size.x - 8.0, window.size.y - 8.0);
@@ -284,7 +274,7 @@ push_left_main_menu :: (
 
 		if GUI._text_button(gui, "Login", id = "login_confirm_btn") {
 			command: Command.Login;
-			command.passcode = string_to_code(menu.login_popup_password);
+			command.passcode = string_to_code(GUI.view(*menu.login_popup_password));
 			command.token = platform.get_token();
 			send_web_message(platform, gui.controls.time, make_command(command));
 			menu.login_popup_open = false;
@@ -401,6 +391,7 @@ process_menu :: (app_user: *App_User, command: Command) -> bool {
 	if get_username {
 		free(state.menu.profile.username);
 		state.menu.profile.username = sprint("%", get_username.username);
+		GUI.set(*state.menu.username, get_username.username);
 		return true;
 	}
 
@@ -480,11 +471,12 @@ process_menu :: (app_user: *App_User, command: Command) -> bool {
 		if login.feedback == .Accepted {
 			if state.menu.passstring
 				free(state.menu.passstring);
+			pw := GUI.view(*state.menu.login_popup_password);
 			state.menu.passstring = sprint(
 				"% % %",
-				slice(state.menu.login_popup_password, 0, 4),
-				slice(state.menu.login_popup_password, 4, 7),
-				slice(state.menu.login_popup_password, 7, 11)
+				slice(pw, 0, 4),
+				slice(pw, 4, 7),
+				slice(pw, 7, 11)
 			);
 		}
 		state.platform.set_token(login.token);
@@ -557,31 +549,6 @@ menu_loop :: (_app: *App) -> bool {
 			}
 		}
 	} else {
-		main_menu_args: GUI.Main_Menu_Args;
-		main_menu_args.instances = NewArray(
-			state.menu.instances_list.count, GUI.Instance_Info,, temp
-		);
-		main_menu_args.create_instance_popup_open = state.menu.create_instance.open;
-		main_menu_args.create_instance_name = state.menu.create_instance.name;
-		main_menu_args.create_instance_password = state.menu.create_instance.password;
-		main_menu_args.enter_instance_password = state.menu.enter_instance_password;
-		for state.menu.instances_list {
-			gui_instance := *main_menu_args.instances[it_index];
-			gui_instance.name.data = it.name.data;
-			gui_instance.name.count = it.name.count;
-			for gui_instance.name if it == 0 { gui_instance.name.count = it_index; break; }
-			gui_instance.player_count = it.current_players;
-			gui_instance.player_capacity = it.max_players;
-			gui_instance.level_name.data = it.level_name.data;
-			gui_instance.level_name.count = it.level_name.count;
-			for gui_instance.level_name if it == 0 {
-				gui_instance.level_name.count = it_index;
-				break;
-			}
-			gui_instance.private = it.private;
-			gui_instance.auto_revive = it.auto_revive;
-			gui_instance.instance_id = it.instance_id;
-		}
 		push_main_menu(app_user, *app_user.gui_state, *state.menu);
 
 		push_left_main_menu(*app_user.gui_state, *state.menu, _app.platform);
@@ -738,30 +705,26 @@ push_create_bomberman_menu :: (
 	GUI.default_params(gui).align = .Top_Left;
 	GUI.default_params(gui).z = 26.2;
 	
-	create_instance_name := GUI.labeled_input_text(
+	GUI.labeled_input_text(
 		gui,
 		"Name",
-		menu.create_bomberman.name,
+		*menu.create_bomberman.name,
 		width(content_aabb) - 8,
 		24,
 		scale = 16,
 		max_chars = 8,
 		id = "instance_name_input",
 	);
-	if menu.create_bomberman.name != create_instance_name {
-		free(menu.create_bomberman.name);
-		menu.create_bomberman.name = sprint("%", create_instance_name);
-	}
 
 	menu.create_bomberman.private = GUI._labeled_checkbox(
 		gui, "Private Instance", width(content_aabb) - 8, 16, id = "private_instance_checkbox"
 	).checked;
 
 	if menu.create_bomberman.private {
-		create_instance_password := GUI.labeled_input_text(
+		GUI.labeled_input_text(
 			gui,
 			"Password",
-			menu.create_bomberman.password,
+			*menu.create_bomberman.password,
 			width(content_aabb) - 8,
 			24,
 			scale = 16,
@@ -769,10 +732,6 @@ push_create_bomberman_menu :: (
 			max_chars = 8,
 			id = "private_instance_password_input",
 		);
-		if menu.create_bomberman.password != create_instance_password {
-			free(menu.create_bomberman.password);
-			menu.create_bomberman.password = sprint("%", create_instance_password);
-		}
 	}
 
 	menu.create_bomberman.max_players = GUI.labeled_int_input(
@@ -794,8 +753,8 @@ push_create_bomberman_menu :: (
 	);
 	if create_clicked {
 		command: Command.Create_Bomberman;
-		string_to_array(menu.create_bomberman.name, command.name);
-		string_to_array(menu.create_bomberman.password, command.password);
+		string_to_array(GUI.view(*menu.create_bomberman.name), command.name);
+		string_to_array(GUI.view(*menu.create_bomberman.password), command.password);
 		command.private = menu.create_bomberman.private;
 		command.max_players = menu.create_bomberman.max_players;
 		send_web_message(platform, gui.controls.time, make_command(command));
@@ -899,7 +858,7 @@ push_main_menu :: (
 	if enter_instance_clicked && selected_instance_id >= 0 {
 		command: Command.Ask_Enter_Instance;
 		command.instance_id = selected_instance_id;
-		string_to_array(menu.enter_instance_password, command.password);
+		string_to_array(GUI.view(*menu.enter_instance_password), command.password);
 		send_web_message(_app.platform, gui.controls.time, make_command(command));
 	}
 	cursor.x += GUI.widget_width(gui, "enter_instance") + 4;
@@ -921,9 +880,9 @@ push_main_menu :: (
 	input_text_aabb = GUI.align_aabb(
 		input_text_aabb, shrink(lower_input_aabb, 4), GUI.Align.Bottom_Right
 	);
-	enter_instance_password := GUI.atom_input_text(
+	GUI.atom_input_text(
 		gui,
-		menu.enter_instance_password,
+		*menu.enter_instance_password,
 		24,
 		128.0,
 		id = GUI.string_id("password_input"),
@@ -933,10 +892,6 @@ push_main_menu :: (
 		_pos = input_text_aabb.min,
 		_align = GUI.Align.Bottom_Left
 	);
-	if menu.enter_instance_password != enter_instance_password {
-		free(menu.enter_instance_password);
-		menu.enter_instance_password = sprint("%", enter_instance_password);
-	}
 
 	cursor =  .{ 16, 64 + 16 };
 
@@ -992,30 +947,26 @@ draw_create_instance_param_panel :: (
 	GUI.default_params(gui).align = .Top_Left;
 	GUI.default_params(gui).z = 26.2;
 	
-	create_instance_name := GUI.labeled_input_text(
+	GUI.labeled_input_text(
 		gui,
 		"Name",
-		menu.create_instance.name,
+		*menu.create_instance.name,
 		width(aabb) - 8,
 		24,
 		scale = 16,
 		max_chars = 8,
 		id = "instance_name_input",
 	);
-	if menu.create_instance.name != create_instance_name {
-		free(menu.create_instance.name);
-		menu.create_instance.name = sprint("%", create_instance_name);
-	}
 
 	create_instance_private := GUI._labeled_checkbox(
 		gui, "Private Instance", width(aabb) - 8, 16, id = "private_instance_checkbox"
 	).checked;
 
 	if create_instance_private {
-		create_instance_password := GUI.labeled_input_text(
+		GUI.labeled_input_text(
 			gui,
 			"Password",
-			menu.create_instance.password,
+			*menu.create_instance.password,
 			width(aabb) - 8,
 			24,
 			scale = 16,
@@ -1023,10 +974,6 @@ draw_create_instance_param_panel :: (
 			max_chars = 8,
 			id = "private_instance_password_input",
 		);
-		if menu.create_instance.password != create_instance_password {
-			free(menu.create_instance.password);
-			menu.create_instance.password = sprint("%", create_instance_password);
-		}
 	}
 
 	create_instance_auto_revive := GUI._labeled_checkbox(
@@ -1045,8 +992,8 @@ draw_create_instance_param_panel :: (
 	);
 	if create_clicked {
 		command: Command.Create_Instance;
-		string_to_array(menu.create_instance.name, command.name);
-		string_to_array(menu.create_instance.password, command.password);
+		string_to_array(GUI.view(*menu.create_instance.name), command.name);
+		string_to_array(GUI.view(*menu.create_instance.password), command.password);
 		command.auto_revive = menu.create_instance.auto_revive;
 		command.private = menu.create_instance.private;
 		command.roster = NewArray(menu.create_instance.roster_list.count, int,, temp);
@@ -1218,21 +1165,18 @@ draw_create_instance_terrain_panel :: (
 	GUI.default_params(gui).direction = .Down;
 	defer GUI.pop_default_params(gui);
 
-	new_filter := GUI.labeled_input_text(
+	if GUI.labeled_input_text(
 		gui,
 		"Filter",
-		menu.create_instance.filter,
+		*menu.create_instance.filter,
 		width(aabb) - 8,
 		16,
 		max_input_width = 256,
 		_z = 26,
 		_align = .Top_Left
-	);
-	if new_filter != menu.create_instance.filter {
-		free(menu.create_instance.filter);
-		menu.create_instance.filter = sprint("%", new_filter);
+	).changed {
 		ask_list_terrain: Command.Ask_List_Terrain;
-		ask_list_terrain.filter = menu.create_instance.filter;
+		ask_list_terrain.filter = GUI.view(*menu.create_instance.filter);
 		ask_list_terrain.correlation_id = 1;
 		send_web_message(platform, gui.controls.time, make_command(ask_list_terrain));
 	}

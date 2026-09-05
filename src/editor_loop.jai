@@ -15,7 +15,7 @@ Editor_Page :: struct {
 	thumbnail_receiving: [..] Thumbnail_Pending;
 
 	show_load_dialog := false;
-	load_filter: string;
+	load_filter: GUI.String;
 	load_result_page := 0;
 
 	Terrain_Entry :: struct {
@@ -28,7 +28,9 @@ Editor_Page :: struct {
 	terrain_list_pool: Pool;
 
 	show_save_dialog := false;
-	save_dialog_input: string;
+	save_dialog_input: GUI.String;
+
+	string_pool: GUI.String_Pool;
 
 	mode: Editor_Mode = .Tiles;
 
@@ -88,8 +90,7 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 				new_save_dialog_input.count += 1;
 			}
 
-			free(page.save_dialog_input);
-			page.save_dialog_input = sprint("%", new_save_dialog_input);
+			GUI.set(*page.save_dialog_input, new_save_dialog_input);
 		}
 		return true;
 	}
@@ -1503,7 +1504,7 @@ draw_editor_toolbar :: (
 	if load_clicked {
 		// Refresh file list
 		ask_list_terrain: Command.Ask_List_Terrain;
-		ask_list_terrain.filter = page.load_filter;
+		ask_list_terrain.filter = GUI.view(*page.load_filter);
 		send_web_message(state.platform, gui.controls.time, make_command(ask_list_terrain));
 		page.show_load_dialog = true;
 	}
@@ -1647,16 +1648,11 @@ draw_load_dialog :: (
 	GUI._atom_label(gui, "Load Terrain", scale = 18, color = V4f.{ 1, 1, 1, 1 });
 
 	// Input for filter
-	new_load_filter := GUI.labeled_input_text(
-		gui, "Filter", page.load_filter, dialog_width - 16, 24, label_color = GUI.GRAY_80, placeholder = "<filter>"
-	);
-	if new_load_filter != page.load_filter {
-		free(page.load_filter.data);
-		page.load_filter = sprint("%", new_load_filter);
-
-		// Refresh file list
+	if GUI.labeled_input_text(
+		gui, "Filter", *page.load_filter, dialog_width - 16, 24, label_color = GUI.GRAY_80, placeholder = "<filter>"
+	).changed {
 		ask_list_terrain: Command.Ask_List_Terrain;
-		ask_list_terrain.filter = page.load_filter;
+		ask_list_terrain.filter = GUI.view(*page.load_filter);
 		send_web_message(platform, gui.controls.time, make_command(ask_list_terrain));
 	}
 
@@ -1898,9 +1894,9 @@ draw_save_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 	GUI.push_quad_screen(gui, V2f.{ input_x, input_y }, V2f.{ input_width, input_height }, V3f.{ 0.3, 0.3, 0.3 }, z = 101);
 
 	// Show current filename
-	new_save_dialog_input := GUI.atom_input_text(
+	GUI.atom_input_text(
 		gui,
-		page.save_dialog_input,
+		*page.save_dialog_input,
 		input_height,
 		input_width,
 		_z = 102,
@@ -1908,10 +1904,6 @@ draw_save_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 		_align = .Top_Left,
 		id = GUI.string_id("save_dialog_input")
 	);
-	if new_save_dialog_input != page.save_dialog_input {
-		free(page.save_dialog_input);
-		page.save_dialog_input = sprint("%", new_save_dialog_input);
-	}
 
 	// Save button
 	save_clicked, _, _ := GUI.text_button(gui, "Save", V2f.{ dialog_x + dialog_width - 140, dialog_y + 20 }, z = 101, id = "dialog_save", align = .Top_Left);
@@ -1925,7 +1917,7 @@ draw_save_dialog :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, p
 		send_web_message(
 			platform, gui.controls.time, make_command(save)
 		);
-		save_terrain_to_file(editor, page.save_dialog_input);
+		save_terrain_to_file(editor, GUI.view(*page.save_dialog_input));
 		page.show_save_dialog = false;
 	}
 

@@ -15,6 +15,8 @@ Scene :: #import "Scene";
 #import "Reflection";
 #scope_export
 
+#load "GUI_String.jai";
+
 Z_SLOT :: V2f.{ 0, 15 };
 Q_SLOT :: V2f.{ 1, 15 };
 C_SLOT :: V2f.{ 2, 15 };
@@ -1886,258 +1888,6 @@ push_no_connection :: (state: *GUI_State) -> No_Connection_Ret {
 	return ret;
 }
 
-Instance_Info :: struct {
-	name: string;
-	auto_revive: bool;
-	private: bool;
-	player_count: int;
-	player_capacity: int;
-	level_name: string;
-	instance_id: int;
-}
-
-Main_Menu_Ret :: struct {
-	reload_instances_clicked := false;
-	enter_instance_clicked := false;
-	create_instance_clicked := false;
-	create_instance_private: bool;
-	create_instance_auto_revive: bool;
-	create_instance_create_clicked: bool;
-	create_instance_cancel_clicked: bool;
-
-	selected_instance_id := -1;
-	localhost := false;
-
-	temp_create_instance_name: string;
-	temp_create_instance_password: string;
-
-	temp_enter_instance_password: string;
-}
-
-Main_Menu_Args :: struct {
-	create_instance_popup_open := false;
-	create_instance_name: string;
-	create_instance_password: string;
-
-	enter_instance_password: string;
-
-	instances: []Instance_Info;
-}
-
-push_main_menu :: (
-	state: *GUI_State,
-	args: Main_Menu_Args
-) -> Main_Menu_Ret {
-	ret: Main_Menu_Ret;
-	push_quad_screen(
-		state,
-		pos = .{ 0, 0 },
-		size = state.controls.window_size,
-		color = v3(GRAY_80),
-		z = 0.01
-	);
-
-	atom_label(
-		state,
-		"Name game",
-		.{ state.controls.window_size.x / 2, 16 },
-		32,
-		z = 1,
-		align = .Top_Center,
-		color = V4f.{ 0, 0, 0, 1 }
-	);
-	push_quad_screen(
-		state,
-		.{ 16, 64 },
-		.{ state.controls.window_size.x - 32, 1 },
-		v3(GRAY_10),
-		z = 0.02
-	);
-	Row :: struct {
-		instance_name: string; @"name(\"Name\")" @"size(128)" @"align(Left)"
-		players_count: string; @"name(\"# Players\")" @"align(Right)"
-		level_name: string; @"name(\"Level name\")" @"align(Right)"
-		auto_revive: bool; @"name(\"Auto-revive\")" @"align(Right)"
-		private: bool; @"name(\"Private\")" @"align(Right)"
-	}
-	rows := NewArray(args.instances.count, Row,, temp);
-	for * rows {
-		it.instance_name = args.instances[it_index].name;
-		it.players_count = tprint(
-			"% / %",
-			formatInt(args.instances[it_index].player_count, 10, 3, #char " "),
-			formatInt(args.instances[it_index].player_capacity, 10, 3, #char " ")
-		);
-		it.level_name = args.instances[it_index].level_name;
-		it.auto_revive = args.instances[it_index].auto_revive;
-		it.private = args.instances[it_index].private;
-	}
-
-	table := atom_table(
-		state,
-		.{ state.controls.window_size.x - 16, 64 + 16 },
-		.{ 512 + 128, state.controls.window_size.y - 64 - 16 - 16 - 32 },
-		rows,
-		id = "table",
-		align = Align.Top_Right
-	);
-
-	if table.selected_row_index >= 0 && table.selected_row_index < args.instances.count {
-		ret.selected_instance_id = args.instances[table.selected_row_index].instance_id;
-	}
-
-	lower_input_aabb := pos_size(
-		V2f.{ table.aabb_min.x, table.aabb_max.y + 4 },
-		V2f.{ table.aabb_max.x - table.aabb_min.x, 32 }
-	);
-	push_quad_screen(state, lower_input_aabb, v3(GRAY_70), z = 0.02);
-
-	text_button_state: Text_Button;
-	cursor := V2f.{ table.aabb_min.x + 8, table.aabb_max.y + 4 + 16 };
-	ret.reload_instances_clicked, text_button_state = text_button(
-		state, "Reload", cursor, 1, id = "reload", align = Align.Center_Left
-	);
-	cursor.x += widget_width(state, "reload") + 4;
-	ret.enter_instance_clicked, text_button_state = text_button(
-		state, "Enter instance", cursor, 1, id = "enter_instance", align = Align.Center_Left
-	);
-	cursor.x += widget_width(state, "enter_instance") + 4;
-	ret.create_instance_clicked, text_button_state = text_button(
-		state, "Create instance", cursor, 1, id = "create_instance", align = Align.Center_Left
-	);
-
-	input_text_aabb := pos_size(v2(0.0), v2(128.0, 24.0));
-	input_text_aabb = align_aabb(input_text_aabb, shrink(lower_input_aabb, 4), Align.Bottom_Right);
-	password_input := string_id("password_input");
-	ret.temp_enter_instance_password = atom_input_text(
-		state,
-		args.enter_instance_password,
-		24,
-		128.0,
-		id = password_input,
-		placeholder = "Password",
-		max_chars = 8,
-		_z=1,
-		_pos = input_text_aabb.min,
-		_align = Align.Bottom_Left
-	);
-
-	cursor =  .{ 16, 64 + 16 };
-
-	if args.create_instance_popup_open {
-		popup := begin_window(
-			state,
-			state.controls.window_size / 2,
-			V2f.{ 400, 300 },
-			Align.Center,
-			"create_instance_popup",
-			10
-		);
-
-		atom_label(
-			state,
-			"Create Instance",
-			popup.pos + V2f.{ popup.size.x / 2, 4 },
-			scale = 24,
-			z = 10.1,
-			align = .Top_Center,
-			color = V4f.{ 0, 0, 0, 1 }
-		);
-
-		push_quad_screen(
-			state,
-			popup.pos + V2f.{ 0, 32 },
-			V2f.{ popup.size.x, 1 },
-			v3(GRAY_10),
-			z = 10.1
-		);
-
-		cursor := 32.0 + 8 + 8;
-
-		ret.create_instance_private = labeled_checkbox(
-			state,
-			"Private Instance",
-			popup.pos + V2f.{ 4, cursor },
-			popup.size.x - 8,
-			16,
-			z = 10.1,
-			align = .Center_Left,
-			id = "private_instance_checkbox"
-		).checked;
-		cursor += 24;
-
-		if ret.create_instance_private {
-			ret.temp_create_instance_password = labeled_input_text(
-				state,
-				"Password",
-				args.create_instance_password,
-				popup.size.x - 32,
-				24,
-				scale = 16,
-				_pos = popup.pos + V2f.{ 4 + 32, cursor },
-				_z = 10.1,
-				_align = .Center_Left,
-				placeholder = "****",
-				max_chars = 8,
-				id = "private_instance_password_input",
-			);
-			cursor += 24;
-		}
-
-		ret.create_instance_auto_revive = labeled_checkbox(
-			state,
-			"Auto revive",
-			popup.pos + V2f.{ 4, cursor },
-			popup.size.x - 8,
-			16,
-			z = 10.1,
-			align = .Center_Left,
-			id = "auto_revive_checkbox"
-		).checked;
-		cursor += 24;
-
-		ret.temp_create_instance_name = labeled_input_text(
-			state,
-			"Instance Name",
-			args.create_instance_name,
-			popup.size.x,
-			24,
-			scale = 16,
-			_pos = popup.pos + V2f.{ 4, cursor },
-			_z = 10.1,
-			_align = .Center_Left,
-			placeholder = "Name",
-			max_chars = 16,
-			id = "instance_name_input",
-		);
-		cursor += 24;
-
-		create_clicked, create_button, create_widget := text_button(
-			state,
-			"Create",
-			popup.pos + v2(popup.size.x, popup.size.y) + v2(-14.0, -15),
-			align = .Bottom_Right,
-			id = "create_instance_button",
-			z = 10.1
-		);
-		ret.create_instance_create_clicked = create_clicked;
-
-		cancel_clicked := text_button(
-			state,
-			"Cancel",
-			popup.pos + v2(popup.size.x, popup.size.y) + v2(-14.0, -15) - v2(width(create_widget.aabb) + 8.0, 0),
-			z = 10.1,
-			id = "cancel_create_instance_button",
-			align = .Bottom_Right
-		);
-		ret.create_instance_cancel_clicked = cancel_clicked;
-
-		end_window(state, "create_instance_popup");
-	}
-
-	return ret;
-}
-
 // --------- MODERN
 
 div :: (a: V4f, b: float32) -> V4f {
@@ -2476,9 +2226,14 @@ atom_dash_quad :: (
 	}
 }
 
+Input_Text_Result :: struct {
+	changed := false;
+	committed := false;
+}
+
 atom_input_text :: (
 	gui: *GUI_State,
-	text: string,
+	buf: *String,
 	scale: float,
 	width := 128.0,
 	_pos := V2f.{ FLOAT32_MAX, FLOAT32_MAX },
@@ -2488,8 +2243,8 @@ atom_input_text :: (
 	placeholder := "",
 	max_chars := -1,
 	margin := 2.0
-) -> string {
-	_max_chars := ifx max_chars < 0 then 1024 else max_chars;
+) -> Input_Text_Result {
+	result: Input_Text_Result;
 
 	pos := ifx _pos.x == FLOAT32_MAX then default_params(gui).cursor else _pos;
 	z := ifx _z == FLOAT32_MAX then default_params(gui).z else _z;
@@ -2509,23 +2264,6 @@ atom_input_text :: (
 	comp.aabb.max = comp.aabb.min + size;
 	comp.physical = .Solid;
 
-	push_quad_screen(gui, comp.aabb, v3(GRAY_20), z + 0.01);
-	push_quad_screen(gui, shrink(comp.aabb, 1.0), v3(GRAY_90), z + 0.02);
-
-	label := atom_label(
-		gui,
-		ifx text.count == 0 then placeholder else text,
-		comp.aabb.min,
-		scale * 0.6,
-		z = z + 0.03,
-		color = ifx comp.keyboard_focused then GRAY_00 else GRAY_60,
-		generate_offsets = true
-	);
-	atom_label_replace(gui, *label, move(comp.aabb, v2(margin, 0)), .Center_Left);
-
-	ret := tprint("%", text);
-	ret.count = min(ret.count, _max_chars);
-
 	if comp.just_pressed {
 		comp.keyboard_focused = true;
 	}
@@ -2534,31 +2272,21 @@ atom_input_text :: (
 		comp.keyboard_focused = false;
 	}
 
+	if comp.keyboard_focused && gui.controls.just_pressed[Platform.Key.Enter] {
+		result.committed = true;
+		comp.keyboard_focused = false;
+	}
+
 	if comp.keyboard_focused {
-		state.cursor = clamp(state.cursor, 0, ret.count);
-		cursor_aabb := AABBf.{
-			comp.aabb.min + v2(3.0, 5.0),
-			V2f.{ 2.0, scale * 0.6 }
-		};
-		if text.count > 0 {
-			cursor_aabb = .{
-				label.aabb_min + v2(label.offsets[state.cursor], 0),
-				V2f.{ 2.0, label.aabb_max.y - label.aabb_min.y}
-			};
-		}
-		cursor_aabb.max += cursor_aabb.min;
-		if placeholder.count == 0 || text.count > 0
-			push_quad_screen(gui, cursor_aabb, v3(GRAY_00), z + 0.04);
+		state.cursor = clamp(state.cursor, 0, buf.count);
 
 		handle_add :: (key: int, to_add: string) #expand {
 			if gui.controls.just_pressed[key] {
-				before := ret;
-				before.count = min(state.cursor, before.count);
-				after := ret;
-				after.count = after.count - state.cursor;
-				after.data += state.cursor;
-				ret = tprint("%1%2%3", before, to_add, after);
-				state.cursor += to_add.count;
+				if max_chars < 0 || buf.count + to_add.count <= max_chars {
+					insert(buf, state.cursor, to_add);
+					state.cursor += to_add.count;
+					result.changed = true;
+				}
 			}
 		}
 
@@ -2606,27 +2334,54 @@ atom_input_text :: (
 		handle_add(xx Platform.Key.Period, ".");
 
 		if gui.controls.just_pressed[xx Platform.Key.Backspace] {
-			if state.cursor > 0 && ret.count > 0 {
-				before := ret;
-				before.count = min(state.cursor - 1, before.count);
-				after := ret;
-				after.count = after.count - state.cursor;
-				after.data += state.cursor;
-				ret = tprint("%1%2", before, after);
+			if state.cursor > 0 && buf.count > 0 {
+				remove_range(buf, state.cursor - 1, 1);
 				state.cursor -= 1;
+				result.changed = true;
 			}
 		}
 		if gui.controls.just_pressed[xx Platform.Key.Left] {
 			state.cursor = max(0, state.cursor - 1);
 		}
 		if gui.controls.just_pressed[xx Platform.Key.Right] {
-			state.cursor = min(ret.count, state.cursor + 1);
+			state.cursor = min(buf.count, state.cursor + 1);
 		}
 	}
 
-	ret.count = min(ret.count, _max_chars);
+	text := view(buf);
 
-	return ret;
+	push_quad_screen(gui, comp.aabb, v3(GRAY_20), z + 0.01);
+	push_quad_screen(gui, shrink(comp.aabb, 1.0), v3(GRAY_90), z + 0.02);
+
+	label := atom_label(
+		gui,
+		ifx text.count == 0 then placeholder else text,
+		comp.aabb.min,
+		scale * 0.6,
+		z = z + 0.03,
+		color = ifx comp.keyboard_focused then GRAY_00 else GRAY_60,
+		generate_offsets = true
+	);
+	atom_label_replace(gui, *label, move(comp.aabb, v2(margin, 0)), .Center_Left);
+
+	if comp.keyboard_focused {
+		state.cursor = clamp(state.cursor, 0, buf.count);
+		cursor_aabb := AABBf.{
+			comp.aabb.min + v2(3.0, 5.0),
+			V2f.{ 2.0, scale * 0.6 }
+		};
+		if text.count > 0 {
+			cursor_aabb = .{
+				label.aabb_min + v2(label.offsets[state.cursor], 0),
+				V2f.{ 2.0, label.aabb_max.y - label.aabb_min.y}
+			};
+		}
+		cursor_aabb.max += cursor_aabb.min;
+		if placeholder.count == 0 || text.count > 0
+			push_quad_screen(gui, cursor_aabb, v3(GRAY_00), z + 0.04);
+	}
+
+	return result;
 }
 
 Atom_Table :: struct {
@@ -3411,7 +3166,7 @@ labeled_dropdown :: (
 labeled_input_text :: (
 	gui: *GUI_State,
 	label: string,
-	text: string,
+	buf: *String,
 	width: float,
 	size: float,
 	scale := 16.0,
@@ -3424,7 +3179,7 @@ labeled_input_text :: (
 	max_chars := -1,
 	padding := 4.0,
 	placeholder := ""
-) -> string {
+) -> Input_Text_Result {
 	_, w := widget(gui, id, struct {});
 
 	origin := default_params(gui).cursor;
@@ -3444,11 +3199,7 @@ labeled_input_text :: (
 	row_aabb := AABBf.{ pos, pos + v2(width, size) };
 	row_aabb = align_aabb(row_aabb, align);
 
-	align_label := vertical(align) | Align.Left;
-	align_input := vertical(align) | Align.Right;
-
-	lower_left := align_pos(pos, .{ width, size }, horizontal(align));
-	label_comp := _atom_label(
+	_atom_label(
 		gui,
 		label,
 		scale,
@@ -3458,10 +3209,10 @@ labeled_input_text :: (
 		color = label_color,
 		id = "label"
 	);
-	
-	input_comp := atom_input_text(
+
+	result := atom_input_text(
 		gui,
-		text,
+		buf,
 		scale / 0.6,
 		min(width - widget_width(gui, "label") - padding * 3, max_input_width),
 		_z = z,
@@ -3473,7 +3224,7 @@ labeled_input_text :: (
 	);
 
 	w.aabb = row_aabb;
-	return input_comp;
+	return result;
 }
 
 Integer_Input :: struct {
@@ -3506,14 +3257,18 @@ integer_input :: (
 
 	lower_left := align_pos(pos, .{ width, height }, align);
 
-	text := tprint("%", state.value);
-	result := atom_input_text(
+	pool: String_Pool;
+	init(*pool, temp);
+	buf := make(*pool, 20);
+	set(*buf, tprint("%", state.value));
+	input := atom_input_text(
 		gui,
-		AABBf.{ lower_left, lower_left + .{ width, height } },
-		height * 0.6,
-		text,
-		z,
-		align = Align.Bottom_Left,
+		*buf,
+		height,
+		width,
+		_pos = lower_left,
+		_z = z,
+		_align = Align.Bottom_Left,
 		id = xx string_id("input"),
 		max_chars = 20
 	);
@@ -3522,8 +3277,8 @@ integer_input :: (
 	state.aabb_max = lower_left + .{ width, height };
 	state.changed = false;
 
-	if result != text {
-		parsed_value, success := string_to_int(result);
+	if input.changed {
+		parsed_value, success := string_to_int(view(*buf));
 		if success {
 			parsed_value = clamp(parsed_value, min_value, max_value);
 			if parsed_value != state.value {

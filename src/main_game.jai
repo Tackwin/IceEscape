@@ -19,7 +19,6 @@ WRender :: #import "WRender";
 PNG :: #import "PNG";
 Scene :: #import "Scene";
 GUI :: #import "GUI";
-#import "gui_demo";
 
 process_complete_ntp :: (state: *State, ntp: Command.NTP) {
 	result: State.NTP_Result;
@@ -252,6 +251,20 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	WRender.graphics = *app_user.graphics;
 	init_store(app.platform, *app_user.store);
 	GUI.gui_state_init(*app_user.gui_state, *app_user.store);
+	menu := *app_user.state.menu;
+	GUI.init(*menu.string_pool);
+	menu.username = GUI.make(*menu.string_pool);
+	menu.login_popup_password = GUI.make(*menu.string_pool);
+	menu.scene_name_leadeboard = GUI.make(*menu.string_pool);
+	menu.enter_instance_password = GUI.make(*menu.string_pool);
+	menu.create_instance.filter = GUI.make(*menu.string_pool);
+	menu.create_instance.name = GUI.make(*menu.string_pool);
+	menu.create_instance.password = GUI.make(*menu.string_pool);
+	menu.create_bomberman.name = GUI.make(*menu.string_pool);
+	menu.create_bomberman.password = GUI.make(*menu.string_pool);
+	GUI.init(*app_user.state.editor_page.string_pool);
+	app_user.state.editor_page.load_filter = GUI.make(*app_user.state.editor_page.string_pool);
+	app_user.state.editor_page.save_dialog_input = GUI.make(*app_user.state.editor_page.string_pool);
 	WRender.init_framegraph(*app_user.framegraph, *app_user.store);
 
 	Scene.make(*app_user.state.scene);
@@ -273,6 +286,8 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	app_user.graphics.gpu = _app.platform.gpu;
 	WRender.graphics = *app_user.graphics;
 	GUI.gui_state_init(*app_user.gui_state, *app_user.store);
+	GUI.rebind(*app_user.state.menu.string_pool);
+	GUI.rebind(*app_user.state.editor_page.string_pool);
 
 	scene: Scene.Scene;
 	Scene.reload(*scene);
