@@ -262,6 +262,61 @@ DB_query :: struct {
 
 	success := false;
 }
+
+db_table_name :: ($T: Type) -> string {
+	info := type_info(T);
+	for note: info.notes {
+		name: string;
+		if scan2(note, "table(%)", *name) {
+			if name.count >= 2 && name[0] == #char "\"" {
+				name.data += 1;
+				name.count -= 2;
+			}
+			return name;
+		}
+	}
+	assert(false, "Type % is missing a @table(name) note\n", T);
+	return "";
+}
+
+db_sql_type :: (member: Type_Info_Struct_Member) -> string {
+	for note: member.notes {
+		if note == "json_array"
+			return "TEXT";
+	}
+
+	tag := member.type.type;
+	if tag == .INTEGER || tag == .BOOL
+		return "INTEGER";
+	if tag == .FLOAT
+		return "REAL";
+	if tag == .STRING
+		return "TEXT";
+	if tag == .ARRAY {
+		arr := member.type.(*Type_Info_Array);
+		if arr.element_type.type == .INTEGER && arr.element_type.runtime_size == 1
+			return "BLOB";
+		return "TEXT";
+	}
+
+	assert(false, "No SQL mapping for database field '%'\n", member.name);
+	return "TEXT";
+}
+
+load_database :: (platform: *Platform, db: DB_query.Handle, $T: Type, where: string = "") -> [] *T {
+	return load_database(platform, db, db_table_name(T), T, where);
+}
+
+store_database :: (
+	platform: *Platform,
+	db: DB_query.Handle,
+	inputs: [] $T,
+	on_conflict_update := true,
+	primary_key_name := "id"
+) {
+	store_database(platform, db, db_table_name(T), inputs, on_conflict_update, primary_key_name);
+}
+
 load_database_custom :: (
 	platform: *Platform, db: DB_query.Handle, $T: Type, query_string: string
 ) -> [] *T {

@@ -10,7 +10,7 @@ embed_database_default_terrain_bomberman_entry :: (app: *App) {
 	to_ascii.terrain_id = 107;
 	to_ascii.max_players = 64;
 	store_database(
-		app.platform, app_user.server.db, "terrain_bomberman_entry", to_asciis, true, "id"
+		app.platform, app_user.server.db, to_asciis, true, "id"
 	);
 }
 
@@ -61,8 +61,7 @@ embed_database_default_rosters :: (app: *App) {
 		info := load_database(
 			app.platform,
 			app_user.server.db,
-			"terrain_infos",
-			DB_Terrain_Infos,
+						DB_Terrain_Infos,
 			tprint("name = \"%\"", it)
 		);
 
@@ -84,7 +83,7 @@ embed_database_default_terrains :: (app: *App) {
 	save :: (new_id: int, ascii: string, name: string) #expand {
 		ids: [1] DB_Terrain_Id;
 		ids[0].id = new_id;
-		store_database(platform, server.db, "terrain_ids", ids);
+		store_database(platform, server.db, ids);
 
 		to_saves: [1] DB_Terrain_Infos;
 		to_save := *to_saves[0];
@@ -92,14 +91,14 @@ embed_database_default_terrains :: (app: *App) {
 		to_save.author_profile_id = -1;
 		to_save.name = parse_terrain_name(ascii);
 		to_save.created_ms = 0;
-		store_database(platform, server.db, "terrain_infos", to_saves);
+		store_database(platform, server.db, to_saves);
 
 		to_asciis: [1] DB_Terrain_Ascii;
 		to_ascii := *to_asciis[0];
 		to_ascii.id = new_id;
 		to_ascii.ascii_id = new_id;
 		to_ascii.ascii = ascii;
-		store_database(platform, server.db, "terrain_asciis", to_asciis, true, "ascii_id");
+		store_database(platform, server.db, to_asciis, true, "ascii_id");
 	}
 
 	terrains := platform.list_files("../assets/terrain", false);

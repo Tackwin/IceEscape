@@ -199,7 +199,7 @@ handle_end_asset :: (server: *Server, asset: *Big_Asset, platform: *Platform) {
 				to_save.thumbnail = asset.buffer;
 
 				store_database(
-					platform, server.db, "terrain_thumbnails", to_saves, primary_key_name="ascii_id"
+					platform, server.db, to_saves, primary_key_name="ascii_id"
 				);
 			}
 		}
@@ -235,7 +235,6 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			token_entries := load_database(
 				platform,
 				server.db,
-				"profile_tokens",
 				DB_Profile_Token,
 				tprint("token = %", connect.token)
 			);
@@ -261,7 +260,6 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			passes := load_database(
 				platform,
 				server.db,
-				"profile_passcodes",
 				DB_Profile_Passcode,
 				tprint("id = %", user.profile_id)
 			);
@@ -297,7 +295,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			// Let's create a profile id for them
 			new_profile_id: DB_Profile_Id;
 			new_profile_id.id = Rand.random_positive_int(*server.rng);
-			store_database(platform, server.db, "profile_ids", DB_Profile_Id.[ new_profile_id ]);
+			store_database(platform, server.db, DB_Profile_Id.[ new_profile_id ]);
 			user.profile_id = new_profile_id.id;
 
 			// And a passcode
@@ -305,7 +303,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			new_passcode.id = user.profile_id;
 			new_passcode.passcode = Rand.random_u64(*server.rng);
 			store_database(
-				platform, server.db, "profile_passcodes", DB_Profile_Passcode.[ new_passcode ]
+				platform, server.db, DB_Profile_Passcode.[ new_passcode ]
 			);
 
 			// Register the token as the mapping for this profile id
@@ -313,7 +311,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			new_token.id = user.profile_id;
 			new_token.token = connect.token.(u64);
 			store_database(
-				platform, server.db, "profile_tokens", DB_Profile_Token.[ new_token ]
+				platform, server.db, DB_Profile_Token.[ new_token ]
 			);
 
 			reply: Command.Connect;
@@ -332,7 +330,6 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			passes := load_database(
 				platform,
 				server.db,
-				"profile_passcodes",
 				DB_Profile_Passcode,
 				tprint("passcode = %", login.passcode)
 			);
@@ -352,7 +349,6 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 					store_database(
 						platform,
 						server.db,
-						"profile_tokens",
 						DB_Profile_Token.[ token_store ]
 					);
 
@@ -388,7 +384,6 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			terrain_info := load_database(
 				platform,
 				server.db,
-				"terrain_infos",
 				DB_Terrain_Infos,
 				tprint("id = %", load_terrain.terrain_id)
 			);
@@ -464,7 +459,6 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			infos := load_database(
 				platform,
 				server.db,
-				"terrain_infos",
 				DB_Terrain_Infos,
 				tprint("name = '%1'", get_terrain_leaderboard.scene_name)
 			);
@@ -477,7 +471,6 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			infos := load_database(
 				platform,
 				server.db,
-				"terrain_infos",
 				DB_Terrain_Infos,
 				tprint("id = %", terrain_id)
 			);
@@ -491,7 +484,6 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 		time_entries := load_database(
 			platform,
 			server.db,
-			"time_entries",
 			DB_Time_Entry,
 			tprint("terrain_id = %1", terrain_id)
 		);
@@ -514,7 +506,6 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			profile_usernames := load_database(
 				platform,
 				server.db,
-				"profile_usernames",
 				DB_Profile_Username,
 				tprint("id = %", time_entries[min_idx].profile_id)
 			);
@@ -535,7 +526,6 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 				profile_usernames := load_database(
 					platform,
 					server.db,
-					"profile_usernames",
 					DB_Profile_Username,
 					tprint("id = %", time_entries[it].profile_id)
 				);
@@ -587,7 +577,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 					to_ascii.ascii = save_terrain.ascii;
 					to_ascii.created_ms = to_milliseconds(current_time_consensus());
 
-					store_database(platform, server.db, "terrain_asciis", to_asciis, false);
+					store_database(platform, server.db, to_asciis, false);
 					return true;
 				}
 			}
@@ -599,7 +589,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 
 			ids: [1] DB_Terrain_Id;
 			ids[0].id = new_id;
-			store_database(platform, server.db, "terrain_ids", ids);
+			store_database(platform, server.db, ids);
 
 			to_saves: [1] DB_Terrain_Infos;
 			to_save := *to_saves[0];
@@ -613,7 +603,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 					break;
 			}
 
-			store_database(platform, server.db, "terrain_infos", to_saves);
+			store_database(platform, server.db, to_saves);
 
 			to_asciis: [1] DB_Terrain_Ascii;
 			to_ascii := *to_asciis[0];
@@ -621,7 +611,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			to_ascii.ascii = save_terrain.ascii;
 			to_ascii.created_ms = to_milliseconds(current_time_consensus());
 
-			store_database(platform, server.db, "terrain_asciis", to_asciis, false);
+			store_database(platform, server.db, to_asciis, false);
 			return true;
 		}
 	}
@@ -633,7 +623,6 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			username_entries := load_database(
 				platform,
 				server.db,
-				"profile_usernames",
 				DB_Profile_Username,
 				tprint("id = %", user.profile_id)
 			);
@@ -657,7 +646,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			to_save.id = user.profile_id;
 			to_save.username = set_username.username;
 
-			store_database(platform, server.db, "profile_usernames", to_saves);
+			store_database(platform, server.db, to_saves);
 		}
 		return true;
 	}
@@ -669,7 +658,6 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			stats := load_database(
 				platform,
 				server.db,
-				"profile_stats",
 				DB_Profile_Stats,
 				tprint("id = %", user.profile_id)
 			);
@@ -1128,7 +1116,6 @@ init_quick_instance :: (
 	terrain_info := load_database(
 		platform,
 		server.db,
-		"terrain_infos",
 		DB_Terrain_Infos,
 		tprint("id = %", terrain_id)
 	);
@@ -1186,7 +1173,6 @@ init_instance_bomberman :: (
 	terrain_info := load_database(
 		platform,
 		server.db,
-		"terrain_infos",
 		DB_Terrain_Infos,
 		tprint("id = %", pick_id)
 	);
@@ -1212,7 +1198,6 @@ init_instance_bomberman :: (
 	terrain_info = load_database(
 		platform,
 		server.db,
-		"terrain_infos",
 		DB_Terrain_Infos,
 		tprint("id = %", id)
 	);
@@ -1236,7 +1221,7 @@ init_instance_with_roster :: (
 	server: *Server, instance: *Instance, roster_id: int, platform: *Platform
 ) -> bool {
 	rosters := load_database(
-		platform, server.db, "terrain_rosters", DB_Terrain_Roster, tprint("id = %", roster_id)
+		platform, server.db, DB_Terrain_Roster, tprint("id = %", roster_id)
 	);
 	if rosters.count == 0 {
 		return false;
@@ -1274,7 +1259,6 @@ init_instance_with_terrain_ids :: (
 		terrain_info := load_database(
 			platform,
 			server.db,
-			"terrain_infos",
 			DB_Terrain_Infos,
 			tprint("id = %", it)
 		);
@@ -1312,7 +1296,6 @@ handle_instance_events :: (server: *Server, instance: *Instance, platform: *Plat
 		stats := load_database(
 			platform,
 			server.db,
-			"profile_stats",
 			DB_Profile_Stats,
 			tprint("id = %", user.profile_id)
 		);
@@ -1336,7 +1319,6 @@ handle_instance_events :: (server: *Server, instance: *Instance, platform: *Plat
 		store_database(
 			platform,
 			server.db,
-			"profile_stats",
 			DB_Profile_Stats.[ stats_entry ]
 		);
 
@@ -1352,7 +1334,6 @@ handle_instance_events :: (server: *Server, instance: *Instance, platform: *Plat
 			store_database(
 				platform,
 				server.db,
-				"time_entries",
 				DB_Time_Entry.[ time_entry ]
 			);
 		}
@@ -1550,158 +1531,7 @@ ensure_database :: (app: *App) {
 	exec_database(app.platform, app_user.server.db, "PRAGMA journal_mode=WAL;");
 	exec_database(app.platform, app_user.server.db, "PRAGMA synchronous=NORMAL;");
 
-	exec_database(
-		app.platform,
-		app_user.server.db,
-		#string QUERY
-			CREATE TABLE IF NOT EXISTS profile_ids (
-				id INTEGER PRIMARY KEY
-			);
-		QUERY
-	);
-
-	exec_database(
-		app.platform,
-		app_user.server.db,
-		#string QUERY
-			CREATE TABLE IF NOT EXISTS profile_stats (
-				id INTEGER PRIMARY KEY,
-				win_count INTEGER DEFAULT 0,
-				death_count INTEGER DEFAULT 0,
-				revive_count INTEGER DEFAULT 0,
-				username TEXT,
-				FOREIGN KEY(id) REFERENCES profile_ids(id) ON DELETE CASCADE
-			);
-
-			ALTER TABLE profile_stats ADD COLUMN IF NOT EXISTS win_count INTEGER DEFAULT 0;
-			ALTER TABLE profile_stats ADD COLUMN IF NOT EXISTS death_count INTEGER DEFAULT 0;
-			ALTER TABLE profile_stats ADD COLUMN IF NOT EXISTS revive_count INTEGER DEFAULT 0;
-		QUERY
-	);
-
-	exec_database(
-		app.platform,
-		app_user.server.db,
-		#string QUERY
-			CREATE TABLE IF NOT EXISTS profile_usernames (
-				id INTEGER PRIMARY KEY,
-				username TEXT,
-				FOREIGN KEY(id) REFERENCES profile_ids(id) ON DELETE CASCADE
-			);
-		QUERY
-	);
-
-	exec_database(
-		app.platform,
-		app_user.server.db,
-		#string QUERY
-			CREATE TABLE IF NOT EXISTS profile_passcodes (
-				id INTEGER PRIMARY KEY,
-				passcode INTEGER,
-				FOREIGN KEY(id) REFERENCES profile_ids(id) ON DELETE CASCADE
-			);
-		QUERY
-	);
-
-	exec_database(
-		app.platform,
-		app_user.server.db,
-		#string QUERY
-			CREATE TABLE IF NOT EXISTS profile_tokens (
-				id INTEGER PRIMARY KEY,
-				token INTEGER,
-				FOREIGN KEY(id) REFERENCES profile_ids(id) ON DELETE CASCADE
-			);
-		QUERY
-	);
-
-	exec_database(
-		app.platform,
-		app_user.server.db,
-		#string QUERY
-			CREATE TABLE IF NOT EXISTS terrain_ids (
-				id INTEGER PRIMARY KEY
-			);
-		QUERY
-	);
-	
-	exec_database(
-		app.platform,
-		app_user.server.db,
-		#string QUERY
-			CREATE TABLE IF NOT EXISTS terrain_infos (
-				id INTEGER PRIMARY KEY,
-				name TEXT,
-				author_profile_id INTEGER,
-				FOREIGN KEY(id) REFERENCES terrain_ids(id) ON DELETE CASCADE
-			);
-			ALTER TABLE terrain_infos ADD COLUMN created_ms INTEGER DEFAULT 0;
-		QUERY
-	);
-	exec_database(
-		app.platform,
-		app_user.server.db,
-		#string QUERY
-			CREATE TABLE IF NOT EXISTS terrain_thumbnails (
-				ascii_id INTEGER PRIMARY KEY,
-				thumbnail BLOB,
-				FOREIGN KEY(ascii_id) REFERENCES terrain_asciis(ascii_id) ON DELETE CASCADE
-			);
-		QUERY
-	);
-	exec_database(
-		app.platform,
-		app_user.server.db,
-		#string QUERY
-			CREATE TABLE IF NOT EXISTS terrain_asciis (
-				ascii_id INTEGER PRIMARY KEY,
-				id INTEGER,
-				ascii TEXT,
-				created_ms INTEGER,
-				FOREIGN KEY(id) REFERENCES terrain_ids(id) ON DELETE CASCADE
-			);
-		QUERY
-	);
-
-	exec_database(
-		app.platform,
-		app_user.server.db,
-		#string QUERY
-			CREATE TABLE IF NOT EXISTS terrain_rosters (
-				id INTEGER PRIMARY KEY,
-				name TEXT,
-				terrain_ids TEXT CHECK (json_valid(terrain_ids) AND json_type(terrain_ids) = 'array')
-			);
-		QUERY
-	);
-
-	exec_database(
-		app.platform,
-		app_user.server.db,
-		#string QUERY
-			CREATE TABLE IF NOT EXISTS time_entries (
-				id INTEGER PRIMARY KEY,
-				profile_id INTEGER,
-				terrain_id INTEGER,
-				time_ms INTEGER,
-				timestamp_ms INTEGER,
-				FOREIGN KEY(profile_id) REFERENCES profile_ids(id) ON DELETE CASCADE
-			);
-		QUERY
-	);
-
-	exec_database(
-		app.platform,
-		app_user.server.db,
-		#string QUERY
-			CREATE TABLE IF NOT EXISTS terrain_bomberman_entry (
-				id INTEGER PRIMARY KEY,
-				terrain_id INTEGER,
-				max_players INTEGER,
-				FOREIGN KEY(terrain_id) REFERENCES terrain_ids(id) ON DELETE CASCADE
-			);
-		QUERY
-	);
+	ensure_database_schema(app.platform, app_user.server.db);
 
 	embed_database_default_terrains(app);
 	embed_database_default_rosters(app);
