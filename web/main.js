@@ -2,9 +2,66 @@
 
 let audio_context = null;
 
+const set_loader_progress = (fraction, label) => {
+	const loader = document.getElementById("loader");
+	const bar = document.getElementById("bar");
+	const fill = bar && bar.querySelector("span");
+	const text = document.getElementById("loader-label");
+	if (text && label) text.textContent = label;
+	if (!bar || !fill) return;
+	if (fraction < 0) {
+		bar.classList.add("indeterminate");
+		fill.style.width = "40%";
+		return;
+	}
+	bar.classList.remove("indeterminate");
+	fill.style.width = Math.round(Math.max(0, Math.min(1, fraction)) * 100) + "%";
+};
+
+const hide_loader = () => {
+	const loader = document.getElementById("loader");
+	if (loader) loader.classList.add("hidden");
+};
+
+const fetch_with_progress = async (url) => {
+	const response = await fetch(url);
+	if (!response.ok) {
+		throw new Error("Failed to fetch " + url + " (" + response.status + ")");
+	}
+	const total = Number(response.headers.get("content-length")) || 0;
+	if (!response.body || !response.body.getReader) {
+		set_loader_progress(1, "Loading");
+		return await response.arrayBuffer();
+	}
+	if (!total) set_loader_progress(-1, "Loading");
+	const reader = response.body.getReader();
+	const chunks = [];
+	let received = 0;
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		chunks.push(value);
+		received += value.byteLength;
+		if (total) set_loader_progress(received / total, "Loading");
+	}
+	const bytes = new Uint8Array(received);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	set_loader_progress(1, "Loading");
+	return bytes.buffer;
+};
+
 window.addEventListener("load", async () => {
 	audio_context = new AudioContext();
-    await initialize_wasm_module(GAME_WASM, 1024 * 16);
+	try {
+		await initialize_wasm_module(GAME_WASM, 1024 * 16);
+	} catch (err) {
+		set_loader_progress(1, "Failed to load");
+		console.error(err);
+	}
 });
 
 const create_fullscreen_canvas = (text) => {
@@ -54,8 +111,8 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
         }),
     };
     
-    const wasm_file = await fetch(module_path);
-	const wasm_data = await wasm_file.arrayBuffer();
+    const wasm_data = await fetch_with_progress(module_path);
+	set_loader_progress(1, "Starting");
 
 	const module = await WebAssembly.compile(wasm_data);
 
@@ -80,6 +137,7 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 	const init = WebAssembly.promising(jai_exports.wasm_init);
 	jai_context = jai_exports.wasm_get_main_context();
 	await init();
+	hide_loader();
 	
 	const worker = new Worker("worker.js", { type: "module" });
 

@@ -11,7 +11,6 @@
 * Add a full log system that is inspectable, taggable, filterable. Do not output it to stdout.
 * WebTransport implementation BIG
 * Dynamic asset loading and requesting. Do not embed everything into the binary.
-* Landing html page
 * Built in, inspectable timeline of every messages received, with tracking id, searchable, filterable, taggable, and inspectable. This is for debugging the network.
 * Use a tagging system of the field of a struct to automatically create the Sync_XXXX messages.
 * Evaluate the use of a RPC protocol instead of the current message passing system. The only worry would be around packet dropping and loss of metadata like time of flight. But it would be a lot more ergonomic to use.
@@ -29,3 +28,4 @@
 * Add some quick shortcut to spawn a local server process. The platform's vtable would need new function like "create_process".
 * Add a SMALL png reader writer that a human can understand. QOI is too much friction.
 * Completely switch to  a generic function for serializing and deserializing the communication structs
+* Landing html page

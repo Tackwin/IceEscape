@@ -1,37 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <link rel="manifest" href="manifest.json" />
-    <link
-          rel="icon"
-          href="icon.png"
-          type="image/png"
-          sizes="512x512"
-    />
+    <link rel="icon" href="icon.png" type="image/png" sizes="512x512" />
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0">
+    <title>Arena</title>
     <style>
-        body {
+        html, body {
             margin: 0;
-            background-color: #333;
-            width:  100%;
+            width: 100%;
             height: 100%;
-            overflow: hidden; /* Prevent scrolling */
+            overflow: hidden;
+            background: #1a2330 url("landing.png") center / cover no-repeat;
         }
-        canvas{
+        canvas {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
         }
+        #loader {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            background: rgba(10, 16, 24, 0.45);
+            z-index: 10;
+        }
+        #loader.hidden {
+            display: none;
+        }
+        #loader-label {
+            color: #fff;
+            font: 16px/1.2 Georgia, serif;
+        }
+        #bar {
+            width: min(360px, 70vw);
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        #bar > span {
+            display: block;
+            height: 100%;
+            width: 0%;
+            background: #fff;
+        }
+        #bar.indeterminate > span {
+            width: 40%;
+            animation: bar-slide 1.2s ease-in-out infinite;
+        }
+        @keyframes bar-slide {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(280%); }
+        }
     </style>
 </head>
-
 <body>
-<script src="identity.js"></script>
-<script src="main.js"></script>
+    <div id="loader">
+        <div id="loader-label">Loading</div>
+        <div id="bar"><span></span></div>
+    </div>
+    <script src="identity.js"></script>
+    <script src="main.js"></script>
 </body>
-
 </html>
