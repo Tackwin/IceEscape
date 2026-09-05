@@ -87,6 +87,22 @@ Key :: enum s32 {
 }
 Key_COUNT :: #run enum_values_as_s64(Key).count;
 
+Keys :: struct {
+	pressed: [Key_COUNT] bool;
+	just_pressed: [Key_COUNT] bool;
+	just_released: [Key_COUNT] bool;
+}
+
+advance_keys :: (previous: Keys, down: [Key_COUNT] bool) -> Keys {
+	next: Keys;
+	for i: 0..Key_COUNT - 1 {
+		next.pressed[i] = down[i];
+		next.just_pressed[i] = down[i] && !previous.pressed[i];
+		next.just_released[i] = !down[i] && previous.pressed[i];
+	}
+	return next;
+}
+
 Connection :: int;
 Connection_Broadcast: Connection : -1;
 
@@ -105,7 +121,7 @@ Frame_Info :: struct {
 
 	layout: Layout;
 
-	key_pressed: [Key_COUNT] bool;
+	keys: Keys;
 
 	mouse_position: V2f;
 	window_size: V2f;

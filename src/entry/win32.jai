@@ -325,7 +325,7 @@ win32_get_frame_info :: (info: *Frame_Info) {
 			info.layout = .AZERTY;
 	}
 
-	for * info.key_pressed {
+	for * info.keys.pressed {
 		it.* = platform_state.pressed[it_index];
 	}
 

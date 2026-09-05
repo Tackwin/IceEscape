@@ -551,16 +551,7 @@ begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Con
 	// Copy controls from previous frame to out_controls
 	out_controls.* = state.controls;
 
-	// Update gui state from current frame info
-	for * state.controls.just_pressed {
-		it.* = info.key_pressed[it_index] && !state.controls.pressed[it_index];
-	}
-	for * state.controls.just_released {
-		it.* = !info.key_pressed[it_index] && state.controls.pressed[it_index];
-	}
-	for * state.controls.pressed {
-		it.* = info.key_pressed[it_index];
-	}
+	state.controls.keys = Platform.advance_keys(state.controls.keys, info.keys.pressed);
 	state.controls.mouse_pos.x = info.mouse_position.x;
 	state.controls.mouse_pos.y = info.mouse_position.y;
 	state.controls.mouse_wheel = info.mouse_wheel;
