@@ -1151,8 +1151,8 @@ init_camera_bomberman :: (scene: *Scene) {
 
 init_player :: (scene: Scene, player: *Player) {
 	if scene.params.mode == .Bomberman {
-		player.server.turning_speed *= 1.5;
-		player.server.speed /= 1.25;
+		player.server.turning_speed *= 1.75;
+		player.server.speed /= 1.4;
 		player.server.radius_hitbox_rock = 0.65;
 	}
 }
@@ -1160,6 +1160,9 @@ init_player :: (scene: Scene, player: *Player) {
 init_bomb :: (scene: Scene, bomb: *Bomb) {
 	bomb.* = .{};
 	bomb.id = scene.bombs.count + 1;
+	if scene.params.mode == .Bomberman {
+		bomb.server.radius_hitbox = 0.5;
+	}
 }
 
 reset_camera_zoom :: (camera: *Camera) {
@@ -2146,6 +2149,23 @@ update_client :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 		}
 	}
 
+	// >RULE Bomb explode on explosion tagged with chain_bomb
+	for *expl: scene.explosions {
+		if !expl.trigger_bombs {
+			continue;
+		}
+		r := explosion_radius(scene, expl);
+
+		for *bomb: scene.bombs {
+			if bomb.server.chain_bomb {
+				d := norm(expl.position - bomb.server.position);
+				if d < r {
+					bomb.server.time = bomb.server.explosion_time;
+				}
+			}
+		}
+	}
+
 	// Springs the trap, only for visuals
 	for * scene.traps if it.activable && !it.activated {
 		for * player, player_idx: scene.players {
@@ -2611,7 +2631,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 
 	// >RULE bombs explode on time, killing their holder
 	for * bomb: scene.bombs {
-		if bomb.server.time > bomb.server.explosion_time {
+		if bomb.server.time >= bomb.server.explosion_time {
 			player, player_idx := find_by_player_id(scene, bomb.holder);
 			if player {
 				should_die[player_idx].soft_die = true;
@@ -2628,6 +2648,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			explosion.position = explosion_center;
 			explosion.lifetime = 0.75;
 			explosion.max_size = bomb.server.explosion_radius * 2;
+			explosion.trigger_bombs = bomb.server.chain_bomb;
 			array_add(*scene.explosions, explosion);
 
 			cmd: Command.Explode;
@@ -2639,7 +2660,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			cmd.delay = 0.0;
 			array_add(*result.explode, cmd);
 
-			if bomb.server.chain_bomb for 1..bomb.server.cross_length {
+			for 1..bomb.server.cross_length {
 				explosion.delay = 0.1 * it;
 				cmd.delay = explosion.delay;
 
@@ -2946,6 +2967,23 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 					should_die_source = p;
 					should_die_strength = 3.0;
 					continue;
+				}
+			}
+		}
+	}
+
+	// >RULE Bomb explode on explosion tagged with chain_bomb
+	for *expl: scene.explosions {
+		if !expl.trigger_bombs {
+			continue;
+		}
+		r := explosion_radius(scene, expl);
+
+		for *bomb: scene.bombs {
+			if bomb.server.chain_bomb {
+				d := norm(expl.position - bomb.server.position);
+				if d < r {
+					bomb.server.time = bomb.server.explosion_time;
 				}
 			}
 		}
@@ -4076,6 +4114,22 @@ can_execute_player_motion :: (scene: Scene, a: V3f, b: V3f, player: *Player) -> 
 			return false;
 		}
 	}
+	if scene.params.mode == .Bomberman {
+		// Forbid motion through snow.
+		tile_under_b, is_under_a_tile := tile_under(scene, b);
+		if is_under_a_tile
+			if tile_under_b.kind == .Dirt
+				return false;
+
+		// Also forbid motion through bombs.
+		for * scene.bombs {
+			d := norm(b - it.server.position);
+
+			if d < it.server.radius_hitbox {
+				return false;
+			}
+		}
+	}
 	return true;
 }
 
@@ -4510,7 +4564,6 @@ process_client_only :: (
 			bomb.server.holdable = sync_bomb.holdable;
 			return true;
 		} else {
-			print("Creating new bomb: %\n", sync_bomb.bomb_id);
 			new_bomb: Bomb;
 			new_bomb.id = sync_bomb.bomb_id;
 			new_bomb.spawner_id = sync_bomb.bomb_spawner_id;
@@ -4572,6 +4625,7 @@ process_client_only :: (
 		explosion.lifetime = explode.lifetime;
 		explosion.max_size = explode.max_size;
 		explosion.delay = explode.delay;
+		explosion.trigger_bombs = explode.trigger_bombs;
 		array_add(*scene.explosions, explosion);
 
 		sound_trigger: Sound_Trigger;

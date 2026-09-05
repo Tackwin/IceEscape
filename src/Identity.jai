@@ -17,7 +17,7 @@ identity_cstr :: (s: string) -> *u8 {
 
 GAME_NAME_LOWER :: #run copy_string(to_lower_copy(GAME_NAME));
 GAME_SERVER_NAME :: #run ident("Server");
-GAME_LINUX_SERVER_NAME :: #run ident("LinuxServer");
+GAME_LINUX_SERVER_NAME :: "LinuxServer";
 GAME_DLL :: #run ident(".dll");
 GAME_PDB :: #run copy_string(join(GAME_NAME, ".dll.pdb"));
 GAME_SERVER_DLL :: #run ident("Server.dll");
@@ -34,5 +34,5 @@ GAME_TEMP_DLL :: #run ident("_temp.dll");
 GAME_TEMP_PDB :: #run ident("_temp.pdb");
 GAME_SERVER_TEMP_DLL :: #run ident("Server_temp.dll");
 GAME_CONTROL_PIPE_PATH :: #run copy_string(join("\\\\.\\pipe\\", GAME_CONTROL_PIPE, "\0"));
-GAME_SYSTEMD_SERVICE :: #run copy_string(join(GAME_NAME_LOWER, "server.service"));
+GAME_SYSTEMD_SERVICE :: "linuxserver.service";
 GAME_WEB_ROOT :: #run copy_string(join("www/", GAME_NAME_LOWER));
