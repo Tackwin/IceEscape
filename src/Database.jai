@@ -5,73 +5,73 @@
 #scope_export
 
 DB_Profile_Id :: struct {
-	id: int;
-} @table(profile_ids);
+	id: int; @table("profile_ids")
+} @table("profile_ids");
 
 DB_Profile_Stats :: struct {
-	id: int;
+	id: int; @table("profile_stats")
 	win_count: int;
 	death_count: int;
 	revive_count: int;
-} @table(profile_stats);
+} @table("profile_stats");
 
 DB_Profile_Passcode :: struct {
-	id: int;
+	id: int; @table("profile_passcodes")
 	passcode: u64;
-} @table(profile_passcodes);
+} @table("profile_passcodes");
 
 DB_Profile_Username :: struct {
-	id: int;
+	id: int; @table("profile_usernames")
 	username: string;
-} @table(profile_usernames);
+} @table("profile_usernames");
 
 DB_Profile_Token :: struct {
-	id: int;
+	id: int; @table("profile_tokens")
 	token: u64;
-} @table(profile_tokens);
+} @table("profile_tokens");
 
 DB_Time_Entry :: struct {
-	id: int;
+	id: int; @table("time_entries")
 	profile_id: int;
 	terrain_id: int;
 	time_ms: int;
 	timestamp_ms: int;
-} @table(time_entries);
+} @table("time_entries");
 
 DB_Terrain_Id :: struct {
-	id: int;
-} @table(terrain_ids);
+	id: int; @table("terrain_ids")
+} @table("terrain_ids");
 
 DB_Terrain_Infos :: struct {
-	id: int;
+	id: int; @table("terrain_infos")
 	name: string;
 	author_profile_id: int;
 	created_ms: int;
-} @table(terrain_infos);
+} @table("terrain_infos");
 
 DB_Terrain_Ascii :: struct {
-	ascii_id: int;
+	ascii_id: int; @table("terrain_asciis")
 	id: int;
 	ascii: string;
 	created_ms: int;
-} @table(terrain_asciis);
+} @table("terrain_asciis");
 
 DB_Terrain_Thumbnail :: struct {
-	ascii_id: int;
+	ascii_id: int; @table("terrain_thumbnails")
 	thumbnail: [] u8;
-} @table(terrain_thumbnails);
+} @table("terrain_thumbnails");
 
 DB_Terrain_Roster :: struct {
-	id: int;
+	id: int; @table("terrain_rosters")
 	name: string;
 	terrain_ids: [] int; @json_array
-} @table(terrain_rosters);
+} @table("terrain_rosters");
 
 DB_Terrain_Bomberman_Entry :: struct {
-	id: int;
+	id: int; @table("terrain_bomberman_entry")
 	terrain_id: int;
 	max_players: int;
-} @table(terrain_bomberman_entry);
+} @table("terrain_bomberman_entry");
 
 All_DB_Types :: Type.[
 	DB_Profile_Id,
@@ -87,6 +87,15 @@ All_DB_Types :: Type.[
 	DB_Terrain_Roster,
 	DB_Terrain_Bomberman_Entry,
 ];
+
+DB_Pragma_Table_Info :: struct {
+	cid: int;
+	name: string;
+	type: string;
+	notnull: int;
+	dflt_value: string;
+	pk: int;
+}
 
 ensure_table :: (platform: *Platform, db: DB_query.Handle, $T: Type) {
 	info := type_info(T).(*Type_Info_Struct);
@@ -120,22 +129,31 @@ ensure_table :: (platform: *Platform, db: DB_query.Handle, $T: Type) {
 			print_to_builder(*sb, "\n");
 		}
 	}
-	print_to_builder(*sb, ");\n");
-
-	for info.members {
-		if it_index == 0
-			continue;
-		column := to_lower_copy(it.name,, temp);
-		print_to_builder(
-			*sb,
-			"ALTER TABLE % ADD COLUMN IF NOT EXISTS % %;\n",
-			table,
-			column,
-			db_sql_type(it)
-		);
-	}
+	print_to_builder(*sb, ");");
 
 	exec_database(platform, db, builder_to_string(*sb));
+
+	existing := load_database_custom(
+		platform, db, DB_Pragma_Table_Info, tprint("PRAGMA table_info(%);", table)
+	);
+	for info.members {
+		column := to_lower_copy(it.name,, temp);
+		found := false;
+		for row: existing {
+			if row.name == column {
+				found = true;
+				break;
+			}
+		}
+		if !found {
+			exec_database(
+				platform,
+				db,
+				tprint("ALTER TABLE % ADD COLUMN % %;", table, column, db_sql_type(it))
+			);
+		}
+	}
+
 	exec_database(platform, db, tprint("SELECT 1 FROM % LIMIT 0;", table));
 }
 

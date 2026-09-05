@@ -264,7 +264,19 @@ DB_query :: struct {
 }
 
 db_table_name :: ($T: Type) -> string {
-	info := type_info(T);
+	info := type_info(T).(*Type_Info_Struct);
+	for member: info.members {
+		for note: member.notes {
+			name: string;
+			if scan2(note, "table(%)", *name) {
+				if name.count >= 2 && name[0] == #char "\"" {
+					name.data += 1;
+					name.count -= 2;
+				}
+				return name;
+			}
+		}
+	}
 	for note: info.notes {
 		name: string;
 		if scan2(note, "table(%)", *name) {
@@ -433,6 +445,8 @@ store_database :: (
 				print_to_builder(*sb, "%1%2 = excluded.%2", sep, to_lower_copy(it.name,, temp));
 				sep = ", ";
 			}
+		} else {
+			print_to_builder(*sb, " ON CONFLICT(%) DO NOTHING", primary_key_name);
 		}
 	}
 	print_to_builder(*sb, ";");
