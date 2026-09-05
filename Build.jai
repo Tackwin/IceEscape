@@ -790,7 +790,7 @@ build_2 :: () {
 			"put",
 			"-o",
 			"./web/*",
-			GAME_WEB_ROOT
+			"www/tackwin"
 		);
 		run_command(
 			"sftpc",
