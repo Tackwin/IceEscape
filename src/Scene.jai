@@ -2050,7 +2050,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 	}
 }
 
-update :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result) {
+update_scene :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result) {
 	scene.fade_in_screen_t = 0.0;
 	scene.client.clock += dt;
 	scene.server.clock += dt;
@@ -2082,7 +2082,7 @@ update :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result)
 	}
 }
 
-update :: (scene: *Scene, lantern: *Lantern, dt: float32) {
+update_lantern :: (scene: *Scene, lantern: *Lantern, dt: float32) {
 	lantern.turned_on = false;
 	button := find_by_pressbutton_id(scene, lantern.button_id);
 	if button && button.activated {
@@ -2171,7 +2171,7 @@ update_client :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	}
 }
 
-update :: (scene: *Scene, hook: *Hook, dt: float32, result: *Frame_Result) {
+update_hook :: (scene: *Scene, hook: *Hook, dt: float32, result: *Frame_Result) {
 	hooker := find_by_player_id(scene, hook.hooker_id);
 	if hooker {
 		hook.server.last_anchor_position = hooker.server.position;
@@ -2219,10 +2219,10 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	if !scene.is_server
 		update_client(scene, dt, result);
 
-	update(scene, *scene.camera, dt);
+	update_camera(scene, *scene.camera, dt);
 
 	for * scene.players {
-		update(scene, it, dt);
+		update_player(scene, it, dt);
 	}
 	{
 		player := find_by_player_id(scene, scene.controlled_player_id);
@@ -2244,7 +2244,7 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	}
 
 	for * scene.skulls {
-		update(scene, it, dt);
+		update_skull(scene, it, dt);
 	}
 
 	{
@@ -2253,7 +2253,7 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			if scene.server.clock > it.server.birthtime + 5 {
 				continue;
 			}
-			update(scene, it, dt);
+			update_coin(scene, it, dt);
 			scene.coins[coin_cursor] = it;
 			coin_cursor += 1;
 		}
@@ -2261,35 +2261,35 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	}
 
 	for * scene.moving_frames {
-		update(scene, it, dt);
+		update_moving_frame(scene, it, dt);
 	}
 
 	for * scene.shurikens {
-		update(scene, it, dt);
+		update_shuriken(scene, it, dt);
 	}
 
 	for * scene.flags {
-		update(scene, it, dt, result);
+		update_flag(scene, it, dt, result);
 	}
 
 	for * scene.pressbuttons {
-		update(scene, it, dt, result);
+		update_pressbutton(scene, it, dt, result);
 	}
 
 	for * scene.within_zones {
-		update(scene, it, dt);
+		update_within_zone(scene, it, dt);
 	}
 
 	for * scene.robots {
-		update(scene, it, time, dt);
+		update_robot(scene, it, time, dt);
 	}
 
 	for * scene.antiairs {
-		update(scene, it, dt);
+		update_antiair(scene, it, dt);
 	}
 
 	for * scene.hooks {
-		update(scene, it, dt, result);
+		update_hook(scene, it, dt, result);
 
 		if it.hooked_id >= 0 && it.server.length <= 0.0 {
 			remove it;
@@ -2307,7 +2307,7 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	}
 
 	for * scene.turn_tables {
-		update(scene, it, dt);
+		update_turn_table(scene, it, dt);
 	}
 
 	update_explosions(scene, dt);
@@ -2328,7 +2328,7 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	}
 
 	for * scene.lanterns {
-		update(scene, it, dt);
+		update_lantern(scene, it, dt);
 	}
 
 	for * scene.keys {
@@ -3465,7 +3465,7 @@ server_die :: (
 	}
 }
 
-update :: (scene: Scene, turn_table: *Turn_Table, dt: float32) {
+update_turn_table :: (scene: Scene, turn_table: *Turn_Table, dt: float32) {
 	angle := get_pointing_angle(scene, turn_table);
 	p := turn_table.position;
 	for * scene.players {
@@ -3486,7 +3486,7 @@ update :: (scene: Scene, turn_table: *Turn_Table, dt: float32) {
 	}
 }
 
-update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
+update_antiair :: (scene: Scene, antiair: *AntiAir, dt: float32) {
 	antiair.server.t += dt;
 	antiair.client.t += dt;
 	antiair.client.t = damp(antiair.client.t, antiair.server.t, 10.0, dt);
@@ -3517,7 +3517,7 @@ update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
 }
 
 // https://rodolphe-vaillant.fr/entry/114/cyclic-coordonate-descent-inverse-kynematic-ccd-ik
-update :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
+update_robot :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
 
 	player := find_by_player_id(scene, robot.player_targeted_id);
 	if !player {
@@ -3625,7 +3625,7 @@ update :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
 
 }
 
-update :: (scene: Scene, button: *PressButton, dt: float32, result: *Frame_Result) {
+update_pressbutton :: (scene: Scene, button: *PressButton, dt: float32, result: *Frame_Result) {
 	if !button.activated {
 		p := v2(button.position);
 
@@ -3691,7 +3691,7 @@ update :: (scene: Scene, button: *PressButton, dt: float32, result: *Frame_Resul
 
 }
 
-update :: (scene: Scene, flag: *Flag, dt: float32, result: *Frame_Result) {
+update_flag :: (scene: Scene, flag: *Flag, dt: float32, result: *Frame_Result) {
 	if !flag.activated {
 		p := v2(flag.position);
 
@@ -3733,7 +3733,7 @@ update :: (scene: Scene, flag: *Flag, dt: float32, result: *Frame_Result) {
 	}
 }
 
-update :: (scene: *Scene, within: *Within_Zone, dt: float32) {
+update_within_zone :: (scene: *Scene, within: *Within_Zone, dt: float32) {
 	n_players := 0;
 	for scene.players {
 		if it.server.dead
@@ -3772,11 +3772,11 @@ update :: (scene: *Scene, within: *Within_Zone, dt: float32) {
 	}
 }
 
-update :: (scene: Scene, shuriken: *Shuriken, dt: float32) {
+update_shuriken :: (scene: Scene, shuriken: *Shuriken, dt: float32) {
 	shuriken.client.theta += shuriken.client.theta_speed * dt;
 }
 
-update :: (scene: Scene, frame: *Moving_Frame, dt: float32) {
+update_moving_frame :: (scene: Scene, frame: *Moving_Frame, dt: float32) {
 	frame.sum_period = 0.0;
 	for 1..frame.keys.count - 1 {
 		frame.sum_period += scene.moving_frame_keys[it + frame.keys.index - 1].period;
@@ -3852,7 +3852,7 @@ update_camera_locked :: (scene: Scene, camera: *Camera, player_locked: *Player, 
 	camera.distance_target = camera.locked_nominal_distance;
 }
 
-update :: (scene: Scene, camera: *Camera, dt: float32) {
+update_camera :: (scene: Scene, camera: *Camera, dt: float32) {
 	if scene.params.mode == .Bomberman
 		return; // Camera is fixed in Bomberman mode
 	player_locked := find_by_player_id(scene, camera.locked_to);
@@ -3902,7 +3902,7 @@ update :: (scene: Scene, camera: *Camera, dt: float32) {
 	}
 }
 
-update :: (scene: Scene, skull: *Skull, dt: float32) {
+update_skull :: (scene: Scene, skull: *Skull, dt: float32) {
 	if !scene.is_server
 		interpolate_to_server(skull);
 
@@ -3910,13 +3910,13 @@ update :: (scene: Scene, skull: *Skull, dt: float32) {
 	skull.client.direction = damp_angle_between(skull.client.direction, dir, 20.0, dt);
 }
 
-update :: (scene: Scene, coin: *Coin, dt: float32) {
+update_coin :: (scene: Scene, coin: *Coin, dt: float32) {
 	coin.server.position += coin.server.speed * coin.server.direction * dt;
 	coin.client.position += coin.server.speed * coin.server.direction * dt;
 	coin.client.theta += xx (3.1415926 * 2.0 * dt);
 }
 
-update :: (scene: Scene, player: *Player, dt: float32) {
+update_player :: (scene: Scene, player: *Player, dt: float32) {
 	og_pos := player.client.position;
 	defer {
 		player.client.delta_frame_position = player.client.position - og_pos;

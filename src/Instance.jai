@@ -553,7 +553,7 @@ update_instance :: (instance: *Instance, dt: float32) {
 
 	for * scene: instance.scenes {
 		Scene.clear_frame_result_frame(*instance.frame_result);
-		Scene.update(scene, time, dt, *instance.frame_result);
+		Scene.update_scene(scene, time, dt, *instance.frame_result);
 
 		should_end_level := false;
 

@@ -255,7 +255,7 @@ editor_loop :: (app_user: *App_User) -> bool {
 		enter_editor(app_user);
 	}
 
-	update(editor);
+	update_editor(editor);
 
 	// Begin GUI frame
 	controls: Controls.State;

@@ -486,7 +486,7 @@ update_game_loop :: (app_user: *App_User) {
 		Scene.add(*process_response, state.scene.id, ntp);
 	}
 	state.scene.client.render_particles = app_user.state.particles_enabled;
-	Scene.update(*state.scene, controls.time, controls.delta_time, null);
+	Scene.update_scene(*state.scene, controls.time, controls.delta_time, null);
 	update_news(*state.scene, controls.time, *state.news);
 
 	if state.scene.fade_in_screen_t > 0 {
