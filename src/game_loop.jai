@@ -789,12 +789,12 @@ push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) 
 		z = 5
 	);
 
-	GUI._atom_label(
+	GUI.atom_label(
 		state,
 		string_from_arr(scene.info.name),
-		_pos = .{ cursor.x + scoreboard_size.x / 2, cursor.y + header_height / 2 },
-		_z = 10,
-		_align = .Center
+		.{ cursor.x + scoreboard_size.x / 2, cursor.y + header_height / 2 },
+		z = 10,
+		align = .Center
 	);
 
 	if page.wr_time_ms > 0 {
@@ -811,21 +811,21 @@ push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) 
 			page.wr_player_name
 		);
 
-		GUI._atom_label(
+		GUI.atom_label(
 			state,
 			wr_string,
-			_pos = .{ cursor.x + 16, cursor.y + header_height / 2 },
-			_z = 100,
-			_align = .Center_Left
+			.{ cursor.x + 16, cursor.y + header_height / 2 },
+			z = 100,
+			align = .Center_Left
 		);
 	}
 
-	GUI._atom_label(
+	GUI.atom_label(
 		state,
 		tprint("Next up: %", page.next_terrain_name),
-		_pos = .{ cursor.x + scoreboard_size.x - 16, cursor.y + header_height / 2 },
-		_z = 100,
-		_align = .Center_Right
+		.{ cursor.x + scoreboard_size.x - 16, cursor.y + header_height / 2 },
+		z = 100,
+		align = .Center_Right
 	);
 
 	GUI.push_quad_screen(
