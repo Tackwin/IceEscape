@@ -5,73 +5,85 @@
 #scope_export
 
 DB_Profile_Id :: struct {
-	id: int; @table("profile_ids")
-} @table("profile_ids");
+	table :: "profile_ids";
+	id: int; @PK
+}
 
 DB_Profile_Stats :: struct {
-	id: int; @table("profile_stats")
+	table :: "profile_stats";
+	id: int; @PK
 	win_count: int;
 	death_count: int;
 	revive_count: int;
-} @table("profile_stats");
+}
 
 DB_Profile_Passcode :: struct {
-	id: int; @table("profile_passcodes")
+	table :: "profile_passcodes";
+	id: int; @PK
 	passcode: u64;
-} @table("profile_passcodes");
+}
 
 DB_Profile_Username :: struct {
-	id: int; @table("profile_usernames")
+	table :: "profile_usernames";
+	id: int; @PK
 	username: string;
-} @table("profile_usernames");
+}
 
 DB_Profile_Token :: struct {
-	id: int; @table("profile_tokens")
+	table :: "profile_tokens";
+	id: int; @PK
 	token: u64;
-} @table("profile_tokens");
+}
 
 DB_Time_Entry :: struct {
-	id: int; @table("time_entries")
+	table :: "time_entries";
+	id: int;
 	profile_id: int;
 	terrain_id: int;
 	time_ms: int;
 	timestamp_ms: int;
-} @table("time_entries");
+}
 
 DB_Terrain_Id :: struct {
-	id: int; @table("terrain_ids")
-} @table("terrain_ids");
+	table :: "terrain_ids";
+	id: int; @PK
+}
 
 DB_Terrain_Infos :: struct {
-	id: int; @table("terrain_infos")
+	table :: "terrain_infos";
+	id: int; @PK
 	name: string;
 	author_profile_id: int;
 	created_ms: int;
-} @table("terrain_infos");
+}
 
 DB_Terrain_Ascii :: struct {
-	ascii_id: int; @table("terrain_asciis")
+	table :: "terrain_asciis";
+	ascii_id: int; @PK
 	id: int;
 	ascii: string;
 	created_ms: int;
-} @table("terrain_asciis");
+}
 
 DB_Terrain_Thumbnail :: struct {
-	ascii_id: int; @table("terrain_thumbnails")
+	table :: "terrain_thumbnails";
+	ascii_id: int; @PK
 	thumbnail: [] u8;
-} @table("terrain_thumbnails");
+}
 
 DB_Terrain_Roster :: struct {
-	id: int; @table("terrain_rosters")
+	table :: "terrain_rosters";
+	id: int; @PK
 	name: string;
 	terrain_ids: [] int; @json_array
-} @table("terrain_rosters");
+}
 
 DB_Terrain_Bomberman_Entry :: struct {
-	id: int; @table("terrain_bomberman_entry")
+	table :: "terrain_bomberman_entry";
+	id: int; @PK
 	terrain_id: int;
 	max_players: int;
-} @table("terrain_bomberman_entry");
+}
 
 All_DB_Types :: Type.[
 	DB_Profile_Id,
@@ -104,57 +116,64 @@ ensure_table :: (platform: *Platform, db: DB_query.Handle, $T: Type) {
 	sb: String_Builder;
 	sb.allocator = temp;
 	print_to_builder(*sb, "CREATE TABLE IF NOT EXISTS % (\n", table);
+	sep := "";
 	for info.members {
+		if it.offset_into_constant_storage >= 0
+			continue;
+
 		column := to_lower_copy(it.name,, temp);
-		print_to_builder(*sb, "\t% %", column, db_sql_type(it));
-		if it_index == 0 {
-			print_to_builder(*sb, " PRIMARY KEY");
-		} else {
-			json_array := false;
-			for note: it.notes {
-				if note == "json_array"
-					json_array = true;
-			}
-			if json_array {
-				print_to_builder(
-					*sb,
-					" CHECK (json_valid(%1) AND json_type(%1) = 'array')",
-					column
-				);
-			}
+		print_to_builder(*sb, "%\t% %", sep, column, db_sql_type(it));
+		sep = ",\n";
+		is_pk := false;
+		json_array := false;
+		for note: it.notes {
+			if note == "PK"
+				is_pk = true;
+			if note == "json_array"
+				json_array = true;
 		}
-		if it_index + 1 < info.members.count {
-			print_to_builder(*sb, ",\n");
-		} else {
-			print_to_builder(*sb, "\n");
+		if is_pk
+			print_to_builder(*sb, " PRIMARY KEY");
+		if json_array {
+			print_to_builder(
+				*sb,
+				" CHECK (json_valid(%1) AND json_type(%1) = 'array')",
+				column
+			);
 		}
 	}
-	print_to_builder(*sb, ");");
+	print_to_builder(*sb, "\n);");
 
-	exec_database(platform, db, builder_to_string(*sb));
+	sql_exec(platform, db, sql(builder_to_string(*sb)));
 
-	existing := load_database_custom(
-		platform, db, DB_Pragma_Table_Info, tprint("PRAGMA table_info(%);", table)
-	);
+	existing_names: [..] string;
+	existing_names.allocator = temp;
+	for sql_loads(
+		platform, db, sql(tprint("PRAGMA table_info(%);", table)), DB_Pragma_Table_Info
+	) {
+		array_add(*existing_names, to_lower_copy(it.name,, temp));
+	}
 	for info.members {
+		if it.offset_into_constant_storage >= 0
+			continue;
 		column := to_lower_copy(it.name,, temp);
 		found := false;
-		for row: existing {
-			if row.name == column {
+		for existing_names {
+			if it == column {
 				found = true;
 				break;
 			}
 		}
 		if !found {
-			exec_database(
+			sql_exec(
 				platform,
 				db,
-				tprint("ALTER TABLE % ADD COLUMN % %;", table, column, db_sql_type(it))
+				sql(tprint("ALTER TABLE % ADD COLUMN % %;", table, column, db_sql_type(it)))
 			);
 		}
 	}
 
-	exec_database(platform, db, tprint("SELECT 1 FROM % LIMIT 0;", table));
+	sql_exec(platform, db, sql(tprint("SELECT 1 FROM % LIMIT 0;", table)));
 }
 
 ensure_database_schema :: (platform: *Platform, db: DB_query.Handle) {
@@ -168,35 +187,40 @@ ensure_database_schema :: (platform: *Platform, db: DB_query.Handle) {
 }
 
 get_wr_info :: (platform: *Platform, db: DB_query.Handle, terrain_id: int) -> DB_Time_Entry {
-	query := tprint(
-		"SELECT * FROM time_entries WHERE terrain_id = %1 ORDER BY time_ms ASC LIMIT 1", terrain_id
+	row, found := sql_load(
+		platform,
+		db,
+		sql(
+			"SELECT * FROM time_entries WHERE terrain_id = ? ORDER BY time_ms ASC LIMIT 1",
+			terrain_id
+		),
+		DB_Time_Entry
 	);
-	time_entries := load_database_custom(platform, db, DB_Time_Entry, query);
-	if time_entries.count > 0 {
-		return time_entries[0];
-	} else {
-		return .{};
-	}
+	if found
+		return row;
+	return .{};
 }
 
 get_profile_name :: (platform: *Platform, db: DB_query.Handle, profile_id: int) -> string {
-	query := tprint("SELECT username FROM profile_usernames WHERE id = %1 LIMIT 1", profile_id);
-	profile_usernames := load_database_custom(platform, db, struct {
-		username: string;
-	}, query);
-	if profile_usernames.count > 0 {
-		return profile_usernames[0].username;
-	} else {
-		return "";
-	}
+	row, found := sql_load(
+		platform,
+		db,
+		sql("SELECT username FROM profile_usernames WHERE id = ? LIMIT 1", profile_id),
+		DB_Profile_Username
+	);
+	if found
+		return row.username;
+	return "";
 }
 
 get_terrain_info :: (platform: *Platform, db: DB_query.Handle, terrain_id: int) -> DB_Terrain_Infos {
-	query := tprint("SELECT * FROM terrain_infos WHERE id = %1 LIMIT 1", terrain_id);
-	terrain_infos := load_database_custom(platform, db, DB_Terrain_Infos, query);
-	if terrain_infos.count > 0 {
-		return terrain_infos[0];
-	} else {
-		return .{};
-	}
+	row, found := sql_load(
+		platform,
+		db,
+		sql("SELECT * FROM terrain_infos WHERE id = ? LIMIT 1", terrain_id),
+		DB_Terrain_Infos
+	);
+	if found
+		return row;
+	return .{};
 }

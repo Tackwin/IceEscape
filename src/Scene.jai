@@ -626,6 +626,11 @@ make_sync :: (safe_zone: *Safe_Zone) -> Command.Sync_Safe_Zone {
 Frame_Result :: struct {
 	broadcast: [..] Command; @allocate("lifetime") @clear("frame")
 	to_instance: [..] Command; @allocate("lifetime") @clear("frame")
+
+	win_player_id: [..] int; @allocate("lifetime") @clear("frame")
+	died_player_id: [..] int; @allocate("lifetime") @clear("frame")
+	revived_someone_player_id: [..] int; @allocate("lifetime") @clear("frame")
+
 	restarted := false; @clear("frame")
 
 	lifetime_pool: Pool;
@@ -3310,6 +3315,9 @@ win_level :: (scene: *Scene, player_id: int, time: Apollo_Time, result: *Frame_R
 			}
 		}
 	}
+
+	if result
+		array_add(*result.win_player_id, player_id);
 }
 
 player_has_revived_other_player :: (
@@ -3319,6 +3327,9 @@ player_has_revived_other_player :: (
 	if player {
 		player.server.souls += 1;
 	}
+
+	if result
+		array_add(*result.revived_someone_player_id, reviver);
 }
 
 drop_keys :: (scene: *Scene, player: *Player) {
@@ -3440,6 +3451,10 @@ server_die :: (
 		player.server.dead = true;
 		player.server.dead_time = xx scene.server.clock;
 		player.server.souls = 0;
+
+		if result {
+			array_add(*result.died_player_id, player.id);
+		}
 
 		tombstone: Tombstone;
 		tombstone.player_id = died.player_id;

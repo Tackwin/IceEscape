@@ -178,28 +178,24 @@ append_queue :: (server: *Server, cmd: $T, connection: Connection) {
 handle_end_asset :: (server: *Server, asset: *Big_Asset, platform: *Platform) {
 	for * server.pending_thumbnails {
 		if it.asset_id == asset.id {
-			// find the latest ascii_id for the given terrain_id
-			terrain_ascii := load_database_custom(
+			ascii, has_ascii := sql_load(
 				platform,
 				server.db,
-				DB_Terrain_Ascii,
-				tprint(
-					"SELECT * FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1",
+				sql(
+					"SELECT * FROM terrain_asciis WHERE id = ? ORDER BY created_ms DESC LIMIT 1",
 					it.terrain_id
-				)
+				),
+				DB_Terrain_Ascii
 			);
 
-			if terrain_ascii.count > 0 {
-				ascii_id := terrain_ascii[0].ascii_id;
-
-				// Store the thumbnail with the ascii_id as id, and overwrite if it already exists
-				to_saves: [1] DB_Terrain_Thumbnail;
-				to_save := *to_saves[0];
-				to_save.ascii_id = ascii_id;
-				to_save.thumbnail = asset.buffer;
-
-				store_database(
-					platform, server.db, to_saves, primary_key_name="ascii_id"
+			if has_ascii {
+				sql_store(
+					platform,
+					server.db,
+					DB_Terrain_Thumbnail.{
+						ascii_id = ascii.ascii_id,
+						thumbnail = asset.buffer,
+					}
 				);
 			}
 		}
@@ -232,20 +228,20 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 	if connect {
 		user := find_user_by_token(server, connect.token);
 		if !user {
-			token_entries := load_database(
+			token_row, has_token := sql_load(
 				platform,
 				server.db,
-				DB_Profile_Token,
-				tprint("token = %", connect.token)
+				sql("SELECT * FROM profile_tokens WHERE token = ?", connect.token),
+				DB_Profile_Token
 			);
 
-			if token_entries.count > 0 {
+			if has_token {
 				old_user: User;
 				old_user.id = sender;
 				old_user.token = connect.token;
 				old_user.connection = sender;
 				old_user.instance_id = -1;
-				old_user.profile_id = token_entries[0].id;
+				old_user.profile_id = token_row.id;
 				server.users[server.user_count] = old_user;
 				user = *server.users[server.user_count];
 				server.user_count += 1;
@@ -257,15 +253,14 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			reply.token = connect.token;
 			reply.profile_id = user.profile_id;
 			reply.passcode = 0xFFFFFFFFFFFFFFFF;
-			passes := load_database(
+			pass_row, has_pass := sql_load(
 				platform,
 				server.db,
-				DB_Profile_Passcode,
-				tprint("id = %", user.profile_id)
+				sql("SELECT * FROM profile_passcodes WHERE id = ?", user.profile_id),
+				DB_Profile_Passcode
 			);
-			if passes.count > 0 {
-				reply.passcode = passes[0].passcode;
-			}
+			if has_pass
+				reply.passcode = pass_row.passcode;
 
 			user.connection = sender;
 			append_queue(server, reply, user.connection);
@@ -293,26 +288,21 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			server.user_count += 1;
 
 			// Let's create a profile id for them
-			new_profile_id: DB_Profile_Id;
-			new_profile_id.id = Rand.random_positive_int(*server.rng);
-			store_database(platform, server.db, DB_Profile_Id.[ new_profile_id ]);
-			user.profile_id = new_profile_id.id;
+			new_id: DB_Profile_Id;
+			new_id.id = Rand.random_positive_int(*server.rng);
+			user.profile_id = new_id.id;
+			sql_store(platform, server.db, new_id);
 
 			// And a passcode
 			new_passcode: DB_Profile_Passcode;
 			new_passcode.id = user.profile_id;
 			new_passcode.passcode = Rand.random_u64(*server.rng);
-			store_database(
-				platform, server.db, DB_Profile_Passcode.[ new_passcode ]
-			);
+			sql_store(platform, server.db, new_passcode);
 
-			// Register the token as the mapping for this profile id
 			new_token: DB_Profile_Token;
 			new_token.id = user.profile_id;
 			new_token.token = connect.token.(u64);
-			store_database(
-				platform, server.db, DB_Profile_Token.[ new_token ]
-			);
+			sql_store(platform, server.db, new_token);
 
 			reply: Command.Connect;
 			reply.token = user.token;
@@ -327,29 +317,29 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 	if login {
 		user := find_user_by_connection(server, sender);
 		if user {
-			passes := load_database(
+			pass_row, has_pass := sql_load(
 				platform,
 				server.db,
-				DB_Profile_Passcode,
-				tprint("passcode = %", login.passcode)
+				sql("SELECT * FROM profile_passcodes WHERE passcode = ?", login.passcode),
+				DB_Profile_Passcode
 			);
-			
-			if passes.count == 0 {
+
+			if !has_pass {
 				command: Command.Login;
 				command.feedback = .Rejected;
 				append_queue(server, command, sender);
 			} else {
-				if passes[0].passcode == login.passcode {
-					user.profile_id = passes[0].id;
+				if pass_row.passcode == login.passcode {
+					user.profile_id = pass_row.id;
 					user.token = login.token;
 
-					token_store: DB_Profile_Token;
-					token_store.id = user.profile_id;
-					token_store.token = login.token.(u64);
-					store_database(
+					sql_store(
 						platform,
 						server.db,
-						DB_Profile_Token.[ token_store ]
+						DB_Profile_Token.{
+							id = user.profile_id,
+							token = login.token.(u64),
+						}
 					);
 
 					command: Command.Login;
@@ -370,35 +360,34 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 	if load_terrain {
 		user := find_user_by_connection(server, sender);
 		if user {
-			query := tprint(
-				"SELECT * FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1",
-				load_terrain.terrain_id
-			);
-			terrain_ascii := load_database_custom(
+			terrain_ascii, has_ascii := sql_load(
 				platform,
 				server.db,
-				DB_Terrain_Ascii,
-				query
+				sql(
+					"SELECT * FROM terrain_asciis WHERE id = ? ORDER BY created_ms DESC LIMIT 1",
+					load_terrain.terrain_id
+				),
+				DB_Terrain_Ascii
 			);
 
-			terrain_info := load_database(
+			terrain_info, has_info := sql_load(
 				platform,
 				server.db,
-				DB_Terrain_Infos,
-				tprint("id = %", load_terrain.terrain_id)
+				sql("SELECT * FROM terrain_infos WHERE id = ?", load_terrain.terrain_id),
+				DB_Terrain_Infos
 			);
 
-			if terrain_ascii.count > 0 && terrain_info.count > 0 {
+			if has_ascii && has_info {
 				reply: Command.Load_Terrain;
 				reply.terrain_id = load_terrain.terrain_id;
-				reply.ascii = terrain_ascii[0].ascii;
+				reply.ascii = terrain_ascii.ascii;
 				reply.info = Scene.Scene_Info.{};
-				reply.info.id = terrain_info[0].id;
-				reply.info.author_profile_id = terrain_info[0].author_profile_id;
+				reply.info.id = terrain_info.id;
+				reply.info.author_profile_id = terrain_info.author_profile_id;
 				memcpy(
 					reply.info.name.data,
-					terrain_info[0].name.data,
-					min(terrain_info[0].name.count, reply.info.name.count)
+					terrain_info.name.data,
+					min(terrain_info.name.count, reply.info.name.count)
 				);
 				append_queue(server, reply, sender);
 			}
@@ -455,38 +444,37 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 	if get_terrain_leaderboard {
 		terrain_id := get_terrain_leaderboard.terrain_id;
 		info: DB_Terrain_Infos;
+		found: bool;
 		if terrain_id < 0 && get_terrain_leaderboard.scene_name.count > 0 {
-			infos := load_database(
+			info, found = sql_load(
 				platform,
 				server.db,
-				DB_Terrain_Infos,
-				tprint("name = '%1'", get_terrain_leaderboard.scene_name)
+				sql("SELECT * FROM terrain_infos WHERE name = ?", get_terrain_leaderboard.scene_name),
+				DB_Terrain_Infos
 			);
-			// Try to lookup the terrain with the name instead
-			if infos.count > 0 {
-				info = infos[0];
-				terrain_id = infos[0].id;
-			}
+			if found
+				terrain_id = info.id;
 		} else {
-			infos := load_database(
+			info, found = sql_load(
 				platform,
 				server.db,
-				DB_Terrain_Infos,
-				tprint("id = %", terrain_id)
+				sql("SELECT * FROM terrain_infos WHERE id = ?", terrain_id),
+				DB_Terrain_Infos
 			);
-			if infos.count > 0 {
-				info = infos[0];
-			}
 		}
 		if terrain_id < 0
 			return true;
 
-		time_entries := load_database(
+		time_entries: [..] DB_Time_Entry;
+		time_entries.allocator = temp;
+		for sql_loads(
 			platform,
 			server.db,
-			DB_Time_Entry,
-			tprint("terrain_id = %1", terrain_id)
-		);
+			sql("SELECT * FROM time_entries WHERE terrain_id = ?", terrain_id),
+			DB_Time_Entry
+		) {
+			array_add(*time_entries, it);
+		}
 
 		reply: Command.Get_Terrain_Leaderboard;
 		reply.terrain_id = terrain_id;
@@ -503,38 +491,31 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 
 			reply.wr_time_ms = time_entries[min_idx].time_ms;
 
-			profile_usernames := load_database(
+			reply.wr_username = "Unknown";
+			wr_user, has_wr_user := sql_load(
 				platform,
 				server.db,
-				DB_Profile_Username,
-				tprint("id = %", time_entries[min_idx].profile_id)
+				sql("SELECT * FROM profile_usernames WHERE id = ?", time_entries[min_idx].profile_id),
+				DB_Profile_Username
 			);
-
-			if profile_usernames.count > 0 {
-				reply.wr_username = profile_usernames[0].username;
-			} else {
-				reply.wr_username = "Unknown";
-			}
+			if has_wr_user
+				reply.wr_username = wr_user.username;
 
 			reply.entries = NewArray(
 				time_entries.count, Command.Get_Terrain_Leaderboard_Entry,, temp
 			);
-			for 0..time_entries.count - 1 {
-				reply.entries[it].time_ms = time_entries[it].time_ms;
-				reply.entries[it].timestamp_ms = time_entries[it].timestamp_ms;
-
-				profile_usernames := load_database(
+			for entry_i: 0..time_entries.count - 1 {
+				reply.entries[entry_i].time_ms = time_entries[entry_i].time_ms;
+				reply.entries[entry_i].timestamp_ms = time_entries[entry_i].timestamp_ms;
+				reply.entries[entry_i].username = "Unknown";
+				entry_user, has_entry_user := sql_load(
 					platform,
 					server.db,
-					DB_Profile_Username,
-					tprint("id = %", time_entries[it].profile_id)
+					sql("SELECT * FROM profile_usernames WHERE id = ?", time_entries[entry_i].profile_id),
+					DB_Profile_Username
 				);
-
-				if profile_usernames.count > 0 {
-					reply.entries[it].username = profile_usernames[0].username;
-				} else {
-					reply.entries[it].username = "Unknown";
-				}
+				if has_entry_user
+					reply.entries[entry_i].username = entry_user.username;
 			}
 		}
 		
@@ -561,23 +542,28 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 					if save_terrain.info.name.data[it] == 0
 						break;
 				}
-				query := tprint(
-					"SELECT id FROM terrain_infos WHERE name = '%1' AND author_profile_id = %2",
-					name, user.profile_id
+				loaded, has_loaded := sql_load(
+					platform,
+					server.db,
+					sql(
+						"SELECT id FROM terrain_infos WHERE name = ? AND author_profile_id = ?",
+						name,
+						user.profile_id
+					),
+					Loaded
 				);
-				loaded := load_database_custom(platform, server.db, Loaded, query);
 
-				if loaded.count > 0 {
-					// We will add a new row to terrain_asciis with the same id, with a newer
-					// timestamp.
-
-					to_asciis: [1] DB_Terrain_Ascii;
-					to_ascii := *to_asciis[0];
-					to_ascii.id = loaded[0].id;
-					to_ascii.ascii = save_terrain.ascii;
-					to_ascii.created_ms = to_milliseconds(current_time_consensus());
-
-					store_database(platform, server.db, to_asciis, false);
+				if has_loaded {
+					// New ascii version for the same terrain id.
+					sql_store(
+						platform,
+						server.db,
+						DB_Terrain_Ascii.{
+							id = loaded.id,
+							ascii = save_terrain.ascii,
+							created_ms = to_milliseconds(current_time_consensus()),
+						}
+					);
 					return true;
 				}
 			}
@@ -587,31 +573,29 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			// and store the ascii and the info with this id
 			new_id := Rand.random_positive_int(*server.rng);
 
-			ids: [1] DB_Terrain_Id;
-			ids[0].id = new_id;
-			store_database(platform, server.db, ids);
+			sql_store(platform, server.db, DB_Terrain_Id.{ id = new_id });
 
-			to_saves: [1] DB_Terrain_Infos;
-			to_save := *to_saves[0];
-			to_save.id = new_id;
-			to_save.author_profile_id = user.profile_id;
-			to_save.name.data = save_terrain.info.name.data;
-			to_save.created_ms = to_milliseconds(current_time_consensus());
-			for 0..save_terrain.info.name.count - 1 {
-				to_save.name.count = it;
-				if save_terrain.info.name.data[it] == 0
+			new_info: DB_Terrain_Infos;
+			new_info.id = new_id;
+			new_info.author_profile_id = user.profile_id;
+			new_info.name.data = save_terrain.info.name.data;
+			new_info.created_ms = to_milliseconds(current_time_consensus());
+			for char_i: 0..save_terrain.info.name.count - 1 {
+				new_info.name.count = char_i;
+				if save_terrain.info.name.data[char_i] == 0
 					break;
 			}
+			sql_store(platform, server.db, new_info);
 
-			store_database(platform, server.db, to_saves);
-
-			to_asciis: [1] DB_Terrain_Ascii;
-			to_ascii := *to_asciis[0];
-			to_ascii.id = new_id;
-			to_ascii.ascii = save_terrain.ascii;
-			to_ascii.created_ms = to_milliseconds(current_time_consensus());
-
-			store_database(platform, server.db, to_asciis, false);
+			sql_store(
+				platform,
+				server.db,
+				DB_Terrain_Ascii.{
+					id = new_id,
+					ascii = save_terrain.ascii,
+					created_ms = to_milliseconds(current_time_consensus()),
+				}
+			);
 			return true;
 		}
 	}
@@ -620,18 +604,16 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 	if get_username {
 		user := find_user_by_connection(server, sender);
 		if user {
-			username_entries := load_database(
-				platform,
-				server.db,
-				DB_Profile_Username,
-				tprint("id = %", user.profile_id)
-			);
-
 			reply: Command.Get_Username;
 			reply.username = "";
-			if username_entries.count > 0 {
-				reply.username = tprint("%", username_entries[0].username);
-			}
+			username_row, has_username := sql_load(
+				platform,
+				server.db,
+				sql("SELECT * FROM profile_usernames WHERE id = ?", user.profile_id),
+				DB_Profile_Username
+			);
+			if has_username
+				reply.username = tprint("%", username_row.username);
 			append_queue(server, reply, sender);
 		}
 		return true;
@@ -641,12 +623,14 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 	if set_username {
 		user := find_user_by_connection(server, sender);
 		if user {
-			to_saves: [1] DB_Profile_Username;
-			to_save := *to_saves[0];
-			to_save.id = user.profile_id;
-			to_save.username = set_username.username;
-
-			store_database(platform, server.db, to_saves);
+			sql_store(
+				platform,
+				server.db,
+				DB_Profile_Username.{
+					id = user.profile_id,
+					username = set_username.username,
+				}
+			);
 		}
 		return true;
 	}
@@ -655,22 +639,20 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 	if get_profile_stats {
 		user := find_user_by_connection(server, sender);
 		if user {
-			stats := load_database(
+			reply: Command.Get_Profile_Stats;
+			reply.stats.win_count = 0;
+			reply.stats.death_count = 0;
+			reply.stats.revive_count = 0;
+			stats_row, has_stats := sql_load(
 				platform,
 				server.db,
-				DB_Profile_Stats,
-				tprint("id = %", user.profile_id)
+				sql("SELECT * FROM profile_stats WHERE id = ?", user.profile_id),
+				DB_Profile_Stats
 			);
-
-			reply: Command.Get_Profile_Stats;
-			if stats.count > 0 {
-				reply.stats.win_count = stats[0].win_count;
-				reply.stats.death_count = stats[0].death_count;
-				reply.stats.revive_count = stats[0].revive_count;
-			} else {
-				reply.stats.win_count = 0;
-				reply.stats.death_count = 0;
-				reply.stats.revive_count = 0;
+			if has_stats {
+				reply.stats.win_count = stats_row.win_count;
+				reply.stats.death_count = stats_row.death_count;
+				reply.stats.revive_count = stats_row.revive_count;
 			}
 			append_queue(server, reply, sender);
 		}
@@ -685,11 +667,16 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			author_name: string;
 			created_ms: int;
 		};
-		entries := load_database_custom(
+		filter_pattern := "%";
+		if ask_terrain_list.filter.count > 0 {
+			filter_pattern = tprint("%\%", ask_terrain_list.filter);
+		}
+		entries: [..] Info;
+		entries.allocator = temp;
+		for sql_loads(
 			platform,
 			server.db,
-			Info,
-			tprint(#string SELECT_QUERY
+			sql(#string SELECT_QUERY
 SELECT
 	ti.id,
 	ti.name,
@@ -697,12 +684,12 @@ SELECT
 	ti.created_ms
 FROM terrain_infos ti
 LEFT JOIN profile_usernames u ON ti.author_profile_id = u.id
-%
-SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
-				then tprint("WHERE ti.name LIKE '%1\%'", ask_terrain_list.filter)
-				else ""
-			)
-		);
+WHERE ti.name LIKE ?
+SELECT_QUERY, filter_pattern),
+			Info
+		) {
+			array_add(*entries, it);
+		}
 
 		reply: Command.Ans_List_Terrain;
 		reply.terrains_id = NewArray(entries.count, int,, temp);
@@ -862,44 +849,39 @@ SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
 	if get_thumbnail {
 		user := find_user_by_connection(server, sender);
 		if user {
-			// find the latest ascii_id for the given terrain_id
-			terrain_ascii := load_database_custom(
+			ascii_row, has_ascii := sql_load(
 				platform,
 				server.db,
-				struct { ascii_id: int; },
-				tprint(
-					"SELECT ascii_id FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1",
+				sql(
+					"SELECT ascii_id FROM terrain_asciis WHERE id = ? ORDER BY created_ms DESC LIMIT 1",
 					get_thumbnail.terrain_id
-				)
+				),
+				DB_Terrain_Ascii
 			);
-			if terrain_ascii.count > 0 {
-				thumbnail: DB_Terrain_Thumbnail;
-				thumbnail.ascii_id = terrain_ascii[0].ascii_id;
-				buffers := load_database_custom(
+			if has_ascii {
+				ascii_id := ascii_row.ascii_id;
+				thumb, has_thumb := sql_load(
 					platform,
 					server.db,
-					struct { thumbnail: [] u8; },
-					tprint(
-						"SELECT thumbnail FROM terrain_thumbnails WHERE ascii_id = %",
-						thumbnail.ascii_id
-					)
+					sql("SELECT thumbnail FROM terrain_thumbnails WHERE ascii_id = ?", ascii_id),
+					DB_Terrain_Thumbnail
 				);
-				if buffers.count > 0 {
+				if has_thumb {
 					reply: Command.Get_Thumbnail;
 					reply.terrain_id = get_thumbnail.terrain_id;
-					reply.asset.size = buffers[0].thumbnail.count;
+					reply.asset.size = thumb.thumbnail.count;
 					reply.asset.id = get_thumbnail.asset.id;
 
-					asset_id := get_hash(int.[thumbnail.ascii_id, user.profile_id]);
+					asset_id := get_hash(int.[ascii_id, user.profile_id]);
 
 					sending: Server.Big_Asset_Sending;
 					sending.user_asset_id = get_thumbnail.asset.id;
 					sending.destination = sender;
 					sending.asset.id = asset_id;
-					sending.asset.buffer = NewArray(buffers[0].thumbnail.count, u8);
+					sending.asset.buffer = NewArray(thumb.thumbnail.count, u8);
 					memcpy(
 						sending.asset.buffer.data,
-						buffers[0].thumbnail.data,
+						thumb.thumbnail.data,
 						sending.asset.buffer.count
 					);
 					array_add(*server.pending_big_assets_sending, sending);
@@ -1103,32 +1085,35 @@ SELECT_QUERY, ifx ask_terrain_list.filter.count > 0
 init_quick_instance :: (
 	server: *Server, instance: *Instance, terrain_id: int, platform: *Platform
 ) -> bool {
-	terrain_ascii := load_database_custom(
+	terrain_ascii, has_ascii := sql_load(
 		platform,
 		server.db,
-		DB_Terrain_Ascii,
-		tprint("SELECT * FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1", terrain_id)
+		sql(
+			"SELECT * FROM terrain_asciis WHERE id = ? ORDER BY created_ms DESC LIMIT 1",
+			terrain_id
+		),
+		DB_Terrain_Ascii
 	);
 
-	if terrain_ascii.count == 0
+	if !has_ascii
 		return false;
 
-	terrain_info := load_database(
+	terrain_info, has_info := sql_load(
 		platform,
 		server.db,
-		DB_Terrain_Infos,
-		tprint("id = %", terrain_id)
+		sql("SELECT * FROM terrain_infos WHERE id = ?", terrain_id),
+		DB_Terrain_Infos
 	);
-	
-	if terrain_info.count == 0
+
+	if !has_info
 		return false;
 
 	info: Scene.Scene_Info;
-	info.id = terrain_info[0].id;
-	info.author_profile_id = terrain_info[0].author_profile_id;
-	string_to_arr(terrain_info[0].name, info.name);
+	info.id = terrain_info.id;
+	info.author_profile_id = terrain_info.author_profile_id;
+	string_to_arr(terrain_info.name, info.name);
 
-	add_scene(instance, terrain_ascii[0].ascii, info);
+	add_scene(instance, terrain_ascii.ascii, info);
 	if instance.scenes.count > 0 {
 		instance.pick_scene_id = instance.scenes[0].id;
 		for 0..instance.scenes.count-2 {
@@ -1148,69 +1133,73 @@ init_instance_bomberman :: (
 	instance.mode = .Bomberman;
 	instance.last_activity_time = current_time_monotonic();
 
-	entries := load_database_custom(
+	entries: [..] int;
+	entries.allocator = temp;
+	for sql_loads(
 		platform,
 		server.db,
-		struct { terrain_id: int; },
-		tprint(
-			"SELECT terrain_id FROM terrain_bomberman_entry WHERE max_players >= %1",
-			max_player_count
-		)
-	);
+		sql("SELECT terrain_id FROM terrain_bomberman_entry WHERE max_players >= ?", max_player_count),
+		DB_Terrain_Bomberman_Entry
+	) {
+		array_add(*entries, it.terrain_id);
+	}
 
 	if entries.count == 0
 		return false;
 
 	pick_id := 100;
-	terrain_ascii := load_database_custom(
+	terrain_ascii, has_ascii := sql_load(
 		platform,
 		server.db,
-		DB_Terrain_Ascii,
-		tprint("SELECT * FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1", pick_id)
+		sql(
+			"SELECT * FROM terrain_asciis WHERE id = ? ORDER BY created_ms DESC LIMIT 1",
+			pick_id
+		),
+		DB_Terrain_Ascii
 	);
-	if terrain_ascii.count == 0
+	if !has_ascii
 		return false;
-	terrain_info := load_database(
+	terrain_info, has_info := sql_load(
 		platform,
 		server.db,
-		DB_Terrain_Infos,
-		tprint("id = %", pick_id)
+		sql("SELECT * FROM terrain_infos WHERE id = ?", pick_id),
+		DB_Terrain_Infos
 	);
-	if terrain_info.count == 0
+	if !has_info
 		return false;
 
 	info: Scene.Scene_Info;
-	info.id = terrain_info[0].id;
-	info.author_profile_id = terrain_info[0].author_profile_id;
-	string_to_arr(terrain_info[0].name, info.name);
+	info.id = terrain_info.id;
+	info.author_profile_id = terrain_info.author_profile_id;
+	string_to_arr(terrain_info.name, info.name);
 
-	pick_scene_id := add_scene(instance, terrain_ascii[0].ascii, info); // Pick up scene
-	id := entries[0].terrain_id;
-	terrain_ascii = load_database_custom(
+	pick_scene_id := add_scene(instance, terrain_ascii.ascii, info); // Pick up scene
+	id := entries[0];
+	terrain_ascii, has_ascii = sql_load(
 		platform,
 		server.db,
-		DB_Terrain_Ascii,
-		tprint("SELECT * FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1", id)
+		sql("SELECT * FROM terrain_asciis WHERE id = ? ORDER BY created_ms DESC LIMIT 1", id),
+		DB_Terrain_Ascii
 	);
-	if terrain_ascii.count == 0
+	if !has_ascii
 		return false;
 
-	terrain_info = load_database(
+	terrain_info, has_info = sql_load(
 		platform,
 		server.db,
-		DB_Terrain_Infos,
-		tprint("id = %", id)
+		sql("SELECT * FROM terrain_infos WHERE id = ?", id),
+		DB_Terrain_Infos
 	);
-	
-	if terrain_info.count == 0
+
+	if !has_info
 		return false;
 
 	info = .{};
-	info.id = terrain_info[0].id;
-	info.author_profile_id = terrain_info[0].author_profile_id;
-	string_to_arr(terrain_info[0].name, info.name);
+	info.id = terrain_info.id;
+	info.author_profile_id = terrain_info.author_profile_id;
+	string_to_arr(terrain_info.name, info.name);
 
-	playing_scene_id := set_bomberman_scene(instance, terrain_ascii[0].ascii, info);
+	playing_scene_id := set_bomberman_scene(instance, terrain_ascii.ascii, info);
 	instance.pick_scene_id = pick_scene_id;
 	instance.playing_scene_id = playing_scene_id;
 	server.instance_count += 1;
@@ -1220,14 +1209,13 @@ init_instance_bomberman :: (
 init_instance_with_roster :: (
 	server: *Server, instance: *Instance, roster_id: int, platform: *Platform
 ) -> bool {
-	rosters := load_database(
-		platform, server.db, DB_Terrain_Roster, tprint("id = %", roster_id)
+	roster, has_roster := sql_load(
+		platform, server.db, sql("SELECT * FROM terrain_rosters WHERE id = ?", roster_id), DB_Terrain_Roster
 	);
-	if rosters.count == 0 {
+	if !has_roster {
 		return false;
 	}
 
-	roster := rosters[0];
 	return init_instance_with_terrain_ids(server, instance, roster.terrain_ids, platform);
 }
 
@@ -1246,32 +1234,36 @@ init_instance_with_terrain_ids :: (
 		if it_index > 0 && it == 100
 			continue;
 
-		terrain_ascii := load_database_custom(
+		terrain_id := it;
+		terrain_ascii, has_ascii := sql_load(
 			platform,
 			server.db,
-			DB_Terrain_Ascii,
-			tprint("SELECT * FROM terrain_asciis WHERE id = % ORDER BY created_ms DESC LIMIT 1", it)
+			sql(
+				"SELECT * FROM terrain_asciis WHERE id = ? ORDER BY created_ms DESC LIMIT 1",
+				terrain_id
+			),
+			DB_Terrain_Ascii
 		);
 
-		if terrain_ascii.count == 0
+		if !has_ascii
 			continue;
 
-		terrain_info := load_database(
+		terrain_info, has_info := sql_load(
 			platform,
 			server.db,
-			DB_Terrain_Infos,
-			tprint("id = %", it)
+			sql("SELECT * FROM terrain_infos WHERE id = ?", terrain_id),
+			DB_Terrain_Infos
 		);
-		
-		if terrain_info.count == 0
+
+		if !has_info
 			continue;
 
 		info: Scene.Scene_Info;
-		info.id = terrain_info[0].id;
-		info.author_profile_id = terrain_info[0].author_profile_id;
-		string_to_arr(terrain_info[0].name, info.name);
+		info.id = terrain_info.id;
+		info.author_profile_id = terrain_info.author_profile_id;
+		string_to_arr(terrain_info.name, info.name);
 
-		add_scene(instance, terrain_ascii[0].ascii, info);
+		add_scene(instance, terrain_ascii.ascii, info);
 	}
 	if instance.scenes.count > 0 {
 		instance.pick_scene_id = instance.scenes[0].id;
@@ -1292,49 +1284,36 @@ handle_instance_events :: (server: *Server, instance: *Instance, platform: *Plat
 		if !user
 			continue;
 
-		// Load existing stats
-		stats := load_database(
+		stats_entry, has_stats := sql_load(
 			platform,
 			server.db,
-			DB_Profile_Stats,
-			tprint("id = %", user.profile_id)
+			sql("SELECT * FROM profile_stats WHERE id = ?", user.profile_id),
+			DB_Profile_Stats
 		);
-
-		stats_entry: DB_Profile_Stats;
-		if stats.count > 0 {
-			stats_entry = stats[0].*;
-		} else {
+		if !has_stats {
 			stats_entry.id = user.profile_id;
 			stats_entry.win_count = 0;
 			stats_entry.death_count = 0;
 			stats_entry.revive_count = 0;
 		}
 
-		// Update stats
 		stats_entry.death_count += event.death_count;
 		stats_entry.revive_count += event.revive_count;
 		stats_entry.win_count += ifx event.winner then 1 else 0;
 
-		// Store back
-		store_database(
-			platform,
-			server.db,
-			DB_Profile_Stats.[ stats_entry ]
-		);
+		sql_store(platform, server.db, stats_entry);
 
-		// Add the time entry to the scene time table
 		if event.winner {
-			time_entry: DB_Time_Entry;
-			time_entry.id = Rand.random_positive_int(*server.rng);
-			time_entry.profile_id = user.profile_id;
-			time_entry.terrain_id = event.scene_id;
-			time_entry.time_ms = event.time_ms;
-			time_entry.timestamp_ms = to_microseconds(current_time_monotonic());
-
-			store_database(
+			sql_store(
 				platform,
 				server.db,
-				DB_Time_Entry.[ time_entry ]
+				DB_Time_Entry.{
+					id = Rand.random_positive_int(*server.rng),
+					profile_id = user.profile_id,
+					terrain_id = event.scene_id,
+					time_ms = event.time_ms,
+					timestamp_ms = to_microseconds(current_time_monotonic()),
+				}
 			);
 		}
 	}
@@ -1528,8 +1507,8 @@ gc_instances :: (server: *Server) {
 ensure_database :: (app: *App) {
 	app_user := app.user_data.(*App_User);
 	app_user.server.db = open_database(app.platform, GAME_SERVER_DB);
-	exec_database(app.platform, app_user.server.db, "PRAGMA journal_mode=WAL;");
-	exec_database(app.platform, app_user.server.db, "PRAGMA synchronous=NORMAL;");
+	sql_exec(app.platform, app_user.server.db, sql("PRAGMA journal_mode=WAL;"));
+	sql_exec(app.platform, app_user.server.db, sql("PRAGMA synchronous=NORMAL;"));
 
 	ensure_database_schema(app.platform, app_user.server.db);
 
