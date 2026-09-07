@@ -341,7 +341,7 @@ handle_editor_camera_controls :: (editor: *Editor, gui: *GUI.GUI_State) {
 		// Pan the camera (move target, position follows)
 		pan_speed := 0.03;
 		editor.scene.camera.target.x -= delta.x * pan_speed;
-		editor.scene.camera.target.y -= delta.y * pan_speed;
+		editor.scene.camera.target.y += delta.y * pan_speed;
 		editor.scene.camera.position = editor.scene.camera.target + editor.camera_offset;
 	}
 

@@ -511,6 +511,9 @@ operator - :: (a: V2($T), b: V2(T)) -> V2(T) #symmetric {
 operator + :: (a: V3($T), b: V3(T)) -> V3(T) #symmetric {
 	return .{ a.x + b.x, a.y + b.y, a.z + b.z };
 }
+operator == :: (a: V3($T), b: V3(T)) -> bool #symmetric {
+	return a.x == b.x && a.y == b.y && a.z == b.z;
+}
 operator + :: (a: Q($T), b: Q(T)) -> Q(T) #symmetric {
 	return .{ a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w };
 }

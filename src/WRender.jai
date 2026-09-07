@@ -2806,6 +2806,7 @@ render_scene :: (
 		render_trophies(frame, *frame.shadow, scene, store, *extra);
 		render_hooks(frame, *frame.shadow, scene, store, *extra);
 		render_presents(frame, *frame.shadow, scene, store, *extra);
+		render_power_ups(frame, *frame.shadow, scene, store, *extra);
 		render_robots(frame, *frame.shadow, scene, store, *extra);
 		render_antiairs(frame, *frame.shadow, scene, store, *extra);
 		render_flags(frame, *frame.shadow, scene, store, *extra);
@@ -3096,6 +3097,7 @@ render_scene :: (
 		render_flags(frame, *frame.geometry, scene, store, *extra);
 		render_lanterns(frame, *frame.geometry, scene, store, *extra);
 		render_presents(frame, *frame.geometry, scene, store, *extra);
+		render_power_ups(frame, *frame.geometry, scene, store, *extra);
 		render_turn_tables(frame, *frame.geometry, scene, store, *extra);
 		render_pressbuttons(frame, *frame.geometry, scene, store, *extra);
 		render_jukeboxes(frame, *frame.geometry, scene, store, *extra);
@@ -4280,6 +4282,21 @@ render_hooks :: (
 	}
 }
 
+render_power_ups :: (
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+) {
+	instanced := append_instance_buffer(frame);
+	for scene.power_ups {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		M4f.scale(*instance.M, .{ 0.35, 0.35, 0.35 });
+		instance.texture_rect = Store.Colormaps_Rect.prop;
+	}
+	if instanced.count > 0
+		commit_geometry(frame, pass, *store.present_a_model, instanced.count);
+}
 render_presents :: (
 	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {

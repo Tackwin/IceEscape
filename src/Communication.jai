@@ -230,6 +230,8 @@ Command :: struct {
 		chain_bomb: bool;
 		cross_length: int;
 
+		explosion_time: float;
+
 		position: V3f;
 		time: float;
 
@@ -274,6 +276,7 @@ Command :: struct {
 		presents: [] Sync_Present;
 		safe_zones: [] Sync_Safe_Zone;
 		standins: [] Sync_Stand_In;
+		power_ups: [] Sync_Power_Up;
 	}
 	Sync_Stand_In :: struct {
 		standin_id: int;
@@ -288,6 +291,18 @@ Command :: struct {
 		position: V3f;
 		kind: int;
 		available: bool;
+	}
+	Sync_Power_Up :: struct {
+		power_up_id: int;
+		position: V3f;
+		kind: int;
+		author_id: int = -1;
+		picked_up: bool;
+	}
+	Pickup_Power_Up :: struct {
+		player_id: int;
+		power_up_id: int;
+		power_up_kind: int;
 	}
 	Explode :: struct {
 		id: int;
@@ -545,7 +560,7 @@ Command :: struct {
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
 		Wipe_Scene, End_Level, Sync_Robot, Explode, Sync_AntiAir, AntiAir_Shoot, Klaxon, Drop,
-		Give_Control, Request_Stats, Sync_Tombstone, Retire, Sync_Present,
+		Give_Control, Request_Stats, Sync_Tombstone, Retire, Sync_Present, Sync_Power_Up,
 		Sync_Safe_Zone, Active_Item, Hooked_Player, Sync_Hook, Cheat_Action, Buy_Ask, Buy_Response,
 		Sync_Stand_In, Ask_Respawn, Ask_Instance_List, Ans_Instance_List, Ask_Enter_Instance,
 		Ans_Enter_Instance, Leave_Instance, Create_Instance, Ans_Create_Instance, Version_Info,
@@ -554,7 +569,7 @@ Command :: struct {
 		Ask_List_Terrain, Ans_List_Terrain, Login, Set_Passcode, Get_Profile_Stats, Set_Username,
 		Get_Username, Get_Terrain_Leaderboard, Signal_Pick, Get_Instance_Tab_Stats,
 		Ask_Enter_Quick_Instance, Set_Thumbnail, Get_Thumbnail, Asset_Chunk, Create_Bomberman,
-		Ans_Create_Bomberman
+		Ans_Create_Bomberman, Pickup_Power_Up
 	);
 	payload: Payload_t;
 	sent_timestamp: float64;

@@ -214,6 +214,7 @@ Scene :: struct {
 	antiairs: [..] AntiAir; @allocate("lifetime") @clear("run")
 	traps: [..] Trap; @allocate("lifetime") @clear("run")
 	presents: [..] Present; @allocate("lifetime") @clear("run")
+	power_ups: [..] Power_Up; @allocate("lifetime") @clear("run")
 	safe_zones: [..] Safe_Zone; @allocate("lifetime") @clear("run")
 	hooks: [..] Hook; @allocate("lifetime") @clear("run")
 	turn_tables: [..] Turn_Table; @allocate("lifetime") @clear("run")
@@ -480,6 +481,8 @@ make_sync :: (scene: *Scene, params: Scene_Parameters) -> Command.Sync_Scene {
 	sync_scene.presents = NewArray(scene.presents.count, Command.Sync_Present, false,, temp);
 	sync_scene.safe_zones = NewArray(scene.safe_zones.count, Command.Sync_Safe_Zone, false,, temp);
 	sync_scene.standins = NewArray(scene.stand_in.count, Command.Sync_Stand_In, false,, temp);
+	sync_scene.power_ups = NewArray(scene.power_ups.count, Command.Sync_Power_Up, false,, temp);
+	
 	for * sync_scene.players {
 		it.* = make_sync(*scene.players[it_index]);
 	}
@@ -504,6 +507,9 @@ make_sync :: (scene: *Scene, params: Scene_Parameters) -> Command.Sync_Scene {
 	}
 	for * sync_scene.safe_zones {
 		it.* = make_sync(*scene.safe_zones[it_index]);
+	}
+	for * sync_scene.power_ups {
+		it.* = make_sync(*scene.power_ups[it_index]);
 	}
 	for * sync_scene.standins {
 		it.* = make_sync(*scene.stand_in[it_index]);
@@ -543,6 +549,7 @@ make_sync :: (bomb: *Bomb) -> Command.Sync_Bomb {
 	sync.holdable = bomb.server.holdable;
 	sync.chain_bomb = bomb.server.chain_bomb;
 	sync.cross_length = bomb.server.cross_length;
+	sync.explosion_time = bomb.server.explosion_time;
 	return sync;
 }
 
@@ -612,6 +619,16 @@ make_sync :: (present: *Present) -> Command.Sync_Present {
 	sync_present.kind = xx present.kind;
 	sync_present.available = present.server.available;
 	return sync_present;
+}
+
+make_sync :: (power_up: *Power_Up) -> Command.Sync_Power_Up {
+	sync_power_up: Command.Sync_Power_Up;
+	sync_power_up.power_up_id = power_up.id;
+	sync_power_up.position = power_up.position;
+	sync_power_up.kind = xx power_up.kind;
+	sync_power_up.author_id = power_up.author_id;
+	sync_power_up.picked_up = power_up.picked_up;
+	return sync_power_up;
 }
 
 make_sync :: (safe_zone: *Safe_Zone) -> Command.Sync_Safe_Zone {
@@ -833,6 +850,23 @@ Present :: struct {
 		cross_length := 0;
 		explosion_time := 0.0;
 	};
+}
+
+Power_Up :: struct {
+	id: int;
+	position: V3f;
+
+	Kind :: enum {
+		Cross_Chain_Length :: 0;
+		Shield :: 1;
+		Explosion_Speed :: 2;
+	};
+	kind: Kind;
+
+	author_id: int = -1;
+	picked_up := false;
+
+	spawn_time := 0.0;
 }
 
 Jukebox :: struct {
@@ -1120,8 +1154,8 @@ init_camera :: (scene: *Scene) {
 		return;
 	}
 
-	scene.camera.position = .{ 0, -4, 8 };
 	scene.camera.target = scene.spawn.position;
+	scene.camera.position = scene.spawn.position + V3f.{ 0, -4, 8 };
 	scene.camera.target_target = scene.camera.target;
 	scene.camera.delta_unit = normalize(scene.camera.position - scene.camera.target);
 	scene.camera.nominal_distance = norm(scene.camera.position - scene.camera.target);
@@ -1157,11 +1191,18 @@ init_player :: (scene: Scene, player: *Player) {
 	}
 }
 
-init_bomb :: (scene: Scene, bomb: *Bomb) {
+allocate_id :: (scene: *Scene) -> int {
+	id := scene.generation;
+	scene.generation += 1;
+	return id;
+}
+
+init_bomb :: (scene: *Scene, bomb: *Bomb) {
 	bomb.* = .{};
-	bomb.id = scene.bombs.count + 1;
+	bomb.id = allocate_id(scene);
 	if scene.params.mode == .Bomberman {
 		bomb.server.radius_hitbox = 0.5;
+		bomb.server.explosion_time = 5.0;
 	}
 }
 
@@ -1542,6 +1583,7 @@ Player :: struct {
 		radius_hitbox_key := 0.55;
 		radius_hitbox_confirmed := 0.15;
 		radius_hitbox_rock := 0.6;
+		radius_hitbox_pickup_power_up := 0.4;
 
 		confirmed_tile := Tile.Kind.Grass;
 
@@ -1555,6 +1597,15 @@ Player :: struct {
 		has_hook_present := 0;
 		
 		need_respawn := false;
+
+		last_dropped_bomb_id: int = -1;
+
+		bomberman : struct {
+			cross_chain_power := 1;
+			explosion_speed_power := 1;
+			shield_power := 0;
+			invincibility_time := 0.0;
+		};
 	};
 
 	// This is the stuff that gets optimistically updated by the client. For rendering
@@ -1607,6 +1658,14 @@ find_by_standin_id :: (scene: Scene, id: int) -> *Stand_In {
 
 find_by_present_id :: (scene: Scene, id: int) -> *Present {
 	for * scene.presents {
+		if it.id == id
+			return it;
+	}
+	return null;
+}
+
+find_by_power_up_id :: (scene: Scene, id: int) -> *Power_Up {
+	for * scene.power_ups {
 		if it.id == id
 			return it;
 	}
@@ -1692,6 +1751,14 @@ find_by_key_id :: (scene: Scene, id: int) -> *Key {
 find_bomb_by_holder_id :: (scene: Scene, id: int) -> *Bomb {
 	for * scene.bombs {
 		if it.holder == id
+			return it;
+	}
+
+	return null;
+}
+find_bomb_by_position :: (scene: Scene, tile_pos: V3f) -> *Bomb {
+	for * scene.bombs {
+		if it.server.position == tile_pos
 			return it;
 	}
 
@@ -1945,9 +2012,14 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 			if Controls.is_action_just_pressed(controls, GUI.Action_Key.Bomberman_Drop) {
 				player := find_by_player_id(scene, scene.controlled_player_id);
 				if player && !player.server.dead {
-					command: Command.Drop;
-					command.player_id = player.id;
-					add(result, scene.id, command);
+					tile := position_to_tile(scene, player.server.position);
+					tile_pos := tile_center(scene, tile);
+					bomb_here := find_bomb_by_position(scene, tile_pos);
+					if !bomb_here {
+						command: Command.Drop;
+						command.player_id = player.id;
+						add(result, scene.id, command);
+					}
 				}
 			}
 	}
@@ -2343,6 +2415,23 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			d := norm(p - q);
 			if d < explosion.max_size / 2 + 0.5 {
 				it.exploded = true;
+				if scene.is_server && scene.params.mode == .Bomberman {
+					// A block rock can drop a power up
+					rng := Rand.random_uniform(*scene.server_rng, 0, 10);
+					if rng < 3 {
+						power_up: Power_Up;
+						power_up.id = allocate_id(scene);
+						power_up.position = it.position;
+						power_up.kind = xx Rand.random_uniform(*scene.server_rng, 0, 3);
+						power_up.author_id = -1;
+						power_up.spawn_time = scene.server.clock.(float);
+						array_add(*scene.power_ups, power_up);
+
+						sync_power_up := make_sync(*power_up);
+						if result
+							array_add(*result.broadcast, make_command(sync_power_up));
+					}
+				}
 			}
 		}
 	}
@@ -2415,6 +2504,14 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		interpolate_to_server(it, dt);
 	}
 
+	// >RULE Remove picked up power ups
+	power_up_cursor := 0;
+	for 0..scene.power_ups.count-1 {
+		scene.power_ups[power_up_cursor] = scene.power_ups[it];
+		if !scene.power_ups[it].picked_up
+			power_up_cursor += 1;
+	}
+	scene.power_ups.count = power_up_cursor;
 }
 
 update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result) {
@@ -2474,6 +2571,55 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 
 		if before != it.server.available {
 			array_add(*result.sync_present, make_sync(it));
+		}
+	}
+
+	// >RULE  player pickup powerups automatically
+	for * scene.players {
+		if it.server.dead
+			continue;
+
+		p := it.server.position;
+
+		for * powerup: scene.power_ups {
+			if powerup.picked_up
+				continue;
+
+			q := powerup.position;
+
+			d := norm(p - q);
+			if d < it.server.radius_hitbox_pickup_power_up {
+				powerup.picked_up = true;
+				apply_power_up_server(scene, it, powerup);
+				msg: Command.Pickup_Power_Up;
+				msg.player_id = it.id;
+				msg.power_up_id = powerup.id;
+				msg.power_up_kind = powerup.kind.(int);
+				array_add(*result.broadcast, make_command(msg));
+				continue;
+			}
+		}
+	}
+
+	// >RULE power up gets destroyed by explosions
+	for * scene.power_ups {
+		p := it.position;
+
+		if it.spawn_time + 3 > scene.server.clock {
+			continue;
+		}
+
+		for e: scene.explosions {
+			q := e.position;
+
+			r := explosion_radius(scene, e);
+
+			d := norm(p - q);
+			if d < r {
+				it.picked_up = true;
+				array_add(*result.broadcast, make_command(make_sync(it)));
+				break;
+			}
 		}
 	}
 
@@ -3109,16 +3255,27 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			);
 		} else if it.soft_die {
 			player := *scene.players[it_index];
-			in_safe_zone := false;
-			for * safe_zone: scene.safe_zones {
-				d := norm(player.server.position - safe_zone.position);
-				if d < safe_zone.radius {
-					in_safe_zone = true;
-					safe_zone.expire -= 1;
-					break;
+
+			for soft_die_check: 0..0 {
+				for * safe_zone: scene.safe_zones {
+					d := norm(player.server.position - safe_zone.position);
+					if d < safe_zone.radius {
+						safe_zone.expire -= 1;
+						break soft_die_check;
+					}
 				}
-			}
-			if !in_safe_zone {
+				
+				if scene.params.mode == .Bomberman {
+					if player.server.bomberman.invincibility_time + 1 > scene.server.clock
+						break;
+
+					if player.server.bomberman.shield_power > 0 {
+						player.server.bomberman.shield_power -= 1;
+						player.server.bomberman.invincibility_time = scene.server.clock.(float);
+						break;
+					}
+				}
+				
 				server_die(scene, player, time, result, should_die_source, should_die_strength);
 			}
 		}
@@ -3143,6 +3300,28 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			array_add(*result.sync_safe_zone, make_sync(it));
 			remove it;
 		}
+	}
+}
+
+apply_power_up_server :: (scene: *Scene, player: *Player, powerup: *Power_Up) {
+	if #complete powerup.kind == {
+		case .Cross_Chain_Length;
+			player.server.bomberman.cross_chain_power += 1;
+		case .Shield;
+			player.server.bomberman.shield_power += 1;
+		case .Explosion_Speed;
+			player.server.bomberman.explosion_speed_power += 1;
+	}
+}
+
+apply_power_up_client :: (scene: *Scene, player: *Player, powerup: *Power_Up) {
+	if #complete powerup.kind == {
+		case .Cross_Chain_Length;
+			player.server.bomberman.cross_chain_power += 1;
+		case .Shield;
+			player.server.bomberman.shield_power += 1;
+		case .Explosion_Speed;
+			player.server.bomberman.explosion_speed_power += 1;
 	}
 }
 
@@ -3998,6 +4177,8 @@ update :: (scene: Scene, player: *Player, dt: float32) {
 		player.server.confirmed_tile = tile.kind;
 	}
 
+	before_tile_center := position_to_tile_center(scene, player.server.position);
+
 	if player.server.slipping {
 		dt_angle := angle_between(
 			player.server.direction, player.server.target_direction, V3f.{ 0, 0, 1 }
@@ -4015,7 +4196,10 @@ update :: (scene: Scene, player: *Player, dt: float32) {
 		wanted_position :=
 			player.server.position + player.server.direction * player.server.speed * dt;
 
-		if can_execute_player_motion(scene, player.server.position, wanted_position, player)
+		can:, wanted_position = can_execute_player_motion(
+			scene, player.server.position, wanted_position, player
+		);
+		if can
 			player.server.position = wanted_position;
 	} else {
 		player.server.direction = player.server.target_direction;
@@ -4027,7 +4211,9 @@ update :: (scene: Scene, player: *Player, dt: float32) {
 
 			dist = min(dist, player.server.speed * dt);
 			wanted_position := player.server.position + dt_pos * dist;
-			if can_execute_player_motion(scene, player.server.position, wanted_position, player)
+
+			can:, wanted_position = can_execute_player_motion(scene, player.server.position, wanted_position, player);
+			if can
 				player.server.position = wanted_position;
 			player.server.target_direction = dt_pos;
 
@@ -4036,6 +4222,11 @@ update :: (scene: Scene, player: *Player, dt: float32) {
 				player.server.walking_toward_position = player.server.position;
 			}
 		}
+	}
+
+	after_tile_center := position_to_tile_center(scene, player.server.position);
+	if before_tile_center != after_tile_center {
+		player.server.last_dropped_bomb_id = -1;
 	}
 }
 
@@ -4086,51 +4277,59 @@ buy_ask :: (scene: *Scene, player_id: int, result: *Process_Response) {
 	}
 }
 
-can_execute_player_motion :: (scene: Scene, a: V3f, b: V3f, player: *Player) -> bool {
+can_execute_player_motion :: (
+	scene: Scene, current: V3f, target: V3f, player: *Player
+) -> bool, V3f {
 	for * scene.gates {
 		if it.is_closed {
-			d := norm(b - it.position);
+			d := norm(target - it.position);
 
 			if d < 1.0 {
 				if it.wait_for_key_id >= 0 {
 					key := find_by_key_id(scene, it.wait_for_key_id);
 					if key && key.holder == player.id {
-						return true;
+						return true, target;
 					}
 				} else {
-					return false;
+					return false, current;
 				}
 
-				return false;
+				return false, current;
 			}
 		}
 	}
 	for * scene.block_rocks {
 		if it.exploded
 			continue;
-		d := norm(b - it.position);
+		d := norm(target - it.position);
 
 		if d < player.server.radius_hitbox_rock {
-			return false;
+			return false, current;
 		}
 	}
 	if scene.params.mode == .Bomberman {
 		// Forbid motion through snow.
-		tile_under_b, is_under_a_tile := tile_under(scene, b);
+		tile_under_b, is_under_a_tile := tile_under(scene, target);
 		if is_under_a_tile
-			if tile_under_b.kind == .Dirt
-				return false;
+			if tile_under_b.kind == .Dirt {
+				// We forbid motion through dirt, but we will let the player walk in the tangent
+				// direction.
 
-		// Also forbid motion through bombs.
-		for * scene.bombs {
-			d := norm(b - it.server.position);
+				// Check surrounding tiles to see if the player can move in the tangent direction.
+				tile_under_x, is_under_a_tile_x := tile_under(scene, .{ target.x, current.y, current.z });
+				tile_under_y, is_under_a_tile_y := tile_under(scene, .{ current.x, target.y, current.z });
 
-			if d < it.server.radius_hitbox {
-				return false;
+				if is_under_a_tile_x && tile_under_x.kind != .Dirt {
+					return true, .{ target.x, current.y, current.z };
+				}
+				if is_under_a_tile_y && tile_under_y.kind != .Dirt {
+					return true, .{ current.x, target.y, current.z };
+				}
+
+				return false, current;
 			}
-		}
 	}
-	return true;
+	return true, target;
 }
 
 process_server_only :: (
@@ -4246,18 +4445,26 @@ process_server_only :: (
 			case .Bomberman;
 				player := find_by_player_id(scene, drop.player_id);
 				if player {
-					bomb: Bomb;
-					init_bomb(scene, *bomb);
-					bomb.server.position = player.server.position;
-					bomb.server.holdable = false;
-					bomb.server.bomberman_bomb = true;
-					bomb.server.chain_bomb = true;
-					bomb.server.cross_length = 2;
-					drop_bomb(scene, *bomb);
-					array_add(*scene.bombs, bomb);
+					tile_center := position_to_tile_center(scene, player.server.position);
+					found_bomb := find_bomb_by_position(scene, tile_center);
+					if !found_bomb {
+						bomb: Bomb;
+						init_bomb(scene, *bomb);
+						bomb.server.position = tile_center;
+						bomb.server.holdable = false;
+						bomb.server.bomberman_bomb = true;
+						bomb.server.chain_bomb = true;
+						bomb.server.cross_length = player.server.bomberman.cross_chain_power;
+						bomb.server.explosion_time *=
+							pow(0.9, player.server.bomberman.explosion_speed_power.(float));
+						drop_bomb(scene, *bomb);
+						array_add(*scene.bombs, bomb);
 
-					sync_bomb := make_sync(*bomb);
-					add(response, scene.id, sync_bomb);
+						sync_bomb := make_sync(*bomb);
+						add(response, scene.id, sync_bomb);
+
+						player.server.last_dropped_bomb_id = bomb.id;
+					}
 				}
 				return true;
 		}
@@ -4268,7 +4475,7 @@ process_server_only :: (
 		player := find_by_player_id(scene, spawn_coin.sender);
 		if player {
 			coin: Coin;
-			coin.id = scene.coin_generation;
+			coin.id = allocate_id(scene);
 			coin.sender = player.id;
 			coin.server.position = player.server.position;
 			coin.server.direction = V3f.{ 0, 0, 0 };
@@ -4284,8 +4491,6 @@ process_server_only :: (
 			cmd.direction = coin.server.direction;
 			cmd.birthtime = coin.server.birthtime.(float32);
 			add(response, scene.id, cmd);
-
-			scene.coin_generation += 1;
 			return true;
 		}
 	}
@@ -4297,8 +4502,7 @@ process_server_only :: (
 			if active_item.safe_zone {
 				if !player.server.dead && player.server.has_safe_present {
 					sz: Safe_Zone;
-					sz.id = scene.generation;
-					scene.generation += 1;
+					sz.id = allocate_id(scene);
 					tile := position_to_tile(scene, player.server.position);
 					sz.position = tile_center(scene, tile);
 					sz.radius = sqrt(2) / 2;
@@ -4314,8 +4518,7 @@ process_server_only :: (
 			if active_item.hook {
 				if !player.server.dead && player.server.has_hook_present > 0 {
 					hook: Hook;
-					hook.id = scene.generation;
-					scene.generation += 1;
+					hook.id = allocate_id(scene);
 					hook.hooker_id = player.id;
 					hook.hooked_id = -1;
 					hook.server.direction = player.server.direction;
@@ -4360,6 +4563,17 @@ process_client_only :: (
 		return true;
 	}
 	
+	power_up_pickup: *Command.Pickup_Power_Up = isa(command.payload, Command.Pickup_Power_Up);
+	if power_up_pickup {
+		powerup := find_by_power_up_id(scene, power_up_pickup.power_up_id);
+		player := find_by_player_id(scene, power_up_pickup.player_id);
+		if powerup && player {
+			apply_power_up_client(scene, player, powerup);
+			powerup.picked_up = true;
+		}
+		return true;
+	}
+
 	signal_pick: *Command.Signal_Pick = isa(command.payload, Command.Signal_Pick);
 	if signal_pick {
 		new: Scene.Pick;
@@ -4532,6 +4746,21 @@ process_client_only :: (
 		}
 	}
 
+	sync_power_up: *Command.Sync_Power_Up = isa(command.payload, Command.Sync_Power_Up);
+	if sync_power_up {
+		power_up := find_by_power_up_id(scene, sync_power_up.power_up_id);
+		if !power_up {
+			array_add(*scene.power_ups, .{});
+			power_up = scene.power_ups.data + scene.power_ups.count - 1;
+		}
+		power_up.picked_up = sync_power_up.picked_up;
+		power_up.id = sync_power_up.power_up_id;
+		power_up.position = sync_power_up.position;
+		power_up.kind = xx sync_power_up.kind;
+		power_up.author_id = sync_power_up.author_id;
+		return true;
+	}
+
 	sync_present: *Command.Sync_Present = isa(command.payload, Command.Sync_Present);
 	if sync_present {
 		present := find_by_present_id(scene, sync_present.present_id);
@@ -4555,31 +4784,24 @@ process_client_only :: (
 	sync_bomb: *Command.Sync_Bomb = isa(command.payload, Command.Sync_Bomb);
 	if sync_bomb {
 		bomb := find_by_bomb_id(scene, sync_bomb.bomb_id);
-		if bomb {
-			bomb.server.position = sync_bomb.position;
-			bomb.server.time = sync_bomb.time;
-			bomb.holder = sync_bomb.holder_id;
-			bomb.last_holder = sync_bomb.last_holder_id;
-			bomb.server.bomberman_bomb = sync_bomb.bomberman_bomb;
-			bomb.server.holdable = sync_bomb.holdable;
-			return true;
-		} else {
-			new_bomb: Bomb;
-			new_bomb.id = sync_bomb.bomb_id;
-			new_bomb.spawner_id = sync_bomb.bomb_spawner_id;
-			new_bomb.holder = sync_bomb.holder_id;
-			new_bomb.last_holder = sync_bomb.last_holder_id;
-			new_bomb.server.position = sync_bomb.position;
-			new_bomb.client.position = sync_bomb.position;
-			new_bomb.server.time = sync_bomb.time;
-			new_bomb.client.time = sync_bomb.time;
-			new_bomb.server.bomberman_bomb = sync_bomb.bomberman_bomb;
-			new_bomb.server.holdable = sync_bomb.holdable;
-			new_bomb.server.cross_length = sync_bomb.cross_length;
-			new_bomb.server.chain_bomb = sync_bomb.chain_bomb;
-			array_add(*scene.bombs, new_bomb);
-			return true;
+		if !bomb {
+			array_add(*scene.bombs, .{});
+			bomb = scene.bombs.data + scene.bombs.count - 1;
 		}
+		bomb.id = sync_bomb.bomb_id;
+		bomb.spawner_id = sync_bomb.bomb_spawner_id;
+		bomb.holder = sync_bomb.holder_id;
+		bomb.last_holder = sync_bomb.last_holder_id;
+		bomb.server.position = sync_bomb.position;
+		bomb.client.position = sync_bomb.position;
+		bomb.server.time = sync_bomb.time;
+		bomb.client.time = sync_bomb.time;
+		bomb.server.bomberman_bomb = sync_bomb.bomberman_bomb;
+		bomb.server.holdable = sync_bomb.holdable;
+		bomb.server.cross_length = sync_bomb.cross_length;
+		bomb.server.chain_bomb = sync_bomb.chain_bomb;
+		bomb.server.explosion_time = sync_bomb.explosion_time;
+		return true;
 	}
 
 	sync_bomb_spawner: *Command.Sync_Bomb_Spawner = isa(command.payload, Command.Sync_Bomb_Spawner);
@@ -4661,11 +4883,12 @@ process_client_only :: (
 				if player {
 					bomb: Bomb;
 					init_bomb(scene, *bomb);
-					bomb.server.position = player.server.position;
+					bomb.server.position = position_to_tile_center(scene, player.server.position);
 					bomb.server.holdable = false;
 					bomb.server.bomberman_bomb = true;
 					drop_bomb(scene, *bomb);
 					array_add(*scene.bombs, bomb);
+					player.server.last_dropped_bomb_id = bomb.id;
 				}
 				return true;
 		}
@@ -5208,6 +5431,7 @@ spawn_into :: (player: *Player, scene: Scene) {
 	player.server.dead = false;
 	player.server.has_safe_present = false;
 	player.server.has_hook_present = 0;
+	player.server.bomberman = .{};
 }
 
 terrain_size :: (scene: Scene) -> V2f {
@@ -5236,6 +5460,10 @@ position_to_tile :: (scene: Scene, pos: V3f) -> V2i {
 		cast(int) floor((pos.x + scene.origin_tile_space.x) / scene.terrain.tile_size.x),
 		cast(int) floor((pos.y + scene.origin_tile_space.y) / scene.terrain.tile_size.y)
 	};
+}
+position_to_tile_center :: (scene: Scene, pos: V3f) -> V3f {
+	tile := position_to_tile(scene, pos);
+	return tile_center(scene, tile);
 }
 
 remove_player_from_scene :: (player_id: int, scene: *Scene) {

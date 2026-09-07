@@ -890,7 +890,7 @@ push_main_menu :: (
 		max_chars = 8,
 		_z=1,
 		_pos = input_text_aabb.min,
-		_align = GUI.Align.Bottom_Left
+		_align = GUI.Align.Top_Left
 	);
 
 	cursor =  .{ 16, 64 + 16 };
