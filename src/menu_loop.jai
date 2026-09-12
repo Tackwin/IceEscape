@@ -568,6 +568,8 @@ menu_loop :: (_app: *App) -> bool {
 		}
 	}
 
+	draw_console(*app_user.gui_state);
+
 	frame := WRender.begin_frame(*framegraph, controls.time);
 	WRender.render_gui(frame, *framegraph, app_user.gui_state, *store);
 	WRender.end_frame(*framegraph, frame);

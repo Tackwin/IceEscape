@@ -2156,7 +2156,10 @@ atom_input_text :: (
 	id : u64 = 0,
 	placeholder := "",
 	max_chars := -1,
-	margin := 2.0
+	margin := 2.0,
+	unfocus_on_commit := true,
+	force_focus := false,
+	cursor_to_end := false
 ) -> Input_Text_Result {
 	result: Input_Text_Result;
 
@@ -2172,7 +2175,12 @@ atom_input_text :: (
 	state, comp := widget(gui, "input", Input_Text);
 	comp.aabb.min = align_pos(pos, size, align);
 	comp.aabb.max = comp.aabb.min + size;
+	comp.z = z;
 	comp.physical = .Solid;
+
+	if force_focus {
+		comp.keyboard_focused = true;
+	}
 
 	if comp.just_pressed {
 		comp.keyboard_focused = true;
@@ -2184,11 +2192,16 @@ atom_input_text :: (
 
 	if comp.keyboard_focused && gui.controls.just_pressed[Platform.Key.Enter] {
 		result.committed = true;
-		comp.keyboard_focused = false;
+		if unfocus_on_commit {
+			comp.keyboard_focused = false;
+		}
 	}
 
 	if comp.keyboard_focused {
 		state.cursor = clamp(state.cursor, 0, buf.count);
+		if cursor_to_end {
+			state.cursor = buf.count;
+		}
 
 		handle_add :: (key: int, to_add: string) #expand {
 			if gui.controls.just_pressed[key] {

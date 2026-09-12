@@ -54,7 +54,7 @@ const fetch_with_progress = async (url) => {
 	return bytes.buffer;
 };
 
-window.addEventListener("load", async () => {
+const boot_game = async () => {
 	audio_context = new AudioContext();
 	try {
 		await initialize_wasm_module(GAME_WASM, 1024 * 16);
@@ -62,7 +62,9 @@ window.addEventListener("load", async () => {
 		set_loader_progress(1, "Failed to load");
 		console.error(err);
 	}
-});
+};
+if (document.readyState === "complete") boot_game();
+else window.addEventListener("load", boot_game);
 
 const create_fullscreen_canvas = (text) => {
     const canvas  = document.createElement("canvas");

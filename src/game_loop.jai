@@ -250,7 +250,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 	}
 
 	GUI.push_breaking_news(*app_user.gui_state, state.news);
-	if controls.pressed[Key.Tab] {
+	if controls.pressed[Key.Tab] && !console_is_open() {
 		push_score_tab(state.scene, *state.game, *app_user.gui_state);
 	}
 	GUI.push_death_indicator(*app_user.gui_state, state.scene);
@@ -401,6 +401,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 
 input_game_loop :: (app_user: *App_User) {
 	using app_user;
+	if console_is_open() || console_ate_input() return;
 	if controls.just_pressed[Key.Escape] {
 		app_user.state.playing.escape_menu_open = !app_user.state.playing.escape_menu_open;
 	}
@@ -601,6 +602,8 @@ game_loop :: (app_user: *App_User) -> bool {
 	input_game_loop(app_user);
 	update_game_loop(app_user);
 	sounding(*state, *state.scene, store, app.platform);
+
+	draw_console(*app_user.gui_state);
 
 	// Flush the command buffer
 	for * state.scene.client_to_server {

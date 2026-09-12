@@ -5,6 +5,7 @@
 * Add an instrumentalised, introspective, profiling system, leveraging jai's metaprogramming. Also I have a pretty hard idea of an histogram GUI for the performance that Molecule already implemented.
 * Add support for gpu timing queries. Full webgpu.
 * Add a full log system that is inspectable, taggable, filterable. Do not output it to stdout.
+* Debug console. Valve-like drop-down from the top, dump unstyled UI. Tag Jai functions with @console so typing the function name in the console runs it. Compile-time table from the note, no manual registry.
 * WebTransport implementation BIG
 * Dynamic asset loading and requesting. Do not embed everything into the binary.
 * Built in, inspectable timeline of every messages received, with tracking id, searchable, filterable, taggable, and inspectable. This is for debugging the network.
@@ -12,6 +13,7 @@
 * Evaluate the use of a RPC protocol instead of the current message passing system. The only worry would be around packet dropping and loss of metadata like time of flight. But it would be a lot more ergonomic to use.
 
 ===== DONE ========
+* Helpful diagnosis in index.html when WebGPU is not available in JavaScript (no navigator.gpu, adapter request fails, insecure context, etc.) instead of a silent/blank load.
 * Come up with a plan for the recurring pattern 
 		new_string := GUI.labeled_input_text(...);
 		if old_string != new_string {

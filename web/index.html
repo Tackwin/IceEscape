@@ -60,14 +60,154 @@
             0% { transform: translateX(-100%); }
             100% { transform: translateX(280%); }
         }
+        #loader.failed #bar {
+            display: none;
+        }
+        #gpu-help {
+            display: none;
+            max-width: min(520px, 86vw);
+            margin: 0;
+            padding: 0 0 0 1.2em;
+            color: #e8e8e8;
+            font: 14px/1.45 Georgia, serif;
+            text-align: left;
+        }
+        #loader.failed #gpu-help {
+            display: block;
+        }
+        #gpu-help li {
+            margin: 0.45em 0;
+        }
     </style>
 </head>
 <body>
     <div id="loader">
         <div id="loader-label">Loading</div>
         <div id="bar"><span></span></div>
+        <ul id="gpu-help"></ul>
     </div>
-    <script src="identity.js"></script>
-    <script src="main.js"></script>
+    <script>
+        const gpuHelp = document.getElementById("gpu-help");
+        const loader = document.getElementById("loader");
+        const loaderLabel = document.getElementById("loader-label");
+
+        const loadScript = (src) => new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = src;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error("Failed to load " + src));
+            document.body.appendChild(script);
+        });
+
+        const withTimeout = (promise, ms) => new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error("timed out")), ms);
+            promise.then(
+                (value) => { clearTimeout(timer); resolve(value); },
+                (err) => { clearTimeout(timer); reject(err); }
+            );
+        });
+
+        const pageContextLine = () => {
+            const host = location.host || "(no host)";
+            return "This page is " + location.protocol + "//" + host + ".";
+        };
+
+        const browserGpuHint = () => {
+            const ua = navigator.userAgent;
+            if (/Firefox/i.test(ua)) {
+                return "Firefox: in about:config set dom.webgpu.enabled to true. Linux may also need gfx.webgpu.ignore-blocklist.";
+            }
+            if (/Safari/i.test(ua) && !/Chrome|Chromium|Edg\//i.test(ua)) {
+                return "Safari: WebGPU requires Safari 18 or later (macOS Sequoia / iOS 18).";
+            }
+            if (/Linux/i.test(ua) && /Chrome|Chromium|Edg\//i.test(ua)) {
+                return "Chrome/Edge on Linux: open chrome://gpu and look at WebGPU. You may need chrome://flags/#enable-unsafe-webgpu.";
+            }
+            if (/Chrome|Chromium|Edg\//i.test(ua)) {
+                return "Chrome/Edge: open chrome://gpu and check the WebGPU section. Try updating the graphics driver.";
+            }
+            return "Use an up-to-date Chrome, Edge, or Safari 18+.";
+        };
+
+        const failGpu = (title, details) => {
+            loader.classList.add("failed");
+            loaderLabel.textContent = title;
+            gpuHelp.replaceChildren();
+            for (const line of details) {
+                const item = document.createElement("li");
+                item.textContent = line;
+                gpuHelp.appendChild(item);
+            }
+            console.error("[WebGPU] " + title + "\n- " + details.join("\n- "));
+        };
+
+        const diagnoseWebGPU = async () => {
+            if (!window.isSecureContext) {
+                return {
+                    title: "WebGPU needs a secure context",
+                    details: [
+                        "This page is not a secure context, so the browser will not expose WebGPU.",
+                        "Serve it over https:// or http://localhost. Opening the file directly (file://) will not work.",
+                        pageContextLine(),
+                    ],
+                };
+            }
+            if (!navigator.gpu) {
+                return {
+                    title: "This browser has no WebGPU",
+                    details: [
+                        "navigator.gpu is missing.",
+                        browserGpuHint(),
+                        pageContextLine(),
+                    ],
+                };
+            }
+            let adapter = null;
+            try {
+                adapter = await withTimeout(navigator.gpu.requestAdapter(), 5000);
+            } catch (err) {
+                const timedOut = err && err.message === "timed out";
+                return {
+                    title: timedOut ? "WebGPU adapter request hung" : "WebGPU adapter request failed",
+                    details: [
+                        timedOut
+                            ? "navigator.gpu.requestAdapter() did not return within 5 seconds."
+                            : ("requestAdapter() threw: " + (err && err.message ? err.message : String(err))),
+                        "Update the GPU driver, check chrome://gpu (or about:support in Firefox), and make sure hardware acceleration is on.",
+                        pageContextLine(),
+                    ],
+                };
+            }
+            if (!adapter) {
+                return {
+                    title: "No WebGPU adapter",
+                    details: [
+                        "navigator.gpu exists, but requestAdapter() returned nothing.",
+                        "The GPU is blocked, unsupported, or the driver failed.",
+                        browserGpuHint(),
+                        pageContextLine(),
+                    ],
+                };
+            }
+            return null;
+        };
+
+        (async () => {
+            const problem = await diagnoseWebGPU();
+            if (problem) {
+                failGpu(problem.title, problem.details);
+                return;
+            }
+            try {
+                await loadScript("identity.js");
+                await loadScript("main.js");
+            } catch (err) {
+                failGpu("Failed to load the game", [
+                    err && err.message ? err.message : String(err),
+                    pageContextLine(),
+                ]);
+            }
+        })();
+    </script>
 </body>
 </html>
