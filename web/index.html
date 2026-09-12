@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icon.png" type="image/png" sizes="512x512" />
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -129,7 +128,7 @@
             return "Use an up-to-date Chrome, Edge, or Safari 18+.";
         };
 
-        const failGpu = (title, details) => {
+        const failLoad = (title, details) => {
             loader.classList.add("failed");
             loaderLabel.textContent = title;
             gpuHelp.replaceChildren();
@@ -138,7 +137,45 @@
                 item.textContent = line;
                 gpuHelp.appendChild(item);
             }
-            console.error("[WebGPU] " + title + "\n- " + details.join("\n- "));
+            console.error("[Arena] " + title + "\n- " + details.join("\n- "));
+        };
+
+        const browserJspiHint = () => {
+            const ua = navigator.userAgent;
+            if (/Firefox/i.test(ua)) {
+                return "Firefox: JSPI is not on by default yet. Use Chrome 137+ or Edge, or Firefox Nightly with javascript.options.wasm_js_promise_integration.";
+            }
+            if (/Safari/i.test(ua) && !/Chrome|Chromium|Edg\//i.test(ua)) {
+                return "Safari: JSPI needs Safari 27 or later.";
+            }
+            if (/Chrome|Chromium|Edg\//i.test(ua)) {
+                return "Chrome/Edge: JSPI shipped in Chrome 137. Update the browser.";
+            }
+            return "Use Chrome 137+, Edge 137+, or Safari 27+.";
+        };
+
+        const diagnoseJSPI = () => {
+            if (typeof WebAssembly !== "object" || WebAssembly === null) {
+                return {
+                    title: "This browser has no WebAssembly",
+                    details: [
+                        "The WebAssembly object is missing.",
+                        "Use an up-to-date Chrome, Edge, or Safari.",
+                        pageContextLine(),
+                    ],
+                };
+            }
+            if (typeof WebAssembly.Suspending !== "function" || typeof WebAssembly.promising !== "function") {
+                return {
+                    title: "This browser has no WebAssembly JSPI",
+                    details: [
+                        "WebAssembly.Suspending / WebAssembly.promising are missing. The game needs JavaScript Promise Integration.",
+                        browserJspiHint(),
+                        pageContextLine(),
+                    ],
+                };
+            }
+            return null;
         };
 
         const diagnoseWebGPU = async () => {
@@ -193,16 +230,21 @@
         };
 
         (async () => {
+            const jspiProblem = diagnoseJSPI();
+            if (jspiProblem) {
+                failLoad(jspiProblem.title, jspiProblem.details);
+                return;
+            }
             const problem = await diagnoseWebGPU();
             if (problem) {
-                failGpu(problem.title, problem.details);
+                failLoad(problem.title, problem.details);
                 return;
             }
             try {
                 await loadScript("identity.js");
                 await loadScript("main.js");
             } catch (err) {
-                failGpu("Failed to load the game", [
+                failLoad("Failed to load the game", [
                     err && err.message ? err.message : String(err),
                     pageContextLine(),
                 ]);
