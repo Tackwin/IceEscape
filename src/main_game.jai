@@ -72,6 +72,7 @@ App_User :: struct {
 	graphics: WRender.Graphics;
 	app_context: *#Context;
 	gui_state: GUI.GUI_State;
+	console: Console_State;
 
 	counter := 0;
 }
@@ -129,6 +130,7 @@ App_User :: struct {
 
 	GUI.begin_frame(*app_user.gui_state, app_user.allocated_frame_info, *app_user.controls, app_user.state.keyboard_layout);
 	handle_debug_local_server(app_user);
+	handle_console(app_user);
 
 	commands := parse_web_message(*app_user.state, app_user.allocated_frame_info);
 	for command: commands {
@@ -265,6 +267,7 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	GUI.init(*app_user.state.editor_page.string_pool);
 	app_user.state.editor_page.load_filter = GUI.make(*app_user.state.editor_page.string_pool);
 	app_user.state.editor_page.save_dialog_input = GUI.make(*app_user.state.editor_page.string_pool);
+	init_console(app_user);
 	WRender.init_framegraph(*app_user.framegraph, *app_user.store);
 
 	Scene.make(*app_user.state.scene);
@@ -288,6 +291,7 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	GUI.gui_state_init(*app_user.gui_state, *app_user.store);
 	GUI.rebind(*app_user.state.menu.string_pool);
 	GUI.rebind(*app_user.state.editor_page.string_pool);
+	rebind_console(app_user);
 
 	scene: Scene.Scene;
 	Scene.reload(*scene);
@@ -385,6 +389,7 @@ write_capture_png :: (app_user: *App_User, platform: *Platform) {
 #load "menu_loop.jai";
 #load "game_loop.jai";
 #load "editor_loop.jai";
+#load "Console.jai";
 
 #program_export "app_quit" app_quit :: (_app: *App) {
 }

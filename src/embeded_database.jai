@@ -4,30 +4,28 @@
 
 embed_database_default_terrain_bomberman_entry :: (app: *App) {
 	app_user := app.user_data.(*App_User);
-	to_asciis: [1] DB_Terrain_Bomberman_Entry;
-	to_ascii := *to_asciis[0];
-	to_ascii.id = 0;
-	to_ascii.terrain_id = 107;
-	to_ascii.max_players = 64;
-	store_database(
-		app.platform, app_user.server.db, "terrain_bomberman_entry", to_asciis, true, "id"
+	sql_store(
+		app.platform,
+		app_user.server.db,
+		DB_Terrain_Bomberman_Entry.{
+			id = 1,
+			terrain_id = 107,
+			max_players = 64,
+		}
 	);
 }
 
 embed_database_default_rosters :: (app: *App) {
 	app_user := app.user_data.(*App_User);
-	
-	exec_database(
+
+	sql_store(
 		app.platform,
 		app_user.server.db,
-		#string QUERY
-			INSERT INTO terrain_rosters (id, name, terrain_ids) VALUES (
-				1, "Base", "[100, 101, 102, 103, 104, 105, 106]"
-			) ON CONFLICT(id) DO UPDATE SET
-				terrain_ids = excluded.terrain_ids,
-				name = excluded.name
-			;
-		QUERY
+		DB_Terrain_Roster.{
+			id = 1,
+			name = "Base",
+			terrain_ids = .[100, 101, 102, 103, 104, 105, 106],
+		}
 	);
 
 	roster: [] string = .[
@@ -54,27 +52,28 @@ embed_database_default_rosters :: (app: *App) {
 		"Tetris",
 	];
 
-	sb: String_Builder;
-	print_to_builder(*sb, "INSERT INTO terrain_rosters (id, name, terrain_ids) VALUES (2, \"File\", \"[");
-	sep := "";
+	ids: [..] int;
+	ids.allocator = temp;
 	for roster {
-		info := load_database(
+		info, found := sql_load(
 			app.platform,
 			app_user.server.db,
-			"terrain_infos",
-			DB_Terrain_Infos,
-			tprint("name = \"%\"", it)
+			sql("SELECT * FROM terrain_infos WHERE name = ?", it),
+			DB_Terrain_Infos
 		);
-
-		if info.count == 0
+		if !found
 			continue;
-		
-		print_to_builder(*sb, "%1%2", sep, info[0].id);
-		sep = ", ";
+		array_add(*ids, info.id);
 	}
-	print_to_builder(*sb, "]\") ");
-	print_to_builder(*sb, "ON CONFLICT(id) DO UPDATE SET terrain_ids = excluded.terrain_ids, name = excluded.name;");
-	exec_database(app.platform, app_user.server.db, builder_to_string(*sb));
+	sql_store(
+		app.platform,
+		app_user.server.db,
+		DB_Terrain_Roster.{
+			id = 2,
+			name = "File",
+			terrain_ids = ids,
+		}
+	);
 }
 
 embed_database_default_terrains :: (app: *App) {
@@ -82,24 +81,29 @@ embed_database_default_terrains :: (app: *App) {
 	server := *app_user.server;
 	platform := app.platform;
 	save :: (new_id: int, ascii: string, name: string) #expand {
-		ids: [1] DB_Terrain_Id;
-		ids[0].id = new_id;
-		store_database(platform, server.db, "terrain_ids", ids);
+		sql_store(platform, server.db, DB_Terrain_Id.{ id = new_id });
 
-		to_saves: [1] DB_Terrain_Infos;
-		to_save := *to_saves[0];
-		to_save.id = new_id;
-		to_save.author_profile_id = -1;
-		to_save.name = parse_terrain_name(ascii);
-		to_save.created_ms = 0;
-		store_database(platform, server.db, "terrain_infos", to_saves);
+		sql_store(
+			platform,
+			server.db,
+			DB_Terrain_Infos.{
+				id = new_id,
+				author_profile_id = -1,
+				name = parse_terrain_name(ascii),
+				created_ms = 0,
+			}
+		);
 
-		to_asciis: [1] DB_Terrain_Ascii;
-		to_ascii := *to_asciis[0];
-		to_ascii.id = new_id;
-		to_ascii.ascii_id = new_id;
-		to_ascii.ascii = ascii;
-		store_database(platform, server.db, "terrain_asciis", to_asciis, true, "ascii_id");
+		sql_store(
+			platform,
+			server.db,
+			DB_Terrain_Ascii.{
+				id = new_id,
+				ascii_id = new_id,
+				ascii = ascii,
+				created_ms = 0,
+			}
+		);
 	}
 
 	terrains := platform.list_files("../assets/terrain", false);

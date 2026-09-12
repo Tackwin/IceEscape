@@ -642,24 +642,12 @@ make_sync :: (safe_zone: *Safe_Zone) -> Command.Sync_Safe_Zone {
 
 Frame_Result :: struct {
 	broadcast: [..] Command; @allocate("lifetime") @clear("frame")
+	move_instance_to_world: [..] Command.Move_To_Play_World; @allocate("lifetime") @clear("frame")
+
 	win_player_id: [..] int; @allocate("lifetime") @clear("frame")
 	died_player_id: [..] int; @allocate("lifetime") @clear("frame")
 	revived_someone_player_id: [..] int; @allocate("lifetime") @clear("frame")
 
-	to_server: [..] Command; @allocate("lifetime") @clear("frame")
-	died: [..] Command.Die; @clear("frame")
-	respawn: [..] Command.Respawn; @clear("frame")
-	sync_gate: [..] Command.Sync_Gate; @clear("frame")
-	move_to_player_world: [..] Command.Move_To_Play_World; @clear("frame")
-	wipe_scene: [..] Command.Wipe_Scene; @clear("frame")
-	end_level: [..] Command.End_Level; @clear("frame")
-	explode: [..] Command.Explode; @clear("frame")
-	antiair_shoot: [..] Command.AntiAir_Shoot; @clear("frame")
-	spawn_coin: [..] Command.Spawn_Coin; @clear("frame")
-	move: [..] Command.Move; @clear("frame")
-	sync_present: [..] Command.Sync_Present; @clear("frame")
-	sync_safe_zone: [..] Command.Sync_Safe_Zone; @clear("frame")
-	sync_player: [..] Command.Sync_Player; @clear("frame")
 	restarted := false; @clear("frame")
 
 	lifetime_pool: Pool;
@@ -667,9 +655,13 @@ Frame_Result :: struct {
 	made := false;
 }
 
+push_broadcast :: (result: *Frame_Result, cmd: $T) {
+	if !result return;
+	array_add(*result.broadcast, make_command(cmd));
+}
+
 #insert -> string {
 	str := clear_string(type_info(Frame_Result));
-	// print("clear string: %\n", str);
 	return str;
 }
 
@@ -681,21 +673,9 @@ make :: (result: *Frame_Result) {
 }
 
 free :: (frame_result: *Frame_Result) {
-	array_free(frame_result.died);
-	array_free(frame_result.respawn);
-	array_free(frame_result.sync_gate);
-	array_free(frame_result.move_to_player_world);
-	array_free(frame_result.wipe_scene);
-	array_free(frame_result.end_level);
-	array_free(frame_result.explode);
-	array_free(frame_result.antiair_shoot);
-	array_free(frame_result.spawn_coin);
-	array_free(frame_result.move);
-	array_free(frame_result.add_scores);
-	array_free(frame_result.sync_present);
-	array_free(frame_result.sync_safe_zone);
-	array_free(frame_result.sync_player);
-	release(*frame_result.lifetime);
+	array_free(frame_result.broadcast);
+	array_free(frame_result.move_instance_to_world);
+	release(*frame_result.lifetime_pool);
 }
 
 Safe_Zone :: struct {
@@ -2142,7 +2122,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 	}
 }
 
-update :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result) {
+update_scene :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result) {
 	scene.fade_in_screen_t = 0.0;
 	scene.client.clock += dt;
 	scene.server.clock += dt;
@@ -2174,7 +2154,7 @@ update :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result)
 	}
 }
 
-update :: (scene: *Scene, lantern: *Lantern, dt: float32) {
+update_lantern :: (scene: *Scene, lantern: *Lantern, dt: float32) {
 	lantern.turned_on = false;
 	button := find_by_pressbutton_id(scene, lantern.button_id);
 	if button && button.activated {
@@ -2263,7 +2243,7 @@ update_client :: (scene: *Scene, dt: float32, result: *Frame_Result) {
 	}
 }
 
-update :: (scene: *Scene, hook: *Hook, dt: float32, result: *Frame_Result) {
+update_hook :: (scene: *Scene, hook: *Hook, dt: float32, result: *Frame_Result) {
 	hooker := find_by_player_id(scene, hook.hooker_id);
 	if hooker {
 		hook.server.last_anchor_position = hooker.server.position;
@@ -2311,10 +2291,10 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	if !scene.is_server
 		update_client(scene, dt, result);
 
-	update(scene, *scene.camera, dt);
+	update_camera(scene, *scene.camera, dt);
 
 	for * scene.players {
-		update(scene, it, dt);
+		update_player(scene, it, dt);
 	}
 	{
 		player := find_by_player_id(scene, scene.controlled_player_id);
@@ -2336,7 +2316,7 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	}
 
 	for * scene.skulls {
-		update(scene, it, dt);
+		update_skull(scene, it, dt);
 	}
 
 	{
@@ -2345,7 +2325,7 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			if scene.server.clock > it.server.birthtime + 5 {
 				continue;
 			}
-			update(scene, it, dt);
+			update_coin(scene, it, dt);
 			scene.coins[coin_cursor] = it;
 			coin_cursor += 1;
 		}
@@ -2353,35 +2333,35 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	}
 
 	for * scene.moving_frames {
-		update(scene, it, dt);
+		update_moving_frame(scene, it, dt);
 	}
 
 	for * scene.shurikens {
-		update(scene, it, dt);
+		update_shuriken(scene, it, dt);
 	}
 
 	for * scene.flags {
-		update(scene, it, dt, result);
+		update_flag(scene, it, dt, result);
 	}
 
 	for * scene.pressbuttons {
-		update(scene, it, dt, result);
+		update_pressbutton(scene, it, dt, result);
 	}
 
 	for * scene.within_zones {
-		update(scene, it, dt);
+		update_within_zone(scene, it, dt);
 	}
 
 	for * scene.robots {
-		update(scene, it, time, dt);
+		update_robot(scene, it, time, dt);
 	}
 
 	for * scene.antiairs {
-		update(scene, it, dt);
+		update_antiair(scene, it, dt);
 	}
 
 	for * scene.hooks {
-		update(scene, it, dt, result);
+		update_hook(scene, it, dt, result);
 
 		if it.hooked_id >= 0 && it.server.length <= 0.0 {
 			remove it;
@@ -2399,7 +2379,7 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	}
 
 	for * scene.turn_tables {
-		update(scene, it, dt);
+		update_turn_table(scene, it, dt);
 	}
 
 	update_explosions(scene, dt);
@@ -2437,7 +2417,7 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	}
 
 	for * scene.lanterns {
-		update(scene, it, dt);
+		update_lantern(scene, it, dt);
 	}
 
 	for * scene.keys {
@@ -2551,7 +2531,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	// 				it.server.available = true;
 	// 				it.server.time_since_taken = 0.0;
 
-	// 				array_add(*result.sync_present, make_sync(it));
+	// 				push_broadcast(result, make_sync(it));
 	// 			}
 	// 		}
 	// 	}
@@ -2570,7 +2550,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		}
 
 		if before != it.server.available {
-			array_add(*result.sync_present, make_sync(it));
+			push_broadcast(result, make_sync(it));
 		}
 	}
 
@@ -2804,7 +2784,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			cmd.position = explosion.position;
 			cmd.trigger_bombs = bomb.server.chain_bomb;
 			cmd.delay = 0.0;
-			array_add(*result.explode, cmd);
+			push_broadcast(result, cmd);
 
 			for 1..bomb.server.cross_length {
 				explosion.delay = 0.1 * it;
@@ -2813,22 +2793,22 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				explosion.position = explosion_center + V3f.{ it.(float), 0.0, 0.0 };
 				cmd.position = explosion.position;
 				array_add(*scene.explosions, explosion);
-				array_add(*result.explode, cmd);
+				push_broadcast(result, cmd);
 
 				explosion.position = explosion_center - V3f.{ it.(float), 0.0, 0.0 };
 				cmd.position = explosion.position;
 				array_add(*scene.explosions, explosion);
-				array_add(*result.explode, cmd);
+				push_broadcast(result, cmd);
 				
 				explosion.position = explosion_center + V3f.{ 0.0, it.(float), 0.0 };
 				cmd.position = explosion.position;
 				array_add(*scene.explosions, explosion);
-				array_add(*result.explode, cmd);
+				push_broadcast(result, cmd);
 
 				explosion.position = explosion_center - V3f.{ 0.0, it.(float), 0.0 };
 				cmd.position = explosion.position;
 				array_add(*scene.explosions, explosion);
-				array_add(*result.explode, cmd);
+				push_broadcast(result, cmd);
 			}
 			remove bomb;
 		}
@@ -2869,7 +2849,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 					move.model_id = it.model_id;
 					move.play_world_id = 0;
 					move.standin_id = standin.id;
-					array_add(*result.move_to_player_world, move);
+					if result array_add(*result.move_instance_to_world, move);
 					standin.retired = true;
 				}
 			}
@@ -2898,7 +2878,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			if it.server.dead {
 				respawn: Command.Respawn;
 				respawn.player_id = it.id;
-				array_add(*result.respawn, respawn);
+				push_broadcast(result, respawn);
 				spawn_into(it, scene);
 
 				for * scene.tombstones {
@@ -2915,7 +2895,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		if it.server.dead && it.server.need_respawn {
 			respawn: Command.Respawn;
 			respawn.player_id = it.id;
-			array_add(*result.respawn, respawn);
+			push_broadcast(result, respawn);
 			spawn_into(it, scene);
 
 			for * scene.tombstones {
@@ -2944,7 +2924,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 					respawn.coin_id = it.id;
 					respawn.cause_player_id = it.sender;
 
-					array_add(*result.respawn, respawn);
+					push_broadcast(result, respawn);
 
 					player_to_respawn := find_by_player_id(scene, tombstone.player_id);
 					if player_to_respawn {
@@ -3003,7 +2983,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 					respawn.player_id = tomb.player_id;
 					respawn.cause_player_id = it.id;
 
-					array_add(*result.respawn, respawn);
+					push_broadcast(result, respawn);
 
 					player_to_respawn := find_by_player_id(scene, tomb.player_id);
 					if player_to_respawn {
@@ -3056,7 +3036,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 					sync: Command.Sync_Gate;
 					sync.gate_id = gate.id;
 					sync.is_closed = gate.is_closed;
-					array_add(*result.sync_gate, sync);
+					push_broadcast(result, sync);
 				}
 			}
 		}
@@ -3072,7 +3052,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				sync: Command.Sync_Gate;
 				sync.gate_id = gate.id;
 				sync.is_closed = gate.is_closed;
-				array_add(*result.sync_gate, sync);
+				push_broadcast(result, sync);
 			}
 		}
 	}
@@ -3093,7 +3073,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				sync: Command.Sync_Gate;
 				sync.gate_id = gate.id;
 				sync.is_closed = gate.is_closed;
-				array_add(*result.sync_gate, sync);
+				push_broadcast(result, sync);
 			}
 		}
 	}
@@ -3193,7 +3173,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				cmd.max_size = explosion.max_size;
 				cmd.position = explosion.position;
 				cmd.delay = 0.0;
-				array_add(*result.explode, cmd);
+				push_broadcast(result, cmd);
 			}
 		}
 		robot.just_shooted = false;
@@ -3215,14 +3195,14 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				cmd.lifetime = explosion.lifetime;
 				cmd.max_size = explosion.max_size;
 				cmd.position = explosion.position;
-				array_add(*result.explode, cmd);
+				push_broadcast(result, cmd);
 			}
 
 			{
 				cmd: Command.AntiAir_Shoot;
 				cmd.antiair_id = antiair.id;
 				cmd.next_target = antiair.server.next_target;
-				array_add(*result.antiair_shoot, cmd);
+				push_broadcast(result, cmd);
 			}
 		}
 		antiair.just_shooted = false;
@@ -3297,7 +3277,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			if dt < it.server.expire_duration
 				continue;
 
-			array_add(*result.sync_safe_zone, make_sync(it));
+			push_broadcast(result, make_sync(it));
 			remove it;
 		}
 	}
@@ -3491,7 +3471,7 @@ win_level :: (scene: *Scene, player_id: int, time: Apollo_Time, result: *Frame_R
 		}
 
 		scene.client.end_level = winner;
-		array_add(*result.end_level, winner);
+		push_broadcast(result, winner);
 	}
 
 	scene.end_scene_countdown_started = true;
@@ -3524,7 +3504,6 @@ player_has_revived_other_player :: (
 
 	if result
 		array_add(*result.revived_someone_player_id, reviver);
-	
 }
 
 drop_keys :: (scene: *Scene, player: *Player) {
@@ -3634,7 +3613,7 @@ server_die :: (
 	if scene.auto_revive {
 		respawn: Command.Respawn;
 		respawn.player_id = player.id;
-		array_add(*result.respawn, respawn);
+		push_broadcast(result, respawn);
 		spawn_into(player, scene);
 	} else {
 		died: Command.Die;
@@ -3642,7 +3621,7 @@ server_die :: (
 		died.position = player.server.position;
 		died.explode_source = should_die_source;
 		died.explode_strength = should_die_strength;
-		array_add(*result.died, died);
+		push_broadcast(result, died);
 		player.server.dead = true;
 		player.server.dead_time = xx scene.server.clock;
 		player.server.souls = 0;
@@ -3668,14 +3647,14 @@ server_die :: (
 
 	if result {
 		if !any_alive {
-			array_add(*result.wipe_scene, .{});
+			push_broadcast(result, Command.Wipe_Scene.{});
 			result.restarted = true;
 			restart(scene, scene.params);
 		}
 	}
 }
 
-update :: (scene: Scene, turn_table: *Turn_Table, dt: float32) {
+update_turn_table :: (scene: Scene, turn_table: *Turn_Table, dt: float32) {
 	angle := get_pointing_angle(scene, turn_table);
 	p := turn_table.position;
 	for * scene.players {
@@ -3696,7 +3675,7 @@ update :: (scene: Scene, turn_table: *Turn_Table, dt: float32) {
 	}
 }
 
-update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
+update_antiair :: (scene: Scene, antiair: *AntiAir, dt: float32) {
 	antiair.server.t += dt;
 	antiair.client.t += dt;
 	antiair.client.t = damp(antiair.client.t, antiair.server.t, 10.0, dt);
@@ -3727,7 +3706,7 @@ update :: (scene: Scene, antiair: *AntiAir, dt: float32) {
 }
 
 // https://rodolphe-vaillant.fr/entry/114/cyclic-coordonate-descent-inverse-kynematic-ccd-ik
-update :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
+update_robot :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
 
 	player := find_by_player_id(scene, robot.player_targeted_id);
 	if !player {
@@ -3835,7 +3814,7 @@ update :: (scene: Scene, robot: *Robot, time: Apollo_Time, dt: float32) {
 
 }
 
-update :: (scene: Scene, button: *PressButton, dt: float32, result: *Frame_Result) {
+update_pressbutton :: (scene: Scene, button: *PressButton, dt: float32, result: *Frame_Result) {
 	if !button.activated {
 		p := v2(button.position);
 
@@ -3901,7 +3880,7 @@ update :: (scene: Scene, button: *PressButton, dt: float32, result: *Frame_Resul
 
 }
 
-update :: (scene: Scene, flag: *Flag, dt: float32, result: *Frame_Result) {
+update_flag :: (scene: Scene, flag: *Flag, dt: float32, result: *Frame_Result) {
 	if !flag.activated {
 		p := v2(flag.position);
 
@@ -3943,7 +3922,7 @@ update :: (scene: Scene, flag: *Flag, dt: float32, result: *Frame_Result) {
 	}
 }
 
-update :: (scene: *Scene, within: *Within_Zone, dt: float32) {
+update_within_zone :: (scene: *Scene, within: *Within_Zone, dt: float32) {
 	n_players := 0;
 	for scene.players {
 		if it.server.dead
@@ -3982,11 +3961,11 @@ update :: (scene: *Scene, within: *Within_Zone, dt: float32) {
 	}
 }
 
-update :: (scene: Scene, shuriken: *Shuriken, dt: float32) {
+update_shuriken :: (scene: Scene, shuriken: *Shuriken, dt: float32) {
 	shuriken.client.theta += shuriken.client.theta_speed * dt;
 }
 
-update :: (scene: Scene, frame: *Moving_Frame, dt: float32) {
+update_moving_frame :: (scene: Scene, frame: *Moving_Frame, dt: float32) {
 	frame.sum_period = 0.0;
 	for 1..frame.keys.count - 1 {
 		frame.sum_period += scene.moving_frame_keys[it + frame.keys.index - 1].period;
@@ -4062,7 +4041,7 @@ update_camera_locked :: (scene: Scene, camera: *Camera, player_locked: *Player, 
 	camera.distance_target = camera.locked_nominal_distance;
 }
 
-update :: (scene: Scene, camera: *Camera, dt: float32) {
+update_camera :: (scene: Scene, camera: *Camera, dt: float32) {
 	if scene.params.mode == .Bomberman
 		return; // Camera is fixed in Bomberman mode
 	player_locked := find_by_player_id(scene, camera.locked_to);
@@ -4112,7 +4091,7 @@ update :: (scene: Scene, camera: *Camera, dt: float32) {
 	}
 }
 
-update :: (scene: Scene, skull: *Skull, dt: float32) {
+update_skull :: (scene: Scene, skull: *Skull, dt: float32) {
 	if !scene.is_server
 		interpolate_to_server(skull);
 
@@ -4120,13 +4099,13 @@ update :: (scene: Scene, skull: *Skull, dt: float32) {
 	skull.client.direction = damp_angle_between(skull.client.direction, dir, 20.0, dt);
 }
 
-update :: (scene: Scene, coin: *Coin, dt: float32) {
+update_coin :: (scene: Scene, coin: *Coin, dt: float32) {
 	coin.server.position += coin.server.speed * coin.server.direction * dt;
 	coin.client.position += coin.server.speed * coin.server.direction * dt;
 	coin.client.theta += xx (3.1415926 * 2.0 * dt);
 }
 
-update :: (scene: Scene, player: *Player, dt: float32) {
+update_player :: (scene: Scene, player: *Player, dt: float32) {
 	og_pos := player.client.position;
 	defer {
 		player.client.delta_frame_position = player.client.position - og_pos;

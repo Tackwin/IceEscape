@@ -80,29 +80,25 @@ push_left_main_menu :: (
 	menu: *Menu,
 	platform: *Platform
 ) {
-	cursor := v2(8.0, 8.0);
-	GUI.default_params(gui).cursor = cursor;
-	GUI.default_params(gui).direction = .Down;
-	GUI.default_params(gui).align = .Top_Left;
-	GUI.default_params(gui).z = 2;
+	GUI.column(gui, v2(8.0, 8.0), z = 2, align = .Top_Left);
+	defer GUI.end(gui);
 
 	{
-		GUI.push_default_params(gui, GUI.default_params(gui).*);
-		defer GUI.pop_default_params(gui);
-		GUI.default_params(gui).direction = .Right;
+		GUI.row(gui);
+		defer GUI.end(gui);
 
 		GUI.space(gui, 8.0);
-		if GUI._text_button(gui, "Login", id = "login_btn") {
+		if GUI.button(gui, "Login", id = "login_btn") {
 			menu.login_popup_open = true;
 		}
 		GUI.space(gui, 8.0);
-		clicked, state := GUI._text_button(gui, "Reveal", id = "see_passcode_btn");
+		clicked, state := GUI.button(gui, "Reveal", id = "see_passcode_btn");
 		GUI.space(gui, 8.0);
 		passcode_label := "Passcode: ---- --- ----";
 		if state.pressed {
 			passcode_label = tprint("Passcode: %", menu.passstring);
 		}
-		GUI._atom_label(
+		GUI.label(
 			gui,
 			passcode_label,
 			id = "passcode_label",
@@ -110,7 +106,6 @@ push_left_main_menu :: (
 			offset_pos = v2(4.0, 0.0)
 		);
 	}
-	GUI.space(gui, 24.0);
 
 	input := GUI.labeled_input_text(
 		gui, "Username:", *menu.username, 256, 24, id = "username_input"
@@ -122,26 +117,25 @@ push_left_main_menu :: (
 		send_web_message(platform, gui.controls.time, make_command(set_username));
 	}
 
-	cursor.x = 8.0;
-	cursor.y = 16.0 + 64.0;
-	GUI.default_params(gui).cursor = cursor;
-	GUI._atom_label(gui, "The terrible bug that messed up some people is gone", scale = 16, color = GUI.GRAY_00);
-	GUI._atom_label(gui, "I have only prayer to offer to my dear player base", scale = 16, color = GUI.GRAY_00);
-	GUI._atom_label(gui, "Sorry :'(", scale = 16, color = GUI.GRAY_00);
-	// GUI._atom_label(gui, "Stats", id = "stats_label", color = GUI.GRAY_00);
-	// GUI._atom_label(
+	GUI.space(gui, 24.0);
+
+	GUI.label(gui, "The terrible bug that messed up some people is gone", scale = 16, color = GUI.GRAY_00);
+	GUI.label(gui, "I have only prayer to offer to my dear player base", scale = 16, color = GUI.GRAY_00);
+	GUI.label(gui, "Sorry :'(", scale = 16, color = GUI.GRAY_00);
+	// GUI.label(gui, "Stats", id = "stats_label", color = GUI.GRAY_00);
+	// GUI.label(
 	// 	gui,
 	// 	tprint("     Death count: %", menu.profile.stats.death_count),
 	// 	id = "death_label",
 	// 	color = GUI.GRAY_00
 	// );
-	// GUI._atom_label(
+	// GUI.label(
 	// 	gui,
 	// 	tprint("     Win count: %", menu.profile.stats.win_count),
 	// 	id = "win_label",
 	// 	color = GUI.GRAY_00
 	// );
-	// GUI._atom_label(
+	// GUI.label(
 	// 	gui,
 	// 	tprint("     Revive count: %", menu.profile.stats.revive_count),
 	// 	id = "revive_label",
@@ -205,12 +199,11 @@ push_left_main_menu :: (
 		}
 	}
 
-	GUI.space(gui, 24 * 7);
 	leaderboard_string := "Leaderboard for: Unselected";
 	if menu.terrain_name_selected_leaderboard.count > 0
 		leaderboard_string = tprint("Leaderboard for: %", menu.terrain_name_selected_leaderboard);
 	
-	GUI._atom_label(
+	GUI.label(
 		gui, leaderboard_string, id = "leaderboard_label", color = GUI.GRAY_00
 	);
 
@@ -267,19 +260,17 @@ push_left_main_menu :: (
 			placeholder = "0123456789A"
 		);
 
-		GUI.space(gui, 64.0);
-		GUI.default_params(gui).cursor = window.pos + v2(window.size.x - 8.0, window.size.y - 8.0);
-		GUI.default_params(gui).align = .Bottom_Right;
-		GUI.default_params(gui).direction = .Left;
+		GUI.row(gui, window.pos + v2(window.size.x - 8.0, window.size.y - 8.0), .Left, align = .Bottom_Right);
+		defer GUI.end(gui);
 
-		if GUI._text_button(gui, "Login", id = "login_confirm_btn") {
+		if GUI.button(gui, "Login", id = "login_confirm_btn") {
 			command: Command.Login;
 			command.passcode = string_to_code(GUI.view(*menu.login_popup_password));
 			command.token = platform.get_token();
 			send_web_message(platform, gui.controls.time, make_command(command));
 			menu.login_popup_open = false;
 		}
-		if GUI._text_button(gui, "Cancel", id = "login_cancel_btn") {
+		if GUI.button(gui, "Cancel", id = "login_cancel_btn") {
 			menu.login_popup_open = false;
 		}
 	}
@@ -555,30 +546,29 @@ menu_loop :: (_app: *App) -> bool {
 		// #if OS == .WASM {
 		// 	version_string :: "0.0.1 (1 March 2026, 23:13:10)";
 		// }
-		GUI.default_params(*app_user.gui_state).cursor.x = controls.window_size.x - 12.0;
-		GUI.default_params(*app_user.gui_state).cursor.y = 8.0;
-		GUI.default_params(*app_user.gui_state).align = .Top_Right;
-		GUI._atom_label(
-			*app_user.gui_state,
-			tprint("Version: %", version_string),
-			id = "version_label",
-			color = GUI.GRAY_00,
-			offset_pos = v2(-4.0, 0.0),
-			scale = 10
-		);
+		{
+			GUI.row(*app_user.gui_state, v2(controls.window_size.x - 12.0, 8.0), align = .Top_Right);
+			defer GUI.end(*app_user.gui_state);
+			GUI.label(
+				*app_user.gui_state,
+				tprint("Version: %", version_string),
+				id = "version_label",
+				color = GUI.GRAY_00,
+				offset_pos = v2(-4.0, 0.0),
+				scale = 10
+			);
+		}
 
-		// Editor button
-		editor_clicked, _, _ := GUI.text_button(
-			*app_user.gui_state,
-			"Level Editor",
-			V2f.{ 20, controls.window_size.y - 40 },
-			z = 5,
-			id = "editor_btn"
-		);
-		if editor_clicked {
-			state.screen_state = .Editor;
+		{
+			GUI.row(*app_user.gui_state, V2f.{ 20, controls.window_size.y - 40 }, z = 5, align = .Bottom_Left);
+			defer GUI.end(*app_user.gui_state);
+			if GUI.button(*app_user.gui_state, "Level Editor", id = "editor_btn") {
+				state.screen_state = .Editor;
+			}
 		}
 	}
+
+	draw_console(*app_user.console, *app_user.gui_state);
 
 	frame := WRender.begin_frame(*framegraph, controls.time);
 	WRender.render_gui(frame, *framegraph, app_user.gui_state, *store);
@@ -698,12 +688,8 @@ push_create_bomberman_menu :: (
 		z = 26.1
 	);
 
-	GUI.push_default_params(gui, GUI.default_params(gui).*);
-	defer GUI.pop_default_params(gui);
-	GUI.default_params(gui).cursor = v2(content_aabb.min.x + 8, content_aabb.min.y + 40);
-	GUI.default_params(gui).direction = .Down;
-	GUI.default_params(gui).align = .Top_Left;
-	GUI.default_params(gui).z = 26.2;
+	GUI.column(gui, v2(content_aabb.min.x + 8, content_aabb.min.y + 40), z = 26.2, align = .Top_Left);
+	defer GUI.end(gui);
 	
 	GUI.labeled_input_text(
 		gui,
@@ -716,7 +702,7 @@ push_create_bomberman_menu :: (
 		id = "instance_name_input",
 	);
 
-	menu.create_bomberman.private = GUI._labeled_checkbox(
+	menu.create_bomberman.private = GUI.labeled_checkbox(
 		gui, "Private Instance", width(content_aabb) - 8, 16, id = "private_instance_checkbox"
 	).checked;
 
@@ -745,10 +731,9 @@ push_create_bomberman_menu :: (
 		id = "max_players_input"
 	).value;
 
-	GUI.default_params(gui).direction = .Left;
-	GUI.default_params(gui).align = .Bottom_Right;
-	GUI.default_params(gui).cursor = v2(content_aabb.max.x - 8, content_aabb.max.y - 8);
-	create_clicked, create_button, create_widget := GUI._text_button(
+	GUI.row(gui, v2(content_aabb.max.x - 8, content_aabb.max.y - 8), .Left, align = .Bottom_Right);
+	defer GUI.end(gui);
+	create_clicked, create_button, create_widget := GUI.button(
 		gui, "Create", id = "create_bomberman_button"
 	);
 	if create_clicked {
@@ -761,7 +746,7 @@ push_create_bomberman_menu :: (
 		menu.create_bomberman.open = false;
 	}
 
-	cancel_clicked := GUI._text_button(
+	cancel_clicked := GUI.button(
 		gui, "Cancel", id = "cancel_create_instance_button"
 	);
 	if cancel_clicked
@@ -885,12 +870,12 @@ push_main_menu :: (
 		*menu.enter_instance_password,
 		24,
 		128.0,
+		input_text_aabb.min,
+		1,
+		GUI.Align.Bottom_Left,
 		id = GUI.string_id("password_input"),
 		placeholder = "Password",
-		max_chars = 8,
-		_z=1,
-		_pos = input_text_aabb.min,
-		_align = GUI.Align.Top_Left
+		max_chars = 8
 	);
 
 	cursor =  .{ 16, 64 + 16 };
@@ -940,12 +925,8 @@ draw_create_instance_param_panel :: (
 		z = 26.1
 	);
 
-	GUI.push_default_params(gui, GUI.default_params(gui).*);
-	defer GUI.pop_default_params(gui);
-	GUI.default_params(gui).cursor = v2(aabb.min.x + 8, aabb.min.y + 40);
-	GUI.default_params(gui).direction = .Down;
-	GUI.default_params(gui).align = .Top_Left;
-	GUI.default_params(gui).z = 26.2;
+	GUI.column(gui, v2(aabb.min.x + 8, aabb.min.y + 40), z = 26.2, align = .Top_Left);
+	defer GUI.end(gui);
 	
 	GUI.labeled_input_text(
 		gui,
@@ -958,7 +939,7 @@ draw_create_instance_param_panel :: (
 		id = "instance_name_input",
 	);
 
-	create_instance_private := GUI._labeled_checkbox(
+	create_instance_private := GUI.labeled_checkbox(
 		gui, "Private Instance", width(aabb) - 8, 16, id = "private_instance_checkbox"
 	).checked;
 
@@ -976,7 +957,7 @@ draw_create_instance_param_panel :: (
 		);
 	}
 
-	create_instance_auto_revive := GUI._labeled_checkbox(
+	create_instance_auto_revive := GUI.labeled_checkbox(
 		gui,
 		"Auto revive",
 		width(aabb) - 8,
@@ -984,10 +965,9 @@ draw_create_instance_param_panel :: (
 		id = "auto_revive_checkbox"
 	).checked;
 
-	GUI.default_params(gui).direction = .Left;
-	GUI.default_params(gui).align = .Bottom_Right;
-	GUI.default_params(gui).cursor = v2(aabb.max.x - 8, aabb.max.y - 8);
-	create_clicked, create_button, create_widget := GUI._text_button(
+	GUI.row(gui, v2(aabb.max.x - 8, aabb.max.y - 8), .Left, align = .Bottom_Right);
+	defer GUI.end(gui);
+	create_clicked, create_button, create_widget := GUI.button(
 		gui, "Create", id = "create_instance_button"
 	);
 	if create_clicked {
@@ -1004,7 +984,7 @@ draw_create_instance_param_panel :: (
 		menu.create_instance.open = false;
 	}
 
-	cancel_clicked := GUI._text_button(
+	cancel_clicked := GUI.button(
 		gui, "Cancel", id = "cancel_create_instance_button"
 	);
 	if cancel_clicked
@@ -1158,12 +1138,8 @@ draw_create_instance_terrain_panel :: (
 	platform := app.app.platform;
 	store := *app.store;
 
-	GUI.push_default_params(gui, GUI.default_params(gui).*);
-	GUI.default_params(gui).z = 26;
-	GUI.default_params(gui).align = .Top_Left;
-	GUI.default_params(gui).cursor = v2(aabb.min.x + 4, aabb.min.y + 8);
-	GUI.default_params(gui).direction = .Down;
-	defer GUI.pop_default_params(gui);
+	GUI.column(gui, v2(aabb.min.x + 4, aabb.min.y + 8), z = 26, align = .Top_Left);
+	defer GUI.end(gui);
 
 	if GUI.labeled_input_text(
 		gui,
@@ -1171,9 +1147,7 @@ draw_create_instance_terrain_panel :: (
 		*menu.create_instance.filter,
 		width(aabb) - 8,
 		16,
-		max_input_width = 256,
-		_z = 26,
-		_align = .Top_Left
+		max_input_width = 256
 	).changed {
 		ask_list_terrain: Command.Ask_List_Terrain;
 		ask_list_terrain.filter = GUI.view(*menu.create_instance.filter);
@@ -1182,7 +1156,7 @@ draw_create_instance_terrain_panel :: (
 	}
 	GUI.push_quad_screen(
 		gui,
-		GUI.default_params(gui).cursor,
+		GUI.flow(gui).cursor,
 		v2(width(aabb) - 8, 1),
 		v3(GUI.GRAY_20),
 		z = 26
@@ -1294,16 +1268,14 @@ draw_create_instance_terrain_panel :: (
 	}
 	cursor.y = scroll_aabb.max.y;
 	cursor.y += 8;
-	GUI.default_params(gui).cursor.x = cursor.x + terrain_entry_row_width - 4;
-	GUI.default_params(gui).cursor.y = cursor.y;
-	GUI.default_params(gui).direction = .Left;
-	GUI.default_params(gui).align = .Bottom_Right;
+	GUI.row(gui, v2(cursor.x + terrain_entry_row_width - 4, cursor.y), .Left, align = .Bottom_Right);
+	defer GUI.end(gui);
 
-	clicked := GUI._text_button(gui, ">", id = "load_dialog_next_page");
+	clicked := GUI.button(gui, ">", id = "load_dialog_next_page");
 	if clicked {
 		menu.create_instance.terrain_page = (menu.create_instance.terrain_page + 1) % page_count;
 	}
-	clicked = GUI._text_button(gui, "<", id = "load_dialog_prev_page");
+	clicked = GUI.button(gui, "<", id = "load_dialog_prev_page");
 	if clicked {
 		menu.create_instance.terrain_page = (menu.create_instance.terrain_page + page_count - 1) % page_count;
 	}

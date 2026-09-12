@@ -87,6 +87,22 @@ Key :: enum s32 {
 }
 Key_COUNT :: #run enum_values_as_s64(Key).count;
 
+Keys :: struct {
+	pressed: [Key_COUNT] bool;
+	just_pressed: [Key_COUNT] bool;
+	just_released: [Key_COUNT] bool;
+}
+
+advance_keys :: (previous: Keys, down: [Key_COUNT] bool) -> Keys {
+	next: Keys;
+	for i: 0..Key_COUNT - 1 {
+		next.pressed[i] = down[i];
+		next.just_pressed[i] = down[i] && !previous.pressed[i];
+		next.just_released[i] = !down[i] && previous.pressed[i];
+	}
+	return next;
+}
+
 Connection :: int;
 Connection_Broadcast: Connection : -1;
 
@@ -105,7 +121,7 @@ Frame_Info :: struct {
 
 	layout: Layout;
 
-	key_pressed: [Key_COUNT] bool;
+	keys: Keys;
 
 	mouse_position: V2f;
 	window_size: V2f;
@@ -221,155 +237,313 @@ Font :: struct {
 	glyphs: [256] Glyph;
 }
 
+Sql_Bind :: struct {
+	type: *Type_Info;
+	value: *void;
+}
+
+Sql :: struct {
+	text: string;
+	binds: [] Sql_Bind;
+}
+
+Sql_Load :: struct (T: Type) {
+	platform: *Platform;
+	db: DB_query.Handle;
+	q: Sql;
+}
+
+Sql_Store :: struct (T: Type) {
+	platform: *Platform;
+	db: DB_query.Handle;
+	text: string;
+	max_iterations: int;
+}
+
 DB_query :: struct {
 	Handle :: int;
-	
+
 	kind: enum {
 		OPEN;
 		EXEC;
 		CLOSE;
-		STORE;
-		LOAD;
 		FLUSH;
+		PREPARE;
+		STEP_ROW;
+		STORE_ROW;
+		STEP_EXEC;
+		FINALIZE;
 	};
 
 	handle: Handle;
 	memory := false;
 
 	query_string: string;
-
-	input: [] *void;
-	output: [] *void;
-	output_allocator: Allocator;
+	binds: [] Sql_Bind;
+	stmt: *void;
+	row_ptr: *void;
 
 	type: *Type_Info;
 
 	success := false;
 }
-load_database_custom :: (
-	platform: *Platform, db: DB_query.Handle, $T: Type, query_string: string
-) -> [] *T {
-	query := DB_query.{};
-	query.kind = .LOAD;
-	query.handle = db;
-	query.type = type_info(T);
-	info := query.type.(*Type_Info_Struct);
-	assert(query.type.type == .STRUCT);
 
-	query.query_string = query_string;
-	query.output_allocator = temp;
-
-	platform.db_query(*query);
-
-	output: [] *T;
-	output.data = query.output.data.(**T);
-	output.count = query.output.count;
-	return output;
+db_table_name :: ($T: Type) -> string {
+	return T.table;
 }
 
-
-load_database :: (
-	platform: *Platform,
-	db: DB_query.Handle,
-	table: string,
-	$T: Type,
-	where: string = ""
-) -> [] *T {
-	query := DB_query.{};
-	query.kind = .LOAD;
-	query.handle = db;
-	query.type = type_info(T);
-	info := query.type.(*Type_Info_Struct);
-	assert(query.type.type == .STRUCT);
-
-	sb: String_Builder;
-	sb.allocator = temp;
-	print_to_builder(*sb, "SELECT ");
-	sep := "";
-	for info.members {
-		print_to_builder(*sb, "%1%2", sep, to_lower_copy(it.name,, temp));
-		sep = ", ";
+db_sql_type :: (member: Type_Info_Struct_Member) -> string {
+	for note: member.notes {
+		if note == "json_array"
+			return "TEXT";
 	}
-	print_to_builder(*sb, " FROM %", table);
-	if where != "" {
-		print_to_builder(*sb, " WHERE %", where);
+
+	tag := member.type.type;
+	if tag == .INTEGER || tag == .BOOL
+		return "INTEGER";
+	if tag == .FLOAT
+		return "REAL";
+	if tag == .STRING
+		return "TEXT";
+	if tag == .ARRAY {
+		arr := member.type.(*Type_Info_Array);
+		if arr.element_type.type == .INTEGER && arr.element_type.runtime_size == 1
+			return "BLOB";
+		return "TEXT";
 	}
-	print_to_builder(*sb, ";");
 
-	query.query_string = builder_to_string(*sb);
-
-	query.output_allocator = temp;
-
-	platform.db_query(*query);
-
-	output: [] *T;
-	output.data = query.output.data.(**T);
-	output.count = query.output.count;
-	return output;
+	assert(false, "No SQL mapping for database field '%'\n", member.name);
+	return "TEXT";
 }
 
-store_database :: (
-	platform: *Platform,
-	db: DB_query.Handle,
-	table: string,
-	inputs: [] $T,
-	on_conflict_update: bool = true,
-	primary_key_name: string = "id"
-) {
-	query := DB_query.{};
-	query.kind = .STORE;
-	query.handle = db;
-	query.input = NewArray(inputs.count, *void,, temp);
-	for 0..inputs.count - 1 {
-		query.input[it] = (inputs.data + it).(*void);
-	}
-	query.type = type_info(T);
-	info := query.type.(*Type_Info_Struct);
-	assert(query.type.type == .STRUCT);
+sql_insert_text :: ($T: Type) -> string {
+	info := type_info(T).(*Type_Info_Struct);
+	table := db_table_name(T);
 
+	pk_name: string;
 	sb: String_Builder;
 	sb.allocator = temp;
 	print_to_builder(*sb, "INSERT INTO % (", table);
 	sep := "";
-	for info.members {
-		print_to_builder(*sb, "%1%2", sep, to_lower_copy(it.name,, temp));
+	for member: info.members {
+		if member.offset_into_constant_storage >= 0
+			continue;
+
+		column := to_lower_copy(member.name,, temp);
+		print_to_builder(*sb, "%1%2", sep, column);
 		sep = ", ";
+
+		for note: member.notes {
+			if note == "PK" {
+				assert(pk_name.count == 0, "Type % has more than one @PK field\n", T);
+				pk_name = column;
+			}
+		}
 	}
 	print_to_builder(*sb, ") VALUES (");
 	sep = "";
-	for info.members {
+	for member: info.members {
+		if member.offset_into_constant_storage >= 0
+			continue;
 		print_to_builder(*sb, "%1?", sep);
 		sep = ", ";
 	}
 	print_to_builder(*sb, ")");
 
-	if on_conflict_update {
-		any_to_update := false;
-		for info.members {
-			if it.name != "id" {
-				any_to_update = true;
-				break;
+	if pk_name.count > 0 {
+		any_update := false;
+		for member: info.members {
+			if member.offset_into_constant_storage >= 0
+				continue;
+			column := to_lower_copy(member.name,, temp);
+			if column == pk_name
+				continue;
+			if !any_update {
+				print_to_builder(*sb, " ON CONFLICT(%) DO UPDATE SET ", pk_name);
+				any_update = true;
+				sep = "";
 			}
+			print_to_builder(*sb, "%1%2 = excluded.%2", sep, column);
+			sep = ", ";
 		}
+		if !any_update
+			print_to_builder(*sb, " ON CONFLICT(%) DO NOTHING", pk_name);
+	}
 
-		if any_to_update {
-			print_to_builder(*sb, " ON CONFLICT(%) DO UPDATE SET ", primary_key_name);
-			sep = "";
-			for info.members {
-				if it.name == primary_key_name {
-					continue;
-				}
-				print_to_builder(*sb, "%1%2 = excluded.%2", sep, to_lower_copy(it.name,, temp));
-				sep = ", ";
-			}
+	return builder_to_string(*sb,, temp);
+}
+
+sql_bind_count :: (text: string) -> int {
+	n := 0;
+	i := 0;
+	while i < text.count {
+		if text[i] == #char "?"
+			n += 1;
+		i += 1;
+	}
+	return n;
+}
+
+sql :: (text: string, args: .. Any) -> Sql {
+	assert(sql_bind_count(text) == args.count, "sql() ? count does not match argument count\n");
+	q: Sql;
+	q.text = text;
+	if args.count > 0 {
+		q.binds = NewArray(args.count, Sql_Bind,, temp);
+		for args {
+			q.binds[it_index].type = it.type;
+			q.binds[it_index].value = it.value_pointer;
 		}
 	}
-	print_to_builder(*sb, ";");
-	
+	return q;
+}
 
-	query.query_string = builder_to_string(*sb);
+sql_exec :: (platform: *Platform, db: DB_query.Handle, q: Sql) {
+	if q.binds.count == 0 {
+		query: DB_query;
+		query.kind = .EXEC;
+		query.handle = db;
+		query.query_string = q.text;
+		platform.db_query(*query);
+		return;
+	}
 
+	query: DB_query;
+	query.kind = .PREPARE;
+	query.handle = db;
+	query.query_string = q.text;
+	query.binds = q.binds;
 	platform.db_query(*query);
+	if !query.success
+		return;
+	query.kind = .STEP_EXEC;
+	platform.db_query(*query);
+	query.kind = .FINALIZE;
+	platform.db_query(*query);
+}
+
+sql_loads :: (platform: *Platform, db: DB_query.Handle, q: Sql, $T: Type) -> Sql_Load(T) {
+	return .{ platform, db, q };
+}
+
+sql_stores :: (
+	platform: *Platform,
+	db: DB_query.Handle,
+	text: string,
+	$T: Type,
+	max_iterations := -1
+) -> Sql_Store(T) {
+	return .{ platform, db, text, max_iterations };
+}
+
+sql_stores :: (
+	platform: *Platform,
+	db: DB_query.Handle,
+	$T: Type,
+	max_iterations := -1
+) -> Sql_Store(T) {
+	return sql_stores(platform, db, sql_insert_text(T), T, max_iterations);
+}
+
+sql_tloads :: (platform: *Platform, db: DB_query.Handle, q: Sql, $T: Type) -> [] T {
+	rows: [..] T;
+	rows.allocator = temp;
+	for sql_loads(platform, db, q, T) {
+		array_add(*rows, it);
+	}
+	return rows;
+}
+
+sql_load :: (platform: *Platform, db: DB_query.Handle, q: Sql, $T: Type) -> T, bool {
+	result: T;
+	found := false;
+	for sql_loads(platform, db, q, T) {
+		result = it;
+		found = true;
+		break;
+	}
+	return result, found;
+}
+
+sql_store :: (platform: *Platform, db: DB_query.Handle, text: string, row: $T) {
+	for sql_stores(platform, db, text, T, 1) {
+		it = row;
+	}
+}
+
+sql_store :: (platform: *Platform, db: DB_query.Handle, row: $T) {
+	sql_store(platform, db, sql_insert_text(T), row);
+}
+
+for_expansion :: (load: $L/Sql_Load, body: Code, flags: For_Flags) #expand {
+	#assert !(flags & .REVERSE) "sql_loads does not support reverse iteration";
+
+	query: DB_query;
+	query.kind = .PREPARE;
+	query.handle = load.db;
+	query.query_string = load.q.text;
+	query.binds = load.q.binds;
+	query.type = type_info(L.T);
+	load.platform.db_query(*query);
+
+	`it: L.T = .{};
+	`it_index := 0;
+
+	if query.success {
+		for load_loop: 0..0x7FFF_FFFE {
+			it = .{};
+			query.kind = .STEP_ROW;
+			query.row_ptr = *it;
+			load.platform.db_query(*query);
+			if !query.success
+				break load_loop;
+
+			#insert (break = break load_loop, continue = { it_index += 1; continue load_loop; }) body;
+
+			it_index += 1;
+		}
+	}
+
+	query.kind = .FINALIZE;
+	load.platform.db_query(*query);
+}
+
+for_expansion :: (store: $S/Sql_Store, body: Code, flags: For_Flags) #expand {
+	#assert !(flags & .REVERSE) "sql_stores does not support reverse iteration";
+	#assert !(flags & .POINTER) "sql_stores it is already a write slot";
+
+	query: DB_query;
+	query.kind = .PREPARE;
+	query.handle = store.db;
+	query.query_string = store.text;
+	query.type = type_info(S.T);
+	store.platform.db_query(*query);
+
+	sql_exec(store.platform, store.db, sql("BEGIN TRANSACTION;"));
+
+	`it: S.T = .{};
+	`it_index := 0;
+
+	if query.success {
+		for store_loop: 0..0x7FFF_FFFE {
+			if store.max_iterations >= 0 && it_index >= store.max_iterations
+				break store_loop;
+
+			it = .{};
+			#insert (
+				break = break store_loop,
+				continue = { it_index += 1; continue store_loop; }
+			) body;
+			query.kind = .STORE_ROW;
+			query.row_ptr = *it;
+			store.platform.db_query(*query);
+			it_index += 1;
+		}
+	}
+
+	sql_exec(store.platform, store.db, sql("COMMIT;"));
+	query.kind = .FINALIZE;
+	store.platform.db_query(*query);
 }
 
 flush_database :: (platform: *Platform, db: DB_query.Handle) {
@@ -394,13 +568,6 @@ quit_database :: (platform: *Platform, handle: DB_query.Handle) {
 	platform.db_query(*query);
 }
 
-exec_database :: (platform: *Platform, handle: DB_query.Handle, query_string: string) {
-	query := DB_query.{};
-	query.kind = .EXEC;
-	query.handle = handle;
-	query.query_string = query_string;
-	platform.db_query(*query);
-}
 
 Platform :: struct {
 	extern_ref :: s32;

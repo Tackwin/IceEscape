@@ -55,7 +55,7 @@ Editor :: struct {
 	grid_snapping := 0.25;
 }
 
-update :: (editor: *Editor) {
+update_editor :: (editor: *Editor) {
 	gui := *editor.gui_state;
 	Scene.interpolate_all_to_server(*editor.scene, gui.controls.delta_time);
 	if editor.clock_running {

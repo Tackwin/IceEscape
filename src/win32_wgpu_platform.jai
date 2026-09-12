@@ -178,7 +178,7 @@ win32_get_frame_info :: (info: *Frame_Info) {
 			info.quit = true;
 	}
 
-	for * info.key_pressed {
+	for * info.keys.pressed {
 		it.* = pressed[it_index];
 	}
 

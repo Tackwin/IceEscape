@@ -4,9 +4,7 @@ Platform ::  #import "Platform";
 #import "GUI";
 
 State :: struct {
-	just_pressed:  [Platform.Key_COUNT] bool;
-	just_released: [Platform.Key_COUNT] bool;
-	pressed:       [Platform.Key_COUNT] bool;
+	using keys: Platform.Keys;
 
 	mouse_pos: V2f;
 	mouse_wheel: s64;

@@ -104,6 +104,11 @@ map_sdl_to_key :: (key: SDL_Keycode) -> Key {
 		case SDLK_BACKSPACE; return Key.Backspace;
 		case SDLK_LEFT; return Key.Left;
 		case SDLK_RIGHT; return Key.Right;
+		case SDLK_UP; return Key.Up;
+		case SDLK_DOWN; return Key.Down;
+		case SDLK_RETURN; return Key.Enter;
+		case SDLK_KP_ENTER; return Key.Enter;
+		case SDLK_MINUS; return Key.Minus;
 	}
 	return xx key;
 }
@@ -325,7 +330,7 @@ win32_get_frame_info :: (info: *Frame_Info) {
 			info.layout = .AZERTY;
 	}
 
-	for * info.key_pressed {
+	for * info.keys.pressed {
 		it.* = platform_state.pressed[it_index];
 	}
 

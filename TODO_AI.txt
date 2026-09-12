@@ -1,17 +1,13 @@
-* Leverage fully jai's metaprogramming to write a better sql interface
 * Completely remake the gui system around a stack based flow global cursor state.
 * Come up with an architecture for lag compensation. Based around trusting a bit more client input and roling back simulation and fast forwarding with the timestamp of the user input.
-* Scene Frame_Result struct should be simply a few different list of Commands based on what the instance should do to them. Spelling out every different type of commands was a mistake.
 * Instance right now is a big struct containing inline all the data for the main gameplay mode. But also a sub struct for the bomberman mode. I want Instance to have at the root only the generic data, and then two different sub structs, one for each modes.
-* Use Jai's metaprogramming so that the struct in Database.jai are tagged and that a function make sure that every tagged struct has a corresponding table in the database.
 * Transform the current RHI into a more generic and bindless system. Get as close to Sebastian Aaltonen's No API blog post as possible (within webpgu constraints).
 * Add an instrumentalised, introspective, profiling system, leveraging jai's metaprogramming. Also I have a pretty hard idea of an histogram GUI for the performance that Molecule already implemented.
 * Add support for gpu timing queries. Full webgpu.
-* There are multiple versions of a struct holding the current keyboard's state of the frame. Like at least one for the gui and one for the platform. I'd like to factorzie all of this.
 * Add a full log system that is inspectable, taggable, filterable. Do not output it to stdout.
+* Debug console. Valve-like drop-down from the top, dump unstyled UI. Tag Jai functions with @console so typing the function name in the console runs it. Compile-time table from the note, no manual registry.
 * WebTransport implementation BIG
 * Dynamic asset loading and requesting. Do not embed everything into the binary.
-* Landing html page
 * Built in, inspectable timeline of every messages received, with tracking id, searchable, filterable, taggable, and inspectable. This is for debugging the network.
 * Use a tagging system of the field of a struct to automatically create the Sync_XXXX messages.
 * Evaluate the use of a RPC protocol instead of the current message passing system. The only worry would be around packet dropping and loss of metadata like time of flight. But it would be a lot more ergonomic to use.
@@ -19,6 +15,7 @@
 * Rename every make_sync function so that they are searchable too.
 
 ===== DONE ========
+* Helpful diagnosis in index.html when WebGPU is not available in JavaScript (no navigator.gpu, adapter request fails, insecure context, etc.) instead of a silent/blank load.
 * Come up with a plan for the recurring pattern 
 		new_string := GUI.labeled_input_text(...);
 		if old_string != new_string {
@@ -31,3 +28,8 @@
 * Add some quick shortcut to spawn a local server process. The platform's vtable would need new function like "create_process".
 * Add a SMALL png reader writer that a human can understand. QOI is too much friction.
 * Completely switch to  a generic function for serializing and deserializing the communication structs
+* Landing html page
+* There are multiple versions of a struct holding the current keyboard's state of the frame. Like at least one for the gui and one for the platform. I'd like to factorzie all of this.
+* Scene Frame_Result struct should be simply a few different list of Commands based on what the instance should do to them. Spelling out every different type of commands was a mistake.
+* Leverage fully jai's metaprogramming to write a better sql interface
+* Use Jai's metaprogramming so that the struct in Database.jai are tagged and that a function make sure that every tagged struct has a corresponding table in the database.

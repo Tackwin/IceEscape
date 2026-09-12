@@ -20,6 +20,144 @@ assign_pdb_link :: (opts: *Build_Options, pdb_file: string) {
 	opts.additional_linker_arguments = args;
 }
 
+Console_Found :: struct {
+	name: string;
+	import: *Message_Import;
+}
+
+Console_Intercept :: struct {
+	found: [..] Console_Found;
+	console_file: *Message_File;
+	main_game_import: *Message_Import;
+	emitted := false;
+}
+
+handle_console_intercept :: (state: *Console_Intercept, message: *Message) {
+	if message.kind == .FILE {
+		file := message.(*Message_File);
+		if ends_with(file.fully_pathed_filename, "Console.jai") {
+			state.console_file = file;
+		}
+	} else if message.kind == .IMPORT {
+		imp := message.(*Message_Import);
+		if imp.module_name == "main_game" {
+			state.main_game_import = imp;
+		}
+	} else if message.kind == .TYPECHECKED {
+		typechecked := message.(*Message_Typechecked);
+		for typechecked.procedure_headers {
+			note_console_procedure(state, it.expression);
+		}
+	} else if message.kind == .PHASE {
+		phase := message.(*Message_Phase);
+		if phase.phase == .TYPECHECKED_ALL_WE_CAN && !state.emitted {
+			if !state.console_file && !state.main_game_import return;
+			emit_console_commands(state, message.workspace);
+			state.emitted = true;
+		}
+	}
+}
+
+note_console_procedure :: (state: *Console_Intercept, header: *Code_Procedure_Header) {
+	has_console := false;
+	for header.notes {
+		if it.text == "console" {
+			has_console = true;
+			break;
+		}
+	}
+	if !has_console return;
+	if header.name.count == 0 return;
+
+	flags := header.procedure_flags;
+	if flags & .COMPILER_GENERATED return;
+	if flags & .POLYMORPHIC return;
+	if flags & .MACRO return;
+	if flags & .COMPILE_TIME_ONLY return;
+	if flags & .TYPE_ONLY return;
+	if flags & .INTRINSIC return;
+
+	load := header.enclosing_load;
+	if load {
+		imp := load.enclosing_import;
+		if imp {
+			if imp.module_type == .PRELOAD return;
+			if imp.module_type == .RUNTIME_SUPPORT return;
+		}
+	}
+
+	filename := "";
+	if load filename = load.fully_pathed_filename;
+
+	if header.arguments.count != 1 {
+		compiler_report(
+			filename,
+			xx header.l0,
+			xx header.c0,
+			tprint("@console '%' skipped: must take *Console_State.", header.name),
+			.WARNING
+		);
+		return;
+	}
+
+	for state.found {
+		if it.name == header.name {
+			compiler_report(
+				filename,
+				xx header.l0,
+				xx header.c0,
+				tprint("@console '%' skipped: duplicate name.", header.name),
+				.WARNING
+			);
+			return;
+		}
+	}
+
+	found: Console_Found;
+	found.name = copy_string(header.name);
+	if load found.import = load.enclosing_import;
+	array_add(*state.found, found);
+}
+
+emit_console_commands :: (state: *Console_Intercept, w: Workspace) {
+	quick_sort(state.found, (a: Console_Found, b: Console_Found) -> s64 {
+		return compare(a.name, b.name);
+	});
+
+	home := state.main_game_import;
+	if !home && state.console_file home = state.console_file.enclosing_import;
+
+	type_name := "Console_Command";
+	if state.main_game_import type_name = "Main_Game.Console_Command";
+
+	builder: String_Builder;
+	print_to_builder(*builder, "console_commands :: %.[\n", type_name);
+	for state.found {
+		call := it.name;
+		if state.main_game_import {
+			call = tprint("Main_Game.%", it.name);
+			if it.import && it.import != home && it.import.module_type == .FILE {
+				call = tprint("Main_Game.%.%", it.import.module_name, it.name);
+			}
+		} else if it.import && it.import != home && it.import.module_type == .FILE {
+			call = tprint("%.%", it.import.module_name, it.name);
+		}
+		print_to_builder(*builder, "	.{ \"%\", % },\n", it.name, call);
+	}
+	print_to_builder(*builder, "];\n");
+	if state.main_game_import {
+		print_to_builder(*builder, "#poke_name Main_Game console_commands;\n");
+	}
+
+	code := builder_to_string(*builder);
+	if state.main_game_import {
+		add_build_string(code, w);
+	} else {
+		add_build_string(code, w, state.console_file);
+	}
+	print("[console] % command(s)\n", state.found.count);
+}
+
 build_game :: () -> Workspace {
 	w := compiler_create_workspace("Game");
 
@@ -390,13 +528,11 @@ build_game_dll_2 :: () {
 		"version_string :: \"0.1.0 (%)\";", calendar_to_string(date)
 	);
 	add_build_string(version_string, w);
+	console_intercept: Console_Intercept;
 	while true {
 		message := compiler_wait_for_message();
-
-		if message.kind == {
-			case .COMPLETE;
-				break;
-		}
+		if message.kind == .COMPLETE break;
+		handle_console_intercept(*console_intercept, message);
 	}
 	compiler_end_intercept(w);
 }
@@ -623,13 +759,11 @@ build_wasm_2 :: () {
 	);
 	add_build_string(version_string, w);
 	add_build_file("src/entry/wasm.jai", w);
+	console_intercept: Console_Intercept;
 	while true {
 		message := compiler_wait_for_message();
-
-		if message.kind == {
-			case .COMPLETE;
-				break;
-		}
+		if message.kind == .COMPLETE break;
+		handle_console_intercept(*console_intercept, message);
 	}
 	compiler_end_intercept(w);
 

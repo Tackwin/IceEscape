@@ -250,7 +250,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 	}
 
 	GUI.push_breaking_news(*app_user.gui_state, state.news);
-	if controls.pressed[Key.Tab] {
+	if controls.pressed[Key.Tab] && !console.open {
 		push_score_tab(state.scene, *state.game, *app_user.gui_state);
 	}
 	GUI.push_death_indicator(*app_user.gui_state, state.scene);
@@ -401,6 +401,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 
 input_game_loop :: (app_user: *App_User) {
 	using app_user;
+	if console.open || console.ate_input return;
 	if controls.just_pressed[Key.Escape] {
 		app_user.state.playing.escape_menu_open = !app_user.state.playing.escape_menu_open;
 	}
@@ -486,7 +487,7 @@ update_game_loop :: (app_user: *App_User) {
 		Scene.add(*process_response, state.scene.id, ntp);
 	}
 	state.scene.client.render_particles = app_user.state.particles_enabled;
-	Scene.update(*state.scene, controls.time, controls.delta_time, null);
+	Scene.update_scene(*state.scene, controls.time, controls.delta_time, null);
 	update_news(*state.scene, controls.time, *state.news);
 
 	if state.scene.fade_in_screen_t > 0 {
@@ -601,6 +602,8 @@ game_loop :: (app_user: *App_User) -> bool {
 	input_game_loop(app_user);
 	update_game_loop(app_user);
 	sounding(*state, *state.scene, store, app.platform);
+
+	draw_console(*app_user.console, *app_user.gui_state);
 
 	// Flush the command buffer
 	for * state.scene.client_to_server {
@@ -789,12 +792,12 @@ push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) 
 		z = 5
 	);
 
-	GUI._atom_label(
+	GUI.atom_label(
 		state,
 		string_from_arr(scene.info.name),
-		_pos = .{ cursor.x + scoreboard_size.x / 2, cursor.y + header_height / 2 },
-		_z = 10,
-		_align = .Center
+		.{ cursor.x + scoreboard_size.x / 2, cursor.y + header_height / 2 },
+		z = 10,
+		align = .Center
 	);
 
 	if page.wr_time_ms > 0 {
@@ -811,21 +814,21 @@ push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) 
 			page.wr_player_name
 		);
 
-		GUI._atom_label(
+		GUI.atom_label(
 			state,
 			wr_string,
-			_pos = .{ cursor.x + 16, cursor.y + header_height / 2 },
-			_z = 100,
-			_align = .Center_Left
+			.{ cursor.x + 16, cursor.y + header_height / 2 },
+			z = 100,
+			align = .Center_Left
 		);
 	}
 
-	GUI._atom_label(
+	GUI.atom_label(
 		state,
 		tprint("Next up: %", page.next_terrain_name),
-		_pos = .{ cursor.x + scoreboard_size.x - 16, cursor.y + header_height / 2 },
-		_z = 100,
-		_align = .Center_Right
+		.{ cursor.x + scoreboard_size.x - 16, cursor.y + header_height / 2 },
+		z = 100,
+		align = .Center_Right
 	);
 
 	GUI.push_quad_screen(

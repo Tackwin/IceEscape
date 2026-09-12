@@ -91,7 +91,7 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 		xx (controls_buffer.data + Window_W).(*u32).*, xx (controls_buffer.data + Window_H).(*u32).*
 	};
 	for 0..Key_COUNT-1 {
-		info.key_pressed[it] = controls_buffer.data[it] > 0;
+		info.keys.pressed[it] = controls_buffer.data[it] > 0;
 	}
 
 	frame_buffer_count: u64 = 0;
@@ -1274,7 +1274,7 @@ entries :: Entry.[
 
 // Main
 
-using Main_Game :: #import "main_game";
+Main_Game :: #import "main_game";
 #poke_name Main_Game version_string;
 
 app: App;
@@ -1329,12 +1329,12 @@ update_thread_temporary_storage_data: [TEMPORARY_STORAGE_SIZE] u8 #align 64;
 	platform = init_platform();
 	app.platform = *platform;
 
-	app_init(*app);
+	Main_Game.app_init(*app);
 }
 
 #program_export "wasm_main_loop" wasm_main_loop :: () #c_call {
 	push_context, defer_pop main_thread_wasm_context;
-	app_loop(*app);
+	Main_Game.app_loop(*app);
 }
 
 
@@ -1344,7 +1344,7 @@ update_thread_temporary_storage_data: [TEMPORARY_STORAGE_SIZE] u8 #align 64;
 	offset_stack: [8*1024*1024] u8 = ---;
 	jsDontOptimize(offset_stack);
 	push_context, defer_pop update_thread_wasm_context;
-	app_update_loop(*app);
+	Main_Game.app_update_loop(*app);
 }
 
 // We expose malloc to just use the default allocator with a fresh context so that our c code 

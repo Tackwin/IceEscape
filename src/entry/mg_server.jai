@@ -172,7 +172,11 @@ win32_db_query :: (query: *DB_query) {
 			} else {
 				blob := sqlite3_column_blob(stmt, index.(s32));
 				length := sqlite3_column_bytes(stmt, index.(s32));
-				value_ptr.(*[] u8).data = blob;
+				copied := NewArray(length, u8,, temp);
+				if length > 0 && blob {
+					memcpy(copied.data, blob, length);
+				}
+				value_ptr.(*[] u8).data = copied.data;
 				value_ptr.(*[] u8).count = length;
 				value_ptr.(*[] u8).count /= info.(*Type_Info_Array).element_type.runtime_size;
 				parsed = true;
@@ -230,120 +234,181 @@ win32_db_query :: (query: *DB_query) {
 				print_sqliterror(db, "Failed to execute query");
 			} else
 				query.success = true;
-		case .STORE;
+		case .PREPARE;
 			if query.handle < 0 || query.handle >= sqlite_array.count {
 				print("Invalid database handle %\n", query.handle);
 				return;
 			}
 			db := sqlite_array[query.handle];
-
-			result := sqlite3_exec(db, "BEGIN TRANSACTION;", null, null, null);
-			if result != SQLITE_OK {
-				print_sqliterror(db, "Failed to begin transaction");
-				return;
-			}
-			defer {
-				result := sqlite3_exec(db, "COMMIT;", null, null, null);
-				if result != SQLITE_OK {
-					print_sqliterror(db, "Failed to commit transaction");
-				} else
-					query.success = true;
-			}
-
 			stmt: *sqlite3_stmt;
-			result = sqlite3_prepare_v2(db, tprint("%\0", query.query_string).data, -1, *stmt, null);
+			result := sqlite3_prepare_v2(
+				db, tprint("%\0", query.query_string).data, -1, *stmt, null
+			);
 			if result != SQLITE_OK {
 				print_sqliterror(db, "Failed to prepare statement");
+				print("Failed query: %\n", query.query_string);
 				return;
 			}
-			defer {
-				sqlite3_finalize(stmt);
+			query.stmt = stmt;
+
+			for bind, bind_index: query.binds {
+				if !bind_type(stmt, bind.type, bind.value, bind_index) {
+					print_sqliterror(db, "Failed to bind sql() argument");
+					sqlite3_finalize(stmt);
+					query.stmt = null;
+					return;
+				}
 			}
+			query.success = true;
+		case .STEP_ROW;
+			query.success = false;
+			if !query.stmt {
+				return;
+			}
+			stmt := query.stmt.(*sqlite3_stmt);
+			result := sqlite3_step(stmt);
+			if result == SQLITE_DONE {
+				return;
+			}
+			if result != SQLITE_ROW {
+				print("Failed to step load query: %\n", query.query_string);
+				return;
+			}
+			if query.type && query.row_ptr && query.type.type == .STRUCT {
+				struct_info := query.type.(*Type_Info_Struct);
+				column_count := sqlite3_column_count(stmt);
+				for field_idx: 0..struct_info.members.count - 1 {
+					field := struct_info.members[field_idx];
+					if field.offset_into_constant_storage >= 0
+						continue;
 
-			// Bind input parameters
-			for input: query.input {
-				sqlite3_reset(stmt);
-				sqlite3_clear_bindings(stmt);
+					flag: Field_Flag = Field_Flag.NONE;
+					for field.notes
+						if it == "json_array"
+							flag = .JSON_ARRAY;
 
-				if query.type.type == .STRUCT {
-					struct_info := query.type.(*Type_Info_Struct);
-					for field_idx: 0..struct_info.members.count - 1 {
-						field := struct_info.members[field_idx];
-						value_ptr := (input.(int) + field.offset_in_bytes).(*void);
-						if !bind_type(stmt, field.type, value_ptr, field_idx) {
-							print_sqliterror(
-								db, tprint(
-									"Unsupported field (%::%) type for binding\n",
-									struct_info.name,
-									field.name
-								)
-							);
+					col := -1;
+					want := to_lower_copy(field.name,, temp);
+					for 0..column_count - 1 {
+						cname: string;
+						cname.data = sqlite3_column_name(stmt, it.(s32));
+						cname.count = c_style_strlen(cname.data);
+						if to_lower_copy(cname,, temp) == want {
+							col = it;
+							break;
 						}
 					}
-				} else {
-					if !bind_type(stmt, query.type, input, 0) {
-						print_sqliterror(db, tprint("Unsupported type for binding %\n", query.type));
-					}
-				}
+					if col < 0
+						continue;
 
-				result := sqlite3_step(stmt);
-				if result != SQLITE_DONE {
-					print_sqliterror(db, "Failed to execute statement");
-					print("Failed query: %\n", query.query_string);
+					value_ptr := (query.row_ptr.(int) + field.offset_in_bytes).(*void);
+					read_type(stmt, field.type, value_ptr, col, flag);
 				}
 			}
-		case .LOAD;
-			if query.handle < 0 || query.handle >= sqlite_array.count {
-				print("Invalid database handle %\n", query.handle);
+			query.success = true;
+		case .STORE_ROW;
+			query.success = false;
+			if !query.stmt || !query.row_ptr || !query.type {
 				return;
 			}
+			stmt := query.stmt.(*sqlite3_stmt);
+			sqlite3_reset(stmt);
+			sqlite3_clear_bindings(stmt);
 
 			db := sqlite_array[query.handle];
-			stmt: *sqlite3_stmt;
-			result := sqlite3_prepare_v2(db, tprint("%\0", query.query_string).data, -1, *stmt, null);
-			if result != SQLITE_OK {
-				print_sqliterror(db, "Failed to prepare statement");
+			if query.type.type == .STRUCT {
+				struct_info := query.type.(*Type_Info_Struct);
+				bind_index := 0;
+				for field_idx: 0..struct_info.members.count - 1 {
+					field := struct_info.members[field_idx];
+					if field.offset_into_constant_storage >= 0
+						continue;
+
+					value_ptr := (query.row_ptr.(int) + field.offset_in_bytes).(*void);
+					json := false;
+					is_pk := false;
+					for field.notes {
+						if it == "json_array"
+							json = true;
+						if it == "PK"
+							is_pk = true;
+					}
+
+					ok := false;
+					if is_pk && field.type.type == .INTEGER {
+						integer: int;
+						if field.type.runtime_size == 1 {
+							integer = value_ptr.(*s8).*;
+						} else if field.type.runtime_size == 2 {
+							integer = value_ptr.(*s16).*;
+						} else if field.type.runtime_size == 4 {
+							integer = value_ptr.(*s32).*;
+						} else {
+							integer = value_ptr.(*s64).*;
+						}
+						if integer == 0 {
+							ok = sqlite3_bind_null(stmt, (bind_index + 1).(s32)) == SQLITE_OK;
+						} else {
+							ok = bind_type(stmt, field.type, value_ptr, bind_index);
+						}
+					} else if json {
+						ints := value_ptr.(*[] int).*;
+						sb: String_Builder;
+						sb.allocator = temp;
+						print_to_builder(*sb, "[");
+						sep := "";
+						for ints {
+							print_to_builder(*sb, "%1%2", sep, it);
+							sep = ", ";
+						}
+						print_to_builder(*sb, "]");
+						js := builder_to_string(*sb,, temp);
+						ok = sqlite3_bind_text(
+							stmt, (bind_index + 1).(s32), js.data, xx js.count, SQLITE_TRANSIENT
+						) == SQLITE_OK;
+					} else {
+						ok = bind_type(stmt, field.type, value_ptr, bind_index);
+					}
+					if !ok {
+						print_sqliterror(
+							db,
+							tprint("Unsupported field (%::%) type for binding\n", struct_info.name, field.name)
+						);
+					}
+					bind_index += 1;
+				}
+			}
+
+			result := sqlite3_step(stmt);
+			if result != SQLITE_DONE {
+				print_sqliterror(db, "Failed to execute statement");
+				print("Failed query: %\n", query.query_string);
 				return;
 			}
-
-			defer {
-				sqlite3_finalize(stmt);
+			query.success = true;
+		case .STEP_EXEC;
+			query.success = false;
+			if !query.stmt {
+				return;
 			}
-
-			outputs: [..] *void;
-			outputs.allocator = query.output_allocator;
+			stmt := query.stmt.(*sqlite3_stmt);
 			while true {
 				result := sqlite3_step(stmt);
 				if result == SQLITE_DONE {
 					query.success = true;
-					break;
-				} else if result != SQLITE_ROW {
-					print_sqliterror(db, "Failed to execute statement");
-					print("Failed query: %\n", query.query_string);
-					break;
+					return;
 				}
-
-				output_ptr := alloc(query.type.runtime_size,, query.output_allocator);
-				if query.type.type == .STRUCT {
-					struct_info := query.type.(*Type_Info_Struct);
-					for field_idx: 0..struct_info.members.count - 1 {
-						field := struct_info.members[field_idx];
-
-						flag: Field_Flag = Field_Flag.NONE;
-						for field.notes
-							if it == "json_array"
-								flag = .JSON_ARRAY;
-
-						value_ptr := (output_ptr.(int) + field.offset_in_bytes).(*void);
-						read_type(stmt, field.type, value_ptr, field_idx, flag);
-					}
-				} else {
-					read_type(stmt, query.type, output_ptr, 0);
-				}
-
-				array_add(*outputs, output_ptr);
+				if result == SQLITE_ROW
+					continue;
+				print("Failed to step exec query: %\n", query.query_string);
+				return;
 			}
-			query.output = outputs;
+		case .FINALIZE;
+			if query.stmt {
+				sqlite3_finalize(query.stmt.(*sqlite3_stmt));
+				query.stmt = null;
+			}
+			query.success = true;
 	}
 }
 
