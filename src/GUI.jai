@@ -64,6 +64,9 @@ HAND_OPEN_SLOT :: V2f.{ 6, 12 };
 STAR_SLOT :: V2f.{ 7, 12 };
 RESURRECT_SLOT :: V2f.{ 7, 11 };
 BOMB_SLOT :: V2f.{ 9, 12 };
+SHIELD_SLOT :: V2f.{ 10, 11 };
+EXPLOSION_TIME_SLOT :: V2f.{ 9, 11 };
+CROSS_LENGTH_SLOT :: V2f.{ 8, 11 };
 
 PLAYER_ICON_SLOT :: V2f.{ 0, 10 };
 AMBULANCE_SLOT :: V2f.{ 0, 10 };
@@ -1534,6 +1537,17 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 			z = 5
 		);
 	}
+	render_text_at :: (x: int, y: int, text: string, color := V3f.{ 1.0, 1.0, 1.0 }) #expand {
+		atom_label(
+			state,
+			text,
+			.{ (x * 42 + 42 - 10).(float32), cell_y(y) + 42 - 10 },
+			z = 5.0,
+			align=.Center,
+			scale=16,
+			color = v4(color, 1.0)
+		);
+	}
 
 	if scene.params.mode == {
 		case .Standard;
@@ -1615,6 +1629,16 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 
 		render_texture_at(2, 2, BOMB_SLOT);
 		render_hint_at(2, 2, action_to_icon(Action_Key.Square22, state.controls.layout));
+		
+		player := Scene.find_by_player_id(scene, scene.controlled_player_id);
+		if player {
+			render_texture_at(0, 3, CROSS_LENGTH_SLOT);
+			render_text_at(0, 3, tprint("%", player.server.bomberman.cross_chain_power));
+			render_texture_at(1, 3, EXPLOSION_TIME_SLOT);
+			render_text_at(1, 3, tprint("%", player.server.bomberman.explosion_speed_power));
+			render_texture_at(2, 3, SHIELD_SLOT);
+			render_text_at(2, 3, tprint("%", player.server.bomberman.shield_power));
+		}
 	}
 	
 

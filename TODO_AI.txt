@@ -11,6 +11,8 @@
 * Built in, inspectable timeline of every messages received, with tracking id, searchable, filterable, taggable, and inspectable. This is for debugging the network.
 * Use a tagging system of the field of a struct to automatically create the Sync_XXXX messages.
 * Evaluate the use of a RPC protocol instead of the current message passing system. The only worry would be around packet dropping and loss of metadata like time of flight. But it would be a lot more ergonomic to use.
+* Rename every update overloaded function by update_player / update_bomb so that I can search for them textually.
+* Rename every make_sync function so that they are searchable too.
 
 ===== DONE ========
 * Helpful diagnosis in index.html when WebGPU is not available in JavaScript (no navigator.gpu, adapter request fails, insecure context, etc.) instead of a silent/blank load.
