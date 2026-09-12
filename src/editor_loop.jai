@@ -605,33 +605,48 @@ handle_entity_picking :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_Sta
 }
 
 draw_mode_picker :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
-	// Draw panel background
 	panel_width := ifx page.mode == .Scene then 300.0 else 180.0;
-	panel_height := ifx page.mode == .Tiles then 320.0 else 500.0;
 	panel_x := 10.0;
 	panel_y := 64.0;
 
-	GUI.push_quad_screen(gui, V2f.{ panel_x, panel_y }, V2f.{ panel_width, panel_height }, V3f.{ 0.2, 0.2, 0.2 }, z = 50);
-	GUI.push_quad_screen(gui, V2f.{ panel_x + 2, panel_y + 2 }, V2f.{ panel_width - 4, panel_height - 4 }, V3f.{ 0.1, 0.1, 0.1 }, z = 51);
+	GUI.place(gui, .{ panel_x, panel_y }, 50, .Top_Left);
 
-	// Mode tabs at top
-	GUI.row(gui, V2f.{ panel_x + 5, panel_y + 12 }, z = 52, align = .Center_Left);
-	if GUI.button(gui, "Tiles", id = "tab_tiles") {
-		page.mode = .Tiles;
-	}
-	if GUI.button(gui, "Entities", id = "tab_entities") {
-		page.mode = .Entities;
-	}
-	if GUI.button(gui, "Scene", id = "tab_scene") {
-		page.mode = .Scene;
-	}
-	GUI.end(gui);
+	{
+		GUI.column(gui, z = 50);
+		defer {
+			aabb := GUI.container_aabb(gui);
+			GUI.push_quad_screen(gui, aabb, .{ 0.2, 0.2, 0.2 }, z = 50);
+			GUI.push_quad_screen(gui, shrink(aabb, 2), .{ 0.1, 0.1, 0.1 }, z = 51);
+			if point_aabb(gui.controls.mouse_pos, aabb)
+				gui.controls.captured_mouse = true;
+			GUI.end(gui);
+		}
 
-	// Content based on mode
-	if page.mode == .Tiles {
-		draw_tile_picker_content(editor, gui, panel_x, panel_y, panel_width, panel_height);
-	} else if page.mode == .Entities {
-		draw_entity_picker_content(editor, page, gui, panel_x, panel_y, panel_width, panel_height);
+		GUI.move_cursor(gui, v2(4));
+		{
+			GUI.row(gui, z = 52, align = .Center_Left);
+			defer GUI.end(gui);
+
+			if GUI.button(gui, "Tiles", id = "tab_tiles")
+				page.mode = .Tiles;
+			if GUI.button(gui, "Entities", id = "tab_entities")
+				page.mode = .Entities;
+			if GUI.button(gui, "Scene", id = "tab_scene")
+				page.mode = .Scene;
+		}
+
+		if page.mode == .Tiles {
+			draw_tile_picker_content(editor, gui);
+		} else if page.mode == .Entities {
+			draw_entity_picker_content(editor, page, gui);
+		} else if page.mode == .Scene {
+			draw_scene_edit_content(editor, page, gui, panel_width);
+		}
+
+		GUI.move_cursor(gui, v2(4));
+	}
+
+	if page.mode == .Entities {
 		draw_entity_type_content(
 			editor,
 			page,
@@ -643,19 +658,10 @@ draw_mode_picker :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
 				512
 			)
 		);
-	} else if page.mode == .Scene {
-		draw_scene_edit_content(
-			editor, page, gui, pos_size(panel_x, panel_y, panel_width, panel_height)
-		);
-	}
-
-	// Capture mouse on panel
-	if point_aabb(gui.controls.mouse_pos, V2f.{ panel_x, panel_y }, V2f.{ panel_x + panel_width, panel_y + panel_height }) {
-		gui.controls.captured_mouse = true;
 	}
 }
 
-draw_tile_picker_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_x: float, panel_y: float, panel_width: float, panel_height: float) {
+draw_tile_picker_content :: (editor: *Editor, gui: *GUI.GUI_State) {
 	tile_kinds :: Scene.Tile.Kind.[
 		.Ice, .Grass, .Slippy_Ice, .Dirt, .Funny_Ice
 	];
@@ -670,7 +676,7 @@ draw_tile_picker_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_x: floa
 		.{ 0.9, 0.7, 1.0 }
 	];
 
-	GUI.column(gui, V2f.{ panel_x + 10, panel_y + 35 }, z = 52, align = .Center_Left);
+	GUI.column(gui, z = 52, align = .Center_Left);
 	defer GUI.end(gui);
 
 	for i: 0..tile_kinds.count - 1 {
@@ -686,16 +692,16 @@ draw_tile_picker_content :: (editor: *Editor, gui: *GUI.GUI_State, panel_x: floa
 }
 
 draw_scene_edit_content :: (
-	editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, content_aabb: AABBf
+	editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, content_width: float
 ) {
-	GUI.column(gui, content_aabb.min + .{ 8.0, 24.0 }, z = 52, align = .Top_Left);
+	GUI.column(gui, z = 52, align = .Top_Left);
 	defer GUI.end(gui);
 
 
 	v2_result := GUI.labeled_v2_input(
 		gui,
 		"Camera",
-		width(content_aabb) - 16.0,
+		content_width - 16.0,
 		24,
 		value = editor.scene.camera_min,
 		drag_speed = editor.grid_snapping,
@@ -712,7 +718,7 @@ draw_scene_edit_content :: (
 	v2_result = GUI.labeled_v2_input(
 		gui,
 		"Camera Max",
-		width(content_aabb) - 16.0,
+		content_width - 16.0,
 		24,
 		value = editor.scene.camera_max,
 		drag_speed = editor.grid_snapping,
@@ -729,7 +735,7 @@ draw_scene_edit_content :: (
 	v2_result = GUI.labeled_v2_input(
 		gui,
 		"Origin",
-		width(content_aabb) - 16.0,
+		content_width - 16.0,
 		24,
 		value = v2(editor.scene.origin_tile_space),
 		drag_speed = editor.grid_snapping,
@@ -744,7 +750,7 @@ draw_scene_edit_content :: (
 	v2_result = GUI.labeled_v2_input(
 		gui,
 		"Spawn point",
-		width(content_aabb) - 16.0,
+		content_width - 16.0,
 		24,
 		value = v2(editor.scene.spawn.position),
 		drag_speed = 0.1,
@@ -759,7 +765,7 @@ draw_scene_edit_content :: (
 	checked := GUI.labeled_checkbox(
 		gui,
 		"Night",
-		width(content_aabb) - 16.0,
+		content_width - 16.0,
 		24,
 		id = "night_checkbox",
 		label_color = GUI.GRAY_80
@@ -810,8 +816,8 @@ draw_scene_edit_content :: (
 
 }
 
-draw_entity_picker_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, panel_x: float, panel_y: float, panel_width: float, panel_height: float) {
-	GUI.column(gui, V2f.{ panel_x + 10, panel_y + 35 }, z = 52, align = .Center_Left);
+draw_entity_picker_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
+	GUI.column(gui, z = 52, align = .Center_Left);
 	defer GUI.end(gui);
 
 	for i: 0..editable_entities_type.count - 1 {

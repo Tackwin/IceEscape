@@ -195,6 +195,8 @@ GUI_State :: struct {
 		origin := V2f.{ 0, 0 };
 		padding: V2f = V2f.{ 8, 8 };
 		child_ids: [..] u64;
+		has_cursor_extent := false;
+		cursor_extent: AABBf;
 	}
 	flow_stack: [..] Flow;
 
@@ -344,6 +346,8 @@ push_flow :: (
 	child := parent;
 	empty_ids: [..] u64;
 	child.child_ids = empty_ids;
+	child.has_cursor_extent = false;
+	child.cursor_extent = .{};
 	child.direction = direction;
 	if has_origin {
 		child.cursor = origin;
@@ -396,11 +400,12 @@ end :: (gui: *GUI_State) {
 	if gui.flow_stack.count == 0
 		return;
 
+	aabb := container_aabb(gui);
 	top := *gui.flow_stack[gui.flow_stack.count - 1];
-	aabb := widgets_aabb(gui, top.child_ids);
 
 	if gui.flow_stack.count > 1 {
 		parent := *gui.flow_stack[gui.flow_stack.count - 2];
+		grow_flow_extent(parent, aabb);
 		for id: top.child_ids {
 			array_add(*parent.child_ids, id);
 		}
@@ -425,8 +430,27 @@ along_direction :: (direction: GUI_State.Direction, amount: float) -> V2f {
 	return .{};
 }
 
+grow_flow_extent :: (f: *GUI_State.Flow, aabb: AABBf) {
+	if f.has_cursor_extent {
+		f.cursor_extent = aabb_union(f.cursor_extent, aabb);
+	} else {
+		f.cursor_extent = aabb;
+		f.has_cursor_extent = true;
+	}
+}
+
+aabb_from_points :: (a: V2f, b: V2f) -> AABBf {
+	return .{
+		min = .{ min(a.x, b.x), min(a.y, b.y) },
+		max = .{ max(a.x, b.x), max(a.y, b.y) },
+	};
+}
+
 move_cursor :: (state: *GUI_State, delta: V2f) {
-	flow(state).cursor += delta;
+	f := flow(state);
+	old := f.cursor;
+	f.cursor += delta;
+	grow_flow_extent(f, aabb_from_points(old, f.cursor));
 }
 move_cursor :: (state: *GUI_State, delta: float) {
 	move_cursor(state, along_direction(flow(state).direction, delta));
@@ -457,8 +481,24 @@ finish_widget :: (gui: *GUI_State, origin: V2f, id: $Id)
 place :: (gui: *GUI_State, pos: V2f, z: float, align: Align) {
 	f := flow(gui);
 	f.cursor = pos;
+	f.origin = pos;
 	f.z = z;
 	f.align = align;
+}
+
+container_aabb :: (gui: *GUI_State) -> AABBf {
+	if gui.flow_stack.count == 0 {
+		return AABBf.{ .{ 0, 0 }, .{ 0, 0 } };
+	}
+	f := *gui.flow_stack[gui.flow_stack.count - 1];
+	aabb := AABBf.{ f.origin, f.origin };
+	if f.child_ids.count > 0 {
+		aabb = aabb_union(aabb, widgets_aabb(gui, f.child_ids));
+	}
+	if f.has_cursor_extent {
+		aabb = aabb_union(aabb, f.cursor_extent);
+	}
+	return aabb;
 }
 
 last_id :: (state: *GUI_State) -> u64 {

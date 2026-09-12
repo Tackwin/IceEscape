@@ -465,7 +465,7 @@ free :: (scene: *Scene) {
 }
 
 
-make_sync :: (scene: *Scene, params: Scene_Parameters) -> Command.Sync_Scene {
+make_sync_scene :: (scene: *Scene, params: Scene_Parameters) -> Command.Sync_Scene {
 	sync_scene: Command.Sync_Scene;
 	sync_scene.id = scene.id;
 	sync_scene.info = scene.info;
@@ -484,41 +484,41 @@ make_sync :: (scene: *Scene, params: Scene_Parameters) -> Command.Sync_Scene {
 	sync_scene.power_ups = NewArray(scene.power_ups.count, Command.Sync_Power_Up, false,, temp);
 	
 	for * sync_scene.players {
-		it.* = make_sync(*scene.players[it_index]);
+		it.* = make_sync_player(*scene.players[it_index]);
 	}
 	for * sync_scene.skulls {
-		it.* = make_sync(*scene.skulls[it_index]);
+		it.* = make_sync_skull(*scene.skulls[it_index]);
 	}
 	for * sync_scene.moving_frames {
-		it.* = make_sync(*scene.moving_frames[it_index]);
+		it.* = make_sync_moving_frame(*scene.moving_frames[it_index]);
 	}
 	for * sync_scene.robots {
-		it.* = make_sync(*scene.robots[it_index]);
+		it.* = make_sync_robot(*scene.robots[it_index]);
 	}
 	for * sync_scene.antiairs {
-		it.* = make_sync(*scene.antiairs[it_index]);
+		it.* = make_sync_antiair(*scene.antiairs[it_index]);
 	}
 	for * sync_scene.tombstones {
-		it.* = make_sync(*scene.tombstones[it_index]);
+		it.* = make_sync_tombstone(*scene.tombstones[it_index]);
 	}
 	for * sync_scene.presents {
 		if scene.presents[it_index].server.available
-			it.* = make_sync(*scene.presents[it_index]);
+			it.* = make_sync_present(*scene.presents[it_index]);
 	}
 	for * sync_scene.safe_zones {
-		it.* = make_sync(*scene.safe_zones[it_index]);
+		it.* = make_sync_safe_zone(*scene.safe_zones[it_index]);
 	}
 	for * sync_scene.power_ups {
-		it.* = make_sync(*scene.power_ups[it_index]);
+		it.* = make_sync_power_up(*scene.power_ups[it_index]);
 	}
 	for * sync_scene.standins {
-		it.* = make_sync(*scene.stand_in[it_index]);
+		it.* = make_sync_stand_in(*scene.stand_in[it_index]);
 	}
 	sync_scene.rng = scene.server_rng;
 	return sync_scene;
 }
 
-make_sync :: (player: *Player) -> Command.Sync_Player {
+make_sync_player :: (player: *Player) -> Command.Sync_Player {
 	sync_player: Command.Sync_Player;
 	sync_player.player_id = player.id;
 	sync_player.position = player.server.position;
@@ -530,14 +530,14 @@ make_sync :: (player: *Player) -> Command.Sync_Player {
 	return sync_player;
 }
 
-make_sync :: (standin: *Stand_In) -> Command.Sync_Stand_In {
+make_sync_stand_in :: (standin: *Stand_In) -> Command.Sync_Stand_In {
 	sync_standin: Command.Sync_Stand_In;
 	sync_standin.standin_id = standin.id;
 	sync_standin.retired = standin.retired;
 	return sync_standin;
 }
 
-make_sync :: (bomb: *Bomb) -> Command.Sync_Bomb {
+make_sync_bomb :: (bomb: *Bomb) -> Command.Sync_Bomb {
 	sync: Command.Sync_Bomb;
 	sync.bomb_id = bomb.id;
 	sync.bomb_spawner_id = bomb.spawner_id;
@@ -553,14 +553,14 @@ make_sync :: (bomb: *Bomb) -> Command.Sync_Bomb {
 	return sync;
 }
 
-make_sync :: (spawner: *Bomb_Spawner) -> Command.Sync_Bomb_Spawner {
+make_sync_bomb_spawner :: (spawner: *Bomb_Spawner) -> Command.Sync_Bomb_Spawner {
 	sync: Command.Sync_Bomb_Spawner;
 	sync.bomb_spawner_id = spawner.id;
 	sync.bomb_spawned_id = spawner.spawned_id;
 	return sync;
 }
 
-make_sync :: (skull: *Skull) -> Command.Sync_Skull {
+make_sync_skull :: (skull: *Skull) -> Command.Sync_Skull {
 	sync_skull: Command.Sync_Skull;
 	sync_skull.skull_id = skull.id;
 	sync_skull.speed = skull.server.speed;
@@ -568,7 +568,7 @@ make_sync :: (skull: *Skull) -> Command.Sync_Skull {
 	return sync_skull;
 }
 
-make_sync :: (hook: *Hook) -> Command.Sync_Hook {
+make_sync_hook :: (hook: *Hook) -> Command.Sync_Hook {
 	sync_hook: Command.Sync_Hook;
 	sync_hook.hook_id = hook.id;
 	sync_hook.last_anchor_position = hook.server.last_anchor_position;
@@ -579,20 +579,20 @@ make_sync :: (hook: *Hook) -> Command.Sync_Hook {
 	return sync_hook;
 }
 
-make_sync :: (tombstone: *Tombstone) -> Command.Sync_Tombstone {
+make_sync_tombstone :: (tombstone: *Tombstone) -> Command.Sync_Tombstone {
 	sync_tombstone: Command.Sync_Tombstone;
 	sync_tombstone.player_id = tombstone.player_id;
 	sync_tombstone.position = tombstone.position;
 	return sync_tombstone;
 }
 
-make_sync :: (moving_frame: *Moving_Frame) -> Command.Sync_Moving_Frame {
+make_sync_moving_frame :: (moving_frame: *Moving_Frame) -> Command.Sync_Moving_Frame {
 	sync_moving_frame: Command.Sync_Moving_Frame;
 	sync_moving_frame.frame_id = moving_frame.id;
 	return sync_moving_frame;
 }
 
-make_sync :: (robot: *Robot) -> Command.Sync_Robot {
+make_sync_robot :: (robot: *Robot) -> Command.Sync_Robot {
 	sync_robot: Command.Sync_Robot;
 	sync_robot.robot_id = robot.id;
 	sync_robot.position = robot.position;
@@ -601,7 +601,7 @@ make_sync :: (robot: *Robot) -> Command.Sync_Robot {
 	return sync_robot;
 }
 
-make_sync :: (antiair: *AntiAir) -> Command.Sync_AntiAir {
+make_sync_antiair :: (antiair: *AntiAir) -> Command.Sync_AntiAir {
 	sync_antiair: Command.Sync_AntiAir;
 	sync_antiair.id = antiair.id;
 	sync_antiair.position = antiair.position;
@@ -612,7 +612,7 @@ make_sync :: (antiair: *AntiAir) -> Command.Sync_AntiAir {
 	return sync_antiair;
 }
 
-make_sync :: (present: *Present) -> Command.Sync_Present {
+make_sync_present :: (present: *Present) -> Command.Sync_Present {
 	sync_present: Command.Sync_Present;
 	sync_present.present_id = present.id;
 	sync_present.position = present.position;
@@ -621,7 +621,7 @@ make_sync :: (present: *Present) -> Command.Sync_Present {
 	return sync_present;
 }
 
-make_sync :: (power_up: *Power_Up) -> Command.Sync_Power_Up {
+make_sync_power_up :: (power_up: *Power_Up) -> Command.Sync_Power_Up {
 	sync_power_up: Command.Sync_Power_Up;
 	sync_power_up.power_up_id = power_up.id;
 	sync_power_up.position = power_up.position;
@@ -631,7 +631,7 @@ make_sync :: (power_up: *Power_Up) -> Command.Sync_Power_Up {
 	return sync_power_up;
 }
 
-make_sync :: (safe_zone: *Safe_Zone) -> Command.Sync_Safe_Zone {
+make_sync_safe_zone :: (safe_zone: *Safe_Zone) -> Command.Sync_Safe_Zone {
 	sync_safe_zone: Command.Sync_Safe_Zone;
 	sync_safe_zone.id = safe_zone.id;
 	sync_safe_zone.position = safe_zone.position;
@@ -2407,7 +2407,7 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 						power_up.spawn_time = scene.server.clock.(float);
 						array_add(*scene.power_ups, power_up);
 
-						sync_power_up := make_sync(*power_up);
+						sync_power_up := make_sync_power_up(*power_up);
 						if result
 							array_add(*result.broadcast, make_command(sync_power_up));
 					}
@@ -2531,7 +2531,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	// 				it.server.available = true;
 	// 				it.server.time_since_taken = 0.0;
 
-	// 				push_broadcast(result, make_sync(it));
+	// 				push_broadcast(result, make_sync_present(it));
 	// 			}
 	// 		}
 	// 	}
@@ -2550,7 +2550,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		}
 
 		if before != it.server.available {
-			push_broadcast(result, make_sync(it));
+			push_broadcast(result, make_sync_present(it));
 		}
 	}
 
@@ -2597,7 +2597,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			d := norm(p - q);
 			if d < r {
 				it.picked_up = true;
-				array_add(*result.broadcast, make_command(make_sync(it)));
+				array_add(*result.broadcast, make_command(make_sync_power_up(it)));
 				break;
 			}
 		}
@@ -2624,7 +2624,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	// 				case .B;
 	// 					it.server.has_hook_present = 3;
 	// 			}
-	// 			array_add(*result.sync_player, make_sync(it));
+	// 			array_add(*result.sync_player, make_sync_player(it));
 	// 			continue;
 	// 		}
 	// 	}
@@ -3277,7 +3277,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			if dt < it.server.expire_duration
 				continue;
 
-			push_broadcast(result, make_sync(it));
+			push_broadcast(result, make_sync_safe_zone(it));
 			remove it;
 		}
 	}
@@ -4249,8 +4249,8 @@ buy_ask :: (scene: *Scene, player_id: int, result: *Process_Response) {
 
 			// 	closest_present.server.available = false;
 
-			// 	add(result, scene.id, make_sync(player));
-			// 	add(result, scene.id, make_sync(*closest_present));
+			// 	add(result, scene.id, make_sync_player(player));
+			// 	add(result, scene.id, make_sync_present(*closest_present));
 			// }
 		}
 	}
@@ -4364,7 +4364,7 @@ process_server_only :: (
 						sync_score.souls = player.server.souls;
 						add_single_reply(response, player.id, sync_score);
 
-						add_single_reply(response, player.id, make_sync(player));
+						add_single_reply(response, player.id, make_sync_player(player));
 					} else {
 						buy_response: Command.Buy_Response;
 						buy_response.player_id = player.id;
@@ -4439,7 +4439,7 @@ process_server_only :: (
 						drop_bomb(scene, *bomb);
 						array_add(*scene.bombs, bomb);
 
-						sync_bomb := make_sync(*bomb);
+						sync_bomb := make_sync_bomb(*bomb);
 						add(response, scene.id, sync_bomb);
 
 						player.server.last_dropped_bomb_id = bomb.id;
@@ -4489,8 +4489,8 @@ process_server_only :: (
 					array_add(*scene.safe_zones, sz);
 
 					player.server.has_safe_present = false;
-					add(response, scene.id, make_sync(player));
-					add(response, scene.id, make_sync(*sz));
+					add(response, scene.id, make_sync_player(player));
+					add(response, scene.id, make_sync_safe_zone(*sz));
 				}
 				return true;
 			}
@@ -4506,8 +4506,8 @@ process_server_only :: (
 					array_add(*scene.hooks, hook);
 
 					player.server.has_hook_present -= 1;
-					add(response, scene.id, make_sync(player));
-					add(response, scene.id, make_sync(*hook));
+					add(response, scene.id, make_sync_player(player));
+					add(response, scene.id, make_sync_hook(*hook));
 				}
 			}
 		}

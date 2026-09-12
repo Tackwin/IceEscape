@@ -209,7 +209,7 @@ sync :: (instance: *Instance) {
 	if check(*instance.sync_count_player) {
 		for * scene: instance.scenes {
 			for * scene.players {
-				msg := Scene.make_sync(it);
+				msg := Scene.make_sync_player(it);
 				queue_scene_scoped_broadcast(instance, scene.id, make_command(msg));
 			}
 		}
@@ -230,11 +230,11 @@ sync :: (instance: *Instance) {
 	if check(*instance.sync_count_bomb) {
 		for * scene: instance.scenes {
 			for * scene.bombs {
-				msg := Scene.make_sync(it);
+				msg := Scene.make_sync_bomb(it);
 				queue_scene_scoped_broadcast(instance, scene.id, make_command(msg));
 			}
 			for * scene.bomb_spawners {
-				msg := Scene.make_sync(it);
+				msg := Scene.make_sync_bomb_spawner(it);
 				queue_scene_scoped_broadcast(instance, scene.id, make_command(msg));
 			}
 		}
@@ -281,7 +281,7 @@ handle_file_change :: (instance: *Instance, path: string) {
 				if scene {
 					Scene.clear_scene_run(scene);
 					Terrain.parse_terrain(data, scene);
-					sync_scene := Scene.make_sync(scene, scene.params);
+					sync_scene := Scene.make_sync_scene(scene, scene.params);
 					queue_scene_scoped_broadcast(instance, scene_id, make_command(sync_scene));
 				}
 			}
@@ -468,7 +468,7 @@ move_playing_scene :: (instance: *Instance, scene_id: int, should_register := fa
 		Scene.process(scene, make_command(spawn), current_time, null);
 	}
 
-	sync_scene := Scene.make_sync(scene, scene.params);
+	sync_scene := Scene.make_sync_scene(scene, scene.params);
 	for * scene.players {
 		user := player_id_to_user_id(instance, it.id);
 		if user >= 0 {
@@ -642,7 +642,7 @@ resync_old_person :: (instance: *Instance, user_id: int) {
 	for * instance.scenes {
 		player := Scene.find_by_player_id(it, person.player_id);
 		if player {
-			cmd := make_command(Scene.make_sync(it, it.params));
+			cmd := make_command(Scene.make_sync_scene(it, it.params));
 			queue_send(instance, cmd, user_id);
 
 			spawn: Command.Spawn;
@@ -686,7 +686,7 @@ add_new_person :: (
 	}
 
 	Scene.spawn_player(pick_scene, new_person.player_id, -1);
-	queue_send(instance, make_command(Scene.make_sync(pick_scene, pick_scene.params)), user_id);
+	queue_send(instance, make_command(Scene.make_sync_scene(pick_scene, pick_scene.params)), user_id);
 
 	spawn: Command.Spawn;
 	spawn.player_id = new_person.player_id;
@@ -768,7 +768,7 @@ move_player_to_currently_playing_world :: (
 	Scene.process(new_scene, make_command(spawn), current_time_monotonic(), null);
 
 	// Send a sync of the new scene to the moved player.
-	sync_scene := Scene.make_sync(new_scene, new_scene.params);
+	sync_scene := Scene.make_sync_scene(new_scene, new_scene.params);
 	user_id := player_id_to_user_id(instance, player_id);
 	queue_send(instance, make_command(sync_scene), user_id);
 
