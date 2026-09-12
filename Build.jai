@@ -89,12 +89,12 @@ note_console_procedure :: (state: *Console_Intercept, header: *Code_Procedure_He
 	filename := "";
 	if load filename = load.fully_pathed_filename;
 
-	if header.arguments.count > 0 {
+	if header.arguments.count != 1 {
 		compiler_report(
 			filename,
 			xx header.l0,
 			xx header.c0,
-			tprint("@console '%' skipped: arguments are not supported yet.", header.name),
+			tprint("@console '%' skipped: must take *Console_State.", header.name),
 			.WARNING
 		);
 		return;

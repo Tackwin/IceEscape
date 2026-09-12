@@ -5,7 +5,7 @@ CONSOLE_HEIGHT_FRACTION :: 0.4;
 
 Console_Command :: struct {
 	name: string;
-	invoke: () -> ();
+	invoke: (*Console_State) -> ();
 }
 
 #placeholder console_commands;
@@ -23,53 +23,33 @@ Console_State :: struct {
 	history_index := -1;
 }
 
-g_console: *Console_State;
-g_console_user: *App_User;
-
-bind_console :: (app_user: *App_User) {
-	g_console_user = app_user;
-	g_console = *app_user.console;
-}
-
 init_console :: (app_user: *App_User) {
-	bind_console(app_user);
-	GUI.init(*app_user.console.string_pool);
-	app_user.console.input = GUI.make(*app_user.console.string_pool, 64);
-	app_user.console.history_draft = GUI.make(*app_user.console.string_pool, 64);
-	app_user.console.lines.allocator = context.allocator;
-	app_user.console.history.allocator = context.allocator;
+	c := *app_user.console;
+	GUI.init(*c.string_pool);
+	c.input = GUI.make(*c.string_pool, 64);
+	c.history_draft = GUI.make(*c.string_pool, 64);
+	c.lines.allocator = context.allocator;
+	c.history.allocator = context.allocator;
 }
 
 rebind_console :: (app_user: *App_User) {
-	bind_console(app_user);
 	GUI.rebind(*app_user.console.string_pool);
 }
 
-console_is_open :: () -> bool {
-	return g_console && g_console.open;
-}
-
-console_ate_input :: () -> bool {
-	return g_console && g_console.ate_input;
-}
-
-console_print :: (text: string) {
-	if !g_console return;
-
+console_print :: (c: *Console_State, text: string) {
 	copied := copy_string(text);
-	if g_console.lines.count >= CONSOLE_LOG_CAP {
-		free(g_console.lines[0]);
-		array_ordered_remove_by_index(*g_console.lines, 0);
+	if c.lines.count >= CONSOLE_LOG_CAP {
+		free(c.lines[0]);
+		array_ordered_remove_by_index(*c.lines, 0);
 	}
-	array_add(*g_console.lines, copied);
+	array_add(*c.lines, copied);
 }
 
-console_print :: (fmt: string, args: .. Any) {
-	console_print(tprint(fmt, ..args));
+console_print :: (c: *Console_State, fmt: string, args: .. Any) {
+	console_print(c, tprint(fmt, ..args));
 }
 
 handle_console :: (app_user: *App_User) {
-	bind_console(app_user);
 	c := *app_user.console;
 	c.ate_input = false;
 
@@ -79,7 +59,7 @@ handle_console :: (app_user: *App_User) {
 		c.ate_input = true;
 		c.history_index = -1;
 		if c.open && c.lines.count == 0 {
-			console_print("F10 toggle. Type help.");
+			console_print(c, "F10 toggle. Type help.");
 		}
 	} else if c.open && pressed[Key.Escape] {
 		c.open = false;
@@ -97,16 +77,15 @@ console_steal :: (controls: *Controls.State) {
 	controls.captured_mouse = true;
 }
 
-console_steal_if_needed :: (controls: *Controls.State) {
-	if console_is_open() || console_ate_input() {
+console_steal_if_needed :: (c: *Console_State, controls: *Controls.State) {
+	if c.open || c.ate_input {
 		console_steal(controls);
 	}
 }
 
-draw_console :: (gui: *GUI.GUI_State) {
-	if !g_console || !g_console.open return;
+draw_console :: (c: *Console_State, gui: *GUI.GUI_State) {
+	if !c.open return;
 
-	c := g_console;
 	window := gui.controls.window_size;
 	panel_h := window.y * CONSOLE_HEIGHT_FRACTION;
 	if panel_h < 80 panel_h = 80;
@@ -177,7 +156,7 @@ draw_console :: (gui: *GUI.GUI_State) {
 	);
 
 	if result.committed {
-		run_console_line(GUI.view(*c.input));
+		run_console_line(c, GUI.view(*c.input));
 		GUI.set(*c.input, "");
 		c.history_index = -1;
 	}
@@ -228,8 +207,8 @@ console_tab_complete :: (c: *Console_State) -> bool {
 		common = console_common_prefix(common, matches[it]);
 	}
 	GUI.set(*c.input, common);
-	console_print(":");
-	for matches console_print("  %", it);
+	console_print(c, ":");
+	for matches console_print(c, "  %", it);
 	return true;
 }
 
@@ -244,12 +223,12 @@ console_common_prefix :: (a: string, b: string) -> string {
 	return result;
 }
 
-run_console_line :: (raw: string) {
+run_console_line :: (c: *Console_State, raw: string) {
 	line := trim(raw);
 	if line.count == 0 return;
 
-	console_print("] %", line);
-	console_push_history(line);
+	console_print(c, "] %", line);
+	console_push_history(c, line);
 
 	name := line;
 	rest: string;
@@ -264,42 +243,40 @@ run_console_line :: (raw: string) {
 	}
 
 	if rest.count > 0 {
-		console_print("v1: commands take no arguments.");
+		console_print(c, "v1: commands take no arguments.");
 		return;
 	}
 
 	for console_commands {
 		if it.name == name {
-			it.invoke();
+			it.invoke(c);
 			return;
 		}
 	}
-	console_print("unknown: %", name);
+	console_print(c, "unknown: %", name);
 }
 
-console_push_history :: (line: string) {
-	if !g_console return;
-	if g_console.history.count > 0 && g_console.history[g_console.history.count - 1] == line {
+console_push_history :: (c: *Console_State, line: string) {
+	if c.history.count > 0 && c.history[c.history.count - 1] == line {
 		return;
 	}
-	if g_console.history.count >= CONSOLE_HISTORY_CAP {
-		free(g_console.history[0]);
-		array_ordered_remove_by_index(*g_console.history, 0);
+	if c.history.count >= CONSOLE_HISTORY_CAP {
+		free(c.history[0]);
+		array_ordered_remove_by_index(*c.history, 0);
 	}
-	array_add(*g_console.history, copy_string(line));
+	array_add(*c.history, copy_string(line));
 }
 
-help :: () {
-	console_print("% command(s):", console_commands.count);
+help :: (c: *Console_State) {
+	console_print(c, "% command(s):", console_commands.count);
 	for console_commands {
-		console_print("  %", it.name);
+		console_print(c, "  %", it.name);
 	}
 } @console
 
-clear :: () {
-	if !g_console return;
-	for g_console.lines {
+clear :: (c: *Console_State) {
+	for c.lines {
 		free(it);
 	}
-	g_console.lines.count = 0;
+	c.lines.count = 0;
 } @console

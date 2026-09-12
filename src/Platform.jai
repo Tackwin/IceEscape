@@ -445,6 +445,15 @@ sql_stores :: (
 	return sql_stores(platform, db, sql_insert_text(T), T, max_iterations);
 }
 
+sql_tloads :: (platform: *Platform, db: DB_query.Handle, q: Sql, $T: Type) -> [] T {
+	rows: [..] T;
+	rows.allocator = temp;
+	for sql_loads(platform, db, q, T) {
+		array_add(*rows, it);
+	}
+	return rows;
+}
+
 sql_load :: (platform: *Platform, db: DB_query.Handle, q: Sql, $T: Type) -> T, bool {
 	result: T;
 	found := false;

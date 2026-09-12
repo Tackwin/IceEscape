@@ -625,7 +625,7 @@ make_sync :: (safe_zone: *Safe_Zone) -> Command.Sync_Safe_Zone {
 
 Frame_Result :: struct {
 	broadcast: [..] Command; @allocate("lifetime") @clear("frame")
-	to_instance: [..] Command; @allocate("lifetime") @clear("frame")
+	move_instance_to_world: [..] Command.Move_To_Play_World; @allocate("lifetime") @clear("frame")
 
 	win_player_id: [..] int; @allocate("lifetime") @clear("frame")
 	died_player_id: [..] int; @allocate("lifetime") @clear("frame")
@@ -643,11 +643,6 @@ push_broadcast :: (result: *Frame_Result, cmd: $T) {
 	array_add(*result.broadcast, make_command(cmd));
 }
 
-push_instance :: (result: *Frame_Result, cmd: $T) {
-	if !result return;
-	array_add(*result.to_instance, make_command(cmd));
-}
-
 #insert -> string {
 	str := clear_string(type_info(Frame_Result));
 	return str;
@@ -662,7 +657,7 @@ make :: (result: *Frame_Result) {
 
 free :: (frame_result: *Frame_Result) {
 	array_free(frame_result.broadcast);
-	array_free(frame_result.to_instance);
+	array_free(frame_result.move_instance_to_world);
 	release(*frame_result.lifetime_pool);
 }
 
@@ -2708,7 +2703,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 					move.model_id = it.model_id;
 					move.play_world_id = 0;
 					move.standin_id = standin.id;
-					push_instance(result, move);
+					if result array_add(*result.move_instance_to_world, move);
 					standin.retired = true;
 				}
 			}

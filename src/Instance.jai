@@ -598,13 +598,10 @@ update_instance :: (instance: *Instance, dt: float32) {
 			}
 		}
 
-		for instance.frame_result.to_instance {
-			move := isa(it.payload, Command.Move_To_Play_World);
-			if move {
-				move_player_to_currently_playing_world(
-					instance, move.player_id, instance.playing_scene_id, move.model_id, move.standin_id
-				);
-			}
+		for instance.frame_result.move_instance_to_world {
+			move_player_to_currently_playing_world(
+				instance, it.player_id, instance.playing_scene_id, it.model_id, it.standin_id
+			);
 		}
 
 		if scene.end_scene_countdown_started {

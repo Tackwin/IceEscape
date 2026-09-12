@@ -465,16 +465,12 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 		if terrain_id < 0
 			return true;
 
-		time_entries: [..] DB_Time_Entry;
-		time_entries.allocator = temp;
-		for sql_loads(
+		time_entries := sql_tloads(
 			platform,
 			server.db,
 			sql("SELECT * FROM time_entries WHERE terrain_id = ?", terrain_id),
 			DB_Time_Entry
-		) {
-			array_add(*time_entries, it);
-		}
+		);
 
 		reply: Command.Get_Terrain_Leaderboard;
 		reply.terrain_id = terrain_id;
@@ -671,9 +667,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 		if ask_terrain_list.filter.count > 0 {
 			filter_pattern = tprint("%\%", ask_terrain_list.filter);
 		}
-		entries: [..] Info;
-		entries.allocator = temp;
-		for sql_loads(
+		entries := sql_tloads(
 			platform,
 			server.db,
 			sql(#string SELECT_QUERY
@@ -687,9 +681,7 @@ LEFT JOIN profile_usernames u ON ti.author_profile_id = u.id
 WHERE ti.name LIKE ?
 SELECT_QUERY, filter_pattern),
 			Info
-		) {
-			array_add(*entries, it);
-		}
+		);
 
 		reply: Command.Ans_List_Terrain;
 		reply.terrains_id = NewArray(entries.count, int,, temp);

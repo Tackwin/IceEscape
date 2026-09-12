@@ -260,7 +260,7 @@ editor_loop :: (app_user: *App_User) -> bool {
 	// Begin GUI frame
 	controls: Controls.State;
 	GUI.begin_frame(gui, info, *controls, app_user.state.keyboard_layout);
-	console_steal_if_needed(*gui.controls);
+	console_steal_if_needed(*app_user.console, *gui.controls);
 
 	if editor_page.rectangle_dragging {
 		// Draw selection rectangle
@@ -318,7 +318,7 @@ editor_loop :: (app_user: *App_User) -> bool {
 		editor_page.rectangle_dragging = false;
 	}
 
-	draw_console(gui);
+	draw_console(*app_user.console, gui);
 
 	// Render the editor
 	editor_render(app_user);
