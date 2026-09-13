@@ -23,8 +23,8 @@ const hide_loader = () => {
 	if (loader) loader.classList.add("hidden");
 };
 
-const fetch_with_progress = async (url) => {
-	const response = await fetch(url);
+const fetch_with_progress = async (url, options) => {
+	const response = await fetch(url, options);
 	if (!response.ok) {
 		throw new Error("Failed to fetch " + url + " (" + response.status + ")");
 	}
@@ -63,8 +63,6 @@ const boot_game = async () => {
 		console.error(err);
 	}
 };
-if (document.readyState === "complete") boot_game();
-else window.addEventListener("load", boot_game);
 
 const create_fullscreen_canvas = (text) => {
     const canvas  = document.createElement("canvas");
@@ -113,7 +111,8 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
         }),
     };
     
-    const wasm_data = await fetch_with_progress(module_path);
+    const wasm_url = module_path + (module_path.indexOf("?") >= 0 ? "&" : "?") + "nocache=" + Date.now();
+    const wasm_data = await fetch_with_progress(wasm_url, { cache: "no-store" });
 	set_loader_progress(1, "Starting");
 
 	const module = await WebAssembly.compile(wasm_data);
@@ -193,18 +192,6 @@ jai_imports.js_set_token = (token) => {
 jai_imports.js_sleep = new WebAssembly.Suspending(async (ms) => {
 	await new Promise(r => setTimeout(r, Number(ms)));
 })
-
-jai_imports.memcmp = (a, b, count) => {
-	const [na, nb, nc] = [Number(a), Number(b), Number(count)];
-	const u8    = new Uint8Array(jai_exports.memory.buffer);
-	const buf_a = u8.subarray(na, na + nc);
-	const buf_b = u8.subarray(nb, nb + nc);
-	for (let i = 0; i < count; i++) {
-		const delta = Number(buf_a[i]) - Number(buf_b[i]);
-		if (delta !== 0) return delta;
-	}
-	return 0;
-};
 
 jai_imports.js_debug_break = () => { debugger; };
 
@@ -366,6 +353,7 @@ const Control_Audio_Command_Cursor = 1024;
 const Control_Audio_Command_Buffer = 1024;
 
 let controls_buffer_data = 0;
+const controls_ready = () => !!(jai_exports && jai_exports.memory);
 const getControlsBufferU8 = () => {
 	return new Uint8Array(jai_exports.memory.buffer, controls_buffer_data, 256);
 }
@@ -508,6 +496,7 @@ const mapKeyNameToKeyIndex = (e) => {
 };
 
 document.addEventListener("keydown", (e) => {
+	if (!controls_ready()) return;
 	const keyIndex = mapKeyNameToKeyIndex(e.key);
 	if (0 <= keyIndex && keyIndex < Key_Count) {
 		Atomics.store(getControlsBufferU8(), keyIndex, 1);
@@ -518,6 +507,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 document.addEventListener("keyup", (e) => {
+	if (!controls_ready()) return;
 	const keyIndex = mapKeyNameToKeyIndex(e.key);
 	if (0 <= keyIndex && keyIndex < Key_Count) {
 		Atomics.store(getControlsBufferU8(), keyIndex, 0);
@@ -528,6 +518,7 @@ document.addEventListener("keyup", (e) => {
 });
 
 document.addEventListener("mousedown", (e) => {
+	if (!controls_ready()) return;
 	if (e.button === 0) {
 		Atomics.store(getControlsBufferU8(), Key_MouseLeft, 1);
 	} else if (e.button === 1) {
@@ -538,6 +529,7 @@ document.addEventListener("mousedown", (e) => {
 });
 
 document.addEventListener("mouseup", (e) => {
+	if (!controls_ready()) return;
 	if (e.button === 0) {
 		Atomics.store(getControlsBufferU8(), Key_MouseLeft, 0);
 	} else if (e.button === 1) {
@@ -548,6 +540,7 @@ document.addEventListener("mouseup", (e) => {
 });
 
 document.addEventListener("mousemove", (e) => {
+	if (!controls_ready()) return;
 	const canvas = document.getElementById("webgpu-canvas");
 	if (!canvas) {
 		return;
@@ -559,6 +552,7 @@ document.addEventListener("mousemove", (e) => {
 });
 
 document.addEventListener("wheel", (e) => {
+	if (!controls_ready()) return;
 	let w = Atomics.load(getControlsBufferS32(), Mouse_Wheel / 4);
 	w = (-e.deltaY * 0.01) * 1000;
 	Atomics.store(getControlsBufferS32(), Mouse_Wheel / 4, w);
@@ -3467,5 +3461,7 @@ jai_imports.jsRenderPassEncoderSetViewport = (params_ptr, returns_ptr) => {
 
 	pass.setViewport(x, y, width, height, minDepth, maxDepth);
 }
+
+boot_game();
 
 

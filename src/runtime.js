@@ -322,19 +322,6 @@ Exports needed for Runtime_Support.jai and the C code included with the Jai dist
 
 */
 
-// TODO: this should not be necesarry, but it is.....
-jai_imports.memcmp = (a, b, count) => {
-    const [na, nb, nc] = [Number(a), Number(b), Number(count)];
-    const u8    = new Uint8Array(jai_exports.memory.buffer);
-    const buf_a = u8.subarray(na, na + nc);
-    const buf_b = u8.subarray(nb, nb + nc);
-    for (let i = 0; i < count; i++) {
-        const delta = Number(buf_a[i]) - Number(buf_b[i]);
-        if (delta !== 0) return delta;
-    }
-    return 0;
-};
-
 jai_imports.js_write_string = (s_count, s_data, to_standard_error) => {
     // since this is only called by write_string_unsynchronized we do not pass is_constant
     const js_string = copy_string_to_js(s_count, s_data, false);

@@ -469,3 +469,17 @@ wfree(void *ptr) {
     *loc = obj;
   }
 }
+
+// LLVM's wasm backend emits env.memcmp as an import (no memory.compare opcode).
+// Defining it here, in a separate object from the Jai module, lets wasm-ld bind
+// those calls in-module. Add other missing C imports to this file.
+int memcmp(const void *s1, const void *s2, size_t n) {
+  const unsigned char *a = (const unsigned char *)s1;
+  const unsigned char *b = (const unsigned char *)s2;
+  for (size_t i = 0; i < n; i++) {
+    if (a[i] != b[i]) {
+      return (int)a[i] - (int)b[i];
+    }
+  }
+  return 0;
+}
