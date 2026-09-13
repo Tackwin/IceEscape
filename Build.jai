@@ -806,6 +806,7 @@ build_c_lib :: () {
 		"-Oz",
 		"--target=wasm64",
 		"-nostdlib",
+		"-fno-builtin",
 		"-c",
 		"-o",
 		"./src/c/walloc.o",

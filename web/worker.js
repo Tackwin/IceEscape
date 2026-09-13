@@ -265,18 +265,6 @@ jai_imports.js_load_audio = () => {
 	console.error("js_load_audio not implemented in worker");
 }
 
-jai_imports.memcmp = (a, b, count) => {
-	const [na, nb, nc] = [Number(a), Number(b), Number(count)];
-	const u8    = new Uint8Array(jai_exports.memory.buffer);
-	const buf_a = u8.subarray(na, na + nc);
-	const buf_b = u8.subarray(nb, nb + nc);
-	for (let i = 0; i < count; i++) {
-		const delta = Number(buf_a[i]) - Number(buf_b[i]);
-		if (delta !== 0) return delta;
-	}
-	return 0;
-};
-
 jai_imports.js_debug_break = () => { debugger; };
 
 // console.log and console.error always add newlines so we need to buffer the output from write_string
