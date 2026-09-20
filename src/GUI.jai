@@ -395,6 +395,7 @@ row :: (gui: *GUI_State, origin: V2f, direction := GUI_State.Direction.Right, z 
 	begin(gui, origin, direction, z, align);
 }
 
+
 end :: (gui: *GUI_State) {
 	assert(gui.flow_stack.count > 0);
 	if gui.flow_stack.count == 0
@@ -2633,13 +2634,18 @@ button :: (
 	gui: *GUI_State,
 	text: string,
 	id := "button",
-	size: Text_Button.Size = .Small
+	size: Text_Button.Size = .Small,
+	align := Align.Undefined
 ) -> bool, Text_Button, *GUI_State.Widget
 {
 	f := flow(gui);
+	_align := align;
+	if _align == Align.Undefined {
+		_align = f.align;
+	}
 	origin := f.cursor;
 	defer finish_widget(gui, origin, id);
-	a, b, c := text_button(gui, text, f.cursor, f.z, id, f.align, size);
+	a, b, c := text_button(gui, text, f.cursor, f.z, id, _align, size);
 	return a, b, c;
 }
 
