@@ -207,6 +207,7 @@ Scene :: struct {
 	props: [..] Prop; @allocate("lifetime") @clear("run")
 	bombs: [..] Bomb; @allocate("lifetime") @clear("run");
 	bomb_spawners: [..] Bomb_Spawner; @allocate("lifetime") @clear("run");
+	camp_ices: [..] Camp_Ice; @allocate("lifetime") @clear("run")
 	particles: [..] Particle; @allocate("lifetime") @clear("run")
 	trophies: [..] Trophy; @allocate("lifetime") @clear("run")
 	robots: [..] Robot; @allocate("lifetime") @clear("run")
@@ -553,6 +554,16 @@ make_sync_bomb :: (bomb: *Bomb) -> Command.Sync_Bomb {
 	return sync;
 }
 
+make_sync_camp_ice :: (camp_ice: *Camp_Ice) -> Command.Sync_Camp_Ice {
+	sync_camp_ice: Command.Sync_Camp_Ice;
+	sync_camp_ice.camp_ice_id = camp_ice.id;
+	sync_camp_ice.position = camp_ice.position;
+	sync_camp_ice.cooldown_time = camp_ice.cooldown_time;
+	sync_camp_ice.cooldown_start = camp_ice.cooldown_start;
+	sync_camp_ice.has_ice_cube = camp_ice.has_ice_cube;
+	return sync_camp_ice;
+}
+
 make_sync_bomb_spawner :: (spawner: *Bomb_Spawner) -> Command.Sync_Bomb_Spawner {
 	sync: Command.Sync_Bomb_Spawner;
 	sync.bomb_spawner_id = spawner.id;
@@ -717,6 +728,17 @@ AntiAir :: struct {
 		t := 0.0;
 		next_target: V2f = .{ FLOAT32_MAX, FLOAT32_MAX };
 	}
+}
+
+Camp_Ice :: struct {
+	id: int;
+	
+	position: V3f; @edit @picking
+
+	cooldown_time := 1.0; @edit
+	cooldown_start := 0.0;
+
+	has_ice_cube := true;
 }
 
 Bomb_Spawner :: struct {
@@ -1557,12 +1579,15 @@ Player :: struct {
 		dead_time: float;
 		dead_cooldown := 90;
 
+		holding_ice_cube := false;
+
 		radius_hitbox_tombstone := 0.75;
 		radius_hurtbox_skull := 0.5;
 		radius_hurtbox_shuriken := 0.25;
 		radius_hitbox_key := 0.55;
 		radius_hitbox_confirmed := 0.15;
 		radius_hitbox_rock := 0.6;
+		radius_hitbox_pickup_ice_cube := 0.4;
 		radius_hitbox_pickup_power_up := 0.4;
 
 		confirmed_tile := Tile.Kind.Grass;
@@ -1746,6 +1771,14 @@ find_bomb_by_position :: (scene: Scene, tile_pos: V3f) -> *Bomb {
 }
 find_by_bomb_id :: (scene: Scene, id: int) -> *Bomb {
 	for * scene.bombs {
+		if it.id == id
+			return it;
+	}
+
+	return null;
+}
+find_by_camp_ice_id :: (scene: Scene, id: int) -> *Camp_Ice {
+	for * scene.camp_ices {
 		if it.id == id
 			return it;
 	}
@@ -2360,6 +2393,10 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		update_antiair(scene, it, dt);
 	}
 
+	for * scene.camp_ices {
+		update_camp_ice(scene, it, dt);
+	}
+
 	for * scene.hooks {
 		update_hook(scene, it, dt, result);
 
@@ -2477,11 +2514,13 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			remove it;
 			break;
 		}
-		player := find_by_player_id(scene, it.holder);
-		if player
-			it.server.position = player.server.position;
-
 		interpolate_to_server(it, dt);
+
+		player := find_by_player_id(scene, it.holder);
+		if player {
+			it.server.position = player.server.position;
+			it.client.position = player.client.position;
+		}
 	}
 
 	// >RULE Remove picked up power ups
@@ -2536,6 +2575,24 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 	// 		}
 	// 	}
 	// }
+
+	// >RULE player pick up ice cube from camp_ice
+	for * scene.players {
+		if it.server.holding_ice_cube
+			continue;
+
+		for * camp_ice: scene.camp_ices {
+			if !camp_ice.has_ice_cube
+				continue;
+
+			d := norm(it.server.position - camp_ice.position);
+			if d < it.server.radius_hitbox_pickup_ice_cube {
+				it.server.holding_ice_cube = true;
+				camp_ice.has_ice_cube = false;
+				break;
+			}
+		}
+	}
 
 	// >RULE presents is available dependings on flags
 	for * scene.presents {
@@ -3531,6 +3588,14 @@ drop_bombs :: (scene: *Scene, player: *Player) {
 			drop_bomb(scene, it);
 	}
 }
+drop_ice_cube :: (scene: *Scene, player: *Player) {
+	tile_pos := position_to_tile(scene, player.server.position);
+	tile := get_tile(scene, tile_pos);
+
+	if tile && tile.kind != .Ice {
+		tile.kind = .Ice;
+	}
+}
 
 explosion_radius :: (scene: Scene, explosion: Explosion) -> float32 {
 	t := ease_out_quad(clamp((explosion.age - explosion.delay) / explosion.lifetime, 0.0, 1.0));
@@ -3609,6 +3674,10 @@ server_die :: (
 
 	drop_keys(scene, player);
 	drop_bombs(scene, player);
+	if player.server.holding_ice_cube {
+		player.server.holding_ice_cube = false;
+		drop_ice_cube(scene, player);
+	}
 
 	if scene.auto_revive {
 		respawn: Command.Respawn;
@@ -3672,6 +3741,18 @@ update_turn_table :: (scene: Scene, turn_table: *Turn_Table, dt: float32) {
 				it.server.target_direction = direction;
 			}
 		}
+	}
+}
+
+update_camp_ice :: (scene: Scene, camp_ice: *Camp_Ice, dt: float32) {
+	if !camp_ice.has_ice_cube {
+		t := scene.client.clock - camp_ice.cooldown_start;
+		camp_ice.cooldown_start -= dt;
+		if t >= camp_ice.cooldown_time
+			camp_ice.has_ice_cube = true;
+	}
+	if camp_ice.has_ice_cube {
+		camp_ice.cooldown_start = scene.client.clock.(float32);
 	}
 }
 
@@ -5080,6 +5161,18 @@ free :: (terrain: *Terrain) {
 	free(terrain.text);
 }
 
+get_tile :: (scene: Scene, x: V2i) -> *Tile {
+	if x.x < 0 || x.x >= scene.terrain.tiles_count.x
+		return null;
+	if x.y < 0 || x.y >= scene.terrain.tiles_count.y
+		return null;
+
+	tile_index := x.x + x.y * scene.terrain.tiles_count.x;
+	if tile_index < 0 || tile_index >= scene.terrain.tiles.count
+		return null;
+
+	return *scene.terrain.tiles[tile_index];
+}
 tile_under :: (scene: Scene, spot: V3f) -> Tile, bool {
 	terrain := *scene.terrain;
 
@@ -5613,6 +5706,21 @@ BOMB_SPAWNER,
 			it.position.x, it.position.y, it.position.z,
 			it.explosion_time,
 			it.explosion_radius
+		);
+	}
+
+	for * scene.camp_ices {
+		print_to_builder(
+			*sb,
+			#string CAMP_ICE
+camp_ice
+- position: % % %
+- cooldown_time: %
+- has_ice_cube: %
+			CAMP_ICE,
+			it.position.x, it.position.y, it.position.z,
+			it.cooldown_time,
+			it.has_ice_cube
 		);
 	}
 

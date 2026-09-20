@@ -113,6 +113,9 @@ SNOWFLAKES_AND_LIGHTS_MP3_PATH :: "../assets/Sound/Snowflakes and Lights.mp3";
 #insert #run embed_data("BOMB_OBJ", "Mesh/Bomb.obj", #filepath);
 #insert #run embed_data("CRATE_OBJ", "Mesh/Crate.obj", #filepath);
 #insert #run embed_data("GRAVESTONE_OBJ", "Mesh/Gravestone.obj", #filepath);
+#insert #run embed_data("CAMP_ICE_OBJ", "Mesh/camp_ice.obj", #filepath);
+#insert #run embed_data("CAMP_ICE_FULL_OBJ", "Mesh/camp_ice_full.obj", #filepath);
+#insert #run embed_data("ICE_CUBE_OBJ", "Mesh/ice_cube.obj", #filepath);
 
 #insert #run embed_data("TROPHY_OBJ", "trophy.obj", #filepath);
 #insert #run embed_data("JUKEBOX_OBJ", "jukebox.obj", #filepath);
@@ -134,38 +137,38 @@ SNOWFLAKES_AND_LIGHTS_MP3_PATH :: "../assets/Sound/Snowflakes and Lights.mp3";
 #insert #run embed_data("FLAG_OBJ", "flag.obj", #filepath);
 #insert #run embed_data("FLAG_DOWN_OBJ", "flag_down.obj", #filepath);
 
-CLICK_WAV_PATH :: "../assets/Sound/click.wav";
-NOTE_WAV_PATH :: "../assets/Sound/Note.wav";
-FOOTSTEP_SNOW_0_MP3_PATH :: "../assets/Sound/footstep_snow_000.mp3";
-FOOTSTEP_SNOW_1_MP3_PATH :: "../assets/Sound/footstep_snow_001.mp3";
-FOOTSTEP_SNOW_2_MP3_PATH :: "../assets/Sound/footstep_snow_002.mp3";
-FOOTSTEP_SNOW_3_MP3_PATH :: "../assets/Sound/footstep_snow_003.mp3";
-FOOTSTEP_SNOW_4_MP3_PATH :: "../assets/Sound/footstep_snow_004.mp3";
+CLICK_WAV_PATH :: "assets/Sound/click.wav";
+NOTE_WAV_PATH :: "assets/Sound/Note.wav";
+FOOTSTEP_SNOW_0_MP3_PATH :: "assets/Sound/footstep_snow_000.mp3";
+FOOTSTEP_SNOW_1_MP3_PATH :: "assets/Sound/footstep_snow_001.mp3";
+FOOTSTEP_SNOW_2_MP3_PATH :: "assets/Sound/footstep_snow_002.mp3";
+FOOTSTEP_SNOW_3_MP3_PATH :: "assets/Sound/footstep_snow_003.mp3";
+FOOTSTEP_SNOW_4_MP3_PATH :: "assets/Sound/footstep_snow_004.mp3";
 
-FOOTSTEP_ICE_0_MP3_PATH :: "../assets/Sound/impactGlass_medium_000.mp3";
-FOOTSTEP_ICE_1_MP3_PATH :: "../assets/Sound/impactGlass_medium_001.mp3";
-FOOTSTEP_ICE_2_MP3_PATH :: "../assets/Sound/impactGlass_medium_002.mp3";
-FOOTSTEP_ICE_3_MP3_PATH :: "../assets/Sound/impactGlass_medium_003.mp3";
-FOOTSTEP_ICE_4_MP3_PATH :: "../assets/Sound/impactGlass_medium_004.mp3";
+FOOTSTEP_ICE_0_MP3_PATH :: "assets/Sound/impactGlass_medium_000.mp3";
+FOOTSTEP_ICE_1_MP3_PATH :: "assets/Sound/impactGlass_medium_001.mp3";
+FOOTSTEP_ICE_2_MP3_PATH :: "assets/Sound/impactGlass_medium_002.mp3";
+FOOTSTEP_ICE_3_MP3_PATH :: "assets/Sound/impactGlass_medium_003.mp3";
+FOOTSTEP_ICE_4_MP3_PATH :: "assets/Sound/impactGlass_medium_004.mp3";
 
-BOAT_SAILING_0_WAV_PATH :: "../assets/Sound/boat_sailing0.wav";
-BOAT_SAILING_1_WAV_PATH :: "../assets/Sound/boat_sailing1.wav";
-BOAT_SAILING_2_WAV_PATH :: "../assets/Sound/boat_sailing2.wav";
+BOAT_SAILING_0_WAV_PATH :: "assets/Sound/boat_sailing0.wav";
+BOAT_SAILING_1_WAV_PATH :: "assets/Sound/boat_sailing1.wav";
+BOAT_SAILING_2_WAV_PATH :: "assets/Sound/boat_sailing2.wav";
 
-DRONE_BUZZING_0_WAV_PATH :: "../assets/Sound/drone_buzzing0.wav";
+DRONE_BUZZING_0_WAV_PATH :: "assets/Sound/drone_buzzing0.wav";
 
-EXPLOSION_0_MP3_PATH :: "../assets/Sound/explosion0.mp3";
-EXPLOSION_1_MP3_PATH :: "../assets/Sound/explosion1.mp3";
-EXPLOSION_2_MP3_PATH :: "../assets/Sound/explosion2.mp3";
-EXPLOSION_3_MP3_PATH :: "../assets/Sound/explosion3.mp3";
-EXPLOSION_4_MP3_PATH :: "../assets/Sound/explosion4.mp3";
-EXPLOSION_5_MP3_PATH :: "../assets/Sound/explosion5.mp3";
-EXPLOSION_6_MP3_PATH :: "../assets/Sound/explosion6.mp3";
-EXPLOSION_7_MP3_PATH :: "../assets/Sound/explosion7.mp3";
-EXPLOSION_8_MP3_PATH :: "../assets/Sound/explosion8.mp3";
-POINT_UP_MP3_PATH :: "../assets/Sound/point_up.mp3";
+EXPLOSION_0_MP3_PATH :: "assets/Sound/explosion0.mp3";
+EXPLOSION_1_MP3_PATH :: "assets/Sound/explosion1.mp3";
+EXPLOSION_2_MP3_PATH :: "assets/Sound/explosion2.mp3";
+EXPLOSION_3_MP3_PATH :: "assets/Sound/explosion3.mp3";
+EXPLOSION_4_MP3_PATH :: "assets/Sound/explosion4.mp3";
+EXPLOSION_5_MP3_PATH :: "assets/Sound/explosion5.mp3";
+EXPLOSION_6_MP3_PATH :: "assets/Sound/explosion6.mp3";
+EXPLOSION_7_MP3_PATH :: "assets/Sound/explosion7.mp3";
+EXPLOSION_8_MP3_PATH :: "assets/Sound/explosion8.mp3";
+POINT_UP_MP3_PATH :: "assets/Sound/point_up.mp3";
 
-LOSER_MP3_PATH :: "../assets/Sound/loser.mp3";
+LOSER_MP3_PATH :: "assets/Sound/loser.mp3";
 
 #insert #run embed_data("TILE_OBJ", "tile.obj", #filepath);
 #insert #run embed_data("TOMBSTONE_OBJ", "tombstone.obj", #filepath);
@@ -225,21 +228,21 @@ LOSER_MP3_PATH :: "../assets/Sound/loser.mp3";
 #insert #run embed_data("QUAD_WGSL", "Shader/quad.wgsl", #filepath);
 
 
-HORN_CAR_0_MP3_PATH :: "../assets/Sound/horn_car0.mp3";
-HORN_CAR_1_MP3_PATH :: "../assets/Sound/horn_car1.mp3";
-HORN_CAR_2_MP3_PATH :: "../assets/Sound/horn_car2.mp3";
-HORN_CAR_3_MP3_PATH :: "../assets/Sound/horn_car3.mp3";
-HORN_CAR_4_MP3_PATH :: "../assets/Sound/horn_car4.mp3";
-HORN_CAR_5_MP3_PATH :: "../assets/Sound/horn_car5.mp3";
-HORN_CAR_6_MP3_PATH :: "../assets/Sound/horn_car6.mp3";
-HORN_CAR_7_MP3_PATH :: "../assets/Sound/horn_car7.mp3";
-HORN_CAR_8_MP3_PATH :: "../assets/Sound/horn_car8.mp3";
+HORN_CAR_0_MP3_PATH :: "assets/Sound/horn_car0.mp3";
+HORN_CAR_1_MP3_PATH :: "assets/Sound/horn_car1.mp3";
+HORN_CAR_2_MP3_PATH :: "assets/Sound/horn_car2.mp3";
+HORN_CAR_3_MP3_PATH :: "assets/Sound/horn_car3.mp3";
+HORN_CAR_4_MP3_PATH :: "assets/Sound/horn_car4.mp3";
+HORN_CAR_5_MP3_PATH :: "assets/Sound/horn_car5.mp3";
+HORN_CAR_6_MP3_PATH :: "assets/Sound/horn_car6.mp3";
+HORN_CAR_7_MP3_PATH :: "assets/Sound/horn_car7.mp3";
+HORN_CAR_8_MP3_PATH :: "assets/Sound/horn_car8.mp3";
 
-DRIFT_0_MP3_PATH :: "../assets/Sound/drift_0.mp3";
-DRIFT_1_MP3_PATH :: "../assets/Sound/drift_1.mp3";
-CHECKPOINT_OK_MP3_PATH :: "../assets/Sound/checkpoint_ok.mp3";
-RES_MP3_PATH :: "../assets/Sound/res.mp3";
-COIN_LAUNCH_MP3_PATH :: "../assets/Sound/coin_launch.mp3";
+DRIFT_0_MP3_PATH :: "assets/Sound/drift_0.mp3";
+DRIFT_1_MP3_PATH :: "assets/Sound/drift_1.mp3";
+CHECKPOINT_OK_MP3_PATH :: "assets/Sound/checkpoint_ok.mp3";
+RES_MP3_PATH :: "assets/Sound/res.mp3";
+COIN_LAUNCH_MP3_PATH :: "assets/Sound/coin_launch.mp3";
 
 #insert #run embed_data("verdana_csv", "Font/verdana.csv", #filepath);
 
@@ -354,6 +357,9 @@ load_everything :: (platform: Platform) {
 			"BOMB_OBJ",
 			"CRATE_OBJ",
 			"GRAVESTONE_OBJ",
+			"CAMP_ICE_OBJ",
+			"CAMP_ICE_FULL_OBJ",
+			"ICE_CUBE_OBJ",
 			"DRONE_BLADE_OBJ",
 			"TROPHY_OBJ",
 			"NUMBER_0_OBJ",

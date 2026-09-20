@@ -19,6 +19,27 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+            z-index: 1;
+        }
+        #inner-canvas {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 1641px;
+            height: 958px;
+            transform: translate(-50%, -50%);
+            z-index: 0;
+            pointer-events: none;
+        }
+        #outer-border {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 1641px;
+            height: 958px;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            pointer-events: none;
         }
         #loader {
             position: fixed;
@@ -80,6 +101,8 @@
     </style>
 </head>
 <body>
+    <img id="inner-canvas" src="inner_canvas.png" alt="">
+    <img id="outer-border" src="outer_border.png" alt="">
     <div id="loader">
         <div id="loader-label">Loading</div>
         <div id="bar"><span></span></div>

@@ -218,6 +218,13 @@ Command :: struct {
 	Sync_Clock :: struct {
 		t: float64;
 	}
+	Sync_Camp_Ice :: struct {
+		camp_ice_id: int;
+		position: V3f;
+		cooldown_time: float;
+		cooldown_start: float;
+		has_ice_cube: bool;
+	}
 	Sync_Bomb_Spawner :: struct {
 		bomb_spawner_id: int;
 		bomb_spawned_id: int;
@@ -569,7 +576,7 @@ Command :: struct {
 		Ask_List_Terrain, Ans_List_Terrain, Login, Set_Passcode, Get_Profile_Stats, Set_Username,
 		Get_Username, Get_Terrain_Leaderboard, Signal_Pick, Get_Instance_Tab_Stats,
 		Ask_Enter_Quick_Instance, Set_Thumbnail, Get_Thumbnail, Asset_Chunk, Create_Bomberman,
-		Ans_Create_Bomberman, Pickup_Power_Up
+		Ans_Create_Bomberman, Pickup_Power_Up, Sync_Camp_Ice
 	);
 	payload: Payload_t;
 	sent_timestamp: float64;

@@ -782,7 +782,7 @@ build_wasm_2 :: () {
 build_c_lib :: () {
 	run_command(
 		"wsl",
-		"clang",
+		"clang++-18",
 		"-O3",
 		"-g",
 		"-fdeclspec",
@@ -933,7 +933,7 @@ build_2 :: () {
 			"put",
 			"-o",
 			"./assets/Sound/*",
-			"assets/Sound"
+			"www/tackwin/assets/Sound"
 		);
 		run_command(
 			"sftpc",

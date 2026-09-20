@@ -31,8 +31,8 @@ embed_database_default_rosters :: (app: *App) {
 	roster: [] string = .[
 		"Welcome",
 		"Good Intro",
-		"Good Too",
 		"Good Ice",
+		"Good Too",
 		"Good Night",
 		"Good Three",
 		"Good Pounding",

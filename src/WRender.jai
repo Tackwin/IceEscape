@@ -2814,6 +2814,7 @@ render_scene :: (
 		render_lanterns(frame, *frame.shadow, scene, store, *extra);
 		render_turn_tables(frame, *frame.shadow, scene, store, *extra);
 		render_bombs(frame, *frame.shadow, scene, store, *extra);
+		render_camp_ices(frame, *frame.shadow, scene, store, *extra);
 		render_pressbuttons(frame, *frame.shadow, scene, store, *extra);
 		render_jukeboxes(frame, *frame.shadow, scene, store, *extra);
 		render_traps(frame, *frame.shadow, scene, store, *extra);
@@ -3103,6 +3104,7 @@ render_scene :: (
 		render_jukeboxes(frame, *frame.geometry, scene, store, *extra);
 		render_block_rocks(frame, *frame.geometry, scene, store, *extra);
 		render_bombs(frame, *frame.geometry, scene, store, *extra);
+		render_camp_ices(frame, *frame.geometry, scene, store, *extra);
 		render_traps(frame, *frame.geometry, scene, store, *extra);
 		render_explosions(frame, *frame.geometry, scene, store, *extra);
 		render_within_zones(frame, *frame.geometry, scene, store, *extra);
@@ -3643,6 +3645,36 @@ render_turn_tables :: (
 	}
 	if instanced.count > 0
 		commit_geometry(frame, pass, *store.turn_table_turn_model, instanced.count);
+}
+
+render_camp_ices :: (
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+) {
+	instanced := append_instance_buffer(frame);
+	for scene.camp_ices {
+		if it.has_ice_cube
+			continue;
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		instance.texture_rect = .{ 0, 0, 1, 1 };
+	}
+	if instanced.count > 0
+		commit_geometry(frame, pass, *store.camp_ice_model, instanced.count);
+
+	instanced = append_instance_buffer(frame);
+	for scene.camp_ices {
+		if !it.has_ice_cube
+			continue;
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		instance.texture_rect = .{ 0, 0, 1, 1 };
+	}
+	if instanced.count > 0
+		commit_geometry(frame, pass, *store.camp_ice_full_model, instanced.count);
 }
 
 render_bombs :: (

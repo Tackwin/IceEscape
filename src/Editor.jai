@@ -19,6 +19,7 @@ editable_entities_type :: Type.[
 	Scene.Skull,
 	Scene.Spawn,
 	Scene.Bomb_Spawner,
+	Scene.Camp_Ice,
 	Scene.Block_Rock,
 	Scene.Present,
 	Scene.PressButton,

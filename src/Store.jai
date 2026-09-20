@@ -22,6 +22,7 @@ Colormaps_Rect :: struct {
 	watercraft :: V4f.{ 2 / 4.0, 2 / 4.0, 1 / 4.0, 1 / 4.0 };
 	down_arrow :: V4f.{ 3 / 4.0, 3 / 4.0, 1 / 4.0, 1 / 4.0 };
 	safe_zone  :: V4f.{ 3 / 4.0, 2 / 4.0, 1 / 4.0, 1 / 4.0 };
+	camp_ice   :: V4f.{ 1 / 4.0, 2 / 4.0, 1 / 4.0, 1 / 4.0 };
 }
 
 
@@ -101,6 +102,9 @@ Store :: struct #type_info_none {
 	bomb_model: WRender.Model;
 	crate_model: WRender.Model;
 	gravestone_model: WRender.Model;
+	camp_ice_model: WRender.Model;
+	camp_ice_full_model: WRender.Model;
+	ice_cube_model: WRender.Model;
 	mark_model: WRender.Model;
 	gate_model: WRender.Model;
 	gate_close_model: WRender.Model;
@@ -731,13 +735,13 @@ poll_data_fetches :: (platform: Platform.Platform, store: *Store) {
 				cursor += 1;
 				// keep
 			case .Ready;
-				read_data: [] u8;
-				read_data.data = store.data.data + store.data.count;
-				read_data.count = xx status.bytes_read;
 				if store.data.allocated < store.data.count + status.bytes_read {
 					min_cap := max(store.data.allocated * 2, store.data.count + status.bytes_read);
 					array_reserve(*store.data, min_cap);
 				}
+				read_data: [] u8;
+				read_data.data = store.data.data + store.data.count;
+				read_data.count = xx status.bytes_read;
 				array_resize(*store.data, store.data.count + status.bytes_read);
 				platform.poll(it.ref, read_data);
 				load_ready_audio(platform, store, it.key, read_data);
@@ -842,6 +846,9 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.bomb_model = WRender.Model.make_from_obj(Assets.BOMB_OBJ, "bomb");
 	store.crate_model = WRender.Model.make_from_obj(Assets.CRATE_OBJ, "crate");
 	store.gravestone_model = WRender.Model.make_from_obj(Assets.GRAVESTONE_OBJ, "gravestone");
+	store.camp_ice_model = WRender.Model.make_from_obj(Assets.CAMP_ICE_OBJ, "camp_ice");
+	store.camp_ice_full_model = WRender.Model.make_from_obj(Assets.CAMP_ICE_FULL_OBJ, "camp_ice_full");
+	store.ice_cube_model = WRender.Model.make_from_obj(Assets.ICE_CUBE_OBJ, "ice_cube");
 	store.mark_model = WRender.Model.make_from_obj(Assets.MARK_OBJ, "mark");
 	store.gate_model = WRender.Model.make_from_obj(Assets.GATE_OBJ, "gate");
 	store.gate_close_model = WRender.Model.make_from_obj(Assets.GATE_CLOSE_OBJ, "gate_close");

@@ -762,6 +762,37 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 			cursor -= 1;
 		}
 
+		if scan2(line, "camp_ice") {
+			camp_ice: Camp_Ice;
+			camp_ice.id = scene.camp_ices.count + 1;
+			defer array_add(*scene.camp_ices, camp_ice);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *camp_ice.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+				if scan2(line, "- has_ice_cube: %", *camp_ice.has_ice_cube)
+					continue;
+				if scan2(line, "- cooldown_time: %", *camp_ice.cooldown_time)
+					continue;
+
+				print("Error reading camp_ice, unrecognized line: % (L%)\n", line, cursor);
+			}
+		}
+
 		if scan2(line, "bomb_spawner") {
 			bomb_spawner: Bomb_Spawner;
 			bomb_spawner.id = scene.bomb_spawners.count + 1;
