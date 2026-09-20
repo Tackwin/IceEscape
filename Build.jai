@@ -738,8 +738,8 @@ build_wasm_2 :: () {
 
 	STACK_SIZE :: 16 * 1024 * 1024;
 	opts.additional_linker_arguments = .[
-		tprint("--initial-memory=%", 1024*1024*1024),
-		tprint("--max-memory=%", 1024*1024*1024),
+		tprint("--initial-memory=%", 2*1024*1024*1024),
+		tprint("--max-memory=%", 2*1024*1024*1024),
 		"--import-memory",
 		"--shared-memory",
 		"--export-memory",
@@ -926,6 +926,14 @@ build_2 :: () {
 			"-o",
 			"./web/*",
 			"www/tackwin"
+		);
+		run_command(
+			"sftpc",
+			"-profile=tools/ssh.tlp",
+			"put",
+			"-o",
+			"./assets/Sound/*",
+			"assets/Sound"
 		);
 		run_command(
 			"sftpc",

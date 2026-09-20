@@ -57,7 +57,7 @@ const fetch_with_progress = async (url, options) => {
 const boot_game = async () => {
 	audio_context = new AudioContext();
 	try {
-		await initialize_wasm_module(GAME_WASM, 1024 * 16);
+		await initialize_wasm_module(GAME_WASM, 1024 * 32);
 	} catch (err) {
 		set_loader_progress(1, "Failed to load");
 		console.error(err);
@@ -74,13 +74,13 @@ const create_fullscreen_canvas = (text) => {
     canvas.style.top       = "50%";
     canvas.style.transform = "translate(-50%, -50%)";
     document.body.appendChild(canvas);
-    
+
     const ctx = canvas.getContext("2d");
     ctx.fillStyle    = "white";
     ctx.font         = "60px Georgia";
     ctx.textAlign    = "center";
     ctx.textBaseline = "middle";
-    
+
     const lines = text.split("\n");
     const line_height  = 70;
     const total_height = lines.length * line_height;
@@ -110,7 +110,7 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
             },
         }),
     };
-    
+
     const wasm_url = module_path + (module_path.indexOf("?") >= 0 ? "&" : "?") + "nocache=" + Date.now();
     const wasm_data = await fetch_with_progress(wasm_url, { cache: "no-store" });
 	set_loader_progress(1, "Starting");
@@ -139,7 +139,7 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 	jai_context = jai_exports.wasm_get_main_context();
 	await init();
 	hide_loader();
-	
+
 	const worker = new Worker("worker.js", { type: "module" });
 
 	worker.onmessage = async e => {
@@ -266,7 +266,7 @@ jai_imports.js_to_calendar = (time_low, time_high, out) => {
 	const minute = date.getMinutes();
 	const second = date.getSeconds();
 	const millisecond = date.getMilliseconds();
-	
+
 	setU32(out, 0, year);
 	setU8(out, 4, month0Indexed);
 	setU8(out, 5, dayMonth);
@@ -595,7 +595,7 @@ const blobToAudioBuffer = async (blob) => {
 	return await audio_context.decodeAudioData(buffer);
 }
 
-let promise_ticket_counter = 0;
+let promise_ticket_counter = 1;
 const promise_tickets = new Map();
 
 jai_imports.js_wait = new WebAssembly.Suspending(ticket => {
@@ -608,6 +608,75 @@ jai_imports.js_wait = new WebAssembly.Suspending(ticket => {
 	});
 	return promise;
 });
+
+const data_fetches = new Map();
+const DATA_PENDING = 1;
+const DATA_READY = 2;
+const DATA_FAILED = 3;
+
+jai_imports.js_fetch_data = (path_ptr, path_len) => {
+	const path = getStringX(path_ptr, path_len);
+	const ticket = promise_ticket_counter;
+	promise_ticket_counter += 1;
+	const entry = {
+		status: DATA_PENDING,
+		buffer: null,
+		offset: 0,
+	};
+	data_fetches.set(ticket, entry);
+
+	const promise = fetch(path, { cache: "no-store" })
+		.then(response => {
+			if (!response.ok) {
+				throw new Error("Failed to fetch " + path + " (" + response.status + ")");
+			}
+			return response.arrayBuffer();
+		})
+		.then(buffer => {
+			entry.buffer = new Uint8Array(buffer);
+			entry.status = DATA_READY;
+		})
+		.catch(error => {
+			console.error("Failed to fetch asset " + path, error);
+			entry.status = DATA_FAILED;
+		});
+	promise_tickets.set(ticket, promise);
+	return ticket;
+};
+
+jai_imports.js_poll_data = (ticket, destination_ptr, capacity, bytes_read_ptr) => {
+	const entry = data_fetches.get(Number(ticket));
+	if (!entry) {
+		setU64(bytes_read_ptr, 0, 0n);
+		return 0;
+	}
+	if (entry.status === DATA_PENDING) {
+		setU64(bytes_read_ptr, 0, 0n);
+		return DATA_PENDING;
+	}
+	if (entry.status === DATA_FAILED) {
+		data_fetches.delete(Number(ticket));
+		setU64(bytes_read_ptr, 0, 0n);
+		return DATA_FAILED;
+	}
+
+	const remaining = entry.buffer.byteLength - entry.offset;
+	if (Number(destination_ptr) === 0 || Number(capacity) === 0) {
+		setU64(bytes_read_ptr, 0, BigInt(remaining));
+		if (remaining === 0) data_fetches.delete(Number(ticket));
+		return DATA_READY;
+	}
+
+	const count = Math.min(Number(capacity), remaining);
+	if (count > 0) {
+		const destination = new Uint8Array(jai_exports.memory.buffer, Number(destination_ptr), count);
+		destination.set(entry.buffer.subarray(entry.offset, entry.offset + count));
+		entry.offset += count;
+	}
+	setU64(bytes_read_ptr, 0, BigInt(count));
+	if (entry.offset >= entry.buffer.byteLength) data_fetches.delete(Number(ticket));
+	return DATA_READY;
+};
 
 jai_imports.js_load_audio = (params_ptr) => {
 	const data = getU64(params_ptr, 0);
@@ -645,7 +714,7 @@ const js_play_audio = (params) => {
 	const exponent = params.exponent;
 	const delay = params.delay;
 	const sound_id = params.sound_id;
-	
+
 	const buffer = audio_id_to_buffer[id];
 	if (!buffer) {
 		return;
@@ -655,7 +724,7 @@ const js_play_audio = (params) => {
 	source.buffer = buffer;
 	source.loop = loop;
 	source.playbackRate.value = Math.pow(2, pitch / 12);
-	
+
 	if (master_gain === null) {
 		master_gain = audio_context.createGain();
 		master_gain.connect(audio_context.destination);
@@ -678,7 +747,7 @@ const js_play_audio = (params) => {
 		panner.maxDistance = 1000;
 		panner.rolloffFactor = exponent;
 		panner.setPosition(x, y, z);
-		
+
 		source.connect(gainNode);
 		gainNode.connect(panner);
 		panner.connect(master_gain);
@@ -687,9 +756,9 @@ const js_play_audio = (params) => {
 		source.connect(gainNode);
 		gainNode.connect(master_gain);
 	}
-	
+
 	source.start(delay / 1000);
-	
+
 	sound_id_to_sound[sound_id] = {
 		source,
 		gainNode,
@@ -697,7 +766,7 @@ const js_play_audio = (params) => {
 		audio_id: id,
 	};
 	sound_id_to_state[sound_id] = SOUND_PLAYING;
-	
+
 	source.onended = () => {
 		delete sound_id_to_sound[sound_id];
 		sound_id_to_state[sound_id] = SOUND_STOPPED;
@@ -713,7 +782,7 @@ const js_set_sound = (params) => {
 	let source = sound.source;
 	let gainNode = sound.gainNode;
 	let panner = sound.panner;
-	
+
 	if (panner) {
 		panner.positionX.value = params.x;
 		panner.positionY.value = params.y;
@@ -1308,7 +1377,7 @@ const getU64 = (ptr, offset) => {
 	} catch {
 		data_view = new DataView(jai_exports.memory.buffer);
 	}
-	
+
 	return data_view.getBigUint64(Number(ptr) + Number(offset), true);
 }
 const getU32 = (ptr, offset) => {
@@ -1648,12 +1717,12 @@ jai_imports.jsAdapterRequestDevice = new WebAssembly.Suspending(
 			console.error("WebGPU device lost:", info);
 		});
 		device_used = device;
-		
+
 		object_map_counter += 1;
 		object_map[object_map_counter] = device;
 
 		const device_idx = object_map_counter;
-		
+
 		device.addEventListener('uncapturederror', event => {
 			console.error("WebGPU uncaptured error:", event.error);
 			const userData1 = uncapturedExceptionsUserData1;
@@ -1827,7 +1896,7 @@ jai_imports.jsMyGpuToCpu = new WebAssembly.Suspending(async (params_ptr, returns
 	if (instance_idx <= 0) {
 		return;
 	}
-	
+
 	const instance = object_map[instance_idx];
 
 	const buffer_idx = getU64(params_ptr, 8);
@@ -1844,7 +1913,7 @@ jai_imports.jsMyGpuToCpu = new WebAssembly.Suspending(async (params_ptr, returns
 	}
 
 	await buffer.mapAsync(GPUMapMode.READ);
-	
+
 	try {
 		const arrayBuffer = buffer.getMappedRange(0, Number(cpu_buffer_size));
 		new Uint8Array(
@@ -1920,12 +1989,12 @@ jai_imports.jsDeviceCreateCommandEncoder = (params_ptr, returns_ptr) => {
 	if (device_idx <= 0) {
 		return;
 	}
-	
+
 	const device = object_map[device_idx];
 	if (!device) {
 		return;
 	}
-	
+
 	const descriptor_ptr = getU64(params_ptr, 8);
 	const label_ptr = descriptor_ptr > 0 ? getU64(descriptor_ptr, 8) : 0;
 	const label = label_ptr > 0 ? getString(label_ptr) : "default-command-encoder-label";
@@ -2175,13 +2244,13 @@ jai_imports.jsSurfaceConfigure = (params_ptr, returns_ptr) => {
 	// In WebGPU, the "surface" is just the canvas element
 	object_map_counter += 1;
 	object_map[object_map_counter] = surface.getContext('webgpu');
-	
+
 	// Configure the context
 	const configre = getSurfaceConfiguration(descriptor_ptr);
 	if (!configre) {
 		return;
 	}
-	
+
 	surface.getContext("webgpu").configure(configre);
 	// surface.width = configre.width;
 	// surface.height = configre.height;
@@ -2267,7 +2336,7 @@ const getVertexState = (ptr) => {
 		cursor += 8;
 		const attributes_ptr = getU64(buffers_ptr, cursor);
 		cursor += 8;
-		
+
 		const attributes = [];
 		let attr_cursor = 0;
 		for (let j = 0; j < attributeCount; j++) {
@@ -2410,7 +2479,7 @@ const getMultisampleState = (ptr) => {
 	const count = getU32(ptr, 8);
 	const mask = getU32(ptr, 12);
 	const alphaToCoverageEnabled = getU32(ptr, 16);
-	
+
 	return {
 		count,
 		mask,
@@ -2540,7 +2609,7 @@ const getRenderPassColorAttachment = (ptr) => {
 	if (!view) {
 		return null;
 	}
-	
+
 	const resolveTarget = resolveTarget_idx != 0 ? object_map[resolveTarget_idx] : undefined;
 	if (resolveTarget_idx != 0 && !resolveTarget) {
 		return null;
@@ -2581,7 +2650,7 @@ const getRenderPassDepthStencilAttachment = (ptr) => {
 	if (!view) {
 		return null;
 	}
-	
+
 	let jsDepthLoadOp = convertLoadOpToJs(_depthLoadOp);
 	let jsDepthStoreOp = convertStoreOpToJs(_depthStoreOp);
 
@@ -2636,7 +2705,7 @@ jai_imports.jsCommandEncoderBeginRenderPass = (params_ptr, returns_ptr) => {
 		colorAttachments.push(attachment);
 		cursor += 72;
 	}
-	
+
 	let depthStencilAttachment = undefined;
 	if (depthStencilAttachment_ptr != 0) {
 		depthStencilAttachment = getRenderPassDepthStencilAttachment(depthStencilAttachment_ptr);
@@ -2645,7 +2714,7 @@ jai_imports.jsCommandEncoderBeginRenderPass = (params_ptr, returns_ptr) => {
 			return;
 		}
 	}
-	
+
 	// const occlusionQuerySet = occlusionQuerySet_idx != 0 ? object_map[occlusionQuerySet_idx] : undefined;
 
 	const jsDescriptor = {
@@ -2656,7 +2725,7 @@ jai_imports.jsCommandEncoderBeginRenderPass = (params_ptr, returns_ptr) => {
 	};
 
 	const pass = encoder.beginRenderPass(jsDescriptor);
-	
+
 	object_map_counter += 1;
 	object_map[object_map_counter] = pass;
 	setU64(returns_ptr, 0, object_map_counter);
@@ -2737,7 +2806,7 @@ jai_imports.jsSurfaceGetCurrentTexture = (params_ptr, returns_ptr) => {
 	if (surface_idx <= 0) {
 		return;
 	}
-	
+
 	const surface = object_map[surface_idx];
 	if (!surface) {
 		return;
@@ -2747,11 +2816,11 @@ jai_imports.jsSurfaceGetCurrentTexture = (params_ptr, returns_ptr) => {
 	if (!texture) {
 		return;
 	}
-	
+
 	object_map_counter += 1;
 	object_map[object_map_counter] = texture;
 	const texture_idx = object_map_counter;
-	
+
 	setU64(returns_ptr, 0, texture_idx);
 }
 
@@ -2789,7 +2858,7 @@ const getTexureViewDescriptor = (ptr) => {
 	}
 
 	let jsDimension = convertTextureViewDimensionToJs(dimension);
-	
+
 	let jsAspect = "all";
 	if (aspect == WGPUTextureAspect_StencilOnly)
 		jsAspect = "stencil-only";
@@ -2821,7 +2890,7 @@ jai_imports.jsTextureCreateView = (params_ptr, returns_ptr) => {
 	if (!texture) {
 		return;
 	}
-	
+
 	let jsDescriptor = undefined;
 	const descriptor_ptr = getU64(params_ptr, 8);
 	if (descriptor_ptr != 0) {
@@ -2839,7 +2908,7 @@ jai_imports.jsTextureViewRelease = (params_ptr, returns_ptr) => {
 	if (view_idx <= 0) {
 		return;
 	}
-	
+
 	object_map[view_idx] = null;
 }
 
@@ -2857,7 +2926,7 @@ jai_imports.jsSurfacePresent = (params_ptr, returns_ptr) => {
 	// if (surface_idx <= 0) {
 	// 	return;
 	// }
-	
+
 	// const surface = object_map[surface_idx];
 	// if (!surface) {
 	// 	return;
@@ -2868,7 +2937,7 @@ jai_imports.jsSurfacePresent = (params_ptr, returns_ptr) => {
 	// 	const render_and_resume = () => {
 	// 		wasm_resume(1);
 	// 	};
-		
+
 	// 	if (vsync) requestAnimationFrame(render_and_resume);
 	// 	else       setTimeout(render_and_resume, 0);
 	// }
@@ -2880,12 +2949,12 @@ jai_imports.jsTextureGetFormat = (params_ptr, returns_ptr) => {
 	if (texture_idx <= 0) {
 		return;
 	}
-	
+
 	const texture = object_map[texture_idx];
 	if (!texture) {
 		return;
 	}
-	
+
 	const format = textureFormatReverseConvert(texture.format);
 	setU32(returns_ptr, 0, format);
 }
@@ -2952,7 +3021,7 @@ const getBindGroupLayoutEntry = (ptr) => {
 	let obj = {};
 	obj.binding = binding;
 	obj.visibility = Number(visibility);
-	
+
 	obj.buffer = undefined;
 	if (bufferType != 0) {
 		obj.buffer = {
@@ -2961,14 +3030,14 @@ const getBindGroupLayoutEntry = (ptr) => {
 			minBindingSize: minBindingSize
 		};
 	}
-	
+
 	obj.sampler = undefined;
 	if (samplerRaw != 0) {
 		obj.sampler = {
 			type: convertSamplerBindingTypeToJs(samplerRaw)
 		};
 	}
-	
+
 	obj.texture = undefined;
 	if (textureSampleTypeRaw != 0) {
 		obj.texture = {
@@ -2977,7 +3046,7 @@ const getBindGroupLayoutEntry = (ptr) => {
 			multisampled: textureMultisampled != 0
 		};
 	}
-	
+
 	obj.storageTexture = undefined;
 	if (storageTextureAccess != 0 && storageTextureFormatRaw != 0) {
 		obj.storageTexture = {
@@ -2995,7 +3064,7 @@ jai_imports.jsDeviceCreateBindGroupLayout = (params_ptr, returns_ptr) => {
 	if (device_idx <= 0) {
 		return;
 	}
-	
+
 	const descriptor_ptr = getU64(params_ptr, 8);
 	if (descriptor_ptr == 0) {
 		return;
@@ -3022,7 +3091,7 @@ jai_imports.jsDeviceCreateBindGroupLayout = (params_ptr, returns_ptr) => {
 		label,
 		entries
 	});
-	
+
 	setU64(returns_ptr, 0, object_map_counter);
 }
 
@@ -3082,7 +3151,7 @@ jai_imports.jsDeviceCreateBindGroup = (params_ptr, returns_ptr) => {
 	if (device_idx <= 0) {
 		return;
 	}
-	
+
 	const descriptor_ptr = getU64(params_ptr, 8);
 	if (descriptor_ptr == 0) {
 		return;
@@ -3097,12 +3166,12 @@ jai_imports.jsDeviceCreateBindGroup = (params_ptr, returns_ptr) => {
 	const layout_idx = getU64(descriptor_ptr, 24);
 	const entryCount = getU64(descriptor_ptr, 32);
 	const entries_ptr = getU64(descriptor_ptr, 40);
-	
+
 	const layout = object_map[layout_idx];
 	if (!layout) {
 		return;
 	}
-	
+
 	const entries = [];
 	let cursor = 0;
 	for (let i = 0; i < entryCount; i++) {
@@ -3112,7 +3181,7 @@ jai_imports.jsDeviceCreateBindGroup = (params_ptr, returns_ptr) => {
 		}
 		cursor += 56;
 	}
-	
+
 	object_map_counter += 1;
 	object_map[object_map_counter] = device.createBindGroup({
 		label,
@@ -3136,7 +3205,7 @@ jai_imports.jsRenderPipelineGetBindGroupLayout = (params_ptr, returns_ptr) => {
 	if (pipeline_idx <= 0) {
 		return;
 	}
-	
+
 	const index = getU32(params_ptr, 8);
 
 	const pipeline = object_map[pipeline_idx];
@@ -3251,7 +3320,7 @@ jai_imports.jsDeviceCreateTexture = (params_ptr, returns_ptr) => {
 	if (device_idx <= 0) {
 		return;
 	}
-	
+
 	const descriptor_ptr = getU64(params_ptr, 8);
 	if (descriptor_ptr == 0) {
 		return;
@@ -3304,7 +3373,7 @@ jai_imports.jsDeviceCreateTexture = (params_ptr, returns_ptr) => {
 		usage: Number(usage),
 		viewFormats
 	};
-	
+
 	object_map_counter += 1;
 	object_map[object_map_counter] = device.createTexture(jsDescriptor);
 	setU64(returns_ptr, 0, object_map_counter);
@@ -3324,7 +3393,7 @@ jai_imports.jsDeviceCreateSampler = (params_ptr, returns_ptr) => {
 	if (device_idx <= 0) {
 		return;
 	}
-	
+
 	const descriptor_ptr = getU64(params_ptr, 8);
 	if (descriptor_ptr == 0) {
 		return;
@@ -3428,7 +3497,7 @@ jai_imports.jsDeviceCreatePipelineLayout = (params_ptr, returns_ptr) => {
 		label,
 		bindGroupLayouts
 	});
-	
+
 	setU64(returns_ptr, 0, object_map_counter);
 }
 
@@ -3463,5 +3532,3 @@ jai_imports.jsRenderPassEncoderSetViewport = (params_ptr, returns_ptr) => {
 }
 
 boot_game();
-
-

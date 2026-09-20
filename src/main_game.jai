@@ -314,8 +314,9 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	app_user.graphics.gpu = _app.platform.gpu;
 	Remap_Context();
 	auto_release_temp();
+	poll_data_fetches(_app.platform.*, *app_user.store);
 
-	
+
 	app_user.framegraph.settings.light_enabled = app_user.state.light_enabled;
 	app_user.framegraph.settings.render_shadows = app_user.state.shadows_enabled;
 	app_user.framegraph.settings.render_props = app_user.state.props_enabled;
@@ -448,7 +449,7 @@ State :: struct {
 	history_app_render_loop_dt: [300] float;
 	history_app_render_cursor := 0;
 	render_loop_timestamp: Apollo_Time;
-	
+
 	render_fps := false;
 	render_command_debug := false;
 	filter_command_debug: [#run enum_highest_value(Command.payload.Kind) + 1] bool;

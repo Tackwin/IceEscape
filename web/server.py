@@ -2,11 +2,24 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import socket
 import select
 import time
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 # Fake latency in seconds for WebSocket proxy (0 = no latency)
 FAKE_LATENCY = 0.0
+ASSET_ROOT = (Path(__file__).resolve().parent.parent / "assets").resolve()
 
 class COOPHandler(SimpleHTTPRequestHandler):
+    def translate_path(self, path):
+        parsed_path = urlsplit(path).path
+        if parsed_path == "/assets" or parsed_path.startswith("/assets/"):
+            relative = unquote(parsed_path[len("/assets/"):])
+            candidate = (ASSET_ROOT / relative).resolve()
+            if candidate != ASSET_ROOT and ASSET_ROOT not in candidate.parents:
+                return str(ASSET_ROOT / "__missing_asset__")
+            return str(candidate)
+        return super().translate_path(path)
+
     def end_headers(self):
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Embedder-Policy", "require-corp")

@@ -19,6 +19,20 @@ Process_Status :: enum s32 {
 	Exited;
 }
 
+Data_State :: enum s32 {
+	Invalid;
+	Pending;
+	Ready;
+	Failed;
+}
+
+Data_Status :: struct {
+	status: Data_State;
+	// With a valid destination this is the number of bytes copied. With an
+	// empty or null destination this is the number of bytes available.
+	bytes_read: s64;
+}
+
 Key :: enum s32 {
 	A :: 0;
 	B;
@@ -572,6 +586,7 @@ quit_database :: (platform: *Platform, handle: DB_query.Handle) {
 Platform :: struct {
 	extern_ref :: s32;
 	wait: #type (promise: extern_ref) = null;
+	poll: #type (promise: extern_ref, data: [] u8) -> Data_Status = null;
 
 	gpu: GPU_proc;
 
@@ -596,7 +611,8 @@ Platform :: struct {
 	sleep: #type (ms: int) =null;
 
 	set_listener_info: #type (listener: Listener) = null;
-	load_audio: #type (data: string, compressed: bool, out: *Audio) -> extern_ref = null;
+	fetch_data: #type (path: string) -> extern_ref = null;
+	load_audio: #type (data: [] u8, compressed: bool, out: *Audio) -> extern_ref = null;
 	play_audio: #type (audio: Audio, position: V3f) -> Sound = null;
 	set_sound: #type (sound: Sound) = null;
 
@@ -617,6 +633,16 @@ Platform :: struct {
 	join: #type (thread_id: int) = null;
 
 	allocator: Allocator;
+}
+
+fetch_data :: (platform: *Platform, path: string) -> Platform.extern_ref {
+	if platform.fetch_data == null return 0;
+	return platform.fetch_data(path);
+}
+
+poll :: (platform: *Platform, promise: Platform.extern_ref, data: [] u8) -> Data_Status {
+	if platform.poll == null return .{ status = .Invalid };
+	return platform.poll(promise, data);
 }
 
 create_process :: (platform: *Platform, path: string) -> Platform.extern_ref {

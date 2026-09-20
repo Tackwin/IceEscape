@@ -169,8 +169,34 @@ Audio_Command :: struct {
 audio_commands: [] Audio_Command;
 audio_command_cursor: *s64;
 
+wasm_fetch_data :: (path: string) -> Platform.extern_ref {
+	js_fetch_data :: (path_data: *void, path_count: s64) -> Platform.extern_ref #foreign;
+	return js_fetch_data(path.data, xx path.count);
+}
+
+wasm_poll_data :: (
+	ref: Platform.extern_ref,
+	data: [] u8
+) -> Data_Status {
+	js_poll_data :: (
+		ref: Platform.extern_ref,
+		destination: *void,
+		capacity: s64,
+		bytes_read: *s64
+	) -> s32 #foreign;
+
+	result: Data_Status;
+	result.status = xx js_poll_data(
+		ref,
+		cast(*void) data.data,
+		xx data.count,
+		*result.bytes_read
+	);
+	return result;
+}
+
 audio_generation := 0;
-load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_ref {
+load_audio :: (data: [] u8, compressed: bool, out: *Audio) -> Platform.extern_ref {
 	audio_generation += 1;
 
 	Params :: struct {
@@ -187,6 +213,7 @@ load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_r
 	params.id = audio_generation;
 
 	out.id = audio_generation;
+	out.loaded = true;
 	ret := js_load_audio(*params);
 	return ret;
 }
@@ -198,6 +225,13 @@ wasm_wait :: (promise: Platform.extern_ref) {
 
 sound_generation := 0;
 play_audio :: (audio: Audio, position: V3f) -> Sound {
+	if !audio.loaded {
+		sound: Sound;
+		sound.id = -1;
+		sound.audio_id = audio.id;
+		return sound;
+	}
+
 	sound_generation += 1;
 	sound: Sound;
 	sound.audio_id = audio.id;
@@ -225,6 +259,8 @@ play_audio :: (audio: Audio, position: V3f) -> Sound {
 	return sound;
 }
 set_sound :: (sound: Sound) {
+	if sound.id < 0 return;
+
 	audio_command_cursor.* += 1;
 	cmd := *audio_commands[(audio_command_cursor.* - 1) % audio_commands.count];
 	cmd.kind = .Set;
@@ -317,6 +353,8 @@ init_platform :: () -> Platform {
 	platform.send_web_message = send_web_message;
 	platform.get_token = get_token;
 	platform.set_token = set_token;
+	platform.fetch_data = wasm_fetch_data;
+	platform.poll = wasm_poll_data;
 	platform.load_audio = load_audio;
 	platform.wait = wasm_wait;
 	platform.play_audio = play_audio;
@@ -341,7 +379,7 @@ init_platform :: () -> Platform {
 }
 
 exit_platform :: (platform: Platform) {
-	
+
 }
 
 get_token :: () -> int {
@@ -403,31 +441,31 @@ get_type_name :: (info: *Type_Info) -> string {
         case .VOID;
             return "void";
     }
-    
+
     return "unknown_type";
 }
 
 header_proc :: (info: *Type_Info_Procedure) -> string {
     sb: String_Builder;
-    
+
     // Start with opening parenthesis
     append(*sb, "(");
-    
+
     // Add arguments
     for i: 0..info.argument_types.count-1 {
         if i > 0 append(*sb, ", ");
-        
+
         // Add argument type
         type_name := get_type_name(info.argument_types[i]);
         append(*sb, type_name);
     }
-    
+
     append(*sb, ")");
-    
+
     // Add return type if present
     if info.return_types.count > 0 {
         append(*sb, " -> ");
-        
+
         if info.return_types.count == 1 {
             type_name := get_type_name(info.return_types[0]);
             append(*sb, type_name);
@@ -442,7 +480,7 @@ header_proc :: (info: *Type_Info_Procedure) -> string {
             append(*sb, ")");
         }
     }
-    
+
     return builder_to_string(*sb);
 }
 
@@ -1347,7 +1385,7 @@ update_thread_temporary_storage_data: [TEMPORARY_STORAGE_SIZE] u8 #align 64;
 	Main_Game.app_update_loop(*app);
 }
 
-// We expose malloc to just use the default allocator with a fresh context so that our c code 
+// We expose malloc to just use the default allocator with a fresh context so that our c code
 // has a usable malloc/realloc/free it can use whenever it wants and you can't accidentaly
 // malloc something with temporary storage as that's not something you can do on other platforms (yet?)
 ptr_to_size: Table(*void, s64);

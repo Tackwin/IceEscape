@@ -84,7 +84,7 @@ FORMAT;
 #insert #run embed_data("PARTICLE_VERTEX", "Shader/particles.vert", #filepath);
 #insert #run embed_data("PARTICLE_FRAGMENT", "Shader/particles.frag", #filepath);
 
-#insert #run embed_data("SNOWFLAKES_AND_LIGHTS_MP3", "Sound/Snowflakes and Lights.mp3", #filepath);
+SNOWFLAKES_AND_LIGHTS_MP3_PATH :: "../assets/Sound/Snowflakes and Lights.mp3";
 
 #insert #run embed_data("VEHICLE_RACER_OBJ", "Mesh/Vehicle_Racer.obj", #filepath);
 #insert #run embed_data("VEHICLE_SUV_OBJ", "Mesh/Vehicle_Suv.obj", #filepath);
@@ -134,39 +134,38 @@ FORMAT;
 #insert #run embed_data("FLAG_OBJ", "flag.obj", #filepath);
 #insert #run embed_data("FLAG_DOWN_OBJ", "flag_down.obj", #filepath);
 
-#insert #run embed_data("CLICK_WAV", "click.wav", #filepath);
+CLICK_WAV_PATH :: "../assets/Sound/click.wav";
+NOTE_WAV_PATH :: "../assets/Sound/Note.wav";
+FOOTSTEP_SNOW_0_MP3_PATH :: "../assets/Sound/footstep_snow_000.mp3";
+FOOTSTEP_SNOW_1_MP3_PATH :: "../assets/Sound/footstep_snow_001.mp3";
+FOOTSTEP_SNOW_2_MP3_PATH :: "../assets/Sound/footstep_snow_002.mp3";
+FOOTSTEP_SNOW_3_MP3_PATH :: "../assets/Sound/footstep_snow_003.mp3";
+FOOTSTEP_SNOW_4_MP3_PATH :: "../assets/Sound/footstep_snow_004.mp3";
 
-#insert #run embed_data("NOTE_WAV", "Sound/Note.wav", #filepath);
-#insert #run embed_data("FOOTSTEP_SNOW_0_MP3", "Sound/footstep_snow_000.mp3", #filepath);
-#insert #run embed_data("FOOTSTEP_SNOW_1_MP3", "Sound/footstep_snow_001.mp3", #filepath);
-#insert #run embed_data("FOOTSTEP_SNOW_2_MP3", "Sound/footstep_snow_002.mp3", #filepath);
-#insert #run embed_data("FOOTSTEP_SNOW_3_MP3", "Sound/footstep_snow_003.mp3", #filepath);
-#insert #run embed_data("FOOTSTEP_SNOW_4_MP3", "Sound/footstep_snow_004.mp3", #filepath);
+FOOTSTEP_ICE_0_MP3_PATH :: "../assets/Sound/impactGlass_medium_000.mp3";
+FOOTSTEP_ICE_1_MP3_PATH :: "../assets/Sound/impactGlass_medium_001.mp3";
+FOOTSTEP_ICE_2_MP3_PATH :: "../assets/Sound/impactGlass_medium_002.mp3";
+FOOTSTEP_ICE_3_MP3_PATH :: "../assets/Sound/impactGlass_medium_003.mp3";
+FOOTSTEP_ICE_4_MP3_PATH :: "../assets/Sound/impactGlass_medium_004.mp3";
 
-#insert #run embed_data("FOOTSTEP_ICE_0_MP3", "Sound/impactGlass_medium_000.mp3", #filepath);
-#insert #run embed_data("FOOTSTEP_ICE_1_MP3", "Sound/impactGlass_medium_001.mp3", #filepath);
-#insert #run embed_data("FOOTSTEP_ICE_2_MP3", "Sound/impactGlass_medium_002.mp3", #filepath);
-#insert #run embed_data("FOOTSTEP_ICE_3_MP3", "Sound/impactGlass_medium_003.mp3", #filepath);
-#insert #run embed_data("FOOTSTEP_ICE_4_MP3", "Sound/impactGlass_medium_004.mp3", #filepath);
+BOAT_SAILING_0_WAV_PATH :: "../assets/Sound/boat_sailing0.wav";
+BOAT_SAILING_1_WAV_PATH :: "../assets/Sound/boat_sailing1.wav";
+BOAT_SAILING_2_WAV_PATH :: "../assets/Sound/boat_sailing2.wav";
 
-#insert #run embed_data("BOAT_SAILING_0_WAV", "Sound/boat_sailing0.wav", #filepath);
-#insert #run embed_data("BOAT_SAILING_1_WAV", "Sound/boat_sailing1.wav", #filepath);
-#insert #run embed_data("BOAT_SAILING_2_WAV", "Sound/boat_sailing2.wav", #filepath);
+DRONE_BUZZING_0_WAV_PATH :: "../assets/Sound/drone_buzzing0.wav";
 
-#insert #run embed_data("DRONE_BUZZING_0_WAV", "Sound/drone_buzzing0.wav", #filepath);
+EXPLOSION_0_MP3_PATH :: "../assets/Sound/explosion0.mp3";
+EXPLOSION_1_MP3_PATH :: "../assets/Sound/explosion1.mp3";
+EXPLOSION_2_MP3_PATH :: "../assets/Sound/explosion2.mp3";
+EXPLOSION_3_MP3_PATH :: "../assets/Sound/explosion3.mp3";
+EXPLOSION_4_MP3_PATH :: "../assets/Sound/explosion4.mp3";
+EXPLOSION_5_MP3_PATH :: "../assets/Sound/explosion5.mp3";
+EXPLOSION_6_MP3_PATH :: "../assets/Sound/explosion6.mp3";
+EXPLOSION_7_MP3_PATH :: "../assets/Sound/explosion7.mp3";
+EXPLOSION_8_MP3_PATH :: "../assets/Sound/explosion8.mp3";
+POINT_UP_MP3_PATH :: "../assets/Sound/point_up.mp3";
 
-#insert #run embed_data("EXPLOSION_0_MP3", "Sound/explosion0.mp3", #filepath);
-#insert #run embed_data("EXPLOSION_1_MP3", "Sound/explosion1.mp3", #filepath);
-#insert #run embed_data("EXPLOSION_2_MP3", "Sound/explosion2.mp3", #filepath);
-#insert #run embed_data("EXPLOSION_3_MP3", "Sound/explosion3.mp3", #filepath);
-#insert #run embed_data("EXPLOSION_4_MP3", "Sound/explosion4.mp3", #filepath);
-#insert #run embed_data("EXPLOSION_5_MP3", "Sound/explosion5.mp3", #filepath);
-#insert #run embed_data("EXPLOSION_6_MP3", "Sound/explosion6.mp3", #filepath);
-#insert #run embed_data("EXPLOSION_7_MP3", "Sound/explosion7.mp3", #filepath);
-#insert #run embed_data("EXPLOSION_8_MP3", "Sound/explosion8.mp3", #filepath);
-#insert #run embed_data("POINT_UP_MP3", "Sound/point_up.mp3", #filepath);
-
-#insert #run embed_data("LOSER_MP3", "Sound/loser.mp3", #filepath);
+LOSER_MP3_PATH :: "../assets/Sound/loser.mp3";
 
 #insert #run embed_data("TILE_OBJ", "tile.obj", #filepath);
 #insert #run embed_data("TOMBSTONE_OBJ", "tombstone.obj", #filepath);
@@ -226,21 +225,21 @@ FORMAT;
 #insert #run embed_data("QUAD_WGSL", "Shader/quad.wgsl", #filepath);
 
 
-#insert #run embed_data("HORN_CAR_0_MP3", "Sound/horn_car0.mp3", #filepath);
-#insert #run embed_data("HORN_CAR_1_MP3", "Sound/horn_car1.mp3", #filepath);
-#insert #run embed_data("HORN_CAR_2_MP3", "Sound/horn_car2.mp3", #filepath);
-#insert #run embed_data("HORN_CAR_3_MP3", "Sound/horn_car3.mp3", #filepath);
-#insert #run embed_data("HORN_CAR_4_MP3", "Sound/horn_car4.mp3", #filepath);
-#insert #run embed_data("HORN_CAR_5_MP3", "Sound/horn_car5.mp3", #filepath);
-#insert #run embed_data("HORN_CAR_6_MP3", "Sound/horn_car6.mp3", #filepath);
-#insert #run embed_data("HORN_CAR_7_MP3", "Sound/horn_car7.mp3", #filepath);
-#insert #run embed_data("HORN_CAR_8_MP3", "Sound/horn_car8.mp3", #filepath);
+HORN_CAR_0_MP3_PATH :: "../assets/Sound/horn_car0.mp3";
+HORN_CAR_1_MP3_PATH :: "../assets/Sound/horn_car1.mp3";
+HORN_CAR_2_MP3_PATH :: "../assets/Sound/horn_car2.mp3";
+HORN_CAR_3_MP3_PATH :: "../assets/Sound/horn_car3.mp3";
+HORN_CAR_4_MP3_PATH :: "../assets/Sound/horn_car4.mp3";
+HORN_CAR_5_MP3_PATH :: "../assets/Sound/horn_car5.mp3";
+HORN_CAR_6_MP3_PATH :: "../assets/Sound/horn_car6.mp3";
+HORN_CAR_7_MP3_PATH :: "../assets/Sound/horn_car7.mp3";
+HORN_CAR_8_MP3_PATH :: "../assets/Sound/horn_car8.mp3";
 
-#insert #run embed_data("DRIFT_0_MP3", "Sound/drift_0.mp3", #filepath);
-#insert #run embed_data("DRIFT_1_MP3", "Sound/drift_1.mp3", #filepath);
-#insert #run embed_data("CHECKPOINT_OK_MP3", "Sound/checkpoint_ok.mp3", #filepath);
-#insert #run embed_data("RES_MP3", "Sound/res.mp3", #filepath);
-#insert #run embed_data("COIN_LAUNCH_MP3", "Sound/coin_launch.mp3", #filepath);
+DRIFT_0_MP3_PATH :: "../assets/Sound/drift_0.mp3";
+DRIFT_1_MP3_PATH :: "../assets/Sound/drift_1.mp3";
+CHECKPOINT_OK_MP3_PATH :: "../assets/Sound/checkpoint_ok.mp3";
+RES_MP3_PATH :: "../assets/Sound/res.mp3";
+COIN_LAUNCH_MP3_PATH :: "../assets/Sound/coin_launch.mp3";
 
 #insert #run embed_data("verdana_csv", "Font/verdana.csv", #filepath);
 
@@ -281,7 +280,6 @@ load_everything :: (platform: Platform) {
 			"TILE_FRAGMENT",
 			"QUAD_TEXTURE_VERTEX",
 			"QUAD_TEXTURE_FRAGMENT",
-			"SNOWFLAKES_AND_LIGHTS_MP3",
 			"ui_atlas_png",
 			"VEHICLE_RACER_OBJ",
 			"VEHICLE_SUV_OBJ",
@@ -291,32 +289,6 @@ load_everything :: (platform: Platform) {
 			"VEHICLE_VINTAGE_RACER_OBJ",
 			"FLAG_OBJ",
 			"FLAG_DOWN_OBJ",
-			"CLICK_WAV",
-			"NOTE_WAV",
-			"FOOTSTEP_SNOW_0_MP3",
-			"FOOTSTEP_SNOW_1_MP3",
-			"FOOTSTEP_SNOW_2_MP3",
-			"FOOTSTEP_SNOW_3_MP3",
-			"FOOTSTEP_SNOW_4_MP3",
-			"FOOTSTEP_ICE_0_MP3",
-			"FOOTSTEP_ICE_1_MP3",
-			"FOOTSTEP_ICE_2_MP3",
-			"FOOTSTEP_ICE_3_MP3",
-			"FOOTSTEP_ICE_4_MP3",
-			"BOAT_SAILING_0_WAV",
-			"BOAT_SAILING_1_WAV",
-			"BOAT_SAILING_2_WAV",
-			"DRONE_BUZZING_0_WAV",
-			"EXPLOSION_0_MP3",
-			"EXPLOSION_1_MP3",
-			"EXPLOSION_2_MP3",
-			"EXPLOSION_3_MP3",
-			"EXPLOSION_4_MP3",
-			"EXPLOSION_5_MP3",
-			"EXPLOSION_6_MP3",
-			"EXPLOSION_7_MP3",
-			"EXPLOSION_8_MP3",
-			"LOSER_MP3",
 			"TILE_OBJ",
 			"TOMBSTONE_OBJ",
 			"COIN_OBJ",
@@ -420,21 +392,6 @@ load_everything :: (platform: Platform) {
 			"COLORMAPS_PNG",
 			"TERRAIN_TILE_ALBEDO_PNG",
 			"TERRAIN_TILE_NORMAL_PNG",
-			"HORN_CAR_0_MP3",
-			"HORN_CAR_1_MP3",
-			"HORN_CAR_2_MP3",
-			"HORN_CAR_3_MP3",
-			"HORN_CAR_4_MP3",
-			"HORN_CAR_5_MP3",
-			"HORN_CAR_6_MP3",
-			"HORN_CAR_7_MP3",
-			"HORN_CAR_8_MP3",
-			"DRIFT_0_MP3",
-			"DRIFT_1_MP3",
-			"CHECKPOINT_OK_MP3",
-			"RES_MP3",
-			"COIN_LAUNCH_MP3",
-			"POINT_UP_MP3",
 			"JUKEBOX_OBJ",
 			"verdana_csv",
 			"verdana_png",

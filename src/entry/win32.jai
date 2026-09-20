@@ -257,7 +257,7 @@ win32_get_token :: () -> int {
 	// token, ok := read_entire_file("token.txt",, temp);
 	// if !ok
 	// 	return 1;
-	
+
 	// print("Read back \"%\"\n", token);
 	// token_value := 0;
 	// if scan2(token, "%", *token_value) {
@@ -403,20 +403,90 @@ Win32_Sound :: struct {
 audio_id_to_data: Table(int, string);
 sound_id_to_sound: Table(int, Win32_Sound);
 
+Win32_Data_Fetch :: struct {
+	data: [] u8;
+	failed: bool;
+	offset: int;
+}
+data_fetches: Table(int, Win32_Data_Fetch);
+data_fetch_counter := 0;
+
 audio_counter := 0;
 sound_counter := 0;
 
-load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_ref {
+win32_fetch_data :: (path: string) -> Platform.extern_ref {
+	push_context,defer_pop launcher_context;
+	data_fetch_counter += 1;
+
+	fetch: Win32_Data_Fetch;
+	data, ok := read_entire_file(path,, temp);
+	if ok {
+		copy := NewArray(data.count, u8);
+		memcpy(copy.data, data.data, data.count);
+		fetch.data = copy;
+	} else {
+		fetch.failed = true;
+		print("Couldn't fetch %\n", path);
+	}
+
+	table_add(*data_fetches, data_fetch_counter, fetch);
+	return xx data_fetch_counter;
+}
+
+win32_poll_data :: (
+	ref: Platform.extern_ref,
+	data: [] u8
+) -> Data_Status {
+	result: Data_Status;
+	if ref <= 0 {
+		result.status = .Invalid;
+		return result;
+	}
+
+	fetch := table_find_pointer(*data_fetches, ref);
+	if !fetch {
+		result.status = .Invalid;
+		return result;
+	}
+	if fetch.failed {
+		table_remove(*data_fetches, ref);
+		result.status = .Failed;
+		return result;
+	}
+
+	result.status = .Ready;
+	remaining := fetch.data.count - fetch.offset;
+	if data.data == null || data.count == 0 {
+		result.bytes_read = xx remaining;
+		return result;
+	}
+
+	read := min(remaining, data.count);
+	if read > 0 {
+		memcpy(data.data, fetch.data.data + fetch.offset, read);
+		fetch.offset += read;
+	}
+	result.bytes_read = xx read;
+	if fetch.offset >= fetch.data.count {
+		free(fetch.data.data);
+		table_remove(*data_fetches, ref);
+	}
+	return result;
+}
+
+load_audio :: (data: [] u8, compressed: bool, out: *Audio) -> Platform.extern_ref {
 	push_context,defer_pop launcher_context;
 	audio_counter += 1;
 
-	audio: Audio;
-	audio.id = audio_counter;
-	// Load audio data
+	copy := NewArray(data.count, u8);
+	memcpy(copy.data, data.data, data.count);
+	data_copy: string;
+	data_copy.data = copy.data;
+	data_copy.count = copy.count;
 
-	table_add(*audio_id_to_data, audio.id, data);
-	audio.loaded = true;
-	out.* = audio;
+	table_add(*audio_id_to_data, audio_counter, data_copy);
+	out.id = audio_counter;
+	out.loaded = true;
 
 	return 0;
 }
@@ -424,11 +494,19 @@ load_audio :: (data: string, compressed: bool, out: *Audio) -> Platform.extern_r
 
 play_audio :: (audio: Audio, position: V3f) -> Sound {
 	push_context,defer_pop launcher_context;
+	sound: Sound;
+	sound.id = -1;
+	sound.audio_id = audio.id;
+	sound.position = position;
+	sound.volume = audio.volume;
+	sound.pitch = audio.pitch;
+	sound.loop = audio.repeating || audio.kind == .Music;
+	if !audio.loaded return sound;
+
 	ok, data := table_find(*audio_id_to_data, audio.id);
-	
+
 	config := ma_decoder_config_init(.unknown, 0, 0);
 	sound_counter += 1;
-	sound: Sound;
 	sound.audio_id = audio.id;
 	sound.id = sound_counter;
 	sound.position = position;
@@ -717,6 +795,8 @@ init_platform :: () -> Platform {
 		return false;
 	};
 	platform.set_sound = set_sound;
+	platform.fetch_data = win32_fetch_data;
+	platform.poll = win32_poll_data;
 	platform.load_audio = load_audio;
 	platform.play_audio = play_audio;
 	platform.set_listener_info = set_listener_info;

@@ -152,7 +152,7 @@ Store :: struct #type_info_none {
 	unit_cylinder_model: WRender.Model;
 	unit_sphere_model: WRender.Model;
 	unit_cube_model: WRender.Model;
-	
+
 	zone_wall_model: WRender.Model;
 	indicator_outline_model: WRender.Model;
 	indicator_stroke_model: WRender.Model;
@@ -224,6 +224,12 @@ Store :: struct #type_info_none {
 	verdana_atlas: WRender.WTexture;
 	verdana: Platform.Font;
 
+	Data_Fetch :: struct {
+		ref: Platform.Platform.extern_ref;
+		key: int;
+	}
+	data_fetches: [..] Data_Fetch;
+	data: [..] u8;
 
 }
 
@@ -549,6 +555,199 @@ get_wprop :: (store: Store, id: Assets.Prop_Id) -> *WRender.Model {
 	return null;
 }
 
+Audio_Data_Key :: enum int {
+	SNOWFLAKES_AND_LIGHTS;
+	CLICK;
+	NOTE;
+	FOOTSTEP_SNOW_0;
+	FOOTSTEP_SNOW_1;
+	FOOTSTEP_SNOW_2;
+	FOOTSTEP_SNOW_3;
+	FOOTSTEP_SNOW_4;
+	FOOTSTEP_ICE_0;
+	FOOTSTEP_ICE_1;
+	FOOTSTEP_ICE_2;
+	FOOTSTEP_ICE_3;
+	FOOTSTEP_ICE_4;
+	HORN_CAR_0;
+	HORN_CAR_1;
+	HORN_CAR_2;
+	HORN_CAR_3;
+	HORN_CAR_4;
+	HORN_CAR_5;
+	HORN_CAR_6;
+	HORN_CAR_7;
+	HORN_CAR_8;
+	BOAT_SAILING_0;
+	BOAT_SAILING_1;
+	BOAT_SAILING_2;
+	DRONE_BUZZING_0;
+	EXPLOSION_0;
+	EXPLOSION_1;
+	EXPLOSION_2;
+	EXPLOSION_3;
+	EXPLOSION_4;
+	EXPLOSION_5;
+	EXPLOSION_6;
+	EXPLOSION_7;
+	EXPLOSION_8;
+	DRIFT_0;
+	DRIFT_1;
+	CHECKPOINT_OK;
+	RES;
+	COIN_LAUNCH;
+	LOSER;
+	POINT_UP;
+}
+
+start_data_fetch :: (
+	platform: Platform.Platform,
+	store: *Store,
+	path: string,
+	key: int
+) {
+	ref := platform.fetch_data(path);
+	if ref == 0 {
+		return;
+	}
+
+	array_add(
+		*store.data_fetches,
+		Store.Data_Fetch.{
+			ref = ref,
+			key = key,
+		}
+	);
+}
+
+load_ready_audio :: (
+	platform: Platform.Platform,
+	store: *Store,
+	key: int,
+	data: [] u8
+) {
+	audio_key: Audio_Data_Key = xx key;
+	if audio_key == {
+		case .SNOWFLAKES_AND_LIGHTS;
+			platform.load_audio(data, true, *store.snowflakes_and_lights_mp3);
+		case .CLICK;
+			platform.load_audio(data, false, *store.click_wav);
+		case .NOTE;
+			platform.load_audio(data, true, *store.note_wav);
+		case .FOOTSTEP_SNOW_0;
+			platform.load_audio(data, true, *store.footstep_snow_0_mp3);
+		case .FOOTSTEP_SNOW_1;
+			platform.load_audio(data, true, *store.footstep_snow_1_mp3);
+		case .FOOTSTEP_SNOW_2;
+			platform.load_audio(data, true, *store.footstep_snow_2_mp3);
+		case .FOOTSTEP_SNOW_3;
+			platform.load_audio(data, true, *store.footstep_snow_3_mp3);
+		case .FOOTSTEP_SNOW_4;
+			platform.load_audio(data, true, *store.footstep_snow_4_mp3);
+		case .FOOTSTEP_ICE_0;
+			platform.load_audio(data, true, *store.footstep_ice_0_mp3);
+		case .FOOTSTEP_ICE_1;
+			platform.load_audio(data, true, *store.footstep_ice_1_mp3);
+		case .FOOTSTEP_ICE_2;
+			platform.load_audio(data, true, *store.footstep_ice_2_mp3);
+		case .FOOTSTEP_ICE_3;
+			platform.load_audio(data, true, *store.footstep_ice_3_mp3);
+		case .FOOTSTEP_ICE_4;
+			platform.load_audio(data, true, *store.footstep_ice_4_mp3);
+		case .HORN_CAR_0;
+			platform.load_audio(data, true, *store.horn_car_0_mp3);
+		case .HORN_CAR_1;
+			platform.load_audio(data, true, *store.horn_car_1_mp3);
+		case .HORN_CAR_2;
+			platform.load_audio(data, true, *store.horn_car_2_mp3);
+		case .HORN_CAR_3;
+			platform.load_audio(data, true, *store.horn_car_3_mp3);
+		case .HORN_CAR_4;
+			platform.load_audio(data, true, *store.horn_car_4_mp3);
+		case .HORN_CAR_5;
+			platform.load_audio(data, true, *store.horn_car_5_mp3);
+		case .HORN_CAR_6;
+			platform.load_audio(data, true, *store.horn_car_6_mp3);
+		case .HORN_CAR_7;
+			platform.load_audio(data, true, *store.horn_car_7_mp3);
+		case .HORN_CAR_8;
+			platform.load_audio(data, true, *store.horn_car_8_mp3);
+		case .BOAT_SAILING_0;
+			platform.load_audio(data, true, *store.boat_sailing_0_wav);
+		case .BOAT_SAILING_1;
+			platform.load_audio(data, false, *store.boat_sailing_1_wav);
+		case .BOAT_SAILING_2;
+			platform.load_audio(data, false, *store.boat_sailing_2_wav);
+		case .DRONE_BUZZING_0;
+			platform.load_audio(data, true, *store.drone_buzzing_0_wav);
+		case .EXPLOSION_0;
+			platform.load_audio(data, false, *store.explosion_0_mp3);
+		case .EXPLOSION_1;
+			platform.load_audio(data, false, *store.explosion_1_mp3);
+		case .EXPLOSION_2;
+			platform.load_audio(data, false, *store.explosion_2_mp3);
+		case .EXPLOSION_3;
+			platform.load_audio(data, false, *store.explosion_3_mp3);
+		case .EXPLOSION_4;
+			platform.load_audio(data, false, *store.explosion_4_mp3);
+		case .EXPLOSION_5;
+			platform.load_audio(data, false, *store.explosion_5_mp3);
+		case .EXPLOSION_6;
+			platform.load_audio(data, false, *store.explosion_6_mp3);
+		case .EXPLOSION_7;
+			platform.load_audio(data, false, *store.explosion_7_mp3);
+		case .EXPLOSION_8;
+			platform.load_audio(data, false, *store.explosion_8_mp3);
+		case .DRIFT_0;
+			platform.load_audio(data, true, *store.drift_0_mp3);
+		case .DRIFT_1;
+			platform.load_audio(data, true, *store.drift_1_mp3);
+		case .CHECKPOINT_OK;
+			platform.load_audio(data, false, *store.checkpoint_ok_mp3);
+		case .RES;
+			platform.load_audio(data, false, *store.res_mp3);
+		case .COIN_LAUNCH;
+			platform.load_audio(data, false, *store.coin_launch_mp3);
+		case .LOSER;
+			platform.load_audio(data, true, *store.loser_mp3);
+		case .POINT_UP;
+			platform.load_audio(data, false, *store.point_up_mp3);
+	}
+}
+
+poll_data_fetches :: (platform: Platform.Platform, store: *Store) {
+	cursor := 0;
+	for * store.data_fetches {
+		status := platform.poll(it.ref, .[]);
+		if #complete status.status == {
+			case .Failed;
+				print("Data fetch with id % failed\n", it.key);
+				// evict
+			case .Invalid;
+				print("Data fetch with id % is invalid\n", it.key);
+				// evict
+			case .Pending;
+				store.data_fetches[cursor] = it.*;
+				cursor += 1;
+				// keep
+			case .Ready;
+				read_data: [] u8;
+				read_data.data = store.data.data + store.data.count;
+				read_data.count = xx status.bytes_read;
+				if store.data.allocated < store.data.count + status.bytes_read {
+					min_cap := max(store.data.allocated * 2, store.data.count + status.bytes_read);
+					array_reserve(*store.data, min_cap);
+				}
+				array_resize(*store.data, store.data.count + status.bytes_read);
+				platform.poll(it.ref, read_data);
+				load_ready_audio(platform, store, it.key, read_data);
+				// evict
+		}
+	}
+	store.data_fetches.count = cursor;
+
+}
+
 init_store :: (platform: Platform.Platform, store: *Store) {
 	if Assets.RUNTIME {
 		Assets.load_everything(platform);
@@ -576,7 +775,7 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	terrain_tile_normal_png := Assets.load_png(Assets.TERRAIN_TILE_NORMAL_PNG,, temp);
 	store.terrain_tile_normal =
 		WRender.WTexture.make_from_image(terrain_tile_normal_png, "terrain_tile_normal", .{ 4, 4 });
-		
+
 	particle_texture_png := Assets.load_png(Assets.PARTICLE_TEXTURE_PNG,, temp);
 	store.particle_texture =
 		WRender.WTexture.make_from_image(particle_texture_png, "particle_texture");
@@ -692,55 +891,54 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 
 	WRender.Model.commit_geometry_buffer();
 
-	promises: [..] Platform.Platform.extern_ref;
+	start_data_fetch(platform, store, Assets.SNOWFLAKES_AND_LIGHTS_MP3_PATH, xx Audio_Data_Key.SNOWFLAKES_AND_LIGHTS);
+	start_data_fetch(platform, store, Assets.CLICK_WAV_PATH, xx Audio_Data_Key.CLICK);
+	start_data_fetch(platform, store, Assets.NOTE_WAV_PATH, xx Audio_Data_Key.NOTE);
+	start_data_fetch(platform, store, Assets.FOOTSTEP_SNOW_0_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_SNOW_0);
+	start_data_fetch(platform, store, Assets.FOOTSTEP_SNOW_1_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_SNOW_1);
+	start_data_fetch(platform, store, Assets.FOOTSTEP_SNOW_2_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_SNOW_2);
+	start_data_fetch(platform, store, Assets.FOOTSTEP_SNOW_3_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_SNOW_3);
+	start_data_fetch(platform, store, Assets.FOOTSTEP_SNOW_4_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_SNOW_4);
+	start_data_fetch(platform, store, Assets.FOOTSTEP_ICE_0_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_ICE_0);
+	start_data_fetch(platform, store, Assets.FOOTSTEP_ICE_1_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_ICE_1);
+	start_data_fetch(platform, store, Assets.FOOTSTEP_ICE_2_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_ICE_2);
+	start_data_fetch(platform, store, Assets.FOOTSTEP_ICE_3_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_ICE_3);
+	start_data_fetch(platform, store, Assets.FOOTSTEP_ICE_4_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_ICE_4);
+	start_data_fetch(platform, store, Assets.HORN_CAR_0_MP3_PATH, xx Audio_Data_Key.HORN_CAR_0);
+	start_data_fetch(platform, store, Assets.HORN_CAR_1_MP3_PATH, xx Audio_Data_Key.HORN_CAR_1);
+	start_data_fetch(platform, store, Assets.HORN_CAR_2_MP3_PATH, xx Audio_Data_Key.HORN_CAR_2);
+	start_data_fetch(platform, store, Assets.HORN_CAR_3_MP3_PATH, xx Audio_Data_Key.HORN_CAR_3);
+	start_data_fetch(platform, store, Assets.HORN_CAR_4_MP3_PATH, xx Audio_Data_Key.HORN_CAR_4);
+	start_data_fetch(platform, store, Assets.HORN_CAR_5_MP3_PATH, xx Audio_Data_Key.HORN_CAR_5);
+	start_data_fetch(platform, store, Assets.HORN_CAR_6_MP3_PATH, xx Audio_Data_Key.HORN_CAR_6);
+	start_data_fetch(platform, store, Assets.HORN_CAR_7_MP3_PATH, xx Audio_Data_Key.HORN_CAR_7);
+	start_data_fetch(platform, store, Assets.HORN_CAR_8_MP3_PATH, xx Audio_Data_Key.HORN_CAR_8);
+	start_data_fetch(platform, store, Assets.BOAT_SAILING_0_WAV_PATH, xx Audio_Data_Key.BOAT_SAILING_0);
+	start_data_fetch(platform, store, Assets.BOAT_SAILING_1_WAV_PATH, xx Audio_Data_Key.BOAT_SAILING_1);
+	start_data_fetch(platform, store, Assets.BOAT_SAILING_2_WAV_PATH, xx Audio_Data_Key.BOAT_SAILING_2);
+	start_data_fetch(platform, store, Assets.DRONE_BUZZING_0_WAV_PATH, xx Audio_Data_Key.DRONE_BUZZING_0);
+	start_data_fetch(platform, store, Assets.EXPLOSION_0_MP3_PATH, xx Audio_Data_Key.EXPLOSION_0);
+	start_data_fetch(platform, store, Assets.EXPLOSION_1_MP3_PATH, xx Audio_Data_Key.EXPLOSION_1);
+	start_data_fetch(platform, store, Assets.EXPLOSION_2_MP3_PATH, xx Audio_Data_Key.EXPLOSION_2);
+	start_data_fetch(platform, store, Assets.EXPLOSION_3_MP3_PATH, xx Audio_Data_Key.EXPLOSION_3);
+	start_data_fetch(platform, store, Assets.EXPLOSION_4_MP3_PATH, xx Audio_Data_Key.EXPLOSION_4);
+	start_data_fetch(platform, store, Assets.EXPLOSION_5_MP3_PATH, xx Audio_Data_Key.EXPLOSION_5);
+	start_data_fetch(platform, store, Assets.EXPLOSION_6_MP3_PATH, xx Audio_Data_Key.EXPLOSION_6);
+	start_data_fetch(platform, store, Assets.EXPLOSION_7_MP3_PATH, xx Audio_Data_Key.EXPLOSION_7);
+	start_data_fetch(platform, store, Assets.EXPLOSION_8_MP3_PATH, xx Audio_Data_Key.EXPLOSION_8);
+	start_data_fetch(platform, store, Assets.DRIFT_0_MP3_PATH, xx Audio_Data_Key.DRIFT_0);
+	start_data_fetch(platform, store, Assets.DRIFT_1_MP3_PATH, xx Audio_Data_Key.DRIFT_1);
+	start_data_fetch(platform, store, Assets.CHECKPOINT_OK_MP3_PATH, xx Audio_Data_Key.CHECKPOINT_OK);
+	start_data_fetch(platform, store, Assets.RES_MP3_PATH, xx Audio_Data_Key.RES);
+	start_data_fetch(platform, store, Assets.COIN_LAUNCH_MP3_PATH, xx Audio_Data_Key.COIN_LAUNCH);
+	start_data_fetch(platform, store, Assets.LOSER_MP3_PATH, xx Audio_Data_Key.LOSER);
+	start_data_fetch(platform, store, Assets.POINT_UP_MP3_PATH, xx Audio_Data_Key.POINT_UP);
 
-	array_add(*promises, platform.load_audio(xx Assets.SNOWFLAKES_AND_LIGHTS_MP3, true, *store.snowflakes_and_lights_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_SNOW_0_MP3, true, *store.footstep_snow_0_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_SNOW_1_MP3, true, *store.footstep_snow_1_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_SNOW_2_MP3, true, *store.footstep_snow_2_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_SNOW_3_MP3, true, *store.footstep_snow_3_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_SNOW_4_MP3, true, *store.footstep_snow_4_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_ICE_0_MP3, true, *store.footstep_ice_0_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_ICE_1_MP3, true, *store.footstep_ice_1_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_ICE_2_MP3, true, *store.footstep_ice_2_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_ICE_3_MP3, true, *store.footstep_ice_3_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.FOOTSTEP_ICE_4_MP3, true, *store.footstep_ice_4_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_0_MP3, true, *store.horn_car_0_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_1_MP3, true, *store.horn_car_1_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_2_MP3, true, *store.horn_car_2_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_3_MP3, true, *store.horn_car_3_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_4_MP3, true, *store.horn_car_4_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_5_MP3, true, *store.horn_car_5_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_6_MP3, true, *store.horn_car_6_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_7_MP3, true, *store.horn_car_7_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.HORN_CAR_8_MP3, true, *store.horn_car_8_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.BOAT_SAILING_0_WAV, true, *store.boat_sailing_0_wav));
-	array_add(*promises, platform.load_audio(xx Assets.BOAT_SAILING_1_WAV, false, *store.boat_sailing_1_wav));
-	array_add(*promises, platform.load_audio(xx Assets.BOAT_SAILING_2_WAV, false, *store.boat_sailing_2_wav));
-	array_add(*promises, platform.load_audio(xx Assets.DRONE_BUZZING_0_WAV, true, *store.drone_buzzing_0_wav));
-	array_add(*promises, platform.load_audio(xx Assets.NOTE_WAV, true, *store.note_wav));
-	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_0_MP3, false, *store.explosion_0_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_1_MP3, false, *store.explosion_1_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_2_MP3, false, *store.explosion_2_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_3_MP3, false, *store.explosion_3_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_4_MP3, false, *store.explosion_4_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_5_MP3, false, *store.explosion_5_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_6_MP3, false, *store.explosion_6_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_7_MP3, false, *store.explosion_7_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.EXPLOSION_8_MP3, false, *store.explosion_8_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.DRIFT_0_MP3, true, *store.drift_0_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.DRIFT_1_MP3, true, *store.drift_1_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.CHECKPOINT_OK_MP3, false, *store.checkpoint_ok_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.RES_MP3, false, *store.res_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.COIN_LAUNCH_MP3, false, *store.coin_launch_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.LOSER_MP3, true, *store.loser_mp3));
-	array_add(*promises, platform.load_audio(xx Assets.POINT_UP_MP3, false, *store.point_up_mp3));
-
-	for promises
-		platform.wait(it);
+	// Native fetches complete synchronously. Browser fetches remain pending and
+	// are picked up by poll_data_fetches from the main loop.
+	poll_data_fetches(platform, store);
 }
 
 #if Assets.RUNTIME {
 	#import "File";
 }
-
