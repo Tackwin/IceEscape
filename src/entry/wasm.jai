@@ -76,10 +76,15 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	Mouse_Wheel :: 136;
 	Window_W :: 140;
 	Window_H :: 144;
+	Is_Mobile :: 152;
+	Touch_Release :: 153;
 	info.mouse_position.x = xx (controls_buffer.data + Mouse_X).(*u32).*;
 	info.mouse_position.y = xx (controls_buffer.data + Mouse_Y).(*u32).*;
 	info.mouse_wheel = xx (controls_buffer.data + Mouse_Wheel).(*s32).* / 1000;
 	(controls_buffer.data + Mouse_Wheel).(*s32).* = 0;
+	info.is_mobile = (controls_buffer.data + Is_Mobile).(*u8).* != 0;
+	info.keys.just_released[Key.MouseLeft] = (controls_buffer.data + Touch_Release).(*u8).* != 0;
+	(controls_buffer.data + Touch_Release).(*u8).* = 0;
 
 	dim: [4] u32;
 	ww := dim[2];

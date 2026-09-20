@@ -107,12 +107,16 @@ Keys :: struct {
 	just_released: [Key_COUNT] bool;
 }
 
-advance_keys :: (previous: Keys, down: [Key_COUNT] bool) -> Keys {
+advance_keys :: (
+	previous: Keys,
+	down: [Key_COUNT] bool,
+	forced_just_released: [Key_COUNT] bool
+) -> Keys {
 	next: Keys;
 	for i: 0..Key_COUNT - 1 {
 		next.pressed[i] = down[i];
 		next.just_pressed[i] = down[i] && !previous.pressed[i];
-		next.just_released[i] = !down[i] && previous.pressed[i];
+		next.just_released[i] = forced_just_released[i] || (!down[i] && previous.pressed[i]);
 	}
 	return next;
 }
@@ -140,6 +144,7 @@ Frame_Info :: struct {
 	mouse_position: V2f;
 	window_size: V2f;
 	framebuffer_size: V2f;
+	is_mobile := false;
 	quit := false;
 
 	window_focused := false;

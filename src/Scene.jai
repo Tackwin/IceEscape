@@ -2058,7 +2058,11 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 
 
 	if !controls.captured_mouse {
-		if controls.just_pressed[Platform.Key.MouseLeft] {
+		left_triggered := controls.just_pressed[Platform.Key.MouseLeft];
+		if controls.is_mobile
+			left_triggered = controls.just_released[Platform.Key.MouseLeft];
+
+		if left_triggered {
 			V := look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
 			P := perspective(scene.camera);
 			r := unproject_ndc(
@@ -2091,7 +2095,11 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 			}
 		}
 
-		if controls.just_pressed[Platform.Key.MouseRight] {
+		right_pressed := controls.just_pressed[Platform.Key.MouseRight];
+		if controls.is_mobile
+			right_pressed = controls.just_released[Platform.Key.MouseRight];
+
+		if right_pressed {
 			V := look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
 			P := perspective(scene.camera);
 			r := unproject_ndc(

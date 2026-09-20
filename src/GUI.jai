@@ -668,7 +668,11 @@ begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Con
 	// Copy controls from previous frame to out_controls
 	out_controls.* = state.controls;
 
-	state.controls.keys = Platform.advance_keys(state.controls.keys, info.keys.pressed);
+	state.controls.keys = Platform.advance_keys(
+		state.controls.keys,
+		info.keys.pressed,
+		info.keys.just_released
+	);
 	state.controls.mouse_pos.x = info.mouse_position.x;
 	state.controls.mouse_pos.y = info.mouse_position.y;
 	state.controls.mouse_wheel = info.mouse_wheel;
@@ -678,6 +682,7 @@ begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Con
 	// Reset the captured flags for the frame that is about to start
 	state.controls.captured_keyboard = false;
 	state.controls.captured_mouse = false;
+	state.controls.is_mobile = info.is_mobile;
 	state.controls.delta_time = info.delta_time;
 	state.controls.time = info.time;
 	// Use the user's preferred layout override instead of the auto-detected one
@@ -4437,4 +4442,3 @@ labeled_v3_input :: (
 	w.aabb = widgets_aabb(gui, string.[ "label", "input" ]);
 	return input_comp;
 }
-

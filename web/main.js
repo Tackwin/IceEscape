@@ -121,6 +121,7 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 	jai_exports  = mainInstance.exports;
 	jai_exports.wasm_init_buffers();
 	controls_buffer_data = Number(jai_exports.wasm_get_controls_buffer());
+	sync_mobile_layout();
 
 	{
 		var token = 0;
@@ -349,10 +350,28 @@ const Mouse_Wheel = 136;
 const Window_W = 140;
 const Window_H = 144;
 const Control_Token = 148;
+const Control_Is_Mobile = 152;
+const Control_Touch_Release = 153;
 const Control_Audio_Command_Cursor = 1024;
 const Control_Audio_Command_Buffer = 1024;
 
+const WASM_GAME_WIDTH = 1366;
+const WASM_GAME_HEIGHT = 768;
+const MOBILE_LONG_PRESS_MS = 350;
+const MOBILE_MOVE_CANCEL_DISTANCE = 12;
+
 let controls_buffer_data = 0;
+let mobile_device = false;
+let mobile_portrait = false;
+let mobile_touch = {
+	active: false,
+	long_press: false,
+	cancelled: false,
+	pointer_id: -1,
+	start_x: 0,
+	start_y: 0,
+	timer: null,
+};
 const controls_ready = () => !!(jai_exports && jai_exports.memory);
 const getControlsBufferU8 = () => {
 	return new Uint8Array(jai_exports.memory.buffer, controls_buffer_data, 256);
@@ -366,6 +385,90 @@ const getControlsBufferS32 = () => {
 const getControlsBufferF32 = () => {
 	return new Float32Array(jai_exports.memory.buffer, controls_buffer_data, 256);
 }
+
+const detect_mobile_device = () => {
+	const user_agent_mobile = navigator.userAgentData && navigator.userAgentData.mobile;
+	const mobile_user_agent = /Android|iPhone|iPad|iPod|Windows Phone|IEMobile/i.test(navigator.userAgent);
+	const ipad_desktop_mode = /Macintosh/i.test(navigator.userAgent)
+		&& navigator.maxTouchPoints > 1;
+	return !!user_agent_mobile || mobile_user_agent || ipad_desktop_mode;
+};
+
+const sync_mobile_layout = () => {
+	mobile_device = detect_mobile_device();
+	mobile_portrait = mobile_device && window.innerHeight > window.innerWidth;
+
+	let scale = 1;
+	if (mobile_device) {
+		const display_width = mobile_portrait ? WASM_GAME_HEIGHT : WASM_GAME_WIDTH;
+		const display_height = mobile_portrait ? WASM_GAME_WIDTH : WASM_GAME_HEIGHT;
+		scale = Math.min(1, window.innerWidth / display_width, window.innerHeight / display_height);
+	}
+
+	document.body.classList.toggle("mobile", mobile_device);
+	document.body.classList.toggle("mobile-portrait", mobile_portrait);
+	document.documentElement.style.setProperty("--mobile-scale", String(scale));
+
+	if (controls_ready()) {
+		Atomics.store(getControlsBufferU8(), Control_Is_Mobile, mobile_device ? 1 : 0);
+	}
+};
+
+const set_mouse_button = (button, down) => {
+	if (!controls_ready()) return;
+	const controls = getControlsBufferU8();
+	if (button === 0) {
+		Atomics.store(controls, Key_MouseLeft, down ? 1 : 0);
+	} else if (button === 1) {
+		Atomics.store(controls, Key_MouseMiddle, down ? 1 : 0);
+	} else if (button === 2) {
+		Atomics.store(controls, Key_MouseRight, down ? 1 : 0);
+	}
+};
+
+const update_pointer_position = (client_x, client_y) => {
+	if (!controls_ready()) return;
+	const canvas = document.getElementById("webgpu-canvas");
+	if (!canvas) return;
+
+	const rect = canvas.getBoundingClientRect();
+	if (rect.width <= 0 || rect.height <= 0) return;
+
+	let x = (client_x - rect.left) / rect.width;
+	let y = (client_y - rect.top) / rect.height;
+	if (mobile_portrait) {
+		const rotated_x = y;
+		y = 1 - x;
+		x = rotated_x;
+	}
+
+	const span = getControlsBufferU32();
+	Atomics.store(span, Mouse_X / 4, Math.round(x * WASM_GAME_WIDTH));
+	Atomics.store(span, Mouse_Y / 4, Math.round(y * WASM_GAME_HEIGHT));
+};
+
+const clear_mobile_touch_timer = () => {
+	if (mobile_touch.timer !== null) {
+		clearTimeout(mobile_touch.timer);
+		mobile_touch.timer = null;
+	}
+};
+
+const queue_mobile_tap_release = () => {
+	if (!controls_ready()) return;
+	Atomics.store(getControlsBufferU8(), Control_Touch_Release, 1);
+};
+
+const reset_pointer_input = () => {
+	clear_mobile_touch_timer();
+	mobile_touch.active = false;
+	mobile_touch.long_press = false;
+	mobile_touch.cancelled = false;
+	mobile_touch.pointer_id = -1;
+	set_mouse_button(0, false);
+	set_mouse_button(1, false);
+	set_mouse_button(2, false);
+};
 
 const flush_audio_command = (idx) => {
 	const base = controls_buffer_data + Number(Control_Audio_Command_Buffer) + (1 + idx) * 136;
@@ -517,39 +620,80 @@ document.addEventListener("keyup", (e) => {
 	}
 });
 
-document.addEventListener("mousedown", (e) => {
+document.addEventListener("pointerdown", (e) => {
 	if (!controls_ready()) return;
-	if (e.button === 0) {
-		Atomics.store(getControlsBufferU8(), Key_MouseLeft, 1);
-	} else if (e.button === 1) {
-		Atomics.store(getControlsBufferU8(), Key_MouseMiddle, 1);
-	} else if (e.button === 2) {
-		Atomics.store(getControlsBufferU8(), Key_MouseRight, 1);
-	}
-});
+	update_pointer_position(e.clientX, e.clientY);
 
-document.addEventListener("mouseup", (e) => {
-	if (!controls_ready()) return;
-	if (e.button === 0) {
-		Atomics.store(getControlsBufferU8(), Key_MouseLeft, 0);
-	} else if (e.button === 1) {
-		Atomics.store(getControlsBufferU8(), Key_MouseMiddle, 0);
-	} else if (e.button === 2) {
-		Atomics.store(getControlsBufferU8(), Key_MouseRight, 0);
-	}
-});
-
-document.addEventListener("mousemove", (e) => {
-	if (!controls_ready()) return;
-	const canvas = document.getElementById("webgpu-canvas");
-	if (!canvas) {
+	if (e.pointerType !== "touch") {
+		set_mouse_button(e.button, true);
 		return;
 	}
-	const rect = canvas.getBoundingClientRect();
-	const span = getControlsBufferU32();
-	Atomics.store(span, Mouse_X / 4, e.clientX - rect.left);
-	Atomics.store(span, Mouse_Y / 4, e.clientY - rect.top);
-});
+
+	if (!e.isPrimary) return;
+	e.preventDefault();
+	clear_mobile_touch_timer();
+	mobile_touch.active = true;
+	mobile_touch.long_press = false;
+	mobile_touch.cancelled = false;
+	mobile_touch.pointer_id = e.pointerId;
+	mobile_touch.start_x = e.clientX;
+	mobile_touch.start_y = e.clientY;
+	mobile_touch.timer = setTimeout(() => {
+		if (!mobile_touch.active || mobile_touch.cancelled) return;
+		mobile_touch.long_press = true;
+		set_mouse_button(0, true);
+	}, MOBILE_LONG_PRESS_MS);
+}, { passive: false });
+
+document.addEventListener("pointerup", (e) => {
+	if (!controls_ready()) return;
+	update_pointer_position(e.clientX, e.clientY);
+
+	if (e.pointerType !== "touch") {
+		set_mouse_button(e.button, false);
+		return;
+	}
+
+	if (!mobile_touch.active || e.pointerId !== mobile_touch.pointer_id) return;
+	e.preventDefault();
+	clear_mobile_touch_timer();
+	if (mobile_touch.long_press) {
+		set_mouse_button(0, false);
+	} else if (!mobile_touch.cancelled) {
+		queue_mobile_tap_release();
+	}
+	mobile_touch.active = false;
+	mobile_touch.pointer_id = -1;
+}, { passive: false });
+
+document.addEventListener("pointercancel", (e) => {
+	if (e.pointerType !== "touch") return;
+	if (!mobile_touch.active || e.pointerId !== mobile_touch.pointer_id) return;
+	e.preventDefault();
+	reset_pointer_input();
+}, { passive: false });
+
+document.addEventListener("pointermove", (e) => {
+	if (!controls_ready()) return;
+	update_pointer_position(e.clientX, e.clientY);
+
+	if (e.pointerType !== "touch") return;
+	if (!mobile_touch.active || e.pointerId !== mobile_touch.pointer_id) return;
+	e.preventDefault();
+	const dx = e.clientX - mobile_touch.start_x;
+	const dy = e.clientY - mobile_touch.start_y;
+	if (!mobile_touch.long_press
+		&& dx * dx + dy * dy > MOBILE_MOVE_CANCEL_DISTANCE * MOBILE_MOVE_CANCEL_DISTANCE)
+	{
+		mobile_touch.cancelled = true;
+		clear_mobile_touch_timer();
+	}
+}, { passive: false });
+
+window.addEventListener("resize", sync_mobile_layout);
+window.addEventListener("orientationchange", sync_mobile_layout);
+window.addEventListener("blur", reset_pointer_input);
+sync_mobile_layout();
 
 document.addEventListener("wheel", (e) => {
 	if (!controls_ready()) return;

@@ -10,6 +10,7 @@ State :: struct {
 	mouse_wheel: s64;
 	window_size:   V2f;
 
+	is_mobile := false;
 	captured_keyboard := false;
 	captured_mouse := false;
 

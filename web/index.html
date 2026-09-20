@@ -12,7 +12,23 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background: #1a2330 url("landing.png") center / cover no-repeat;
+            background: #1a2330;
+        }
+        body {
+            position: relative;
+            isolation: isolate;
+            user-select: none;
+        }
+        #landing-background {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: translate(-50%, -50%);
+            z-index: -1;
+            pointer-events: none;
         }
         canvas {
             position: absolute;
@@ -20,6 +36,7 @@
             left: 50%;
             transform: translate(-50%, -50%);
             z-index: 1;
+            touch-action: none;
         }
         #inner-canvas {
             position: absolute;
@@ -40,6 +57,21 @@
             transform: translate(-50%, -50%);
             z-index: 2;
             pointer-events: none;
+        }
+        body.mobile canvas,
+        body.mobile #inner-canvas,
+        body.mobile #outer-border {
+            transform: translate(-50%, -50%) scale(var(--mobile-scale, 1));
+        }
+        body.mobile-portrait canvas,
+        body.mobile-portrait #inner-canvas,
+        body.mobile-portrait #outer-border {
+            transform: translate(-50%, -50%) rotate(90deg) scale(var(--mobile-scale, 1));
+        }
+        body.mobile-portrait #landing-background {
+            width: 100vh;
+            height: 100vw;
+            transform: translate(-50%, -50%) rotate(90deg);
         }
         #loader {
             position: fixed;
@@ -101,6 +133,7 @@
     </style>
 </head>
 <body>
+    <img id="landing-background" src="landing.png" alt="">
     <img id="inner-canvas" src="inner_canvas.png" alt="">
     <img id="outer-border" src="outer_border.png" alt="">
     <div id="loader">
