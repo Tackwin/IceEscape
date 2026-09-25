@@ -742,6 +742,7 @@ Frame :: struct {
 	shadow: Pass(WFramegraph.Uniforms);
 	geometry: Pass(WFramegraph.Uniforms);
 	editor: Pass(WFramegraph.Uniforms);
+	sdf: Pass(WFramegraph.Sdf_Uniform);
 	ui: Pass(WFramegraph.UI_Uniform);
 
 	cpu: [..] u8;
@@ -772,6 +773,9 @@ WFramegraph :: struct {
 
 	quadModule: WGPUShaderModule;
 	quadPipeline: WGPURenderPipeline;
+	sdfModule: WGPUShaderModule;
+	sdfPipeline: WGPURenderPipeline;
+	sdfBindGroupLayout: WGPUBindGroupLayout;
 
 	instanceBindGroupLayout: WGPUBindGroupLayout;
 	textureBindGroupLayout: WGPUBindGroupLayout;
@@ -810,6 +814,11 @@ WFramegraph :: struct {
 	UI_Uniform :: struct {
 		window_size: V2f;
 	}
+	Sdf_Uniform :: struct {
+		view_projection: M4f;
+		viewport_size: V2f;
+		padding: V2f;
+	}
 	UI_Instance :: struct {
 		pos: V2f;
 		size: V2f;
@@ -819,6 +828,28 @@ WFramegraph :: struct {
 		rotation: float = 0;
 		outline: float = 0;
 		use_custom_texture: u32 = 0;
+	}
+	Sdf_Shape :: enum u32 {
+		RECTANGLE :: 0;
+		CIRCLE :: 1;
+		LINE :: 2;
+	}
+	Sdf_Instance :: struct {
+		FLAG_SCREEN_SPACE :: 1;
+		FLAG_DEPTH_TEST :: 2;
+
+		model: M4f;
+		bounds: V4f;
+		color: V4f;
+		parameters: V4f;
+		shape: Sdf_Shape;
+		flags: u32;
+		rotation: float32;
+		screen_depth: float32;
+		padding0: u32;
+		padding1: u32;
+		padding2: u32;
+		padding3: u32;
 	}
 
 	Present_Uniform :: struct {
@@ -1048,6 +1079,72 @@ init_quad_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 			framegraph.quadPipeline, 1
 		);
 	}
+}
+
+init_sdf_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
+	assert(size_of(WFramegraph.Sdf_Instance) == 144, "SDF instance layout must be 144 bytes");
+	assert(size_of(WFramegraph.Sdf_Uniform) == 80, "SDF uniform layout must be 80 bytes");
+
+	desc: WGPUShaderModuleDescriptor = .{};
+	wgsl: WGPUShaderSourceWGSL = .{};
+	wgsl.code = toWGPUStringView(store.sdf_shader.code);
+	wgsl.chain.next = null;
+	wgsl.chain.sType = .ShaderSourceWGSL;
+	desc.nextInChain = *wgsl.chain;
+	framegraph.sdfModule = graphics.gpu.deviceCreateShaderModule(graphics.device, *desc);
+
+	pipeline: WGPURenderPipelineDescriptor = .{};
+	pipeline.label = toWGPUStringView("SDF Pipeline");
+	pipeline.layout = null;
+	pipeline.vertex.module = framegraph.sdfModule;
+	pipeline.vertex.entryPoint = toWGPUStringView("vs");
+	pipeline.vertex.bufferCount = 0;
+	pipeline.vertex.buffers = null;
+	pipeline.primitive.topology = .WGPUPrimitiveTopology_TriangleList;
+	pipeline.primitive.stripIndexFormat = .Undefined;
+	pipeline.primitive.frontFace = .CCW;
+	pipeline.primitive.cullMode = .None;
+	pipeline.primitive.unclippedDepth = 0;
+
+	depth: WGPUDepthStencilState = .{};
+	depth.format = .Depth32Float;
+	depth.depthWriteEnabled = 0;
+	depth.depthCompare = .LessEqual;
+	depth.stencilFront = .{};
+	depth.stencilBack = .{};
+	depth.stencilReadMask = 0;
+	depth.stencilWriteMask = 0;
+	depth.depthBias = 0;
+	depth.depthBiasSlopeScale = 0.0;
+	depth.depthBiasClamp = 0.0;
+	pipeline.depthStencil = *depth;
+
+	pipeline.multisample.count = xx framegraph.settings.multisamples;
+	pipeline.multisample.mask = 0xFFFFFFFF;
+	pipeline.multisample.alphaToCoverageEnabled = 0;
+
+	fragment: WGPUFragmentState = .{};
+	fragment.module = framegraph.sdfModule;
+	fragment.entryPoint = toWGPUStringView("fs");
+	targets: [1] WGPUColorTargetState;
+	targets[0].format = .RGBA16Float;
+	blend: WGPUBlendState = .{};
+	blend.color.operation = .Add;
+	blend.color.srcFactor = .SrcAlpha;
+	blend.color.dstFactor = .OneMinusSrcAlpha;
+	blend.alpha.operation = .Add;
+	blend.alpha.srcFactor = .One;
+	blend.alpha.dstFactor = .OneMinusSrcAlpha;
+	targets[0].blend = *blend;
+	targets[0].writeMask = WGPUColorWriteMask_All;
+	fragment.targets = targets.data;
+	fragment.targetCount = targets.count;
+	pipeline.fragment = *fragment;
+
+	framegraph.sdfPipeline = graphics.gpu.deviceCreateRenderPipeline(graphics.device, *pipeline);
+	framegraph.sdfBindGroupLayout = graphics.gpu.renderPipelineGetBindGroupLayout(
+		framegraph.sdfPipeline, 0
+	);
 }
 
 init_present_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
@@ -1523,6 +1620,7 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 	init_present_pipeline(framegraph, store);
 
 	init_quad_pipeline(framegraph, store);
+	init_sdf_pipeline(framegraph, store);
 
 	if framegraph.geometryBindGroup
 		graphics.gpu.bindGroupRelease(framegraph.geometryBindGroup);
@@ -1611,6 +1709,34 @@ ui_instance_bind_group :: (
 	entries[4].textureView = sdf_map.view;
 	entries[5].binding = 5;
 	entries[5].sampler = sdf_map.sampler;
+	desc.entryCount = entries.count;
+	desc.entries = entries.data;
+
+	memcpy(frame.cpu.data + frame.cpu_cursor, *uniforms, size_of(type_of(uniforms)));
+	frame.cpu_cursor += size_of(type_of(uniforms));
+
+	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
+}
+
+sdf_instance_bind_group :: (
+	framegraph: *WFramegraph,
+	frame: *Frame,
+	uniforms: WFramegraph.Sdf_Uniform
+) -> WGPUBindGroup {
+	align_up(*frame.cpu_cursor, 256);
+
+	desc: WGPUBindGroupDescriptor = .{};
+	desc.label = toWGPUStringView("SDF Instance Bind Group");
+	desc.layout = framegraph.sdfBindGroupLayout;
+	entries: [2] WGPUBindGroupEntry;
+	entries[0].binding = 0;
+	entries[0].buffer = framegraph.frame_buffer;
+	entries[0].offset = xx frame.cpu_cursor;
+	entries[0].size = size_of(WFramegraph.Sdf_Uniform);
+	entries[1].binding = 1;
+	entries[1].buffer = framegraph.frame_buffer;
+	entries[1].offset = 0;
+	entries[1].size = xx frame.cpu.count;
 	desc.entryCount = entries.count;
 	desc.entries = entries.data;
 
@@ -1770,6 +1896,143 @@ append_ui_instance_buffer :: (frame: *Frame) -> [] WFramegraph.UI_Instance {
 	return data;
 }
 
+append_sdf_instance_buffer :: (frame: *Frame) -> [] WFramegraph.Sdf_Instance {
+	align_up(*frame.cpu_cursor, size_of(WFramegraph.Sdf_Instance));
+
+	data: [] WFramegraph.Sdf_Instance;
+	data.data = (frame.cpu.data + frame.cpu_cursor).(*WFramegraph.Sdf_Instance);
+	data.count = 0;
+	return data;
+}
+
+// Screen-space positions and sizes use logical 1366x768 pixels; world instances use local units.
+make_sdf_instance :: (
+	shape: WFramegraph.Sdf_Shape,
+	position: V3f,
+	quad_half_size: V2f,
+	color: V4f,
+	parameters: V4f,
+	screen_space: bool = false,
+	depth_test: bool = true,
+	rotation: float32 = 0.0,
+	screen_depth: float32 = 0.0
+) -> WFramegraph.Sdf_Instance {
+	instance: WFramegraph.Sdf_Instance;
+	instance = .{};
+	instance.model = M4f.identity();
+	if !screen_space {
+		instance.model = M4f.translate(position) * to_rotation_matrix(
+			axis_angle(V3f.{ 0.0, 0.0, 1.0 }, rotation)
+		);
+	}
+	instance.bounds = .{
+		ifx screen_space then position.x else 0.0,
+		ifx screen_space then position.y else 0.0,
+		quad_half_size.x,
+		quad_half_size.y,
+	};
+	instance.color = color;
+	instance.parameters = parameters;
+	instance.shape = shape;
+	instance.rotation = rotation;
+	instance.screen_depth = screen_depth;
+	if screen_space
+		instance.flags |= instance.FLAG_SCREEN_SPACE;
+	if depth_test
+		instance.flags |= instance.FLAG_DEPTH_TEST;
+	return instance;
+}
+
+// half_size is the rectangle's shape extent; corner radius and outline thickness use the same units.
+make_sdf_rectangle :: (
+	position: V3f,
+	half_size: V2f,
+	color: V4f,
+	corner_radius: float32 = 0.0,
+	outline_thickness: float32 = 0.0,
+	screen_space: bool = false,
+	depth_test: bool = true,
+	rotation: float32 = 0.0,
+	screen_depth: float32 = 0.0
+) -> WFramegraph.Sdf_Instance {
+	aa_margin: float32 = 0.01;
+	if screen_space
+		aa_margin = 1.0;
+	quad_margin := outline_thickness * 0.5 + aa_margin;
+	quad_half_size := half_size + V2f.{ quad_margin, quad_margin };
+	return make_sdf_instance(
+		WFramegraph.Sdf_Shape.RECTANGLE,
+		position,
+		quad_half_size,
+		color,
+		.{ corner_radius, outline_thickness, half_size.x, half_size.y },
+		screen_space,
+		depth_test,
+		rotation,
+		screen_depth
+	);
+}
+
+// Circle radius and outline thickness use world units, or logical pixels in screen-space mode.
+make_sdf_circle :: (
+	position: V3f,
+	radius: float32,
+	outline_thickness: float32,
+	color: V4f,
+	screen_space: bool = false,
+	depth_test: bool = true,
+	rotation: float32 = 0.0,
+	screen_depth: float32 = 0.0
+) -> WFramegraph.Sdf_Instance {
+	aa_margin: float32 = 0.01;
+	if screen_space
+		aa_margin = 1.0;
+	quad_radius := radius + outline_thickness * 0.5 + aa_margin;
+	return make_sdf_instance(
+		WFramegraph.Sdf_Shape.CIRCLE,
+		position,
+		.{ quad_radius, quad_radius },
+		color,
+		.{ radius, outline_thickness, 0.0, 0.0 },
+		screen_space,
+		depth_test,
+		rotation,
+		screen_depth
+	);
+}
+
+// Lines are round-capped; half_length and full stroke width use world units or logical pixels.
+make_sdf_line :: (
+	position: V3f,
+	half_length: float32,
+	thickness: float32,
+	color: V4f,
+	screen_space: bool = false,
+	depth_test: bool = true,
+	rotation: float32 = 0.0,
+	screen_depth: float32 = 0.0
+) -> WFramegraph.Sdf_Instance {
+	aa_margin: float32 = 0.01;
+	if screen_space
+		aa_margin = 1.0;
+	radius := thickness * 0.5;
+	quad_half_size := V2f.{
+		half_length + radius + aa_margin,
+		radius + aa_margin,
+	};
+	return make_sdf_instance(
+		WFramegraph.Sdf_Shape.LINE,
+		position,
+		quad_half_size,
+		color,
+		.{ half_length, thickness, 0.0, 0.0 },
+		screen_space,
+		depth_test,
+		rotation,
+		screen_depth
+	);
+}
+
 commit_geometry :: (
 	frame: *Frame, pass: *Frame.Pass, model: *Model, count: int, part_idx: int = -1
 ) {
@@ -1798,6 +2061,18 @@ commit_ui :: (frame: *Frame, pass: *Frame.Pass, count: int) {
 	draw.instance_start = frame.cpu_cursor / stride;
 	draw.second_bind_group = pass.current_bind_group;
 	draw.custom_texture = pass.current_custom_texture;
+	array_add(*pass.draws, draw);
+	frame.cpu_cursor += xx (count * stride);
+}
+
+commit_sdf :: (frame: *Frame, pass: *Frame.Pass, count: int) {
+	if count <= 0
+		return;
+
+	stride := size_of(WFramegraph.Sdf_Instance);
+	draw: Frame.Draw;
+	draw.instance_count = count;
+	draw.instance_start = frame.cpu_cursor / stride;
 	array_add(*pass.draws, draw);
 	frame.cpu_cursor += xx (count * stride);
 }
@@ -1858,6 +2133,7 @@ reserve_frame :: (frame: *Frame) {
 	array_resize(*frame.cpu, 64 * 1024 * 1024);
 	array_reserve(*frame.shadow.draws, 1024 * 1024);
 	array_reserve(*frame.geometry.draws, 1024 * 1024);
+	array_reserve(*frame.sdf.draws, 4096);
 	array_reserve(*frame.ui.draws, 1024 * 1024);
 }
 
@@ -1866,6 +2142,7 @@ reset_frame :: (frame: *Frame, current_time: Apollo_Time) {
 	frame.shadow.draws.count = 0;
 	frame.geometry.draws.count = 0;
 	frame.editor.draws.count = 0;
+	frame.sdf.draws.count = 0;
 	frame.ui.draws.count = 0;
 	frame.ui.current_custom_texture = null;
 	frame.current_time = current_time;
@@ -2119,6 +2396,11 @@ present_frame_to :: (
 		framegraph, frame, frame.geometry.uniforms, "Geometry"
 	);
 	defer graphics.gpu.bindGroupRelease(geometry_bind_group);
+	sdf_bind_group: WGPUBindGroup = null;
+	if frame.sdf.draws.count > 0
+		sdf_bind_group = sdf_instance_bind_group(framegraph, frame, frame.sdf.uniforms);
+	defer if sdf_bind_group
+		graphics.gpu.bindGroupRelease(sdf_bind_group);
 	ui_bind_group := ui_instance_bind_group(
 		framegraph, frame, frame.ui.uniforms, store.ui_atlas, store.verdana_atlas
 	);
@@ -2386,6 +2668,42 @@ present_frame_to :: (
 					xx it.instance_start
 				);
 			}
+		}
+		graphics.gpu.renderPassEncoderEnd(pass);
+	}
+	if frame.sdf.draws.count > 0 {
+		attachment: WGPURenderPassColorAttachment;
+		attachment.view = framegraph.hdrTexture.view;
+		attachment.depthSlice = DEPTH_SLICE_UNDEFINED;
+		attachment.loadOp = .Load;
+		attachment.storeOp = .Store;
+		attachment.clearValue = .{ 0.0, 0.0, 0.0, 0.0 };
+
+		depth_attachment: WGPURenderPassDepthStencilAttachment;
+		depth_attachment.view = framegraph.depthView;
+		depth_attachment.depthLoadOp = .Load;
+		depth_attachment.depthStoreOp = .Store;
+		depth_attachment.depthClearValue = 1.0;
+		depth_attachment.stencilLoadOp = .Undefined;
+		depth_attachment.stencilStoreOp = .Undefined;
+		depth_attachment.stencilClearValue = 0;
+
+		pass_desc: WGPURenderPassDescriptor = .{};
+		pass_desc.label = toWGPUStringView("SDF Pass");
+		pass_desc.colorAttachments = *attachment;
+		pass_desc.colorAttachmentCount = 1;
+		pass_desc.depthStencilAttachment = *depth_attachment;
+		pass := graphics.gpu.commandEncoderBeginRenderPass(encoder, *pass_desc);
+		defer graphics.gpu.renderPassEncoderRelease(pass);
+
+		graphics.gpu.renderPassEncoderSetPipeline(pass, framegraph.sdfPipeline);
+		graphics.gpu.renderPassEncoderSetBindGroup(pass, 0, sdf_bind_group, 0, null);
+		for *frame.sdf.draws {
+			if it.instance_count <= 0
+				continue;
+			graphics.gpu.renderPassEncoderDraw(
+				pass, 6, xx it.instance_count, 0, xx it.instance_start
+			);
 		}
 		graphics.gpu.renderPassEncoderEnd(pass);
 	}
@@ -2737,6 +3055,9 @@ render_scene :: (
 	frame.geometry.uniforms = .{};
 	frame.geometry.uniforms.V = Scene.look_at(camera_center, camera_target, .{ 0, 0, 1 });
 	frame.geometry.uniforms.P = Scene.perspective(scene.camera);
+	frame.sdf.uniforms = .{};
+	frame.sdf.uniforms.view_projection = frame.geometry.uniforms.P * frame.geometry.uniforms.V;
+	frame.sdf.uniforms.viewport_size = .{ 1366, 768 };
 
 	frame.geometry.uniforms.shadowV = Scene.look_at(
 		camera_center + V3f.{ 100, 100, 100 }, camera_center, V3f.{ 0, 1, 0 }
@@ -3080,6 +3401,7 @@ render_scene :: (
 
 		frame.geometry.current_bind_group = *framegraph.geometryBindGroup;
 		render_players(frame, *frame.geometry, scene, store, *extra);
+		render_players_sdf(frame, *frame.geometry, scene, store, *extra);
 		render_debris(frame, *frame.geometry, scene, store, *extra);
 		render_keys(frame, *frame.geometry, scene, store, *extra);
 		render_skulls(frame, *frame.geometry, scene, store, *extra);
@@ -4457,6 +4779,26 @@ render_standin :: (
 
 		commit_geometry(frame, pass, model, instanced.count);
 	}
+}
+
+render_players_sdf :: (
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+) {
+	instances := append_sdf_instance_buffer(frame);
+	for scene.players {
+		if it.server.dead
+			continue;
+
+		instances.count += 1;
+		sdf := *instances[instances.count - 1];
+		sdf.* = make_sdf_circle(
+			position=.{ it.client.position.x, it.client.position.y, 0.0 },
+			radius=0.5,
+			outline_thickness=0.05,
+			color=.{ 1.0, 0.12, 0.04, 1.0 }
+		);
+	}
+	commit_sdf(frame, *frame.sdf, instances.count);
 }
 
 render_players :: (
