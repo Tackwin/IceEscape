@@ -13,6 +13,50 @@ V3d :: V3(float64);
 V3f :: V3(float32);
 V3f_MAX :: V3f.{ FLOAT32_MAX, FLOAT32_MAX, FLOAT32_MAX };
 
+// Distributes colors around a fixed-lightness, fixed-chroma CIELAB ring.
+// idx wraps and pool_count must be positive.
+get_evenly_spaced_color :: (idx: int, pool_count: int) -> V3f {
+	assert(pool_count > 0);
+
+	color_idx := idx % pool_count;
+	if color_idx < 0
+		color_idx += pool_count;
+
+	hue: float32 = (xx color_idx / xx pool_count) * (2.0 * PI);
+	lightness: float32 = 70.0;
+	chroma: float32 = 37.0;
+
+	lab_fy := (lightness + 16.0) / 116.0;
+	lab_a := chroma * cos(hue);
+	lab_b := chroma * sin(hue);
+	lab_fx := lab_fy + lab_a / 500.0;
+	lab_fz := lab_fy - lab_b / 200.0;
+
+	// This lightness/chroma ring stays inside sRGB, so the inverse Lab curve is cubic.
+	x := 0.95047 * lab_fx * lab_fx * lab_fx;
+	y := lab_fy * lab_fy * lab_fy;
+	z := 1.08883 * lab_fz * lab_fz * lab_fz;
+
+	red := 3.2406 * x - 1.5372 * y - 0.4986 * z;
+	green := -0.9689 * x + 1.8758 * y + 0.0415 * z;
+	blue := 0.0557 * x - 0.2040 * y + 1.0570 * z;
+
+	if red <= 0.0031308
+		red *= 12.92;
+	else
+		red = 1.055 * pow(red, 1.0 / 2.4) - 0.055;
+	if green <= 0.0031308
+		green *= 12.92;
+	else
+		green = 1.055 * pow(green, 1.0 / 2.4) - 0.055;
+	if blue <= 0.0031308
+		blue *= 12.92;
+	else
+		blue = 1.055 * pow(blue, 1.0 / 2.4) - 0.055;
+
+	return .{ red, green, blue };
+}
+
 V4 :: struct(T: Type) {
 	x: T = 0;
 	y: T = 0;

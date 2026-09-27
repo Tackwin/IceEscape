@@ -170,6 +170,10 @@ Store :: struct #type_info_none {
 	terrain_tile_normal: WRender.WTexture;
 	particle_texture: WRender.WTexture;
 	ui_atlas: WRender.WTexture;
+	lobby_panel_heavy_frame: WRender.WTexture;
+	ui_felt: WRender.WTexture;
+	ui_compact_frame: WRender.WTexture;
+	lobby_button_frame: WRender.WTexture;
 	font_atlas: WRender.WTexture;
 
 	loser_mp3: Platform.Audio;
@@ -790,7 +794,22 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 
 	ui_atlas_png := Assets.load_png(Assets.ui_atlas_png,, temp);
 	store.ui_atlas = WRender.WTexture.make_from_image(ui_atlas_png, "ui_atlas");
+	felt_png := Assets.load_png(Assets.UI_FELT_PNG,, temp);
+	store.ui_felt = WRender.WTexture.make_from_image(felt_png, "ui_felt");
 
+	lobby_panel_heavy_frame_png := Assets.load_png(Assets.LOBBY_PANEL_HEAVY_FRAME_PNG,, temp);
+	store.lobby_panel_heavy_frame = WRender.WTexture.make_from_image(
+		lobby_panel_heavy_frame_png, "lobby_panel_heavy_frame"
+	);
+
+	lobby_button_frame_png := Assets.load_png(Assets.LOBBY_BUTTON_FRAME_PNG,, temp);
+	store.lobby_button_frame = WRender.WTexture.make_from_image(
+		lobby_button_frame_png, "lobby_button_frame"
+	);
+
+
+	compact_png := Assets.load_png(Assets.UI_COMPACT_FRAME_PNG,, temp);
+	store.ui_compact_frame = WRender.WTexture.make_from_image(compact_png, "ui_compact_frame");
 	verdana_atlas_png := Assets.load_png(Assets.verdana_png,, temp);
 	store.verdana_atlas = WRender.WTexture.make_from_image(verdana_atlas_png, "verdana_atlas");
 	store.verdana = Assets.load_font(xx Assets.verdana_csv);

@@ -110,7 +110,7 @@ fn in_shadow(world_pos: vec3f) -> f32 {
 		var c = cos(t) * 2;
 		var s = sin(t) * 2;
 		var uv = shadowUV + vec2f(c * offset.x, s * offset.y);
-		let visibility = textureSampleCompare(shadowMap, shadowSampler, uv, shadowDepth - 0.0001);
+		let visibility = textureSampleCompare(shadowMap, shadowSampler, fract(uv), shadowDepth - 0.0001);
 		if (visibility > 0) {
 			shadow += 1.0;
 		}
@@ -292,10 +292,10 @@ fn textureNoTile(
 	// fetch and blend
 	let b = smoothstep(vec2f(0.25, 0.25), vec2f(0.75, 0.75), fuv);
 	
-	return mix(mix(textureSampleGrad(t, samp, uva, idx, ddxa, ddya),
-	               textureSampleGrad(t, samp, uvb, idx, ddxb, ddyb), b.x),
-	           mix(textureSampleGrad(t, samp, uvc, idx, ddxc, ddyc),
-	               textureSampleGrad(t, samp, uvd, idx, ddxd, ddyd), b.x), b.y);
+	return mix(mix(textureSampleGrad(t, samp, fract(uva), idx, ddxa, ddya),
+	               textureSampleGrad(t, samp, fract(uvb), idx, ddxb, ddyb), b.x),
+	           mix(textureSampleGrad(t, samp, fract(uvc), idx, ddxc, ddyc),
+	               textureSampleGrad(t, samp, fract(uvd), idx, ddxd, ddyd), b.x), b.y);
 }
 
 fn flaggedSample(
@@ -306,7 +306,7 @@ fn flaggedSample(
 	if ((flags & UV_NO_TILE) > 0) {
 		return textureNoTile(map, samp, idx, uv);
 	} else {
-		return textureSample(map, samp, uv, idx);
+		return textureSample(map, samp, fract(uv), idx);
 	}
 	return vec4f();
 }

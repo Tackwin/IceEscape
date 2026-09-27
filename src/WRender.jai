@@ -339,9 +339,9 @@ WTexture :: struct {
 
 		samplerDesc: WGPUSamplerDescriptor = .{};
 		samplerDesc.label = toWGPUStringView(tprint("Texture Sampler (%)", label));
-		samplerDesc.addressModeU = .Repeat;
-		samplerDesc.addressModeV = .Repeat;
-		samplerDesc.addressModeW = .Repeat;
+		samplerDesc.addressModeU = .ClampToEdge;
+		samplerDesc.addressModeV = .ClampToEdge;
+		samplerDesc.addressModeW = .ClampToEdge;
 		samplerDesc.magFilter = .Linear;
 		samplerDesc.minFilter = .Linear;
 		samplerDesc.mipmapFilter = .Linear;
@@ -371,7 +371,9 @@ WTexture :: struct {
 	}
 
 	make_from_image :: (
-		image: Image, label: string = "unknown", tiles_count := V2i.{ 1, 1 }
+		image: Image,
+		label: string = "unknown",
+		tiles_count := V2i.{ 1, 1 }
 	) -> WTexture {
 		texture: WTexture;
 
@@ -451,9 +453,9 @@ WTexture :: struct {
 
 		samplerDesc: WGPUSamplerDescriptor = .{};
 		samplerDesc.label = toWGPUStringView(tprint("Texture Sampler (%)", label));
-		samplerDesc.addressModeU = .Repeat;
-		samplerDesc.addressModeV = .Repeat;
-		samplerDesc.addressModeW = .Repeat;
+		samplerDesc.addressModeU = .ClampToEdge;
+		samplerDesc.addressModeV = .ClampToEdge;
+		samplerDesc.addressModeW = .ClampToEdge;
 		samplerDesc.magFilter = .Linear;
 		samplerDesc.minFilter = .Linear;
 		samplerDesc.mipmapFilter = .Linear;
@@ -1162,9 +1164,9 @@ init_present_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 	{
 		samplerDesc: WGPUSamplerDescriptor = .{};
 		samplerDesc.label = toWGPUStringView("Present Sampler");
-		samplerDesc.addressModeU = .Repeat;
-		samplerDesc.addressModeV = .Repeat;
-		samplerDesc.addressModeW = .Repeat;
+		samplerDesc.addressModeU = .ClampToEdge;
+		samplerDesc.addressModeV = .ClampToEdge;
+		samplerDesc.addressModeW = .ClampToEdge;
 		samplerDesc.magFilter = .Linear;
 		samplerDesc.minFilter = .Linear;
 		samplerDesc.mipmapFilter = .Linear;
@@ -2063,6 +2065,25 @@ commit_ui :: (frame: *Frame, pass: *Frame.Pass, count: int) {
 	draw.custom_texture = pass.current_custom_texture;
 	array_add(*pass.draws, draw);
 	frame.cpu_cursor += xx (count * stride);
+}
+
+UI_Draw_Item :: struct {
+	instance: WFramegraph.UI_Instance;
+	z: float32;
+	custom_texture: *WTexture = null;
+	order: int;
+}
+
+ui_draw_item_sort :: (a: UI_Draw_Item, b: UI_Draw_Item) -> int {
+	if a.z < b.z
+		return -1;
+	if a.z > b.z
+		return 1;
+	if a.order < b.order
+		return -1;
+	if a.order > b.order
+		return 1;
+	return 0;
 }
 
 commit_sdf :: (frame: *Frame, pass: *Frame.Pass, count: int) {
@@ -3451,79 +3472,68 @@ render_gui :: (
 
 	font := *store.verdana;
 
-	instances := append_ui_instance_buffer(frame);
+	items: [..] UI_Draw_Item;
+	items.allocator = temp;
+	array_reserve(*items, gui_state.quads.count + gui_state.chars.count);
 	for gui_state.quads {
-		if it.late
-			continue;
-		instances.count += 1;
-		instance := *instances[instances.count - 1];
-		instance.* = .{};
-		instance.pos = it.pos;
-		instance.size = it.size;
-		instance.color = it.color;
-		instance.z30sdf2 = xx (it.z * 400);
-		instance.texture_rect = it.texture_rect;
+		item: UI_Draw_Item;
+		item.instance.pos = it.pos;
+		item.instance.size = it.size;
+		item.instance.color = it.color;
+		// Sort on the actual depth. Low shader bits are flags, not fractional depth.
+		item.z = it.z;
+		if it.address_mode == GUI.Texture_Address_Mode.Repeat item.instance.z30sdf2 = 2;
+		item.instance.texture_rect = it.texture_rect;
+		if it.custom_texture
+			item.custom_texture = it.custom_texture.(*WTexture);
+		if !item.custom_texture && it.custom_texture_idx >= 0 {
+			item.custom_texture = Store.user_texture(store, it.custom_texture_idx);
+			if item.custom_texture && item.custom_texture.gpu
+				item.instance.color = V4f.{ 1, 1, 1, 1 };
+		}
+		if item.custom_texture && WTexture.is_gpu_valid(item.custom_texture)
+			item.instance.use_custom_texture = 1;
+		else {
+			// An unavailable custom image must not accidentally sample the UI atlas.
+			if it.custom_texture || it.custom_texture_idx >= 0 continue;
+			item.custom_texture = null;
+		}
+		item.order = items.count;
+		array_add(*items, item);
 	}
 
 	for gui_state.chars {
-		instances.count += 1;
-		instance := *instances[instances.count - 1];
-		instance.* = .{};
+		item: UI_Draw_Item;
 
 		glyph := font.glyphs[it.id];
 
-		instance.pos = it.pos;
-		instance.size = it.size;
-		instance.texture_rect.x = glyph.atlasx / 1024;
-		instance.texture_rect.y = glyph.atlasy / 1024;
-		instance.texture_rect.z = (glyph.atlasw - glyph.atlasx) / 1024;
-		instance.texture_rect.w = (glyph.atlash - glyph.atlasy) / 1024;
-		instance.z30sdf2 = (it.z * 400).(u32) + 1;
-		instance.color = it.color;
-		instance.outline = ifx it.outline then 1.0 else 0.0;
+		item.instance.pos = it.pos;
+		item.instance.size = it.size;
+		item.instance.texture_rect.x = glyph.atlasx / 1024;
+		item.instance.texture_rect.y = glyph.atlasy / 1024;
+		item.instance.texture_rect.z = (glyph.atlasw - glyph.atlasx) / 1024;
+		item.instance.texture_rect.w = (glyph.atlash - glyph.atlasy) / 1024;
+		item.z = it.z;
+		item.instance.z30sdf2 = 1;
+		item.instance.color = it.color;
+		item.instance.outline = ifx it.outline then 1.0 else 0.0;
+		item.order = items.count;
+		array_add(*items, item);
 	}
 
-	instance_sort :: (a: WFramegraph.UI_Instance, b: WFramegraph.UI_Instance) -> int {
-		az := a.z30sdf2 / 4;
-		bz := b.z30sdf2 / 4;
-		if az < bz
-			return -1;
-		if az > bz
-			return 1;
-		return 0;
-	};
-	quick_sort(instances, instance_sort);
-	commit_ui(frame, *frame.ui, instances.count);
-	instances = append_ui_instance_buffer(frame);
-
-	last_custom_texture := -1;
-	for gui_state.quads {
-		if !it.late
-			continue;
-
-		if it.custom_texture_idx != last_custom_texture {
-			user_texture := Store.user_texture(store, it.custom_texture_idx);
-			if user_texture && user_texture.gpu {
-				quick_sort(instances, instance_sort);
-				commit_ui(frame, *frame.ui, instances.count);
-				instances = append_ui_instance_buffer(frame);
-				last_custom_texture = it.custom_texture_idx;
-				frame.ui.current_custom_texture = user_texture;
-			}
+	quick_sort(items, ui_draw_item_sort);
+	instances := append_ui_instance_buffer(frame);
+	current_custom_texture: *WTexture = null;
+	for items {
+		if it.custom_texture != current_custom_texture {
+			commit_ui(frame, *frame.ui, instances.count);
+			instances = append_ui_instance_buffer(frame);
+			current_custom_texture = it.custom_texture;
+			frame.ui.current_custom_texture = current_custom_texture;
 		}
-
 		instances.count += 1;
-		instance := *instances[instances.count - 1];
-		instance.* = .{};
-		instance.pos = it.pos;
-		instance.size = it.size;
-		instance.color = it.color;
-		instance.z30sdf2 = xx (it.z * 400);
-		instance.texture_rect = it.texture_rect;
-		if it.custom_texture_idx >= 0
-			instance.use_custom_texture = 1;
+		instances[instances.count - 1] = it.instance;
 	}
-	quick_sort(instances, instance_sort);
 	commit_ui(frame, *frame.ui, instances.count);
 }
 
@@ -4792,9 +4802,9 @@ render_players_sdf :: (
 		instances.count += 1;
 		sdf := *instances[instances.count - 1];
 		sdf.* = make_sdf_circle(
-			position=.{ it.client.position.x, it.client.position.y, 0.0 },
-			radius=0.5,
-			outline_thickness=0.05,
+			position=.{ it.client.position.x, it.client.position.y, 0.01 },
+			radius=0.2,
+			outline_thickness=0.02,
 			color=.{ 1.0, 0.12, 0.04, 1.0 }
 		);
 	}
