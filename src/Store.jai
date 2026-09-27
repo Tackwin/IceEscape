@@ -797,18 +797,18 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	felt_png := Assets.load_png(Assets.UI_FELT_PNG,, temp);
 	store.ui_felt = WRender.WTexture.make_from_image(felt_png, "ui_felt");
 
-	lobby_panel_heavy_frame_png := Assets.load_png(Assets.LOBBY_PANEL_HEAVY_FRAME_PNG,, temp);
+	lobby_panel_heavy_frame_png := Assets.load_png(Assets.UI_PANEL_FRAME_PNG,, temp);
 	store.lobby_panel_heavy_frame = WRender.WTexture.make_from_image(
 		lobby_panel_heavy_frame_png, "lobby_panel_heavy_frame"
 	);
 
-	lobby_button_frame_png := Assets.load_png(Assets.LOBBY_BUTTON_FRAME_PNG,, temp);
+	lobby_button_frame_png := Assets.load_png(Assets.UI_BTN_DARK_FRAME_PNG,, temp);
 	store.lobby_button_frame = WRender.WTexture.make_from_image(
 		lobby_button_frame_png, "lobby_button_frame"
 	);
 
 
-	compact_png := Assets.load_png(Assets.UI_COMPACT_FRAME_PNG,, temp);
+	compact_png := Assets.load_png(Assets.UI_BTN_COMPACT_FRAME_PNG,, temp);
 	store.ui_compact_frame = WRender.WTexture.make_from_image(compact_png, "ui_compact_frame");
 	verdana_atlas_png := Assets.load_png(Assets.verdana_png,, temp);
 	store.verdana_atlas = WRender.WTexture.make_from_image(verdana_atlas_png, "verdana_atlas");
