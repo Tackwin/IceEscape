@@ -253,15 +253,10 @@ COIN_LAUNCH_MP3_PATH :: "assets/Sound/coin_launch.mp3";
 #insert #run embed_data("TERRAIN_TILE_NORMAL_PNG", "Images/tile_normal.png", #filepath);
 #insert #run embed_data("PARTICLE_TEXTURE_PNG", "Images/particle_texture.png", #filepath);
 #insert #run embed_data("ui_atlas_png", "UI/ui_atlas_v2.png", #filepath);
-#insert #run embed_data("UI_FELT_PNG", "UI/felt_tile.png", #filepath);
-#insert #run embed_data("UI_COMPACT_FRAME_PNG", "UI/compact_controls/textures/button_compact_frame.png", #filepath);
-#insert #run embed_data(
-	"LOBBY_PANEL_HEAVY_FRAME_PNG", "UI/iceescape_9slice_v1/textures/panel_heavy_frame.png", #filepath
-);
-
-#insert #run embed_data(
-	"LOBBY_BUTTON_FRAME_PNG", "UI/iceescape_9slice_v1/textures/button_dark_frame.png", #filepath
-);
+#insert #run embed_data("UI_FELT_PNG", "UI/textures/felt_noise.png", #filepath);
+#insert #run embed_data("UI_PANEL_FRAME_PNG", "UI/textures/panel_frame.png", #filepath);
+#insert #run embed_data("UI_BTN_COMPACT_FRAME_PNG", "UI/textures/button_compact_frame.png", #filepath);
+#insert #run embed_data("UI_BTN_DARK_FRAME_PNG", "UI/textures/button_dark_frame.png", #filepath);
 
 
 
@@ -297,9 +292,9 @@ load_everything :: (platform: Platform) {
 			"QUAD_TEXTURE_FRAGMENT",
 			"ui_atlas_png",
 			"UI_FELT_PNG",
-			"UI_COMPACT_FRAME_PNG",
-			"LOBBY_PANEL_HEAVY_FRAME_PNG",
-			"LOBBY_BUTTON_FRAME_PNG",
+			"UI_BTN_COMPACT_FRAME_PNG",
+			"UI_BTN_DARK_FRAME_PNG",
+			"UI_PANEL_FRAME_PNG",
 			"VEHICLE_RACER_OBJ",
 			"VEHICLE_SUV_OBJ",
 			"VEHICLE_SPEEDSTER_OBJ",
