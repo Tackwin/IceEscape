@@ -109,14 +109,14 @@ fn fxaa(uv: vec2u) -> vec4f {
 	
 	//Average middle texels along dir line
 	let A = 0.5 * (
-		textureSample(albedoMap, albedoSampler, vec2f(uv) / uniforms.size - dir * (1.0/6.0)) +
-		textureSample(albedoMap, albedoSampler, vec2f(uv) / uniforms.size + dir * (1.0/6.0))
+		textureSample(albedoMap, albedoSampler, clamp(vec2f(uv) / uniforms.size - dir * (1.0/6.0), vec2f(0.0), vec2f(1.0))) +
+		textureSample(albedoMap, albedoSampler, clamp(vec2f(uv) / uniforms.size + dir * (1.0/6.0), vec2f(0.0), vec2f(1.0)))
 	);
 	
 	//Average with outer texels along dir line
 	let B = A * 0.5 + 0.25 * (
-		textureSample(albedoMap, albedoSampler, vec2f(uv) / uniforms.size - dir * 0.5) +
-		textureSample(albedoMap, albedoSampler, vec2f(uv) / uniforms.size + dir * 0.5)
+		textureSample(albedoMap, albedoSampler, clamp(vec2f(uv) / uniforms.size - dir * 0.5, vec2f(0.0), vec2f(1.0))) +
+		textureSample(albedoMap, albedoSampler, clamp(vec2f(uv) / uniforms.size + dir * 0.5, vec2f(0.0), vec2f(1.0)))
 	);
 		
 		

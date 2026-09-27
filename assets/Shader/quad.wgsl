@@ -73,16 +73,26 @@ fn screenPxRange(uv: vec2f, scale: f32) -> f32 {
 	return max(0.5 * dot(unitRange, screenTexSize), 1.0);
 }
 
+fn address_uv(uv: vec2f, wrap_uvs: bool) -> vec2f {
+	if (wrap_uvs) {
+		return fract(uv);
+	}
+	return clamp(uv, vec2f(0.0), vec2f(1.0));
+}
+
 @fragment fn fs(
 	@location(0) uv: vec2f,
 	@interpolate(flat) @location(1) instanceIndex: u32,
 ) -> @location(0) vec4f {
 	let instance = instanceData[instanceIndex];
+	// Addressing is per draw, not part of the texture/sampler resource.
+	let repeat_uvs = (instance.z30sdf2 & 2u) != 0u;
+	let sample_uv = address_uv(uv, repeat_uvs);
 
 	var color = instance.color;
 	if (abs(instance.texture_rect.z) > 0.0 && abs(instance.texture_rect.w) > 0.0) {
-		if ((instance.z30sdf2 % 4) > 0) {
-			var msd = textureSample(sdfMap, sdfSampler, uv, 0).rgb;
+		if ((instance.z30sdf2 & 1u) != 0u) {
+			var msd = textureSample(sdfMap, sdfSampler, address_uv(uv, false), 0).rgb;
 			var sd = median(msd.r, msd.g, msd.b);
 			var width = screenPxRange(uv, 1.0);
 
@@ -120,9 +130,9 @@ fn screenPxRange(uv: vec2f, scale: f32) -> f32 {
 		}
 		else {
 			if (instance.use_custom_texture > 0) {
-				color = textureSample(customTexture, customSampler, uv, 0);
+				color = textureSample(customTexture, customSampler, sample_uv, 0) * instance.color;
 			} else {
-				color = textureSample(albedoMap, albedoSampler, uv, 0);
+				color = textureSample(albedoMap, albedoSampler, address_uv(uv, false), 0) * instance.color;
 			}
 		}
 	}

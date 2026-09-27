@@ -15,9 +15,56 @@ Scene :: #import "Scene";
 #import "Reflection";
 #scope_export
 
+Nine_Slice_Edge_Mode :: enum {
+	Stretch;
+	Mirror_Repeat;
+}
+
+Nine_Slice_Center_Mode :: enum {
+	Stretch;
+	Transparent;
+}
+
+Texture_Address_Mode :: enum {
+	Clamp;
+	Repeat;
+}
+
+Nine_Slice_Style :: struct {
+	texture: *void = null;
+	texture_size: V2f;
+	// Source-space pixel borders in left, top, right, bottom order.
+	borders: V4f;
+	scale: float32 = 0.8;
+	edge_mode: Nine_Slice_Edge_Mode = .Mirror_Repeat;
+	center_mode: Nine_Slice_Center_Mode = .Stretch;
+	fill_color: V4f = .{ 0, 0, 0, 0 };
+	fill_inset: float32 = 0;
+}
+
+Table_Style :: struct {
+	selectable := true;
+	vertical_rules := true;
+	dashed_header := true;
+	header_size := 14.0;
+	compact_icons := false;
+	background_color: V4f = .{ 0.9, 0.9, 0.9, 1 };
+	left_rail_color: V4f = .{ 0.7, 0.7, 0.7, 1 };
+	header_color: V4f = .{ 1, 1, 1, 1 };
+	text_color: V4f = .{ 1, 1, 1, 1 };
+	separator_color: V4f = .{ 0.4, 0.4, 0.4, 1 };
+	selected_color: V4f = .{ 0.6, 0.6, 0.6, 1 };
+	hover_color: V4f = .{ 0.3, 0.3, 0.3, 1 };
+	selected_row_skin: Nine_Slice_Style;
+	button_skin: Nine_Slice_Style;
+}
+
 #load "GUI_String.jai";
 
 Z_SLOT :: V2f.{ 0, 15 };
+RELOAD_SLOT :: V2f.{ 10, 15 };
+PLAY_SLOT :: V2f.{ 11, 15 };
+EYE_SLOT :: V2f.{ 12, 15 };
 Q_SLOT :: V2f.{ 1, 15 };
 C_SLOT :: V2f.{ 2, 15 };
 UP_SLOT :: V2f.{ 3, 15 };
@@ -147,8 +194,10 @@ GUI_State :: struct {
 		color: V4f = .{ 1.0, 1.0, 1.0, 1.0 };
 		z: float32 = 0;
 		texture_rect: V4f = .{ 0, 0, 0, 0 };
+		custom_texture: *void = null;
 		late := false;
 		custom_texture_idx := -1;
+		address_mode: Texture_Address_Mode = .Clamp;
 	}
 	quads: [..] Quad;
 
@@ -178,6 +227,8 @@ GUI_State :: struct {
 	controls: Controls.State;
 
 	handled_mouse := false;
+	mouse_left_owner: u64;
+	mouse_right_owner: u64;
 
 	main_font: *Platform.Font;
 
@@ -197,6 +248,8 @@ GUI_State :: struct {
 		child_ids: [..] u64;
 		has_cursor_extent := false;
 		cursor_extent: AABBf;
+		has_fixed_bounds := false;
+		fixed_bounds: AABBf;
 	}
 	flow_stack: [..] Flow;
 
@@ -230,6 +283,7 @@ GUI_State :: struct {
 		just_pressed := false;
 
 		keyboard_focused := false;
+		modal_barrier := false;
 
 		age: int = 0;
 	}
@@ -348,6 +402,7 @@ push_flow :: (
 	child.child_ids = empty_ids;
 	child.has_cursor_extent = false;
 	child.cursor_extent = .{};
+	child.has_fixed_bounds = false;
 	child.direction = direction;
 	if has_origin {
 		child.cursor = origin;
@@ -395,6 +450,27 @@ row :: (gui: *GUI_State, origin: V2f, direction := GUI_State.Direction.Right, z 
 	begin(gui, origin, direction, z, align);
 }
 
+
+// A sized container occupies one slot in its parent flow. Its children use
+// their own cursor and cannot change that slot's dimensions.
+box :: (
+	gui: *GUI_State,
+	size: V2f,
+	direction := GUI_State.Direction.Down,
+	inset := V2f.{ 0, 0 },
+	gap := V2f.{ 0, 0 },
+	z := FLOAT32_MAX
+) -> AABBf {
+	origin := flow(gui).cursor;
+	begin(gui, direction, z, .Top_Left);
+	f := flow(gui);
+	f.has_fixed_bounds = true;
+	f.fixed_bounds = .{ origin, origin + size };
+	f.cursor = origin + inset;
+	f.origin = f.cursor;
+	f.padding = gap;
+	return f.fixed_bounds;
+}
 
 end :: (gui: *GUI_State) {
 	assert(gui.flow_stack.count > 0);
@@ -459,7 +535,28 @@ move_cursor :: (state: *GUI_State, delta: float) {
 space :: (state: *GUI_State, amount: float) {
 	move_cursor(state, amount);
 }
+
+horizontal_rule :: (
+	state: *GUI_State,
+	width: float,
+	color := LOBBY_SEPARATOR,
+	thickness := 1.0,
+	z := FLOAT32_MAX
+) {
+	f := flow(state);
+	push_quad_screen(
+		state,
+		f.cursor,
+		.{ width, thickness },
+		v3(color),
+		ifx z == FLOAT32_MAX then f.z else z,
+		color.w
+	);
+	space(state, thickness);
+}
+
 advance_cursor :: (gui: *GUI_State, origin: V2f, dir: GUI_State.Direction, aabb: AABBf) {
+	grow_flow_extent(flow(gui), aabb);
 	extent := aabb_width(aabb) + flow(gui).padding.x;
 	if dir == .Down || dir == .Up {
 		extent = aabb_height(aabb) + flow(gui).padding.y;
@@ -492,10 +589,10 @@ container_aabb :: (gui: *GUI_State) -> AABBf {
 		return AABBf.{ .{ 0, 0 }, .{ 0, 0 } };
 	}
 	f := *gui.flow_stack[gui.flow_stack.count - 1];
+	if f.has_fixed_bounds return f.fixed_bounds;
 	aabb := AABBf.{ f.origin, f.origin };
-	if f.child_ids.count > 0 {
-		aabb = aabb_union(aabb, widgets_aabb(gui, f.child_ids));
-	}
+	// Layout is recorded when a flow widget advances, not by walking its
+	// internal state/label widgets (which may have no bounds or overlap).
 	if f.has_cursor_extent {
 		aabb = aabb_union(aabb, f.cursor_extent);
 	}
@@ -612,6 +709,7 @@ widget :: (state: *GUI_State, raw_id: $Id, $T: Type, default: T = .{}) -> *T, *G
 			user_state.touched = true;
 			return user_state.user.(*T), user_state;
 		}
+		free(user_state.user);
 	}
 
 	widget_state: GUI_State.Widget;
@@ -651,6 +749,7 @@ widget_sized :: (
 gc_user_state :: (state: *GUI_State) {
 	for * value, key: state.widgets {
 		if !value.touched {
+			free(value.user);
 			remove key;
 			continue;
 		}
@@ -710,69 +809,59 @@ begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Con
 	quick_sort(widget_ids, (pair) => -pair.z );
 
 	met_keyboard_focused := false;
+	keyboard_blocked := false;
+	left_available := true;
+	right_available := true;
+	if state.controls.just_pressed[Key.MouseLeft] state.mouse_left_owner = 0;
+	if state.controls.just_pressed[Key.MouseRight] state.mouse_right_owner = 0;
 
 	for widget_ids {
 		widget := table_find_pointer(*state.widgets, it.id);
-		if !widget
-			continue;
-
-		if widget.physical == .Empty
-			continue;
-
-		if area(widget.aabb) == 0
-			continue;
-
-		before_pressed := widget.pressed;
-		defer if !before_pressed && widget.pressed {
-			widget.just_pressed = true;
-		}
-
+		if !widget continue;
 		widget.hovered = false;
 		widget.pressed = false;
 		widget.released = false;
 		widget.just_pressed = false;
-
-		if met_keyboard_focused
+		if keyboard_blocked || met_keyboard_focused || state.controls.just_pressed[Key.MouseLeft]
 			widget.keyboard_focused = false;
-		if widget.keyboard_focused
-			met_keyboard_focused = true;
-
-		defer {
-			state.controls.captured_mouse |= widget.pressed;
-			state.controls.captured_mouse |= widget.released;
+		if widget.keyboard_focused met_keyboard_focused = true;
+		if widget.modal_barrier {
+			keyboard_blocked = true;
+			state.controls.captured_keyboard = true;
 		}
+		if widget.physical == .Empty || area(widget.aabb) <= 0 continue;
+		if !in(widget.aabb, state.controls.mouse_pos) continue;
 
-		if in(widget.aabb, state.controls.mouse_pos) {
-			widget.hovered = (widget.physical & .Mouse) != .Empty;
-			if !state.controls.captured_mouse {
-				if widget.physical & .Mouse_Left {
-					if state.controls.pressed[Key.MouseLeft] {
-						widget.pressed = true;
-					}
-					if state.controls.just_pressed[Key.MouseLeft] {
-						widget.just_pressed = true;
-					}
-					if (state.controls.just_released[Key.MouseLeft]) {
-						widget.released = true;
-					}
-				}
-
-				if widget.physical & .Mouse_Right {
-					if state.controls.pressed[Key.MouseRight] {
-						widget.pressed = true;
-					}
-					if state.controls.just_pressed[Key.MouseRight] {
-						widget.just_pressed = true;
-					}
-					if (state.controls.just_released[Key.MouseRight]) {
-						widget.released = true;
-					}
-				}
+		if left_available && (widget.physical & .Mouse_Left) != .Empty {
+			widget.hovered = true;
+			left_available = false;
+			if state.controls.just_pressed[Key.MouseLeft] {
+				state.mouse_left_owner = it.id;
+				widget.just_pressed = true;
 			}
+			if state.mouse_left_owner == it.id {
+				widget.pressed = state.controls.pressed[Key.MouseLeft];
+				widget.released = state.controls.just_released[Key.MouseLeft];
+			}
+			state.controls.captured_mouse = true;
+		}
+		if right_available && (widget.physical & .Mouse_Right) != .Empty {
+			widget.hovered = true;
+			right_available = false;
+			if state.controls.just_pressed[Key.MouseRight] {
+				state.mouse_right_owner = it.id;
+				widget.just_pressed = true;
+			}
+			if state.mouse_right_owner == it.id {
+				widget.pressed |= state.controls.pressed[Key.MouseRight];
+				widget.released |= state.controls.just_released[Key.MouseRight];
+			}
+			state.controls.captured_mouse = true;
 		}
 	}
-
-	state.controls.captured_keyboard = met_keyboard_focused;
+	if state.controls.just_released[Key.MouseLeft] state.mouse_left_owner = 0;
+	if state.controls.just_released[Key.MouseRight] state.mouse_right_owner = 0;
+	state.controls.captured_keyboard |= met_keyboard_focused;
 }
 
 push_checkbox :: (
@@ -867,6 +956,245 @@ push_quad_texture :: (state: *GUI_State, pos: V2f, size: V2f, color: V3f, tex_sl
 	array_add(*state.quads, quad);
 }
 
+push_quad_custom_texture :: (
+	state: *GUI_State,
+	pos: V2f,
+	size: V2f,
+	texture: *void,
+	texture_rect := V4f.{ 0, 0, 1, 1 },
+	z := 0.0,
+	color := V4f.{ 1, 1, 1, 1 }
+) -> *state.Quad {
+	quad: state.Quad;
+	quad.pos = pos;
+	quad.size = size;
+	quad.color = color;
+	quad.texture_rect = texture_rect;
+	quad.custom_texture = texture;
+	quad.late = true;
+	quad.z = z;
+	array_add(*state.quads, quad);
+	return *state.quads[state.quads.count - 1];
+}
+
+push_tiled_texture :: (
+	state: *GUI_State,
+	pos: V2f,
+	size: V2f,
+	texture: *void,
+	texture_size: V2f,
+	z := 0.0,
+	color := V4f.{ 1, 1, 1, 1 }
+) -> *state.Quad {
+	if !texture || texture_size.x <= 0 || texture_size.y <= 0 || size.x <= 0 || size.y <= 0
+		return null;
+
+	uv_size := V2f.{ size.x / texture_size.x, size.y / texture_size.y };
+	quad := push_quad_custom_texture(
+		state,
+		pos,
+		size,
+		texture,
+		.{ 0, 0, uv_size.x, uv_size.y },
+		z,
+		color
+	);
+	quad.address_mode = .Repeat;
+	return quad;
+}
+
+push_nine_slice_piece :: (
+	state: *GUI_State,
+	pos: V2f,
+	size: V2f,
+	texture: *void,
+	texture_size: V2f,
+	source: V4f,
+	z: float32,
+	color: V4f,
+	mirror_x := false,
+	mirror_y := false
+) {
+	if size.x <= 0 || size.y <= 0 || source.z <= 0 || source.w <= 0
+		return;
+
+	uv: V4f;
+	uv.x = (source.x + 0.5) / texture_size.x;
+	uv.y = (source.y + 0.5) / texture_size.y;
+	uv.z = max(source.z - 1, 0.0001) / texture_size.x;
+	uv.w = max(source.w - 1, 0.0001) / texture_size.y;
+	if mirror_x {
+		uv.x += uv.z;
+		uv.z = -uv.z;
+	}
+	if mirror_y {
+		uv.y += uv.w;
+		uv.w = -uv.w;
+	}
+	push_quad_custom_texture(state, pos, size, texture, uv, z, color);
+}
+
+push_nine_slice :: (
+	state: *GUI_State,
+	pos: V2f,
+	size: V2f,
+	style: Nine_Slice_Style,
+	z := 0.0,
+	color := V4f.{ 1, 1, 1, 1 }
+) {
+	texture := style.texture;
+	texture_size := style.texture_size;
+	if !texture || texture_size.x <= 0 || texture_size.y <= 0 || size.x <= 0 || size.y <= 0 || style.scale <= 0
+		return;
+
+	left := max(0.0, style.borders.x);
+	top := max(0.0, style.borders.y);
+	right := max(0.0, style.borders.z);
+	bottom := max(0.0, style.borders.w);
+	if left + right > texture_size.x || top + bottom > texture_size.y return;
+	slice_scale := max(0.0, style.scale);
+	if left + right > 0
+		slice_scale = min(slice_scale, size.x / (left + right));
+	if top + bottom > 0
+		slice_scale = min(slice_scale, size.y / (top + bottom));
+	dest_left := left * slice_scale;
+	dest_top := top * slice_scale;
+	dest_right := right * slice_scale;
+	dest_bottom := bottom * slice_scale;
+	center_width := max(0.0, size.x - dest_left - dest_right);
+	center_height := max(0.0, size.y - dest_top - dest_bottom);
+	source_center_width := max(0.0, texture_size.x - left - right);
+	source_center_height := max(0.0, texture_size.y - top - bottom);
+
+	if style.fill_color.w > 0 {
+		fill_inset := style.fill_inset * slice_scale;
+		fill_size := size - V2f.{ fill_inset * 2, fill_inset * 2 };
+		if fill_size.x > 0 && fill_size.y > 0 {
+			fill_color := V4f.{
+				style.fill_color.x * color.x,
+				style.fill_color.y * color.y,
+				style.fill_color.z * color.z,
+				style.fill_color.w * color.w,
+			};
+			push_quad_screen(
+				state,
+				pos + V2f.{ fill_inset, fill_inset },
+				fill_size,
+				v3(fill_color),
+				z - 0.001,
+				fill_color.w
+			);
+		}
+	}
+
+	if style.center_mode == .Stretch && center_width > 0 && center_height > 0 {
+		push_nine_slice_piece(
+			state,
+			pos + V2f.{ dest_left, dest_top },
+			V2f.{ center_width, center_height },
+			texture,
+			texture_size,
+			V4f.{ left, top, source_center_width, source_center_height },
+			z,
+			color
+		);
+	}
+
+	// Repeat the long rails at the authored UI scale; mirror alternate segments
+	// so the metal grain stays continuous without stretching over large panels.
+	if source_center_width > 0 && center_width > 0 {
+		repeat_count := 1;
+		if style.edge_mode == .Mirror_Repeat && slice_scale > 0 {
+			repeat_count = max(
+				1,
+				ceil(center_width / (source_center_width * slice_scale * 1.25)).(int)
+			);
+		}
+		for i: 0..repeat_count - 1 {
+			segment_start := center_width * i / repeat_count;
+			segment_end := center_width * (i + 1) / repeat_count;
+			mirror := i % 2 == 1;
+			push_nine_slice_piece(
+				state,
+				pos + V2f.{ dest_left + segment_start, 0 },
+				V2f.{ segment_end - segment_start, dest_top },
+				texture,
+				texture_size,
+				V4f.{ left, 0, source_center_width, top },
+				z,
+				color,
+				mirror_x = mirror
+			);
+			push_nine_slice_piece(
+				state,
+				pos + V2f.{ dest_left + segment_start, size.y - dest_bottom },
+				V2f.{ segment_end - segment_start, dest_bottom },
+				texture,
+				texture_size,
+				V4f.{ left, texture_size.y - bottom, source_center_width, bottom },
+				z,
+				color,
+				mirror_x = mirror
+			);
+		}
+	}
+
+	if source_center_height > 0 && center_height > 0 {
+		repeat_count := 1;
+		if style.edge_mode == .Mirror_Repeat && slice_scale > 0 {
+			repeat_count = max(
+				1,
+				ceil(center_height / (source_center_height * slice_scale * 1.25)).(int)
+			);
+		}
+		for i: 0..repeat_count - 1 {
+			segment_start := center_height * i / repeat_count;
+			segment_end := center_height * (i + 1) / repeat_count;
+			mirror := i % 2 == 1;
+			push_nine_slice_piece(
+				state,
+				pos + V2f.{ 0, dest_top + segment_start },
+				V2f.{ dest_left, segment_end - segment_start },
+				texture,
+				texture_size,
+				V4f.{ 0, top, left, source_center_height },
+				z,
+				color,
+				mirror_y = mirror
+			);
+			push_nine_slice_piece(
+				state,
+				pos + V2f.{ size.x - dest_right, dest_top + segment_start },
+				V2f.{ dest_right, segment_end - segment_start },
+				texture,
+				texture_size,
+				V4f.{ texture_size.x - right, top, right, source_center_height },
+				z,
+				color,
+				mirror_y = mirror
+			);
+		}
+	}
+
+	push_nine_slice_piece(
+		state, pos, V2f.{ dest_left, dest_top }, texture, texture_size,
+		V4f.{ 0, 0, left, top }, z, color
+	);
+	push_nine_slice_piece(
+		state, pos + V2f.{ size.x - dest_right, 0 }, V2f.{ dest_right, dest_top },
+		texture, texture_size, V4f.{ texture_size.x - right, 0, right, top }, z, color
+	);
+	push_nine_slice_piece(
+		state, pos + V2f.{ 0, size.y - dest_bottom }, V2f.{ dest_left, dest_bottom },
+		texture, texture_size, V4f.{ 0, texture_size.y - bottom, left, bottom }, z, color
+	);
+	push_nine_slice_piece(
+		state, pos + V2f.{ size.x - dest_right, size.y - dest_bottom },
+		V2f.{ dest_right, dest_bottom }, texture, texture_size,
+		V4f.{ texture_size.x - right, texture_size.y - bottom, right, bottom }, z, color
+	);
+}
+
 push_late_quad_screen :: (
 	state: *GUI_State, aabb: AABBf, color: V4f, z := 0.0
 ) -> *state.Quad {
@@ -922,7 +1250,7 @@ horizontal :: (align: Align) -> Align {
 	return align & 0b0011;
 }
 
-push_buy_prompt :: (state: *GUI_State, scene: *Scene.Scene) {
+push_buy_prompt :: (state: *GUI_State, scene: *Scene.Scene, store: *Store) {
 	V := Scene.look_at(scene.camera.position, scene.camera.target, .{ 0, 0, 1 });
 	P := Scene.perspective(scene.camera);
 
@@ -959,14 +1287,19 @@ push_buy_prompt :: (state: *GUI_State, scene: *Scene.Scene) {
 						state.controls.window_size.y / 2 -
 						pos.y * (state.controls.window_size.y) / 2;
 
-					atom_label(state, prompt, screen_p, 24, z=10, align = .Center, outline = true);
+					label := atom_label(state, prompt, screen_p, 24, z=10, align = .Center, outline = true,
+						color = GOLD_ACCENT);
+					push_nine_slice(state,
+						label.aabb_min - v2(10),
+						label.aabb_max - label.aabb_min + v2(20),
+						compact_button_skin(store, LOBBY_BUTTON_DARK), 9.8);
 				}
 			}
 		}
 	}
 }
 
-push_breaking_news :: (state: *GUI_State, news: [] Scene.Breaking_News) {
+push_breaking_news :: (state: *GUI_State, news: [] Scene.Breaking_News, store: *Store) {
 	cursor := V2f.{ state.controls.window_size.x / 2, 16};
 	for news {
 		t := to_float64_seconds(state.controls.time - it.time).(float);
@@ -976,8 +1309,12 @@ push_breaking_news :: (state: *GUI_State, news: [] Scene.Breaking_News) {
 		text := tprint("NEWS: %", it.text);
 		label := atom_label(
 			state, text, .{ cursor.x, cursor.y }, 20, z=20, align = .Top_Center, outline = true,
-			color = V4f.{ 1.0, 1.0, 1.0, alpha }
+			color = V4f.{ GOLD_ACCENT.x, GOLD_ACCENT.y, GOLD_ACCENT.z, alpha }
 		);
+		fill := LOBBY_BUTTON_DARK;
+		fill.w = alpha;
+		push_nine_slice(state, label.aabb_min - v2(10),
+			label.aabb_max - label.aabb_min + v2(20), compact_button_skin(store, fill), 19.8);
 
 		cursor.y += label.aabb_max.y - label.aabb_min.y + 4;
 	}
@@ -1237,8 +1574,8 @@ push_ms_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, 
 	}
 }
 
-push_point_ui :: (state: *GUI_State, player: Scene.Player) {
-	cursor := V2f.{ 4, 32 + 12 };
+push_point_ui :: (state: *GUI_State, player: Scene.Player, store: *Store) {
+	cursor := V2f.{ 12, 40 + 12 };
 
 	score_label := atom_label(
 		state,
@@ -1247,15 +1584,19 @@ push_point_ui :: (state: *GUI_State, player: Scene.Player) {
 		24,
 		1,
 		align = .Center_Left,
-		outline = true
+		outline = true,
+		color = TEXT_NORMAL
 	);
 
-	push_quad_screen(
-		state, .{ score_label.aabb_min, score_label.aabb_max }, COLOR_SOMBER_A, 0, a = 0.45
+	push_nine_slice(
+		state, score_label.aabb_min - v2(8),
+		score_label.aabb_max - score_label.aabb_min + v2(16),
+		compact_button_skin(store, LOBBY_BUTTON_DARK),
+		0
 	);
 }
 
-push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
+push_end_screen :: (state: *GUI_State, scene: Scene.Scene, store: *Store) {
 	display_player_icon :: (
 		player_id: int, p: V2f, z := 10.0, size := 24
 	) #expand {
@@ -1266,14 +1607,14 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 			state,
 			pos = .{ p.x - size, p.y - size },
 			size = .{ size * 2, size * 2 },
-			color = COLOR_HIGHLIGHT_A,
+			color = v3(GOLD_ACCENT),
 			z = z + 0.1
 		);
 		push_quad_screen(
 			state,
 			pos = .{ p.x - size - 1, p.y - size - 1 },
 			size = .{ 2 * size, 2 * size },
-			color = COLOR_BRIGHT_A,
+			color = v3(LOBBY_ACTION_BLUE),
 			z = z + 0.2
 		);
 		push_quad_texture(
@@ -1289,8 +1630,7 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 	size   := v2(1024.0 - 128, 258.0);
 
 	window_aabb := pos_size(center - size / 2.0, size);
-	push_quad_screen(state, window_aabb, v3(GRAY_20), z = 10.0);
-	push_quad_screen(state, shrink(window_aabb, 1), v3(GRAY_80), z = 10.1);
+	push_felt_panel(state, store, window_aabb.min, size, 9.9);
 
 	atom_label(
 		state,
@@ -1299,7 +1639,7 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 		z = 11.0,
 		align=.Top_Center,
 		scale=24,
-		color = GRAY_00
+		color = GOLD_ACCENT
 	);
 	dt := to_float64_seconds(state.controls.time - scene.end_scene_countdown_time);
 	dt = scene.end_scene_countdown - dt;
@@ -1311,13 +1651,13 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 		z = 11.0,
 		align=.Top_Center,
 		scale=16,
-		color = GRAY_20
+		color = TEXT_MUTE
 	);
 
 	push_quad_screen(
 		state,
 		pos_size(window_aabb.min.x, window_aabb.min.y + 64, width(window_aabb), 1),
-		v3(GRAY_20),
+		v3(LOBBY_SEPARATOR),
 		z = 10.2
 	);
 	atom_label(
@@ -1327,7 +1667,7 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 		z = 11.0,
 		align=.Center_Right,
 		scale=24,
-		color = GRAY_00
+		color = TEXT_MUTE
 	);
 	display_player_icon(
 		scene.client.end_level.winner_id, .{ center.x + 8 + 24, top(window_aabb) + 64 + 32 }, z = 10
@@ -1335,7 +1675,7 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 	push_quad_screen(
 		state,
 		pos_size(window_aabb.min.x, window_aabb.min.y + 64 + 64, width(window_aabb), 1),
-		v3(GRAY_20),
+		v3(LOBBY_SEPARATOR),
 		z = 10.2
 	);
 	atom_label(
@@ -1345,12 +1685,12 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 		z = 11.0,
 		align=.Center,
 		scale=16,
-		color = GRAY_00
+		color = TEXT_NORMAL
 	);
 	push_quad_screen(
 		state,
 		pos_size(center.x, window_aabb.min.y + 64 + 32, 1, 64 + 32),
-		v3(GRAY_20),
+		v3(LOBBY_SEPARATOR),
 		z = 10.2
 	);
 	atom_label(
@@ -1360,12 +1700,12 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 		z = 11.0,
 		align=.Center,
 		scale=16,
-		color = GRAY_00
+		color = TEXT_MUTE
 	);
 	push_quad_screen(
 		state,
 		pos_size(window_aabb.min.x, window_aabb.min.y + 64 + 64 + 64 + 32, width(window_aabb), 1),
-		v3(GRAY_20),
+		v3(LOBBY_SEPARATOR),
 		z = 10.2
 	);
 	time := scene.client.end_level.time;
@@ -1384,7 +1724,7 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 		z = 11.0,
 		align=.Center,
 		scale=16,
-		color = GRAY_00
+		color = TEXT_NORMAL
 	);
 
 	wr_string := "WR xx:xx s xx ms";
@@ -1414,12 +1754,12 @@ push_end_screen :: (state: *GUI_State, scene: Scene.Scene) {
 		z = 11.0,
 		align=.Center,
 		scale=16,
-		color = GRAY_00
+		color = TEXT_NORMAL
 	);
 	push_quad_screen(
 		state,
 		pos_size(window_aabb.min.x, window_aabb.min.y + 64 + 64 + 64 + 32 + 32 + 2, width(window_aabb), 1),
-		v3(GRAY_20),
+		v3(LOBBY_SEPARATOR),
 		z = 10.2
 	);
 }
@@ -1476,7 +1816,7 @@ push_death_indicator :: (state: *GUI_State, scene: Scene.Scene) {
 				p2.y * (state.controls.window_size.y - 50) / 2;
 
 			// Check if too close to the bottom left ui palette
-			action_palette_safety := V2f.{ 168 + 25, 168 + 25 };
+			action_palette_safety := V2f.{ 196 + 25, 196 + 25 };
 			if screen_p2.x < action_palette_safety.x && screen_p2.y > state.controls.window_size.y - action_palette_safety.y {
 				dx := abs(screen_p2.x - action_palette_safety.x);
 				dy := abs(screen_p2.y - (state.controls.window_size.y - action_palette_safety.y));
@@ -1513,33 +1853,71 @@ COLOR_BRIGHT_A :: V3f.{ 25/255.0, 159/255.0, 215/255.0 };
 COLOR_HIGHLIGHT_A :: V3f.{ 54/255.0, 189/255.0, 247/255.0 };
 COLOR_BACK_A :: V3f.{ 3/255.0, 60/255.0, 84/255.0 };
 
-push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
-	palette_h := 168.0;
-	palette_y := state.controls.window_size.y - palette_h;
+// Felt repeats at native density; only the straight metal rails repeat.
+compact_button_skin :: (store: *Store, fill_color := V4f.{ 0.04, 0.09, 0.12, 1 }) -> Nine_Slice_Style {
+	skin: Nine_Slice_Style;
+	skin.texture = *store.ui_compact_frame;
+	skin.texture_size = .{ store.ui_compact_frame.width.(float32), store.ui_compact_frame.height.(float32) };
+	skin.borders = .{ 8, 8, 8, 8 };
+	skin.scale = 1;
+	skin.center_mode = .Transparent;
+	skin.fill_color = fill_color;
+	skin.fill_inset = 3;
+	return skin;
+}
 
-	push_quad_screen(
-		state,
-		pos = .{ 0, palette_y },
-		size = .{ 168, 168 },
-		color = .{ 218/255.0, 220/255.0, 231/255.0 },
-		1
-	);
+lobby_button_skin :: (store: *Store, fill_color := LOBBY_BUTTON_DARK, compact := false) -> Nine_Slice_Style {
+	if compact return compact_button_skin(store, fill_color);
+	skin: Nine_Slice_Style;
+	skin.texture = *store.lobby_button_frame;
+	skin.texture_size = .{ store.lobby_button_frame.width.(float32), store.lobby_button_frame.height.(float32) };
+	skin.borders = .{ 20, 20, 20, 20 };
+	skin.scale = 0.8;
+	skin.center_mode = .Transparent;
+	skin.fill_color = fill_color;
+	skin.fill_inset = 12;
+	return skin;
+}
+
+themed_button :: (
+	gui: *GUI_State, store: *Store, text: string, id: string, size: V2f,
+	fill_color := LOBBY_BUTTON_DARK, icon := V2f.{ -1, -1 }, enabled := true,
+	font_size := 14.0, z := FLOAT32_MAX
+) -> bool, bool {
+	skin := lobby_button_skin(store, fill_color, compact = size.x < 160 || size.y < 32);
+	clicked, pressed := button_sized(gui, text, size, id, skin = skin, icon = icon,
+		enabled = enabled, font_size = font_size, z = z);
+	return clicked, pressed;
+}
+
+push_felt_panel :: (state: *GUI_State, store: *Store, pos: V2f, size: V2f, z := 1.0) {
+	push_tiled_texture(state, pos + v2(10.0), size - v2(20.0), *store.ui_felt,
+		.{ 900, 764 }, z, .{ 0.13, 0.18, 0.21, 1 });
+	skin: Nine_Slice_Style;
+	skin.texture = *store.lobby_panel_heavy_frame;
+	skin.texture_size = .{ store.lobby_panel_heavy_frame.width.(float32), store.lobby_panel_heavy_frame.height.(float32) };
+	skin.borders = .{ 48, 48, 48, 48 };
+	skin.scale = 0.7; // Fixed corners, including the shallow lobby header.
+	skin.center_mode = .Transparent;
+	push_nine_slice(state, pos, size, skin, z + 0.01);
+}
+
+push_action_palette :: (state: *GUI_State, scene: Scene.Scene, store: *Store) {
+	palette_h := 196.0;
+	palette_y := state.controls.window_size.y - palette_h;
+	push_felt_panel(state, store, .{ 0, palette_y }, .{ 196, 196 }, 1);
+	push_quad_screen(state, .{ 14, palette_y + 14 }, .{ 168, 168 }, v3(LOBBY_TABLE_BACKGROUND), 1.1, a = 0.96);
 
 	cell_y :: (y: int) -> float32 #expand {
-		return palette_y + (3 - y) * 42.0;
+		return palette_y + 14 + (3 - y) * 42.0;
 	}
 
 	render_square_at :: (x: int, y: int, key_code: int) #expand {
-		color := COLOR_BRIGHT_A;
+		color := LOBBY_BUTTON_DARK;
 		if state.controls.pressed[xx key_code]
-			color = COLOR_HIGHLIGHT_A;
-		push_quad_screen(
-			state,
-			pos = .{ x * 42.0 + 1, cell_y(y) + 1 },
-			size = .{ 40, 40 },
-			color = color,
-			z = 2
-		);
+			color = LOBBY_ACTION_BLUE;
+		push_quad_screen(state, .{ x * 42.0 + 15, cell_y(y) + 1 }, .{ 41, 41 },
+			v3(color), 2, a = color.w);
 	}
 	render_square_at(0, 0, xx action_to_platform(Action_Key.Square00, state.controls.layout));
 	render_square_at(1, 0, xx action_to_platform(Action_Key.Square10, state.controls.layout));
@@ -1557,11 +1935,17 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 	render_square_at(1, 3, xx action_to_platform(Action_Key.Square13, state.controls.layout));
 	render_square_at(2, 3, xx action_to_platform(Action_Key.Square23, state.controls.layout));
 	render_square_at(3, 3, xx action_to_platform(Action_Key.Square33, state.controls.layout));
+	for 1..4 {
+		push_quad_screen(state, .{ (it * 42 + 14).(float32), palette_y + 14 }, .{ 1, 168 },
+			v3(LOBBY_SEPARATOR), 2.1, a = LOBBY_SEPARATOR.w);
+		push_quad_screen(state, .{ 14, palette_y + 14 + it * 42 }, .{ 168, 1 },
+			v3(LOBBY_SEPARATOR), 2.1, a = LOBBY_SEPARATOR.w);
+	}
 
 	render_texture_at :: (x: int, y: int, tex_slot: V2f, color := V3f.{ 1.0, 1.0, 1.0 }) #expand {
 		push_quad_texture(
 			state,
-			pos = .{ (x * 42 + 4).(float32), cell_y(y) + 4 },
+			pos = .{ (x * 42 + 18).(float32), cell_y(y) + 4 },
 			size = .{ 34, 34 },
 			tex_slot = tex_slot,
 			color = color,
@@ -1571,7 +1955,7 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 	render_hint_at :: (x: int, y: int, tex_slot: V2f)  #expand {
 		push_quad_texture(
 			state,
-			pos = .{ (x * 42 + 42 - 18).(float32), cell_y(y) + 42 - 18 },
+			pos = .{ (x * 42 + 56 - 18).(float32), cell_y(y) + 42 - 18 },
 			size = .{ 18, 18 },
 			tex_slot = tex_slot,
 			color = .{ 1.0, 1.0, 1.0 },
@@ -1582,7 +1966,7 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 		atom_label(
 			state,
 			text,
-			.{ (x * 42 + 42 - 10).(float32), cell_y(y) + 42 - 10 },
+			.{ (x * 42 + 56 - 10).(float32), cell_y(y) + 42 - 10 },
 			z = 5.0,
 			align=.Center,
 			scale=16,
@@ -1633,7 +2017,7 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 				for 0..player.server.has_hook_present-1 {
 					push_quad_screen(
 						state,
-						pos = .{ (0 * 42 + 3 + it * 6).(float32), (2 * 42 + 3).(float32) },
+						pos = .{ (17 + it * 6).(float32), cell_y(2) + 3 },
 						size = .{ 4, 4 },
 						color = .{ 1.0, 1.0, 1.0 },
 						z = 6
@@ -1651,7 +2035,7 @@ push_action_palette :: (state: *GUI_State, scene: Scene.Scene) {
 				if t > 0 {
 					push_quad_screen(
 						state,
-						pos = .{ 3 * 42.0 + 1, 0 * 42.0 + 1 + 40 * t },
+						pos = .{ 3 * 42.0 + 15, cell_y(0) + 1 + 40 * t },
 						size = .{ 40, 40 * (1 - t) },
 						color = COLOR_SOMBER_A,
 						z = 3,
@@ -1725,7 +2109,7 @@ Escape_Menu_Ret :: struct {
 	slowdown_enabled := false;
 	slowdown_changed := false;
 }
-push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_Ret {
+push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args, store: *Store = null) -> Escape_Menu_Ret {
 	ret: Escape_Menu_Ret;
 	push_id(state, "escape_menu");
 	defer pop_id(state);
@@ -1734,106 +2118,90 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args) -> Escape_Menu_R
 	state.controls.captured_mouse = true;
 	state.controls.captured_keyboard = true;
 
-	popup_size := widget(state, 1, V2f, .{ 100, 50 });
-	pos := (state.controls.window_size - popup_size.*) / 2;
-
-	push_quad_screen(
-		state, pos, popup_size.*, v3(GRAY_10), z = 11
-	);
-	push_quad_screen(
-		state, pos + v2(1.0), popup_size.* - v2(2.0), v3(GRAY_80), z = 11.1
-	);
-
-	popup_size.* = V2f.{ 0, 0 };
-	grow :: (_size: V2f, from: V2f, to: V2f) -> V2f {
-		size := _size;
-		size.x = max(size.x, to.x - from.x);
-		size.y = max(size.y, to.y - from.y);
-		return size;
+	popup_size := V2f.{ 520, 560 };
+	pos := (state.controls.window_size - popup_size) / 2;
+	if store {
+		push_felt_panel(state, store, pos, popup_size, z = 11.0);
+	} else {
+		push_quad_screen(state, pos, popup_size, v3(GRAY_10), z = 11);
+		push_quad_screen(state, pos + v2(1.0), popup_size - v2(2.0), v3(GRAY_80), z = 11.1);
 	}
+	atom_label(state, "Settings", .{ pos.x + popup_size.x / 2, pos.y + 28 },
+		20, z = 12.1, align = .Center, color = GOLD_ACCENT);
+	push_quad_screen(state, .{ pos.x + 24, pos.y + 48 },
+		.{ popup_size.x - 48, 1 }, v3(LOBBY_SEPARATOR), z = 12.0);
 
-	column(state, pos + v2(16.0, 24), z = 12, align = .Center_Left);
-
-	resume_button: Text_Button;
-	leave_button: Text_Button;
-	{
-		row(state);
-		defer end(state);
-		_, resume_button = button(state, "Resume", id = "resume", size = .Small);
-		_, leave_button = button(state, "Leave Instance", id = "leave", size = .Small);
-		popup_size.* = grow(popup_size, pos, flow(state).cursor);
+	row(state, pos + v2(32.0, 64.0), .Right, z = 12, align = .Top_Left);
+	if store {
+		ret.resume_clicked, _ = themed_button(state, store, "Resume", "resume", .{ 200, 40 }, LOBBY_ACTION_BLUE);
+		space(state, 16);
+		ret.leave_instance_clicked, _ = themed_button(state, store, "Leave Instance", "leave",
+			.{ 200, 40 }, LOBBY_BUTTON_DARK);
+	} else {
+		ret.resume_clicked = button(state, "Resume", id = "resume");
+		space(state, 16);
+		ret.leave_instance_clicked = button(state, "Leave Instance", id = "leave");
 	}
-
-	ret.sound_checked = labeled_checkbox(
-		state,
-		"Sound",
-		popup_size.x - 28,
-		16,
-		id = "sound_checkbox",
-		padding = 0,
-		default = args.sound_enabled
-	).checked;
-	popup_size.* = grow(popup_size, pos, flow(state).cursor);
-
-	layout_options :: string.[ "AZERTY", "QWERTY" ];
-	current_layout_index := cast(int) args.keyboard_layout;
-	layout_dropdown := labeled_dropdown(
-		state,
-		"Keyboard",
-		layout_options,
-		popup_size.x - 28,
-		24,
-		id = "keyboard_dropdown",
-		padding = 0,
-		default_index = current_layout_index
-	);
-	ret.keyboard_layout = cast(Platform.Layout) layout_dropdown.selected_index;
-	ret.layout_changed = layout_dropdown.changed;
-	popup_size.* = grow(popup_size, pos, flow(state).cursor);
-
-	shadows_checkbox := labeled_checkbox(
-		state,
-		"Shadows",
-		popup_size.x - 28,
-		16,
-		id = "shadows_checkbox",
-		padding = 0,
-		default = args.shadows_enabled
-	);
-	ret.shadows_enabled = shadows_checkbox.checked;
-	ret.shadows_changed = shadows_checkbox.just_checked;
-	popup_size.* = grow(popup_size, pos, flow(state).cursor);
-
-	particles_checkbox := labeled_checkbox(
-		state,
-		"Particles",
-		popup_size.x - 28,
-		16,
-		id = "particles_checkbox",
-		padding = 0,
-		default = args.particles_enabled
-	);
-	ret.particles_enabled = particles_checkbox.checked;
-	ret.particles_changed = particles_checkbox.just_checked;
-	popup_size.* = grow(popup_size, pos, flow(state).cursor);
-
-	props_checkbox := labeled_checkbox(
-		state,
-		"Props",
-		popup_size.x - 28,
-		16,
-		id = "props_checkbox",
-		padding = 0,
-		default = args.props_enabled
-	);
-	ret.props_enabled = props_checkbox.checked;
-	ret.props_changed = props_checkbox.just_checked;
-	popup_size.* = grow(popup_size, pos, flow(state).cursor);
-
 	end(state);
 
-	ret.resume_clicked = resume_button.clicked;
-	ret.leave_instance_clicked = leave_button.clicked;
+	control_skin := ifx store then compact_button_skin(store, LOBBY_BUTTON_DARK) else .{};
+	column(state, pos + v2(32.0, 124.0), z = 12, align = .Top_Left);
+	ret.sound_checked = labeled_checkbox(state, "Sound", popup_size.x - 64, 24,
+		id = "sound_checkbox", default = args.sound_enabled, label_color = TEXT_NORMAL,
+		skin = control_skin).checked;
+	space(state, 8);
+	layout_options :: string.[ "AZERTY", "QWERTY" ];
+	layout_dropdown := labeled_dropdown(state, "Keyboard", layout_options, popup_size.x - 64, 32,
+		id = "keyboard_dropdown", default_index = cast(int) args.keyboard_layout,
+		label_color = TEXT_NORMAL, skin = control_skin);
+	ret.keyboard_layout = cast(Platform.Layout) layout_dropdown.selected_index;
+	ret.layout_changed = layout_dropdown.changed;
+	space(state, 8);
+	shadows_checkbox := labeled_checkbox(state, "Shadows", popup_size.x - 64, 24,
+		id = "shadows_checkbox", default = args.shadows_enabled, label_color = TEXT_NORMAL,
+		skin = control_skin);
+	ret.shadows_enabled = shadows_checkbox.checked;
+	ret.shadows_changed = shadows_checkbox.just_checked;
+	space(state, 8);
+	lighting_checkbox := labeled_checkbox(state, "Lighting", popup_size.x - 64, 24,
+		id = "lighting_checkbox", default = args.lighting_enabled, label_color = TEXT_NORMAL,
+		skin = control_skin);
+	ret.lighting_enabled = lighting_checkbox.checked;
+	ret.lighting_changed = lighting_checkbox.just_checked;
+	space(state, 8);
+	shadow_samples_options :: string.[ "4 samples", "9 samples", "25 samples" ];
+	shadow_samples := labeled_dropdown(state, "Shadow quality", shadow_samples_options,
+		popup_size.x - 64, 32, id = "shadow_samples_dropdown",
+		default_index = args.shadow_samples_index, label_color = TEXT_NORMAL, skin = control_skin);
+	ret.shadow_samples_index = shadow_samples.selected_index;
+	ret.shadow_samples_changed = shadow_samples.changed;
+	space(state, 8);
+	aa_options :: string.[ "FXAA", "MSAA 2x", "MSAA 4x", "No AA" ];
+	aa := labeled_dropdown(state, "Anti-aliasing", aa_options, popup_size.x - 64, 32,
+		id = "aa_mode_dropdown", default_index = args.aa_mode_index,
+		label_color = TEXT_NORMAL, skin = control_skin);
+	ret.aa_mode_index = aa.selected_index;
+	ret.aa_mode_changed = aa.changed;
+	space(state, 8);
+	shadow_map_options :: string.[ "1024", "2048", "4096" ];
+	shadow_map := labeled_dropdown(state, "Shadow map", shadow_map_options, popup_size.x - 64, 32,
+		id = "shadow_map_dropdown", default_index = args.shadow_map_size_index,
+		label_color = TEXT_NORMAL, skin = control_skin);
+	ret.shadow_map_size_index = shadow_map.selected_index;
+	ret.shadow_map_size_changed = shadow_map.changed;
+	space(state, 8);
+	particles_checkbox := labeled_checkbox(state, "Particles", popup_size.x - 64, 24,
+		id = "particles_checkbox", default = args.particles_enabled, label_color = TEXT_NORMAL,
+		skin = control_skin);
+	ret.particles_enabled = particles_checkbox.checked;
+	ret.particles_changed = particles_checkbox.just_checked;
+	space(state, 8);
+	props_checkbox := labeled_checkbox(state, "Props", popup_size.x - 64, 24,
+		id = "props_checkbox", default = args.props_enabled, label_color = TEXT_NORMAL,
+		skin = control_skin);
+	ret.props_enabled = props_checkbox.checked;
+	ret.props_changed = props_checkbox.just_checked;
+	end(state);
 
 	return ret;
 }
@@ -1843,41 +2211,27 @@ No_Connection_Ret :: struct {
 	retry_localhost_clicked: bool;
 }
 
-push_no_connection :: (state: *GUI_State) -> No_Connection_Ret {
+push_no_connection :: (state: *GUI_State, store: *Store = null) -> No_Connection_Ret {
 	ret: No_Connection_Ret;
-	push_quad_screen(
-		state,
-		pos = .{ 0, 0 },
-		size = state.controls.window_size,
-		color = v3(GRAY_80),
-		z = 0.01
-	);
-	atom_label(
-		state,
-		"No connection to the server :(",
-		.{ state.controls.window_size.x / 2, state.controls.window_size.y / 2 - 24 },
-		32,
-		z=1,
-		align = .Center,
-		color = V4f.{ 0, 0, 0, 1 }
-	);
-
-	column(state, .{ state.controls.window_size.x / 2, state.controls.window_size.y / 2 + 24 }, z = 1, align = .Center);
-	ret.retry_clicked = button(
-		state,
-		"Retry",
-		id = "retry"
-	);
-
-	ret.retry_localhost_clicked = button(
-		state,
-		"Retry localhost",
-		id = "retry_localhost"
-	);
-
+	center := state.controls.window_size / 2;
+	push_quad_screen(state, .{ 0, 0 }, state.controls.window_size, LOBBY_BACKGROUND, z = 0.01);
+	if store push_felt_panel(state, store, center - v2(280.0, 112.0), .{ 560, 224 }, z = 0.5);
+	atom_label(state, "No connection to the server", .{ center.x, center.y - 48 }, 24,
+		z = 1, align = .Center, color = GOLD_ACCENT);
+	atom_label(state, "Check the server, then try again.", .{ center.x, center.y - 12 }, 13,
+		z = 1, align = .Center, color = TEXT_MUTE);
+	row(state, .{ center.x - 174, center.y + 52 }, .Right, z = 1, align = .Top_Left);
+	if store {
+		ret.retry_clicked, _ =
+			themed_button(state, store, "Retry", "retry", .{ 164, 40 });
+		space(state, 16);
+		ret.retry_localhost_clicked, _ =
+			themed_button(state, store, "Retry localhost", "retry_localhost", .{ 164, 40 });
+	} else {
+		ret.retry_clicked = button(state, "Retry", id = "retry");
+		ret.retry_localhost_clicked = button(state, "Retry localhost", id = "retry_localhost");
+	}
 	end(state);
-	
-	
 	return ret;
 }
 
@@ -1899,6 +2253,27 @@ GRAY_80  :: #run div(V4f.{ 209, 211, 212, 255 }, 255.0);
 GRAY_90  :: #run div(V4f.{ 230, 231, 232, 255 }, 255.0);
 GRAY_100 :: #run div(V4f.{ 255, 255, 255, 255 }, 255.0);
 
+TEXT_MUTE   :: GRAY_50;
+TEXT_NORMAL :: GRAY_80;
+GOLD_ACCENT :: V4f.{ 0.81, 0.70, 0.48, 1 };
+
+LOBBY_BACKGROUND       :: V3f.{ 0.03, 0.055, 0.075 };
+MENU_BASE_BACKGROUND   :: V3f.{ 0.1, 0.1, 0.1 };
+LOBBY_BUTTON_DARK      :: V4f.{ 0.04, 0.09, 0.12, 1 };
+LOBBY_ACTION_BLUE      :: V4f.{ 0.06, 0.16, 0.22, 1 };
+LOBBY_ACTION_OLIVE     :: V4f.{ 0.16, 0.22, 0.10, 1 };
+LOBBY_ROW_SELECTED     :: V4f.{ 0.09, 0.22, 0.29, 0.75 };
+LOBBY_ROW_HOVER        :: V4f.{ 0.20, 0.32, 0.36, 0.24 };
+LOBBY_TABLE_BACKGROUND :: V4f.{ 0.015, 0.045, 0.055, 0.08 };
+LOBBY_SEPARATOR        :: V4f.{ 0.22, 0.30, 0.32, 0.55 };
+LOBBY_READY            :: V4f.{ 0.58, 0.72, 0.62, 1 };
+
+BUTTON_DISABLED_TINT :: V4f.{ 0.5, 0.5, 0.5, 1 };
+BUTTON_PRESSED_TINT  :: V4f.{ 0.78, 0.78, 0.78, 1 };
+BUTTON_HOVER_TINT    :: V4f.{ 1.18, 1.18, 1.18, 1 };
+BUTTON_IDLE_TINT     :: V4f.{ 1, 1, 1, 1 };
+BUTTON_LABEL_TINT    :: V4f.{ 0.9, 0.85, 0.74, 1 };
+
 GREEN_BRIGHT :: #run div(V4f.{   0, 166,  81, 255 }, 255.0);
 
 Window :: struct {
@@ -1911,7 +2286,9 @@ begin_window :: (
 	size := V2f.{ FLOAT32_MAX, FLOAT32_MAX },
 	align := Align.Center,
 	id := "window",
-	z := 0.0
+	z := 0.0,
+	modal := false,
+	store: *Store = null
 ) -> Window {
 	push_id(gui, string_id(id));
 
@@ -1921,8 +2298,17 @@ begin_window :: (
 	lower_left := align_pos(pos, size, align);
 
 	window_aabb := AABBf.{ lower_left, lower_left + size };
-	push_quad_screen(gui, window_aabb, v3(GRAY_20), z);
-	push_quad_screen(gui, shrink(window_aabb, 1.0), v3(GRAY_80), z + 0.01);
+	comp.aabb = ifx modal then AABBf.{ .{ 0, 0 }, gui.controls.window_size } else window_aabb;
+	comp.z = z;
+	comp.modal_barrier = modal;
+	if modal
+		push_quad_screen(gui, .{ 0, 0 }, gui.controls.window_size, LOBBY_BACKGROUND, z - 0.01, a = 0.72);
+	if store {
+		push_felt_panel(gui, store, window_aabb.min, window_aabb.max - window_aabb.min, z);
+	} else {
+		push_quad_screen(gui, window_aabb, v3(GRAY_20), z);
+		push_quad_screen(gui, shrink(window_aabb, 1.0), v3(GRAY_80), z + 0.01);
+	}
 
 	state.pos = lower_left;
 	state.size = size;
@@ -1973,6 +2359,48 @@ label :: (
 	);
 }
 
+label_box :: (
+	gui: *GUI_State,
+	text: string,
+	size: V2f,
+	scale := 16.0,
+	color := V4f.{ 1, 1, 1, 1 },
+	align := Align.Center_Left,
+	id := "label"
+) {
+	f := flow(gui).*;
+	aabb := AABBf.{ f.cursor, f.cursor + size };
+	label := atom_label(gui, text, f.cursor, scale, f.z, .Top_Left, color, id = string_id(id));
+	atom_label_replace(gui, *label, aabb, align);
+	advance_cursor(gui, f.cursor, f.direction, aabb);
+}
+
+input_text :: (
+	gui: *GUI_State,
+	buf: *String,
+	scale: float32,
+	width := 128.0,
+	id := "input_text",
+	placeholder := "",
+	max_chars := -1,
+	password_mask := false,
+	dark_style := false,
+	margin := 2.0,
+	skin: Nine_Slice_Style = .{}
+) -> Input_Text_Result {
+	f := flow(gui).*;
+	result := atom_input_text(
+		gui, buf, scale, width, f.cursor, f.z, f.align,
+		id = string_id(id), placeholder = placeholder, max_chars = max_chars,
+		password_mask = password_mask, dark_style = dark_style, margin = margin, skin = skin
+	);
+	// The atom owns its focus widget under a private ID scope.
+	// Flow consumes the input rectangle, not that internal widget's ID.
+	pos := align_pos(f.cursor, .{ width, scale }, f.align);
+	advance_cursor(gui, f.cursor, f.direction, .{ pos, pos + v2(width, scale) });
+	return result;
+}
+
 atom_label :: (
 	gui: *GUI_State,
 	text: string,
@@ -2005,6 +2433,7 @@ atom_label :: (
 	ret.gui_char_start_index = gui.chars.count;
 	for text {
 		glyph := gui.main_font.glyphs[it];
+		if generate_offsets ret.offsets[it_index + 1] = cursor.x - pos.x;
 		if glyph.unicode != it
 			continue;
 
@@ -2014,7 +2443,7 @@ atom_label :: (
 		char.pos.y = cursor.y - glyph.planeh * scale;
 		char.size.x = (glyph.planew - glyph.planex) * scale;
 		char.size.y = (glyph.planeh - glyph.planey) * scale;
-		char.z = z + (it / 256.0 / 1000.0);
+		char.z = z;
 		char.color = color;
 		char.outline = outline;
 
@@ -2031,6 +2460,12 @@ atom_label :: (
 		array_add(*gui.chars, char);
 	}
 	ret.gui_char_count = gui.chars.count - ret.gui_char_start_index;
+	if ret.gui_char_count == 0 {
+		ret.aabb_min = pos;
+		ret.aabb_max = pos;
+		w.aabb = .{ pos, pos };
+		return ret;
+	}
 
 	for ret.gui_char_start_index..gui.chars.count-1 {
 		char := *gui.chars[it];
@@ -2224,7 +2659,11 @@ atom_input_text :: (
 	margin := 2.0,
 	unfocus_on_commit := true,
 	force_focus := false,
-	cursor_to_end := false
+	cursor_to_end := false,
+	skin: Nine_Slice_Style = .{},
+	dark_style := false,
+	text_size := 13.0,
+	password_mask := false
 ) -> Input_Text_Result {
 	result: Input_Text_Result;
 
@@ -2233,6 +2672,7 @@ atom_input_text :: (
 
 	Input_Text :: struct {
 		cursor := 0;
+		display_start := 0;
 	};
 
 	size := v2(width, scale);
@@ -2249,6 +2689,17 @@ atom_input_text :: (
 
 	if comp.just_pressed {
 		comp.keyboard_focused = true;
+		state.cursor = clamp(state.display_start, 0, buf.count);
+		x := comp.aabb.min.x + margin;
+		font_size := ifx dark_style then text_size else scale * 0.6;
+		current_text := view(buf);
+		for i: state.cursor..current_text.count - 1 {
+			c := ifx password_mask then #char "*" else current_text[i];
+			advance := gui.main_font.glyphs[c].advance * font_size;
+			if gui.controls.mouse_pos.x < x + advance / 2 break;
+			x += advance;
+			state.cursor = i + 1;
+		}
 	}
 
 	if comp.keyboard_focused && gui.controls.just_pressed[Platform.Key.Escape] {
@@ -2263,6 +2714,7 @@ atom_input_text :: (
 	}
 
 	if comp.keyboard_focused {
+		gui.controls.captured_keyboard = true;
 		state.cursor = clamp(state.cursor, 0, buf.count);
 		if cursor_to_end {
 			state.cursor = buf.count;
@@ -2320,6 +2772,7 @@ atom_input_text :: (
 		handle_add(xx Platform.Key._9, "9");
 		handle_add(xx Platform.Key.Space, " ");
 		handle_add(xx Platform.Key.Period, ".");
+		handle_add(xx Platform.Key.Minus, "-");
 
 		if gui.controls.just_pressed[xx Platform.Key.Backspace] {
 			if state.cursor > 0 && buf.count > 0 {
@@ -2338,38 +2791,70 @@ atom_input_text :: (
 
 	text := view(buf);
 
-	push_quad_screen(gui, comp.aabb, v3(GRAY_20), z + 0.01);
-	push_quad_screen(gui, shrink(comp.aabb, 1.0), v3(GRAY_90), z + 0.02);
+	if skin.texture {
+		push_nine_slice(gui, comp.aabb.min, comp.aabb.max - comp.aabb.min, skin, z + 0.01);
+	} else if dark_style {
+		border := ifx comp.keyboard_focused then V3f.{ 0.70, 0.56, 0.32 } else V3f.{ 0.30, 0.34, 0.34 };
+		push_quad_screen(gui, comp.aabb, border, z + 0.01);
+		push_quad_screen(gui, shrink(comp.aabb, 1.0), V3f.{ 0.025, 0.045, 0.055 }, z + 0.02);
+	} else {
+		push_quad_screen(gui, comp.aabb, v3(GRAY_20), z + 0.01);
+		push_quad_screen(gui, shrink(comp.aabb, 1.0), v3(GRAY_90), z + 0.02);
+	}
 
-	label := atom_label(
-		gui,
-		ifx text.count == 0 then placeholder else text,
-		comp.aabb.min,
-		scale * 0.6,
-		z = z + 0.03,
-		color = ifx comp.keyboard_focused then GRAY_00 else GRAY_60,
-		generate_offsets = true
-	);
-	atom_label_replace(gui, *label, move(comp.aabb, v2(margin, 0)), .Center_Left);
-
+	font_size := ifx dark_style then text_size else scale * 0.6;
+	inner_width := max(0.0, width - 2 * margin - 2);
+	if password_mask {
+		masked := NewArray(text.count, u8,, temp);
+		for *masked it.* = #char "*";
+		text = .{ masked.count, masked.data };
+	}
+	state.cursor = clamp(state.cursor, 0, text.count);
+	state.display_start = 0;
 	if comp.keyboard_focused {
-		state.cursor = clamp(state.cursor, 0, buf.count);
-		cursor_aabb := AABBf.{
-			comp.aabb.min + v2(3.0, 5.0),
-			V2f.{ 2.0, scale * 0.6 }
-		};
-		if text.count > 0 {
-			cursor_aabb = .{
-				label.aabb_min + v2(label.offsets[state.cursor], 0),
-				V2f.{ 2.0, label.aabb_max.y - label.aabb_min.y}
-			};
+		caret_width := 0.0;
+		for i: 0..state.cursor - 1 caret_width += gui.main_font.glyphs[text[i]].advance * font_size;
+		while caret_width > inner_width && state.display_start < state.cursor {
+			caret_width -= gui.main_font.glyphs[text[state.display_start]].advance * font_size;
+			state.display_start += 1;
 		}
-		cursor_aabb.max += cursor_aabb.min;
-		if placeholder.count == 0 || text.count > 0
-			push_quad_screen(gui, cursor_aabb, v3(GRAY_00), z + 0.04);
+	}
+	visible_end := state.display_start;
+	visible_width := 0.0;
+	while visible_end < text.count {
+		next_width := visible_width + gui.main_font.glyphs[text[visible_end]].advance * font_size;
+		if next_width > inner_width break;
+		visible_width = next_width;
+		visible_end += 1;
+	}
+	displayed := ifx text.count == 0 then fit_text(gui, placeholder, font_size, inner_width)
+		else slice(text, state.display_start, visible_end);
+	label := atom_label(gui, displayed, comp.aabb.min, font_size, z = z + 0.03,
+		color = ifx dark_style then (ifx text.count > 0 then V4f.{ 0.86, 0.88, 0.85, 1 } else V4f.{ 0.48, 0.56, 0.58, 1 })
+			else (ifx comp.keyboard_focused then GRAY_00 else GRAY_60), generate_offsets = true);
+	atom_label_replace(gui, *label, .{ comp.aabb.min + v2(margin, 0), comp.aabb.max - v2(margin, 0) }, .Center_Left);
+	if comp.keyboard_focused {
+		cursor_x := comp.aabb.min.x + margin;
+		if text.count > 0 cursor_x += label.offsets[clamp(state.cursor - state.display_start, 0, label.offsets.count - 1)];
+		push_quad_screen(gui, .{ cursor_x, comp.aabb.min.y + (scale - font_size) / 2 }, .{ 1, font_size },
+			ifx dark_style then V3f.{ 0.85, 0.74, 0.51 } else v3(GRAY_00), z + 0.04);
 	}
 
 	return result;
+}
+
+fit_text :: (gui: *GUI_State, text: string, scale: float32, max_width: float32) -> string {
+	width := 0.0;
+	for text width += gui.main_font.glyphs[it].advance * scale;
+	if width <= max_width return text;
+	dots_width := gui.main_font.glyphs[#char "."].advance * scale * 3;
+	if max_width < dots_width return "";
+	width = 0;
+	for text {
+		width += gui.main_font.glyphs[it].advance * scale;
+		if width + dots_width > max_width return tprint("%...", slice(text, 0, it_index));
+	}
+	return text;
 }
 
 Atom_Table :: struct {
@@ -2387,7 +2872,9 @@ table :: (
 	rows: [] $T,
 	size: V2f,
 	id := "table",
-	row_height := 26
+	row_height := 26,
+	skin: *Table_Style = null,
+	selected_row: *int = null
 ) -> Atom_Table {
 	f := flow(gui);
 	origin := f.cursor;
@@ -2402,7 +2889,9 @@ table :: (
 		id,
 		row_height,
 		f.z,
-		f.align
+		f.align,
+		skin,
+		selected_row
 	);
 }
 
@@ -2414,7 +2903,9 @@ atom_table :: (
 	id := "table",
 	row_height := 26,
 	z := 0.0,
-	align := Align.Bottom_Left
+	align := Align.Bottom_Left,
+	skin: *Table_Style = null,
+	selected_row: *int = null
 ) -> Atom_Table {
 	ret: Atom_Table;
 
@@ -2422,20 +2913,33 @@ atom_table :: (
 		selected_row_index: int;
 	}
 	state := widget(gui, id, State);
+	if selected_row state.selected_row_index = selected_row.*;
+	state.selected_row_index = ifx rows.count > 0 then clamp(state.selected_row_index, 0, rows.count - 1) else -1;
+	push_id(gui, id);
+	defer pop_id(gui);
 
 	lower_left := align_pos(pos, size, align);
 	ret.aabb_min = lower_left;
 	ret.aabb_max = lower_left + size;
 
-	push_quad_screen(gui, lower_left, size, v3(GRAY_90), z + 0.1);
-	push_quad_screen(gui, lower_left, .{ 4, size.y }, v3(GRAY_70), z + 0.2);
-	atom_dash_quad(
+	background_color := ifx skin then skin.background_color else GRAY_90;
+	left_rail_color := ifx skin then skin.left_rail_color else GRAY_70;
+	header_color := ifx skin then skin.header_color else GRAY_00;
+	text_color := ifx skin then skin.text_color else GRAY_00;
+	separator_color := ifx skin then skin.separator_color else GRAY_40;
+	dash_color := ifx skin then skin.separator_color else GRAY_60;
+	end_rule_color := ifx skin then skin.separator_color else GRAY_00;
+	selected_color := ifx skin then skin.selected_color else GRAY_60;
+	hover_color := ifx skin then skin.hover_color else GRAY_30;
+	push_quad_screen(gui, lower_left, size, v3(background_color), z + 0.1, background_color.w);
+	push_quad_screen(gui, lower_left, .{ 4, size.y }, v3(left_rail_color), z + 0.2, left_rail_color.w);
+	if !skin || skin.dashed_header atom_dash_quad(
 		gui,
 		.{ lower_left.x + 4, lower_left.y },
 		.{ size.x - 4, 2 },
 		.{ 2, 2 },
 		.{ 4, 2 },
-		v3(GRAY_60),
+		v3(dash_color),
 		z + 0.15
 	);
 
@@ -2446,6 +2950,7 @@ atom_table :: (
 		align_right := false;
 		align_center := false;
 		button := false;
+		icon_slot := V2f.{ -1, -1 };
 	}
 	t_info := type_info(T);
 	cols := NewArray(t_info.members.count, Cols,, temp);
@@ -2459,6 +2964,7 @@ atom_table :: (
 		it.offset = xx info.offset_in_bytes;
 
 		for note: info.notes {
+			if scan2(note, "icon(%,%)", *it.icon_slot.x, *it.icon_slot.y) continue;
 			if scan2(note, "name(%)", *it.name)
 				continue;
 			if scan2(note, "size(%)", *it.size)
@@ -2482,14 +2988,23 @@ atom_table :: (
 	push_id(gui, "col");
 	for * cols {
 		cursor.x += 4;
+		header_pos := cursor;
+		header_align := Align.Center_Left;
+		if it.size >= 0 && it.align_center {
+			header_pos.x += it.size / 2 - 4;
+			header_align = .Center;
+		} else if it.size >= 0 && it.align_right {
+			header_pos.x += it.size - 4;
+			header_align = .Center_Right;
+		}
 		label := atom_label(
 			gui,
 			it.name,
-			cursor,
-			14,
-			align = .Center_Left,
+			header_pos,
+			ifx skin then skin.header_size else 14.0,
+			align = header_align,
 			z = z + 0.25,
-			color = GRAY_00,
+			color = header_color,
 			id = xx it_index
 		);
 		if it.size < 0 {
@@ -2497,13 +3012,13 @@ atom_table :: (
 		}
 		cursor.x += it.size;
 
-		if it_index < cols.count {
+		if it_index < cols.count - 1 && (!skin || skin.vertical_rules) {
 			push_quad_screen(
 				gui,
 				.{ cursor.x, lower_left.y },
 				.{ 1, size.y },
-				v3(GRAY_40),
-				z + 0.20
+				v3(separator_color),
+				z + 0.20, separator_color.w
 			);
 		}
 	}
@@ -2511,6 +3026,7 @@ atom_table :: (
 
 	cursor = V2f.{ lower_left.x + 4, lower_left.y + row_height / 2 + row_height };
 	for row, row_index: rows {
+		if ((row_index + 2) * row_height).(float32) > size.y break;
 		push_id(gui, row_index);
 		defer pop_id(gui);
 
@@ -2533,23 +3049,44 @@ atom_table :: (
 				align = Align.Center;
 			}
 			
-			if it.button {
+			if it.button && skin && skin.compact_icons && it.icon_slot.x >= 0 {
+				button_pos := label_pos - V2f.{ 14, 11 };
+				_, button := widget_sized(gui, tprint("%", it_index), struct {},
+					AABBf.{ button_pos, button_pos + V2f.{ 28, 22 } }, z + 0.3, .Mouse_Left);
+				push_nine_slice(gui, button_pos, .{ 28, 22 }, skin.button_skin, z + 0.26,
+					ifx button.pressed then V4f.{ 0.7, 0.7, 0.7, 1 } else
+					(ifx button.hovered then V4f.{ 1.2, 1.2, 1.2, 1 } else V4f.{ 1, 1, 1, 1 }));
+				push_quad_texture(gui, button_pos + V2f.{ 6, 3 }, .{ 16, 16 }, .{ 1, 1, 1 },
+					it.icon_slot, z + 0.28);
+				if button.released {
+					state.selected_row_index = row_index;
+					ret.clicked_row_index = row_index;
+					ret.clicked_col_index = it_index;
+				}
+			} else if it.button {
 				clicked := text_button(
-					gui, str, label_pos, z = z + 0.25, id = tprint("%", it_index), align = align
+					gui,
+					str,
+					label_pos,
+					z = z + 0.25,
+					id = tprint("%", it_index),
+					align = align,
+					skin = ifx skin then skin.button_skin else .{}
 				);
 				if clicked {
+					state.selected_row_index = row_index;
 					ret.clicked_row_index = row_index;
 					ret.clicked_col_index = it_index;
 				}
 			} else {
 				atom_label(
 					gui,
-					str,
+					fit_text(gui, str, 14, (it.size - 6).(float32)),
 					label_pos,
 					14,
 					align = align,
 					z = z + 0.25,
-					color = GRAY_00,
+					color = text_color,
 					id = xx it_index
 				);
 			}
@@ -2562,37 +3099,51 @@ atom_table :: (
 			row_aabb_max.x = row_aabb_min.x + size.x - 4;
 		}
 
-		background_color := V4f.{ 0, 0, 0, 0 };
-		
+		row_background_color := V4f.{ 0, 0, 0, 0 };
 
-		if state.selected_row_index == row_index {
-			background_color = GRAY_60;
+		if (!skin || skin.selectable) && state.selected_row_index == row_index {
+			row_background_color = selected_color;
 		}
-		if point_aabb(gui.controls.mouse_pos, row_aabb_min, row_aabb_max) {
-			if gui.controls.just_pressed[Key.MouseLeft] {
-				state.selected_row_index = row_index;
-				ret.just_selected_row_index = row_index;
-			} else {
-				background_color = GRAY_30;
-			}
-
-			if gui.controls.pressed[Key.MouseLeft]
-				background_color = GRAY_60;
+		_, row_widget := widget_sized(gui, "row_selection", struct {},
+			AABBf.{ row_aabb_min, row_aabb_max }, z + 0.21,
+			ifx !skin || skin.selectable then GUI_State.Widget.Physical.Mouse_Left else .Empty);
+		if row_widget.released {
+			state.selected_row_index = row_index;
+			ret.just_selected_row_index = row_index;
 		}
-		if background_color.w > 0 {
+		if row_widget.hovered row_background_color = hover_color;
+		if (!skin || skin.selectable) && state.selected_row_index == row_index
+			row_background_color = selected_color;
+		if state.selected_row_index == row_index && skin && skin.selectable && skin.selected_row_skin.texture {
+			push_nine_slice(
+				gui,
+				row_aabb_min,
+				row_aabb_max - row_aabb_min,
+				skin.selected_row_skin,
+				z + 0.15
+			);
+		} else if row_background_color.w > 0 {
 			push_quad_screen(
-				gui, row_aabb_min, row_aabb_max - row_aabb_min, v3(background_color), z + 0.15
+				gui,
+				row_aabb_min,
+				row_aabb_max - row_aabb_min,
+				v3(row_background_color),
+				z + 0.15,
+				row_background_color.w
 			);
 		}
 
 
+		if skin && skin.selectable && !skin.vertical_rules && state.selected_row_index == row_index {
+			push_quad_screen(gui, row_aabb_min, .{ 2, row_height.(float32) }, V3f.{ 0.78, 0.65, 0.39 }, z + 0.22);
+		}
 		cursor.y += row_height;
 		push_quad_screen(
 			gui,
 			.{ lower_left.x + 4, cursor.y - row_height / 2 },
 			.{ size.x - 4, 1 },
-			v3(GRAY_40),
-			z + 0.20
+			v3(separator_color),
+			z + 0.20, separator_color.w
 		);
 	}
 
@@ -2600,10 +3151,11 @@ atom_table :: (
 		gui,
 		.{ lower_left.x + 4, lower_left.y + row_height - 1 },
 		.{ size.x - 4, 1 },
-		v3(GRAY_00),
-		z + 0.25
+		v3(end_rule_color),
+		z + 0.25, end_rule_color.w
 	);
 	ret.selected_row_index = state.selected_row_index;
+	if selected_row selected_row.* = state.selected_row_index;
 
 	return ret;
 }
@@ -2649,6 +3201,66 @@ button :: (
 	return a, b, c;
 }
 
+button_sized :: (
+	gui: *GUI_State,
+	text: string,
+	size: V2f,
+	id := "button",
+	skin: Nine_Slice_Style = .{},
+	z := FLOAT32_MAX,
+	font_size := 14.0,
+	icon := V2f.{ -1, -1 },
+	enabled := true,
+	align := Align.Bottom_Left
+) -> bool, bool {
+	f := flow(gui);
+	button_z := ifx z == FLOAT32_MAX then f.z else z;
+	origin := f.cursor;
+	_, widget := widget_sized(
+		gui, id, struct {}, AABBf.{ origin, origin + size }, button_z, .Mouse
+	);
+	widget.physical = ifx enabled then GUI_State.Widget.Physical.Mouse_Left else .Empty;
+
+	clicked := enabled && widget.released;
+	pressed := enabled && widget.pressed;
+	hovered := enabled && widget.hovered;
+	tint := ifx !enabled then BUTTON_DISABLED_TINT else
+		(ifx pressed then BUTTON_PRESSED_TINT else
+		(ifx hovered then BUTTON_HOVER_TINT else BUTTON_IDLE_TINT));
+
+	push_nine_slice(gui, origin, size, skin, button_z, tint);
+	content_pos := origin + size / 2 + (ifx pressed then v2(1.0) else v2(0.0));
+	if icon.x >= 0 {
+		icon_size := min(24.0, size.y - 10);
+		push_quad_texture(
+			gui,
+			origin + v2(8.0, (size.y - icon_size) / 2),
+			v2(icon_size),
+			v3(tint),
+			icon,
+			button_z + 0.4
+		);
+		if text.count > 0 content_pos.x += 12;
+	}
+	if text.count > 0 {
+		push_id(gui, id);
+		atom_label(
+			gui,
+			text,
+			content_pos,
+			font_size,
+			button_z + 0.5,
+			Align.Center,
+			V4f.{ BUTTON_LABEL_TINT.x * tint.x, BUTTON_LABEL_TINT.y * tint.y, BUTTON_LABEL_TINT.z * tint.z, 1 },
+			id = string_id("label")
+		);
+		pop_id(gui);
+	}
+
+	finish_widget(gui, origin, id);
+	return clicked, pressed;
+}
+
 text_button :: (
 	gui: *GUI_State,
 	text: string,
@@ -2656,7 +3268,8 @@ text_button :: (
 	z := 0.0,
 	id := "text_button",
 	align := Align.Bottom_Left,
-	size: Text_Button.Size = .Small
+	size: Text_Button.Size = .Small,
+	skin: Nine_Slice_Style = .{}
 ) -> bool, Text_Button, *GUI_State.Widget
 {
 	state, widget := widget(gui, id, Text_Button);
@@ -2664,16 +3277,22 @@ text_button :: (
 	push_id(gui, id);
 	defer pop_id(gui);
 
-	widget.physical = .Mouse;
+	widget.physical = .Mouse_Left;
+	widget.z = z;
 	state.aabb_padding = .{ 4, 4 };
 	state.border = .{ 1, 1 };
 	state.clicked = false;
 
 	label_color := V4f.{ 0, 0, 0, 1 };
 	background_color := V4f.{ 1, 1, 1, 1 };
+	if skin.texture {
+		label_color = V4f.{ 0.9, 0.84, 0.7, 1 };
+		background_color = V4f.{ 1.12, 1.12, 1.12, 1 };
+	}
 	if state.last_hover && !gui.controls.pressed[Key.MouseLeft] {
-		label_color = V4f.{ 1, 1, 1, 1 };
-		background_color = V4f.{ 0, 0, 0, 1 };
+		label_color = V4f.{ 1, 0.95, 0.83, 1 };
+		if !skin.texture
+			background_color = V4f.{ 0, 0, 0, 1 };
 	}
 
 	scale := 20.0;
@@ -2695,8 +3314,12 @@ text_button :: (
 	}
 	widget.aabb.min = label.aabb_min - state.aabb_padding;
 	widget.aabb.max = label.aabb_max + state.aabb_padding;
-	push_quad_screen(gui, widget.aabb, v3(state.border_color), z);
-	push_quad_screen(gui, shrink(widget.aabb, state.border), v3(background_color), z + 0.5);
+	if skin.texture {
+		push_nine_slice(gui, widget.aabb.min, widget.aabb.max - widget.aabb.min, skin, z, background_color);
+	} else {
+		push_quad_screen(gui, widget.aabb, v3(state.border_color), z);
+		push_quad_screen(gui, shrink(widget.aabb, state.border), v3(background_color), z + 0.5);
+	}
 
 	state.last_hover = widget.hovered;
 	state.clicked = widget.released;
@@ -2766,7 +3389,8 @@ checkbox :: (
 	z := 0.0,
 	id := "checkbox",
 	align := Align.Center,
-	default := false
+	default := false,
+	skin: Nine_Slice_Style = .{}
 ) -> Checkbox {
 	state, widget := widget(gui, id, Checkbox);
 
@@ -2779,12 +3403,17 @@ checkbox :: (
 
 	lower_left := align_pos(pos, .{ size, size }, align);
 
-	push_quad_screen(gui, lower_left, .{ size, size }, v3(GRAY_80), z);
-	push_quad_screen(gui, lower_left + .{ 1, 1 }, .{ size - 2, size - 2 }, v3(GRAY_10), z + 1);
+	if skin.texture {
+		push_nine_slice(gui, lower_left, .{ size, size }, skin, z);
+	} else {
+		push_quad_screen(gui, lower_left, .{ size, size }, v3(GRAY_80), z);
+		push_quad_screen(gui, lower_left + .{ 1, 1 }, .{ size - 2, size - 2 }, v3(GRAY_10), z + 1);
+	}
 
 	if state.checked {
+		checked_color := ifx skin.texture then v3(LOBBY_READY) else v3(GREEN_BRIGHT);
 		push_quad_screen(
-			gui, lower_left + .{ 4, 4 }, .{ size - 8, size - 8 }, v3(GREEN_BRIGHT), z + 2
+			gui, lower_left + .{ 4, 4 }, .{ size - 8, size - 8 }, checked_color, z + 2
 		);
 	}
 
@@ -2802,11 +3431,12 @@ checkbox :: (
 	return state.*;
 }
 
-checkbox :: (gui: *GUI_State, size: float, id := "checkbox", default := false) -> Checkbox {
+checkbox :: (gui: *GUI_State, size: float, id := "checkbox", default := false,
+	skin: Nine_Slice_Style = .{}) -> Checkbox {
 	f := flow(gui);
 	origin := f.cursor;
 	defer finish_widget(gui, origin, id);
-	return checkbox(gui, f.cursor, size, f.z, id, f.align, default);
+	return checkbox(gui, f.cursor, size, f.z, id, f.align, default, skin);
 }
 
 labeled_checkbox :: (
@@ -2817,7 +3447,8 @@ labeled_checkbox :: (
 	id := "labeled_checkbox",
 	padding := 4.0,
 	default := false,
-	label_color := GRAY_00
+	label_color := GRAY_00,
+	skin: Nine_Slice_Style = .{}
 ) -> Checkbox {
 	_, w := widget(gui, id, struct {});
 
@@ -2851,7 +3482,8 @@ labeled_checkbox :: (
 		z,
 		align = vertical(align) | Align.Right,
 		id = "checkbox",
-		default = default
+		default = default,
+		skin = skin
 	);
 
 	w.aabb = widgets_aabb(gui, string.[ "label", "checkbox" ]);
@@ -2872,7 +3504,8 @@ dropdown :: (
 	z := 0.0,
 	id := "dropdown",
 	align := Align.Bottom_Left,
-	default_index := 0
+	default_index := 0,
+	skin: Nine_Slice_Style = .{}
 ) -> Dropdown {
 
 	Dropdown_Widget :: struct {
@@ -2901,8 +3534,12 @@ dropdown :: (
 	header_aabb := AABBf.{ lower_left, lower_left + v2(width, height) };
 
 	// Draw dropdown header (the selected item display)
-	push_quad_screen(gui, header_aabb, v3(0.0, 0.0, 0.0), z);
-	push_quad_screen(gui, shrink(header_aabb, v2(1.0, 1.0)), v3(1.0, 1.0, 1.0), z + 0.1);
+	if skin.texture {
+		push_nine_slice(gui, lower_left, .{ width, height }, skin, z);
+	} else {
+		push_quad_screen(gui, header_aabb, v3(0.0, 0.0, 0.0), z);
+		push_quad_screen(gui, shrink(header_aabb, v2(1.0, 1.0)), v3(1.0, 1.0, 1.0), z + 0.1);
+	}
 
 	// Display selected option
 	if options.count > 0 && state.selected_index >= 0 && state.selected_index < options.count {
@@ -2913,7 +3550,7 @@ dropdown :: (
 			height * 0.6,
 			z + 0.2,
 			align = .Center_Left,
-			color = v4(0.0, 0.0, 0.0, 1.0),
+			color = ifx skin.texture then TEXT_NORMAL else v4(0.0, 0.0, 0.0, 1.0),
 			id = xx string_id("selected_label")
 		);
 	}
@@ -2926,13 +3563,13 @@ dropdown :: (
 		// Up arrow (triangle)
 		atom_label(
 			gui, "^", .{ arrow_x, arrow_y }, height * 0.5, z + 0.2,
-			align = .Center, color = v4(0.0, 0.0, 0.0, 1.0), id = xx string_id("arrow")
+			align = .Center, color = ifx skin.texture then GOLD_ACCENT else v4(0.0, 0.0, 0.0, 1.0), id = xx string_id("arrow")
 		);
 	} else {
 		// Down arrow (v)
 		atom_label(
 			gui, "v", .{ arrow_x, arrow_y }, height * 0.5, z + 0.2,
-			align = .Center, color = v4(0.0, 0.0, 0.0, 1.0), id = xx string_id("arrow")
+			align = .Center, color = ifx skin.texture then GOLD_ACCENT else v4(0.0, 0.0, 0.0, 1.0), id = xx string_id("arrow")
 		);
 	}
 
@@ -2969,17 +3606,24 @@ dropdown :: (
 
 			// Highlight on hover
 			if option_widget.hovered {
-				bg_color = v3(0.8, 0.8, 0.8);
+				bg_color = ifx skin.texture then v3(LOBBY_ROW_HOVER) else v3(0.8, 0.8, 0.8);
 			}
 
 			// Highlight if selected
 			if is_selected {
-				bg_color = v3(0.9, 0.9, 0.9);
+				bg_color = ifx skin.texture then v3(LOBBY_ROW_SELECTED) else v3(0.9, 0.9, 0.9);
 			}
 
 			// Draw option background
-			push_quad_screen(gui, option_aabb, v3(0.0, 0.0, 0.0), z + 0.9);
-			push_quad_screen(gui, shrink(option_aabb, v2(1.0, 1.0)), bg_color, z + 1.0);
+			if skin.texture {
+				option_skin := skin;
+				option_skin.fill_color = v4(bg_color, 1);
+				push_nine_slice(gui, option_aabb.min, option_aabb.max - option_aabb.min, option_skin, z + 1.0);
+				text_color = TEXT_NORMAL;
+			} else {
+				push_quad_screen(gui, option_aabb, v3(0.0, 0.0, 0.0), z + 0.9);
+				push_quad_screen(gui, shrink(option_aabb, v2(1.0, 1.0)), bg_color, z + 1.0);
+			}
 
 			// Draw option text
 			atom_label(
@@ -3018,12 +3662,13 @@ dropdown :: (
 	width: float,
 	height: float,
 	id := "dropdown",
-	default_index := 0
+	default_index := 0,
+	skin: Nine_Slice_Style = .{}
 ) -> Dropdown {
 	f := flow(gui);
 	origin := f.cursor;
 	defer finish_widget(gui, origin, id);
-	return dropdown(gui, options, f.cursor, width, height, f.z, id, f.align, default_index);
+	return dropdown(gui, options, f.cursor, width, height, f.z, id, f.align, default_index, skin);
 }
 
 labeled_dropdown :: (
@@ -3035,7 +3680,8 @@ labeled_dropdown :: (
 	id := "labeled_dropdown",
 	label_color := GRAY_00,
 	padding := 4.0,
-	default_index := 0
+	default_index := 0,
+	skin: Nine_Slice_Style = .{}
 ) -> Dropdown {
 	_, w := widget(gui, id, struct {});
 
@@ -3073,7 +3719,8 @@ labeled_dropdown :: (
 		z,
 		align = Align.Center_Right,
 		id = "dropdown",
-		default_index = default_index
+		default_index = default_index,
+		skin = skin
 	);
 
 	w.aabb = widgets_aabb(gui, string.[ "label", "dropdown" ]);
@@ -3092,7 +3739,9 @@ labeled_input_text :: (
 	label_color := GRAY_00,
 	max_chars := -1,
 	padding := 4.0,
-	placeholder := ""
+	placeholder := "",
+	skin: Nine_Slice_Style = .{},
+	dark_style := false
 ) -> Input_Text_Result {
 	_, w := widget(gui, id, struct {});
 
@@ -3130,7 +3779,9 @@ labeled_input_text :: (
 		.Center_Right,
 		id = xx string_id("input_text"),
 		max_chars = max_chars,
-		placeholder = placeholder
+		placeholder = placeholder,
+		skin = skin,
+		dark_style = dark_style
 	);
 
 	w.aabb = row_aabb;
@@ -3606,7 +4257,8 @@ float_input :: (
 	max_value := FLOAT32_MAX,
 	drag_speed := 0.01,
 	precision := 3,
-	id := "float_input"
+	id := "float_input",
+	skin: Nine_Slice_Style = .{}
 ) -> Float_Input {
 	state, widget := widget(gui, id, Float_Input);
 
@@ -3633,9 +4285,13 @@ float_input :: (
 	mouse_in_widget := point_aabb(gui.controls.mouse_pos, widget.aabb);
 
 	// Background
-	border_color := ifx state.editing then v3(GREEN_BRIGHT) else ifx state.dragging then v3(GRAY_00) else v3(GRAY_40);
-	push_quad_screen(gui, lower_left, .{ width, height }, border_color, z);
-	push_quad_screen(gui, lower_left + v2(1), .{ width - 2, height - 2 }, v3(GRAY_90), z + 0.01);
+	if skin.texture {
+		push_nine_slice(gui, lower_left, .{ width, height }, skin, z);
+	} else {
+		border_color := ifx state.editing then v3(GREEN_BRIGHT) else ifx state.dragging then v3(GRAY_00) else v3(GRAY_40);
+		push_quad_screen(gui, lower_left, .{ width, height }, border_color, z);
+		push_quad_screen(gui, lower_left + v2(1), .{ width - 2, height - 2 }, v3(GRAY_90), z + 0.01);
+	}
 
 	// Draw drag indicator arrows on the sides when not editing
 	if !state.editing {
@@ -3659,7 +4315,7 @@ float_input :: (
 			height * 0.6,
 			z = z + 0.03,
 			align = .Center_Left,
-			color = GRAY_00,
+			color = ifx skin.texture then TEXT_NORMAL else GRAY_00,
 			generate_offsets = true
 		);
 
@@ -3752,7 +4408,7 @@ float_input :: (
 			height * 0.6,
 			z = z + 0.03,
 			align = .Center,
-			color = GRAY_00
+			color = ifx skin.texture then TEXT_NORMAL else GRAY_00
 		);
 
 		// Handle interactions
@@ -3819,7 +4475,8 @@ int_input :: (
 	min_value := S64_MIN,
 	max_value := S64_MAX,
 	drag_speed := 1,
-	id := "int_input"
+	id := "int_input",
+	skin: Nine_Slice_Style = .{}
 ) -> Int_Input {
 	state, widget := widget(gui, id, Int_Input);
 
@@ -3846,9 +4503,13 @@ int_input :: (
 	mouse_in_widget := point_aabb(gui.controls.mouse_pos, widget.aabb);
 
 	// Background
-	border_color := ifx state.editing then v3(GREEN_BRIGHT) else ifx state.dragging then v3(GRAY_00) else v3(GRAY_40);
-	push_quad_screen(gui, lower_left, .{ width, height }, border_color, z);
-	push_quad_screen(gui, lower_left + v2(1), .{ width - 2, height - 2 }, v3(GRAY_90), z + 0.01);
+	if skin.texture {
+		push_nine_slice(gui, lower_left, .{ width, height }, skin, z);
+	} else {
+		border_color := ifx state.editing then v3(GREEN_BRIGHT) else ifx state.dragging then v3(GRAY_00) else v3(GRAY_40);
+		push_quad_screen(gui, lower_left, .{ width, height }, border_color, z);
+		push_quad_screen(gui, lower_left + v2(1), .{ width - 2, height - 2 }, v3(GRAY_90), z + 0.01);
+	}
 
 	// Draw drag indicator arrows on the sides when not editing
 	if !state.editing {
@@ -3872,7 +4533,7 @@ int_input :: (
 			height * 0.6,
 			z = z + 0.03,
 			align = .Center_Left,
-			color = GRAY_00,
+			color = ifx skin.texture then TEXT_NORMAL else GRAY_00,
 			generate_offsets = true
 		);
 
@@ -3963,7 +4624,7 @@ int_input :: (
 			height * 0.6,
 			z = z + 0.03,
 			align = .Center,
-			color = GRAY_00
+			color = ifx skin.texture then TEXT_NORMAL else GRAY_00
 		);
 
 		// Handle interactions
@@ -4032,7 +4693,9 @@ labeled_float_input :: (
 	drag_speed := 0.01,
 	precision := 3,
 	id := "labeled_float_input",
-	padding := 4.0
+	padding := 4.0,
+	skin: Nine_Slice_Style = .{},
+	label_color := TEXT_NORMAL
 ) -> Float_Input {
 	_, w := widget(gui, id, struct {});
 
@@ -4055,7 +4718,7 @@ labeled_float_input :: (
 		height * 0.6,
 		z,
 		align = vertical(align) | Align.Left,
-		color = GRAY_80,
+		color = label_color,
 		id = xx string_id("label")
 	);
 
@@ -4070,7 +4733,8 @@ labeled_float_input :: (
 		max_value = max_value,
 		drag_speed = drag_speed,
 		precision = precision,
-		id = "input"
+		id = "input",
+		skin = skin
 	);
 
 	w.aabb = widgets_aabb(gui, string.[ "label", "input" ]);
@@ -4087,7 +4751,9 @@ labeled_int_input :: (
 	max_value := S64_MAX,
 	drag_speed := 1,
 	id := "labeled_int_input",
-	padding := 4.0
+	padding := 4.0,
+	skin: Nine_Slice_Style = .{},
+	label_color := TEXT_NORMAL
 ) -> Int_Input {
 	_, w := widget(gui, id, struct {});
 
@@ -4110,7 +4776,7 @@ labeled_int_input :: (
 		height * 0.6,
 		z,
 		align = vertical(align) | Align.Left,
-		color = GRAY_80,
+		color = label_color,
 		id = xx string_id("label")
 	);
 
@@ -4124,7 +4790,8 @@ labeled_int_input :: (
 		min_value = min_value,
 		max_value = max_value,
 		drag_speed = drag_speed,
-		id = "input"
+		id = "input",
+		skin = skin
 	);
 
 	w.aabb = widgets_aabb(gui, string.[ "label", "input" ]);
@@ -4437,4 +5104,3 @@ labeled_v3_input :: (
 	w.aabb = widgets_aabb(gui, string.[ "label", "input" ]);
 	return input_comp;
 }
-

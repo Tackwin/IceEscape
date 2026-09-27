@@ -191,8 +191,8 @@ process_game :: (
 gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 	using app_user;
 
-	GUI.push_action_palette(*gui_state, scene);
-	GUI.push_buy_prompt(*gui_state, *scene);
+	GUI.push_action_palette(*gui_state, scene, *store);
+	GUI.push_buy_prompt(*gui_state, *scene, *store);
 
 	{
 		name: string;
@@ -202,19 +202,19 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		label := GUI.atom_label(
 			*app_user.gui_state,
 			name,
-			V2f.{ 4, 4 },
+			V2f.{ 12, 10 },
 			24,
 			1,
 			align = .Top_Left,
-			outline = true
+			outline = true,
+			color = GUI.GOLD_ACCENT
 		);
-		GUI.push_quad_screen(
-			*app_user.gui_state, .{ label.aabb_min, label.aabb_max }, GUI.COLOR_SOMBER_A, 0, a = 0.45
-		);
+		GUI.push_nine_slice(*app_user.gui_state, label.aabb_min - v2(8),
+			label.aabb_max - label.aabb_min + v2(16), GUI.compact_button_skin(*store), 0);
 
 		player := Scene.find_by_player_id(state.scene, state.scene.controlled_player_id);
 		if player {
-			GUI.push_point_ui(*app_user.gui_state, player);
+			GUI.push_point_ui(*app_user.gui_state, player, *store);
 		}
 	}
 	{
@@ -230,28 +230,24 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 				formatInt(seconds.(int), minimum_digits = 2, padding = #char "_"),
 				formatInt(milliseconds.(int), minimum_digits = 3, padding = #char "_")
 			),
-			.{ app_user.gui_state.controls.window_size.x, 0 },
+			.{ app_user.gui_state.controls.window_size.x - 12, 10 },
 			scale=18,
 			z=1,
 			align = .Top_Right,
-			outline = true
+			outline = true,
+			color = GUI.TEXT_NORMAL
 		);
-		GUI.push_quad_screen(
-			*app_user.gui_state,
-			.{ label.aabb_min, label.aabb_max },
-			GUI.COLOR_SOMBER_A,
-			0,
-			a = 0.45
-		);
+		GUI.push_nine_slice(*app_user.gui_state, label.aabb_min - v2(8),
+			label.aabb_max - label.aabb_min + v2(16), GUI.compact_button_skin(*store), 0);
 	}
 
 	if state.scene.end_scene_countdown_started {
-		GUI.push_end_screen(*app_user.gui_state, state.scene);
+		GUI.push_end_screen(*app_user.gui_state, state.scene, *store);
 	}
 
-	GUI.push_breaking_news(*app_user.gui_state, state.news);
+	GUI.push_breaking_news(*app_user.gui_state, state.news, *store);
 	if controls.pressed[Key.Tab] && !console.open {
-		push_score_tab(state.scene, *state.game, *app_user.gui_state);
+		push_score_tab(state.scene, *state.game, *app_user.gui_state, *app_user.store);
 	}
 	GUI.push_death_indicator(*app_user.gui_state, state.scene);
 
@@ -266,7 +262,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		escape_args.particles_enabled = state.particles_enabled;
 		escape_args.props_enabled = state.props_enabled;
 		escape_args.shadow_map_size_index = cast(int) state.shadow_map_size;
-		ret := GUI.push_escape_menu(*app_user.gui_state, escape_args);
+		ret := GUI.push_escape_menu(*app_user.gui_state, escape_args, *app_user.store);
 
 		state.volume_on = ret.sound_checked;
 		if ret.layout_changed {
@@ -773,31 +769,29 @@ sounding :: (
 }
 
 
-push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) {
+push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State, store: *Store) {
 	scoreboard_center := state.controls.window_size / 2;
 	scoreboard_center.y -= state.controls.window_size.y / 12;
-	scoreboard_size := V2f.{ 600, 400 };
-	header_height := 32.0;
+	scoreboard_size := V2f.{ 600, 441 }; // Header plus eight 48px player rows.
+	header_height := 56.0;
+	footer_height := 28.0;
 
 	cursor := V2f.{
 		scoreboard_center.x - scoreboard_size.x / 2,
 		scoreboard_center.y - scoreboard_size.y / 2
 	};
 
-	GUI.push_quad_screen(
-		state,
-		pos = cursor,
-		size = scoreboard_size,
-		color = GUI.COLOR_BACK_A,
-		z = 5
-	);
+	GUI.push_felt_panel(state, store, cursor - V2f.{ 14, 14 },
+		scoreboard_size + V2f.{ 28, footer_height + 28 }, 5);
 
 	GUI.atom_label(
 		state,
 		string_from_arr(scene.info.name),
-		.{ cursor.x + scoreboard_size.x / 2, cursor.y + header_height / 2 },
+		.{ cursor.x + scoreboard_size.x / 2, cursor.y + 18 },
+		scale = 18,
 		z = 10,
-		align = .Center
+		align = .Center,
+		color = GUI.GOLD_ACCENT
 	);
 
 	if page.wr_time_ms > 0 {
@@ -817,16 +811,18 @@ push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) 
 		GUI.atom_label(
 			state,
 			wr_string,
-			.{ cursor.x + 16, cursor.y + header_height / 2 },
+			.{ cursor.x + 16, cursor.y + 41 },
+			scale = 11,
 			z = 100,
 			align = .Center_Left
 		);
 	}
 
-	GUI.atom_label(
+	if page.next_terrain_name.count > 0 GUI.atom_label(
 		state,
 		tprint("Next up: %", page.next_terrain_name),
-		.{ cursor.x + scoreboard_size.x - 16, cursor.y + header_height / 2 },
+		.{ cursor.x + scoreboard_size.x - 16, cursor.y + 41 },
+		scale = 11,
 		z = 100,
 		align = .Center_Right
 	);
@@ -835,29 +831,32 @@ push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) 
 		state,
 		pos = cursor,
 		size = .{ scoreboard_size.x, header_height },
-		color = GUI.COLOR_SOMBER_A,
+		color = v3(GUI.LOBBY_BUTTON_DARK),
 		z = 6
 	);
 	GUI.push_quad_screen(
 		state,
 		pos = .{ cursor.x, cursor.y + scoreboard_size.y },
-		size = .{ scoreboard_size.x, header_height },
-		color = GUI.COLOR_SOMBER_A,
+		size = .{ scoreboard_size.x, footer_height },
+		color = v3(GUI.LOBBY_BUTTON_DARK),
 		z = 6
 	);
 	GUI.push_quad_screen(
 		state,
 		pos = .{ cursor.x, cursor.y + scoreboard_size.y },
 		size = .{ scoreboard_size.x, 1 },
-		color = .{ 1.0, 1.0, 1.0 },
+		color = v3(GUI.LOBBY_SEPARATOR),
 		z = 7
 	);
+	GUI.atom_label(state, "Release TAB to return to the game",
+		.{ cursor.x + scoreboard_size.x / 2, cursor.y + scoreboard_size.y + footer_height / 2 },
+		scale = 11, z = 10, align = .Center, color = GUI.TEXT_MUTE);
 
 	GUI.push_quad_screen(
 		state,
 		pos = .{ cursor.x, cursor.y + header_height },
 		size = .{ scoreboard_size.x, 1 },
-		color = .{ 1.0, 1.0, 1.0 },
+		color = v3(GUI.LOBBY_SEPARATOR),
 		z = 7
 	);
 
@@ -882,14 +881,14 @@ push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State) 
 			state,
 			pos = cursor,
 			size = scoreline_size,
-			color = GUI.COLOR_HIGHLIGHT_A,
+			color = v3(GUI.LOBBY_SEPARATOR),
 			z = 10
 		);
 		GUI.push_quad_screen(
 			state,
 			pos = .{ cursor.x + 1, cursor.y + 1 },
 			size = .{ scoreline_size.x - 2, scoreline_size.y - 2 },
-			color = GUI.COLOR_BACK_A,
+			color = v3(GUI.LOBBY_BUTTON_DARK),
 			z = 11
 		);
 
