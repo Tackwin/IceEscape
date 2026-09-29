@@ -762,6 +762,43 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 			cursor -= 1;
 		}
 
+		if scan2(line, "wind_zone") {
+			wind_zone: Wind_Zone;
+			wind_zone.id = scene.wind_zones.count + 1;
+			defer array_add(*scene.wind_zones, wind_zone);
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				if scan2(line, "- direction: % %", *wind_zone.dir.x, *wind_zone.dir.y)
+					continue;
+				sx := 0.0;
+				sy := 0.0;
+				if scan2(line, "- aabb: % % % %", *wind_zone.position.x, *wind_zone.position.y, *sx, *sy) {
+					wind_zone.size.x = sx - wind_zone.position.x;
+					wind_zone.size.y = sy - wind_zone.position.y;
+					continue;
+				}
+				if scan2(line, "- strength: %", *wind_zone.strength)
+					continue;
+
+				print("Error reading wind zone, unrecognized line: % (L%)\n", line, cursor);
+			}
+
+			cursor -= 1;
+		}
+
 		if scan2(line, "camp_ice") {
 			camp_ice: Camp_Ice;
 			camp_ice.id = scene.camp_ices.count + 1;

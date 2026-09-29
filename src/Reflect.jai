@@ -98,6 +98,8 @@ Scene_Placeable_Entity :: struct {
 	type: Type_Info_Struct;
 	position_path: string;
 	array_offset : s64 = 0;
+
+	
 }
 
 get_scene_placeable_entities :: () -> [] Scene_Placeable_Entity {

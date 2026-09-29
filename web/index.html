@@ -34,7 +34,7 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%);
+            transform: translate(-50%, -50%) scale(var(--display-scale, 1));
             z-index: 1;
             touch-action: none;
         }
@@ -44,7 +44,7 @@
             left: 50%;
             width: 1641px;
             height: 958px;
-            transform: translate(-50%, -50%);
+            transform: translate(-50%, -50%) scale(var(--display-scale, 1));
             z-index: 0;
             pointer-events: none;
         }
@@ -54,19 +54,14 @@
             left: 50%;
             width: 1641px;
             height: 958px;
-            transform: translate(-50%, -50%);
+            transform: translate(-50%, -50%) scale(var(--display-scale, 1));
             z-index: 2;
             pointer-events: none;
-        }
-        body.mobile canvas,
-        body.mobile #inner-canvas,
-        body.mobile #outer-border {
-            transform: translate(-50%, -50%) scale(var(--mobile-scale, 1));
         }
         body.mobile-portrait canvas,
         body.mobile-portrait #inner-canvas,
         body.mobile-portrait #outer-border {
-            transform: translate(-50%, -50%) rotate(90deg) scale(var(--mobile-scale, 1));
+            transform: translate(-50%, -50%) rotate(90deg) scale(var(--display-scale, 1));
         }
         body.mobile-portrait #landing-background {
             width: 100vh;

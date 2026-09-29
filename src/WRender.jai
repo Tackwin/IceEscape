@@ -912,7 +912,7 @@ WFramegraph :: struct {
 		overlay_color: V4f = .{ 1, 1, 1, 1 };
 		light_count: u32 = 0;
 		light_index: u32 = 0;
-		padding2: u32 = 0;
+		grid_opacity: float32 = 1.0;
 		padding3: u32 = 0;
 	};
 
@@ -3451,6 +3451,7 @@ render_scene :: (
 		render_traps(frame, *frame.geometry, scene, store, *extra);
 		render_explosions(frame, *frame.geometry, scene, store, *extra);
 		render_within_zones(frame, *frame.geometry, scene, store, *extra);
+		render_wind_zones(frame, *frame.geometry, scene, store, *extra);
 		render_extra(frame, *frame.geometry, store, *extra);
 		render_safezones(frame, *frame.geometry, scene, store, *extra);
 
@@ -3722,6 +3723,25 @@ render_extra_quads :: (
 		return;
 
 	commit_geometry(frame, pass, *store.tile_model, instanced.count);
+}
+
+render_wind_zones :: (
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+) {
+	instanced := append_instance_buffer(frame);
+
+	for scene.wind_zones {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(.{ it.position.x, it.position.y, 0.05 });
+		instance.M *= scale_matrix(v3(it.size, 1.0));
+		instance.color = V4f.{ 0.3, 0.6, 1.0, 0.125 };
+		instance.texture_rect = Store.Colormaps_Rect.vehicle;
+	}
+	if instanced.count > 0 {
+		commit_geometry(frame, pass, *store.indicator_outline_model, instanced.count);
+	}
 }
 
 render_within_zones :: (
@@ -4803,9 +4823,9 @@ render_players_sdf :: (
 		sdf := *instances[instances.count - 1];
 		sdf.* = make_sdf_circle(
 			position=.{ it.client.position.x, it.client.position.y, 0.01 },
-			radius=0.2,
+			radius=0.35,
 			outline_thickness=0.02,
-			color=.{ 1.0, 0.12, 0.04, 1.0 }
+			color=.{ 0.2, 0.2, 0.2, 0.3 }
 		);
 	}
 	commit_sdf(frame, *frame.sdf, instances.count);
@@ -4844,6 +4864,26 @@ render_players :: (
 				model = *store.spirit_model;
 			commit_geometry(frame, pass, model, instanced.count);
 		}
+	}
+
+	instanced := append_instance_buffer(frame);
+	for scene.players {
+		if !it.server.holding_ice_cube
+			continue;
+		
+		// The ice cub will bob up and down over time
+		t := scene.client.clock.(float32);
+		bob := sin(t * 2.0) * 0.1;
+		position := it.client.position;
+		position.z += 1 + bob;
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(position);
+		instance.texture_rect = .{ 0, 0, 1, 1 };
+	}
+	if instanced.count > 0 {
+		commit_geometry(frame, pass, *store.ice_cube_model, instanced.count);
 	}
 }
 

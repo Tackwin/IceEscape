@@ -207,6 +207,7 @@ Scene :: struct {
 	props: [..] Prop; @allocate("lifetime") @clear("run")
 	bombs: [..] Bomb; @allocate("lifetime") @clear("run");
 	bomb_spawners: [..] Bomb_Spawner; @allocate("lifetime") @clear("run");
+	wind_zones: [..] Wind_Zone; @allocate("lifetime") @clear("run")
 	camp_ices: [..] Camp_Ice; @allocate("lifetime") @clear("run")
 	particles: [..] Particle; @allocate("lifetime") @clear("run")
 	trophies: [..] Trophy; @allocate("lifetime") @clear("run")
@@ -528,6 +529,7 @@ make_sync_player :: (player: *Player) -> Command.Sync_Player {
 	sync_player.model_id = player.server.model_id;
 	sync_player.has_safe_present = player.server.has_safe_present;
 	sync_player.has_hook_present = player.server.has_hook_present;
+	sync_player.holding_ice_cube = player.server.holding_ice_cube;
 	return sync_player;
 }
 
@@ -739,6 +741,15 @@ Camp_Ice :: struct {
 	cooldown_start := 0.0;
 
 	has_ice_cube := true;
+}
+
+Wind_Zone :: struct {
+	id: int;
+
+	position: V3f; @edit @picking
+	size: V2f; @edit @picking
+	dir: V2f; @edit @picking @normalize
+	strength: float = 1.0; @edit
 }
 
 Bomb_Spawner :: struct {
@@ -1785,6 +1796,14 @@ find_by_camp_ice_id :: (scene: Scene, id: int) -> *Camp_Ice {
 
 	return null;
 }
+find_by_wind_zone_id :: (scene: Scene, id: int) -> *Wind_Zone {
+	for * scene.wind_zones {
+		if it.id == id
+			return it;
+	}
+
+	return null;
+}
 find_by_bomb_spawner_id :: (scene: Scene, id: int) -> *Bomb_Spawner {
 	for * scene.bomb_spawners {
 		if it.id == id
@@ -2597,6 +2616,9 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			if d < it.server.radius_hitbox_pickup_ice_cube {
 				it.server.holding_ice_cube = true;
 				camp_ice.has_ice_cube = false;
+
+				sync := make_sync_camp_ice(camp_ice);
+				array_add(*result.broadcast, make_command(sync));
 				break;
 			}
 		}
@@ -3596,12 +3618,22 @@ drop_bombs :: (scene: *Scene, player: *Player) {
 			drop_bomb(scene, it);
 	}
 }
-drop_ice_cube :: (scene: *Scene, player: *Player) {
+drop_ice_cube :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 	tile_pos := position_to_tile(scene, player.server.position);
 	tile := get_tile(scene, tile_pos);
 
 	if tile && tile.kind != .Ice {
 		tile.kind = .Ice;
+
+		if result {
+			tile_change: Command.Terrain_Edit;
+			tile_change.tile_x = tile_pos.x;
+			tile_change.tile_y = tile_pos.y;
+			tile_change.tile_w = 1;
+			tile_change.tile_h = 1;
+			tile_change.new_tile = Tile.Kind.Ice.(int);
+			array_add(*result.broadcast, make_command(tile_change));
+		}
 	}
 }
 
@@ -3684,7 +3716,7 @@ server_die :: (
 	drop_bombs(scene, player);
 	if player.server.holding_ice_cube {
 		player.server.holding_ice_cube = false;
-		drop_ice_cube(scene, player);
+		drop_ice_cube(scene, player, result);
 	}
 
 	if scene.auto_revive {
@@ -4248,6 +4280,30 @@ update_player :: (scene: Scene, player: *Player, dt: float32) {
 	before_tile_center := position_to_tile_center(scene, player.server.position);
 
 	if player.server.slipping {
+		// wind
+		wind_dir := V2f.{ 0, 0 };
+		wind_strength := 0.0;
+		for scene.wind_zones {
+			if in(pos_size(v2(it.position), it.size), v2(player.server.position)) {
+				wind_dir += it.dir * it.strength;
+				wind_strength += it.strength;
+			}
+		}
+		wind_dir = normalize(wind_dir);
+		if wind_strength > 0 {
+			dt_angle := angle_between(
+				player.server.target_direction, V3f.{ wind_dir.x, wind_dir.y, 0 }, V3f.{ 0, 0, 1 }
+			);
+			turn_angle: float;
+			if dt_angle < 0
+				turn_angle = -min(100 * wind_strength * dt * DEG_RAD, -dt_angle);
+			else
+				turn_angle = min(100 * wind_strength * dt * DEG_RAD, dt_angle);
+			q := axis_angle(V3f.{ 0, 0, 1 }, turn_angle);
+			player.server.target_direction = q * player.server.target_direction;
+			player.server.target_direction = normalize(player.server.target_direction);
+		}
+
 		dt_angle := angle_between(
 			player.server.direction, player.server.target_direction, V3f.{ 0, 0, 1 }
 		);
@@ -4261,8 +4317,9 @@ update_player :: (scene: Scene, player: *Player, dt: float32) {
 		player.server.direction = q * player.server.direction;
 		player.server.direction = normalize(player.server.direction);
 
-		wanted_position :=
-			player.server.position + player.server.direction * player.server.speed * dt;
+		wanted_position := player.server.position;
+		wanted_position += player.server.direction * player.server.speed * dt;
+		wanted_position += v3(wind_dir, 0) * wind_strength * dt;
 
 		can:, wanted_position = can_execute_player_motion(
 			scene, player.server.position, wanted_position, player
@@ -4662,6 +4719,19 @@ process_client_only :: (
 		return true;
 	}
 
+	terrain_edit: *Command.Terrain_Edit = isa(command.payload, Command.Terrain_Edit);
+	if terrain_edit {
+		for y: 0..terrain_edit.tile_h - 1 {
+			for x: 0..terrain_edit.tile_w - 1 {
+				tile := get_tile(scene, .{ terrain_edit.tile_x + x, terrain_edit.tile_y + y });
+				if tile
+					tile.kind = terrain_edit.new_tile.(Tile.Kind);
+			}
+		}
+
+		return true;
+	}
+
 	wipe_scene: *Command.Wipe_Scene = isa(command.payload, Command.Wipe_Scene);
 	if wipe_scene {
 		scene.fade_screen.start = time;
@@ -4730,6 +4800,21 @@ process_client_only :: (
 			hook.server.length = sync_hook.length;
 			array_add(*scene.hooks, hook);
 		}
+		return true;
+	}
+
+	sync_camp_ice: *Command.Sync_Camp_Ice = isa(command.payload, Command.Sync_Camp_Ice);
+	if sync_camp_ice {
+		camp_ice := find_by_camp_ice_id(scene, sync_camp_ice.camp_ice_id);
+		if !camp_ice {
+			array_add(*scene.camp_ices, .{});
+			camp_ice = scene.camp_ices.data + scene.camp_ices.count - 1;
+		}
+		camp_ice.id = sync_camp_ice.camp_ice_id;
+		camp_ice.cooldown_start = sync_camp_ice.cooldown_start;
+		camp_ice.cooldown_time = sync_camp_ice.cooldown_time;
+		camp_ice.position = sync_camp_ice.position;
+		camp_ice.has_ice_cube = sync_camp_ice.has_ice_cube;
 		return true;
 	}
 
@@ -5133,6 +5218,7 @@ process :: (scene: Scene, player: *Player, command: Command, response: *Process_
 			it.server.dead = sync.dead;
 			it.server.has_safe_present = sync.has_safe_present;
 			it.server.has_hook_present = sync.has_hook_present;
+			it.server.holding_ice_cube = sync.holding_ice_cube;
 			if sync.model_id >= 0
 				it.server.model_id = sync.model_id;
 		}
@@ -5824,6 +5910,21 @@ TURN_TABLE,
 			it.position.x, it.position.y, it.position.z,
 			it.turning_speed,
 			it.turning_offset
+		);
+	}
+
+	for * scene.wind_zones {
+		print_to_builder(
+			*sb,
+			#string WIND_ZONE
+wind_zone
+- direction: % %
+- aabb: % % % %
+- strength: %
+WIND_ZONE,
+			it.dir.x, it.dir.y,
+			it.position.x, it.position.y, it.position.x + it.size.x, it.position.y + it.size.y,
+			it.strength
 		);
 	}
 

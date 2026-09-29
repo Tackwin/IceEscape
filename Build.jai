@@ -782,7 +782,7 @@ build_wasm_2 :: () {
 build_c_lib :: () {
 	run_command(
 		"wsl",
-		"clang++-18",
+		"clang-18",
 		"-O3",
 		"-g",
 		"-fdeclspec",

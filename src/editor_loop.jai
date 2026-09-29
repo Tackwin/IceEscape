@@ -44,6 +44,7 @@ Editor_Page :: struct {
 	}
 	selected: [..] Selection;
 
+	picking_v2f_field: *V2f = null;
 	picking_v3f_field: *V3f = null;
 	picking_aabb_field: *AABBf = null;
 	picking_aabb_field_did_press := false;
@@ -400,6 +401,17 @@ handle_field_picking :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_Stat
 	// Don't pick if GUI captured the mouse
 	if gui.controls.captured_mouse {
 		return false;
+	}
+
+	if page.picking_v2f_field {
+		if gui.controls.just_released[Key.MouseLeft] {
+			// Convert screen position to world position
+			world_pos := screen_to_world(editor, gui.controls.mouse_pos, gui.controls.window_size);
+
+			page.picking_v2f_field.* = v2(world_pos);
+			page.picking_v2f_field = null;
+			return true;
+		}
 	}
 
 	if page.picking_v3f_field {
@@ -990,6 +1002,40 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 			}
 			if field.type.type == .STRUCT {
 				struct_info := field.type.(*Type_Info_Struct);
+
+				if struct_info.name == "V2" {
+					current_value := member_pointer(
+						selected_entity_type, selected_entity_ptr, field.path, V2f
+					);
+
+					GUI.row(gui);
+					defer GUI.end(gui);
+					v2_result := GUI.labeled_v2_input(
+						gui,
+						tprint("%:", field.display_name),
+						content_width - 50,
+						24,
+						value = current_value.*,
+						drag_speed = 0.1,
+						precision = 2,
+						id = tprint("entity_field_%", field.display_name),
+					);
+
+					if v2_result.changed {
+						current_value.* = v2_result.value;
+						if has_note(field.member, "normalize") {
+							current_value.* = normalize(current_value.*);
+						}
+					}
+
+					if field.has_picking {
+						GUI.space(gui, 8);
+						if GUI.button(gui, "X") {
+							page.picking_v2f_field = current_value;
+							page.was_rectangle_dragging = false;
+						}
+					}
+				}
 				if struct_info.name == "V3" {
 					current_value := member_pointer(
 						selected_entity_type, selected_entity_ptr, field.path, V3f

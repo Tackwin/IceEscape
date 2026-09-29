@@ -394,20 +394,42 @@ const detect_mobile_device = () => {
 	return !!user_agent_mobile || mobile_user_agent || ipad_desktop_mode;
 };
 
+const integer_scale_that_fits = (content_width, content_height, viewport_width, viewport_height) => {
+	const largest_upscale = Math.floor(Math.min(
+		viewport_width / content_width,
+		viewport_height / content_height
+	));
+	if (largest_upscale >= 1) return largest_upscale;
+
+	const required_downscale = Math.ceil(Math.max(
+		content_width / viewport_width,
+		content_height / viewport_height
+	) * 4) / 4;
+	return 1 / required_downscale;
+};
+
 const sync_mobile_layout = () => {
 	mobile_device = detect_mobile_device();
-	mobile_portrait = mobile_device && window.innerHeight > window.innerWidth;
+	const viewport_width = Math.max(1, Math.floor(
+		window.visualViewport ? window.visualViewport.width : window.innerWidth
+	));
+	const viewport_height = Math.max(1, Math.floor(
+		window.visualViewport ? window.visualViewport.height : window.innerHeight
+	));
+	mobile_portrait = mobile_device && viewport_height > viewport_width;
 
-	let scale = 1;
-	if (mobile_device) {
-		const display_width = mobile_portrait ? WASM_GAME_HEIGHT : WASM_GAME_WIDTH;
-		const display_height = mobile_portrait ? WASM_GAME_WIDTH : WASM_GAME_HEIGHT;
-		scale = Math.min(1, window.innerWidth / display_width, window.innerHeight / display_height);
-	}
+	const display_width = mobile_portrait ? 768 : 1366;
+	const display_height = mobile_portrait ? 1366 : 768;
+	const scale = integer_scale_that_fits(
+		display_width,
+		display_height,
+		viewport_width,
+		viewport_height
+	);
 
 	document.body.classList.toggle("mobile", mobile_device);
 	document.body.classList.toggle("mobile-portrait", mobile_portrait);
-	document.documentElement.style.setProperty("--mobile-scale", String(scale));
+	document.documentElement.style.setProperty("--display-scale", String(scale));
 
 	if (controls_ready()) {
 		Atomics.store(getControlsBufferU8(), Control_Is_Mobile, mobile_device ? 1 : 0);
@@ -692,6 +714,9 @@ document.addEventListener("pointermove", (e) => {
 
 window.addEventListener("resize", sync_mobile_layout);
 window.addEventListener("orientationchange", sync_mobile_layout);
+if (window.visualViewport) {
+	window.visualViewport.addEventListener("resize", sync_mobile_layout);
+}
 window.addEventListener("blur", reset_pointer_input);
 sync_mobile_layout();
 

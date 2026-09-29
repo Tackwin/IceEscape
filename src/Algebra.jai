@@ -569,6 +569,12 @@ operator + :: (a: V2($T), b: V2(T)) -> V2(T) #symmetric {
 	return .{ a.x + b.x, a.y + b.y };
 }
 
+normalize :: (a: V2($T)) -> V2(T) {
+	l := sqrt(a.x * a.x + a.y * a.y);
+	if l == 0
+		return .{ 0, 0 };
+	return .{ a.x / l, a.y / l };
+}
 normalize :: (a: V3($T)) -> V3(T) {
 	l := sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
 	if l == 0

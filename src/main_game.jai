@@ -32,7 +32,6 @@ process_complete_ntp :: (state: *State, ntp: Command.NTP) {
 
 send_web_message :: (platform: Platform, time: Apollo_Time, _command: Command) {
 	command := _command;
-	command.sent_timestamp = to_float64_seconds(time);
 	buffer: [..] u8;
 	buffer.allocator = temp;
 	serialize(command, *buffer);

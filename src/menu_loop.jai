@@ -714,6 +714,7 @@ menu_loop :: (_app: *App) -> bool {
 		GUI.MENU_BASE_BACKGROUND,
 		0,
 	);
+
 	if !state.is_connected {
 		no_connection_ret := GUI.push_no_connection(*app_user.gui_state, *app_user.store);
 

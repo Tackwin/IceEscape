@@ -112,7 +112,6 @@ prepare_typed_message :: (_payload: $T) -> [] u8 {
 	buffer.allocator = temp;
 
 	#if T == Command {
-		payload.sent_timestamp = to_float64_seconds(current_time_monotonic());
 		serialize(payload, *buffer);
 	}
 

@@ -153,10 +153,12 @@ queue_send :: (instance: *Instance, cmd: Command, target_user_id: int) {
 queue_scene_scoped_broadcast :: (instance: *Instance, scene_id: int, cmd: Command) {
 	scene := find_by_scene_id(instance, scene_id);
 	if scene {
+		cmd_timestamped := cmd;
+		cmd_timestamped.sent_timestamp = scene.server.clock;
 		for scene.players {
 			user_id := player_id_to_user_id(instance, it.id);
 			if user_id >= 0 {
-				queue_send(instance, cmd, user_id);
+				queue_send(instance, cmd_timestamped, user_id);
 			}
 		}
 	}

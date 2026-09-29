@@ -26,7 +26,8 @@ editable_entities_type :: Type.[
 	Scene.Lantern,
 	Scene.Turn_Table,
 	Scene.AntiAir,
-	Scene.Robot
+	Scene.Robot,
+	Scene.Wind_Zone
 ];
 
 Editor :: struct {

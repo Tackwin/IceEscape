@@ -150,6 +150,7 @@ Command :: struct {
 		dead: bool;
 		has_safe_present: bool;
 		has_hook_present: int;
+		holding_ice_cube: bool;
 	}
 	Give_Control :: struct {
 		player_id: int;
@@ -379,6 +380,14 @@ Command :: struct {
 	Ask_Instance_List :: struct {
 	}
 
+	Terrain_Edit :: struct {
+		tile_x: int;
+		tile_y: int;
+		tile_w: int;
+		tile_h: int;
+		new_tile: int;
+	}
+
 	Ans_Instance_List :: struct {
 		Instance_Info :: struct {
 			instance_id: int;
@@ -574,7 +583,7 @@ Command :: struct {
 		Sync_Stats, Sync_Clock, Note_Played, Sync_Bomb_Spawner, Sync_Bomb, Sync_Score,
 		Ask_Enter_Custom_Instance, Ans_Enter_Custom_Instance, Save_Terrain, Load_Terrain,
 		Ask_List_Terrain, Ans_List_Terrain, Login, Set_Passcode, Get_Profile_Stats, Set_Username,
-		Get_Username, Get_Terrain_Leaderboard, Signal_Pick, Get_Instance_Tab_Stats,
+		Get_Username, Get_Terrain_Leaderboard, Signal_Pick, Get_Instance_Tab_Stats, Terrain_Edit,
 		Ask_Enter_Quick_Instance, Set_Thumbnail, Get_Thumbnail, Asset_Chunk, Create_Bomberman,
 		Ans_Create_Bomberman, Pickup_Power_Up, Sync_Camp_Ice
 	);

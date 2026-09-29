@@ -36,7 +36,7 @@ struct InstanceData {
 	color_overlay: vec4f,
 	light_count: u32,
 	light_index: u32,
-	padding0: u32,
+	grid_opacity: f32,
 	padding1: u32,
 };
 
@@ -365,11 +365,12 @@ fn flaggedSample(
 	if ((flags & 4) != 0) {
 		let uvx = uv.x;
 		let uvy = uv.y;
-		var sleft = smoothstep(0.0, 3.0 / 128.0, uvx);
-		var sright = smoothstep(1.0, 1.0 - 3.0 / 128.0, uvx);
-		var stop = smoothstep(0.0, 3.0 / 128.0, uvy);
-		var sbottom = smoothstep(1.0, 1.0 - 3.0 / 128.0, uvy);
+		var sleft = smoothstep(0.0, 3.5 / 128.0, uvx);
+		var sright = smoothstep(1.0, 1.0 - 3.5 / 128.0, uvx);
+		var stop = smoothstep(0.0, 3.5 / 128.0, uvy);
+		var sbottom = smoothstep(1.0, 1.0 - 3.5 / 128.0, uvy);
 		var s = 1.0;
+		var maxS = 1.0 - stop * sleft * sbottom * sright * 0.05;
 		if ((flags & 8) != 0) {
 			s *= stop;
 		}
@@ -383,7 +384,7 @@ fn flaggedSample(
 			s *= sright;
 		}
 
-		let newColor = mix(vec3(0.25), color.rgb, s);
+		let newColor = mix(vec3(0.2), color.rgb, min(s, maxS));
 		color.r = newColor.r;
 		color.g = newColor.g;
 		color.b = newColor.b;

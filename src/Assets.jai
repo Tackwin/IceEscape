@@ -252,7 +252,7 @@ COIN_LAUNCH_MP3_PATH :: "assets/Sound/coin_launch.mp3";
 #insert #run embed_data("TERRAIN_TILE_ALBEDO_PNG", "Images/tile_albedo.png", #filepath);
 #insert #run embed_data("TERRAIN_TILE_NORMAL_PNG", "Images/tile_normal.png", #filepath);
 #insert #run embed_data("PARTICLE_TEXTURE_PNG", "Images/particle_texture.png", #filepath);
-#insert #run embed_data("ui_atlas_png", "UI/ui_atlas_v2.png", #filepath);
+#insert #run embed_data("ui_atlas_png", "UI/ui_atlas.png", #filepath);
 #insert #run embed_data("UI_FELT_PNG", "UI/textures/felt_noise.png", #filepath);
 #insert #run embed_data("UI_PANEL_FRAME_PNG", "UI/textures/panel_frame.png", #filepath);
 #insert #run embed_data("UI_BTN_COMPACT_FRAME_PNG", "UI/textures/button_compact_frame.png", #filepath);
