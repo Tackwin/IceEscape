@@ -1,6 +1,6 @@
 #scope_file
 #import "Xar";
-#import "Rand";
+Rand :: #import "Rand";
 #import "Utils";
 #import "Basic";
 #import "Remap_Context"(false);
@@ -13,6 +13,7 @@
 #import "Common";
 #import "Communication";
 Scene :: #import "Scene";
+Play_Session :: #import "Play_Session";
 #import "Database";
 
 #scope_export
@@ -223,6 +224,24 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 		return true;
 	}
 
+	ask_play_session := isa(cmd.payload, Command.Ask_Play_Session);
+	if ask_play_session {
+		reply: Command.Ans_Play_Session;
+		reply.request_id = ask_play_session.request_id;
+		user := find_user_by_connection(server, sender);
+		if user {
+			instance := find_instance_by_id(server, user.instance_id);
+			if instance && find_person_by_user_id(instance, user.id) {
+				init_play_session(instance);
+				reply = Play_Session.make_sync_message(*instance.play_session, ask_play_session.request_id);
+			} else {
+				reply.status = .No_Instance;
+			}
+		}
+		append_queue(server, reply, sender);
+		return true;
+	}
+
 	connect := isa(cmd.payload, Command.Connect);
 	if connect {
 		user := find_user_by_token(server, connect.token);
@@ -269,6 +288,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			if instance {
 				ans_enter_instance: Command.Ans_Enter_Instance;
 				ans_enter_instance.reason = .Return;
+				ans_enter_instance.instance_id = instance.id;
 				append_queue(server, ans_enter_instance, user.connection);
 
 				resync_old_person(instance, user.id);
@@ -380,7 +400,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 				reply: Command.Load_Terrain;
 				reply.terrain_id = load_terrain.terrain_id;
 				reply.ascii = terrain_ascii.ascii;
-				reply.info = Scene.Scene_Info.{};
+				reply.info = Command.Scene_Info.{};
 				reply.info.id = terrain_info.id;
 				reply.info.author_profile_id = terrain_info.author_profile_id;
 				memcpy(
@@ -426,9 +446,10 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 						);
 						for instance.persons {
 							reply.players_stats[it_index].player_id = it.player_id;
-							reply.players_stats[it_index].death = it.run_stats.death_count;
-							reply.players_stats[it_index].revive = it.run_stats.revive_count;
-							reply.players_stats[it_index].wins = it.run_stats.win_count;
+							participant := Play_Session.find_participant(*instance.play_session, it.participant_id);
+							reply.players_stats[it_index].death = participant.death_count;
+							reply.players_stats[it_index].revive = participant.revive_count;
+							reply.players_stats[it_index].wins = participant.win_count;
 						}
 
 						queue_send(instance, make_command(reply), user.id);
@@ -774,15 +795,20 @@ SELECT_QUERY, filter_pattern),
 				// If the user is already in the instance, we just resend the current state to them
 				ans_enter_instance: Command.Ans_Enter_Instance;
 				ans_enter_instance.reason = .Already_In;
+				ans_enter_instance.instance_id = instance.id;
 				append_queue(server, ans_enter_instance, sender);
 
 				resync_old_person(instance, user.id);
+				return true;
 			}
-			if add_new_person(instance, user.id) {
+			if add_new_person(instance, user.id, user.profile_id, get_profile_name(platform, server.db, user.profile_id)) {
+				previous := find_instance_by_id(server, user.instance_id);
+				if previous remove_person(previous, user.id);
 				user.instance_id = instance.id;
 
 				ans_enter_instance: Command.Ans_Enter_Instance;
 				ans_enter_instance.reason = .Accepted;
+				ans_enter_instance.instance_id = instance.id;
 				append_queue(server, ans_enter_instance, sender);
 			}
 		}
@@ -913,19 +939,22 @@ SELECT_QUERY, filter_pattern),
 			}
 			server.instances[server.instance_count].scene_parameters = params;
 			server.instances[server.instance_count].id = server.instance_generation;
+			init_play_session(*server.instances[server.instance_count]);
 			server.instances[server.instance_count].hidden = true;
 			server.instances[server.instance_count].private = true;
 			server.instances[server.instance_count].user_created = true;
 			server.instance_count += 1;
 			server.instance_generation += 1;
 
-			if !add_new_person(*server.instances[server.instance_count - 1], user.id) {
+			if !add_new_person(*server.instances[server.instance_count - 1], user.id, user.profile_id, get_profile_name(platform, server.db, user.profile_id)) {
 				command: Command.Ans_Enter_Custom_Instance;
 				command.reason = .Rejected;
 				append_queue(server, command, sender);
 				return true;
 			}
 
+			previous := find_instance_by_id(server, user.instance_id);
+			if previous remove_person(previous, user.id);
 			user.instance_id = server.instances[server.instance_count - 1].id;
 			ans_enter_custom_instance: Command.Ans_Enter_Custom_Instance;
 			ans_enter_custom_instance.reason = .Accepted;
@@ -959,17 +988,20 @@ SELECT_QUERY, filter_pattern),
 		);
 		server.instances[server.instance_count].scene_parameters = params;
 		server.instances[server.instance_count].id = server.instance_generation;
+		init_play_session(*server.instances[server.instance_count]);
 		server.instances[server.instance_count].private = true;
 		server.instances[server.instance_count].user_created = true;
 		server.instance_count += 1;
 		server.instance_generation += 1;
 
-		if !add_new_person(*server.instances[server.instance_count - 1], user.id) {
+		if !add_new_person(*server.instances[server.instance_count - 1], user.id, user.profile_id, get_profile_name(platform, server.db, user.profile_id)) {
 			command: Command.Ans_Enter_Custom_Instance;
 			command.reason = .Rejected;
 			append_queue(server, command, sender);
 			return true;
 		}
+		previous := find_instance_by_id(server, user.instance_id);
+		if previous remove_person(previous, user.id);
 		user.instance_id = server.instances[server.instance_count - 1].id;
 
 		ans_enter_custom_instance: Command.Ans_Enter_Custom_Instance;
@@ -1048,7 +1080,6 @@ SELECT_QUERY, filter_pattern),
 			}
 
 			instance.scene_parameters = params;
-			instance.id = server.instance_generation;
 			memcpy(
 				instance.name.data,
 				create_inst.name.data,
@@ -1193,6 +1224,7 @@ init_instance_bomberman :: (
 	playing_scene_id := set_bomberman_scene(instance, terrain_ascii.ascii, info);
 	instance.pick_scene_id = pick_scene_id;
 	instance.playing_scene_id = playing_scene_id;
+	init_play_session(instance);
 	server.instance_count += 1;
 	return true;
 }
@@ -1266,6 +1298,7 @@ init_instance_with_terrain_ids :: (
 	instance.id = server.instance_generation;
 	server.instance_generation += 1;
 	server.instance_count += 1;
+	init_play_session(instance);
 	return true;
 }
 

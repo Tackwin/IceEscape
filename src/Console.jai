@@ -21,6 +21,7 @@ Console_State :: struct {
 	lines: [..] string;
 	history: [..] string;
 	history_index := -1;
+	end_level_preview_action: End_Level_Preview_Action;
 }
 
 init_console :: (app_user: *App_User) {
@@ -279,4 +280,14 @@ clear :: (c: *Console_State) {
 		free(it);
 	}
 	c.lines.count = 0;
+} @console
+
+previewendlevel :: (c: *Console_State) {
+	c.end_level_preview_action = .Show;
+	console_print(c, "Showing dummy end-level results. Countdown held; animation clock running.");
+} @console
+
+hideendlevel :: (c: *Console_State) {
+	c.end_level_preview_action = .Hide;
+	console_print(c, "End-level preview hidden.");
 } @console

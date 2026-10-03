@@ -15,6 +15,8 @@ Controls :: #import "Controls";
 Rand :: #import "Rand";
 GUI :: #import "GUI";
 XPBD :: #import "XPBD";
+#scope_file
+Play_Session :: #import "Play_Session";
 
 #scope_export
 
@@ -83,6 +85,7 @@ Scene_Mode :: enum {
 Scene_Parameters :: struct {
 	auto_revive := false;
 	mode := Scene_Mode.Standard;
+	personal_share_weight: float64 = Play_Session.PERSONAL_SHARE_WEIGHT;
 }
 
 Scene_Info :: struct {
@@ -168,7 +171,6 @@ Scene :: struct {
 		store: *Store;
 
 		clock: float64 = 0.0;
-		end_level: Command.End_Level;
 		render_particles := false;
 
 		leaderboard: Command.Get_Terrain_Leaderboard;
@@ -467,12 +469,20 @@ free :: (scene: *Scene) {
 }
 
 
+make_info_message :: (info: Scene_Info) -> Command.Scene_Info {
+	return .{ id = info.id, name = info.name, author_profile_id = info.author_profile_id };
+}
+
+read_info_message :: (info: Command.Scene_Info) -> Scene_Info {
+	return .{ id = info.id, name = info.name, author_profile_id = info.author_profile_id };
+}
+
 make_sync_scene :: (scene: *Scene, params: Scene_Parameters) -> Command.Sync_Scene {
 	sync_scene: Command.Sync_Scene;
 	sync_scene.id = scene.id;
-	sync_scene.info = scene.info;
+	sync_scene.info = make_info_message(scene.info);
 	sync_scene.clock = scene.server.clock;
-	sync_scene.params = params;
+	sync_scene.params = .{ auto_revive = params.auto_revive, mode = xx params.mode, personal_share_weight = params.personal_share_weight };
 	sync_scene.terrain = scene.terrain.text;
 	sync_scene.players = NewArray(scene.players.count, Command.Sync_Player, false,, temp);
 	sync_scene.skulls = NewArray(scene.skulls.count, Command.Sync_Skull, false,, temp);
@@ -516,7 +526,7 @@ make_sync_scene :: (scene: *Scene, params: Scene_Parameters) -> Command.Sync_Sce
 	for * sync_scene.standins {
 		it.* = make_sync_stand_in(*scene.stand_in[it_index]);
 	}
-	sync_scene.rng = scene.server_rng;
+	sync_scene.rng.s = scene.server_rng.s;
 	return sync_scene;
 }
 
@@ -653,6 +663,19 @@ make_sync_safe_zone :: (safe_zone: *Safe_Zone) -> Command.Sync_Safe_Zone {
 	return sync_safe_zone;
 }
 
+// Ordered simulation facts. Instance routes them into Play_Session; generation
+// distinguishes a wipe/retry even when it happens partway through this frame.
+Level_Event :: struct {
+	kind: enum { Participation; Death; Revive; Finish; };
+	run_generation: int;
+	player_id: int;
+	other_player_id: int;
+	icon_id: int;
+	duration_ms: int;
+	// Finish's place in the outgoing stream, before any later death/wipe packets.
+	broadcast_index: int;
+}
+
 Frame_Result :: struct {
 	broadcast: [..] Command; @allocate("lifetime") @clear("frame")
 	move_instance_to_world: [..] Command.Move_To_Play_World; @allocate("lifetime") @clear("frame")
@@ -660,6 +683,7 @@ Frame_Result :: struct {
 	win_player_id: [..] int; @allocate("lifetime") @clear("frame")
 	died_player_id: [..] int; @allocate("lifetime") @clear("frame")
 	revived_someone_player_id: [..] int; @allocate("lifetime") @clear("frame")
+	level_events: [..] Level_Event; @allocate("lifetime") @clear("frame")
 
 	restarted := false; @clear("frame")
 
@@ -1606,8 +1630,6 @@ Player :: struct {
 		model_id := 0;
 
 		souls := 0;
-		death_count := 0;
-		revive_count := 0;
 
 		has_safe_present := false;
 		has_hook_present := 0;
@@ -2183,6 +2205,9 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 }
 
 update_scene :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_Result) {
+	if result && !scene.end_scene_countdown_started {
+		for scene.players push_level_participation(scene, it.id, result);
+	}
 	scene.fade_in_screen_t = 0.0;
 	scene.client.clock += dt;
 	scene.server.clock += dt;
@@ -3509,56 +3534,22 @@ activate_trigger :: (scene: *Scene, trigger_id: int) {
 	table_set(*scene.trigger_activated, trigger_id, true);
 }
 
+push_level_participation :: (scene: *Scene, player_id: int, result: *Frame_Result) {
+	if !result || scene.end_scene_countdown_started return;
+	player := find_by_player_id(scene, player_id);
+	// Character-selection spectators are not participants in a level.
+	if !player || player.server.model_id <= 0 return;
+	array_add(*result.level_events, .{ kind = .Participation, run_generation = scene.run_generation,
+		player_id = player_id, icon_id = player.server.model_id });
+}
+
 win_level :: (scene: *Scene, player_id: int, time: Apollo_Time, result: *Frame_Result) {
-	// for top: 0..winner.best_scores_id.count-1 {
-	// 	best_score := -9999;
-	// 	best_player_id := -1;
-	// 	for scene.players {
-	// 		already_in := false;
-	// 		for idx: winner.best_scores_id {
-	// 			if idx == it.id {
-	// 				already_in = true;
-	// 				break;
-	// 			}
-	// 		}
-	// 		if already_in
-	// 			continue;
-
-	// 		if it.server.score.score > best_score {
-	// 			best_score = it.server.score.score;
-	// 			best_player_id = it.id;
-	// 		}
-	// 	}
-
-	// 	if best_player_id >= 0 {
-	// 		winner.best_scores_id[top] = best_player_id;
-	// 	} else {
-	// 		break;
-	// 	}
-	// }
-
+	if scene.end_scene_countdown_started return;
 	if result {
-		winner: Command.End_Level;
-		winner.winner_id = player_id;
-		winner.next_level_scheduled_in_seconds = 6;
-		winner.next_scene_id = scene.next_id;
-		winner.time = scene.server.clock.(float32);
-
-		best_death := -1;
-		best_revive := -1;
-		for scene.players {
-			if winner.most_death_id < 0 || it.server.death_count > best_death {
-				best_death = it.server.death_count;
-				winner.most_death_id = it.id;
-			}
-			if winner.most_revive_id < 0 || it.server.revive_count > best_revive {
-				best_revive = it.server.revive_count;
-				winner.most_revive_id = it.id;
-			}
-		}
-
-		scene.client.end_level = winner;
-		push_broadcast(result, winner);
+		push_level_participation(scene, player_id, result);
+		array_add(*result.level_events, .{ kind = .Finish, run_generation = scene.run_generation,
+			player_id = player_id, duration_ms = (scene.server.clock * 1000).(int),
+			broadcast_index = result.broadcast.count });
 	}
 
 	scene.end_scene_countdown_started = true;
@@ -3587,6 +3578,12 @@ player_has_revived_other_player :: (
 	player := find_by_player_id(scene, reviver);
 	if player {
 		player.server.souls += 1;
+	}
+	if result && !scene.end_scene_countdown_started && reviver != revived {
+		push_level_participation(scene, reviver, result);
+		push_level_participation(scene, revived, result);
+		array_add(*result.level_events, .{ kind = .Revive, run_generation = scene.run_generation,
+			player_id = reviver, other_player_id = revived });
 	}
 
 	if result
@@ -3709,6 +3706,11 @@ server_die :: (
 	should_die_source: V3f,
 	should_die_strength: float32
 ) {
+	if result && !scene.end_scene_countdown_started {
+		push_level_participation(scene, player.id, result);
+		array_add(*result.level_events, .{ kind = .Death, run_generation = scene.run_generation,
+			player_id = player.id });
+	}
 	player.server.has_safe_present = false;
 	player.server.has_hook_present = 0;
 
@@ -4381,7 +4383,7 @@ buy_ask :: (scene: *Scene, player_id: int, result: *Process_Response) {
 			command: Command.Buy_Ask;
 			command.player_id = player.id;
 			command.present_id = closest_present.id;
-			command.item_kind = closest_present.kind;
+			command.item_kind = xx closest_present.kind;
 			add(result, scene.id, command);
 			
 			// if player.server.score.points >= closest_present.server.cost {
@@ -4409,7 +4411,7 @@ can_execute_player_motion :: (
 		if it.is_closed {
 			d := norm(target - it.position);
 
-			if d < 1.0 {
+			if d < sqrt(2.0)/2 {
 				if it.wait_for_key_id >= 0 {
 					key := find_by_key_id(scene, it.wait_for_key_id);
 					if key && key.holder == player.id {
@@ -4474,7 +4476,7 @@ process_server_only :: (
 					buy_response: Command.Buy_Response;
 					buy_response.player_id = player.id;
 					buy_response.present_id = present.id;
-					buy_response.item_kind = present.kind;
+					buy_response.item_kind = xx present.kind;
 					buy_response.success = false;
 					buy_response.why = .Already_Have_Item;
 					add_single_reply(response, player.id, buy_response);
@@ -4483,7 +4485,7 @@ process_server_only :: (
 					buy_response: Command.Buy_Response;
 					buy_response.player_id = player.id;
 					buy_response.present_id = present.id;
-					buy_response.item_kind = present.kind;
+					buy_response.item_kind = xx present.kind;
 					buy_response.success = false;
 					buy_response.why = .Already_Have_Item;
 					add_single_reply(response, player.id, buy_response);
@@ -4515,7 +4517,7 @@ process_server_only :: (
 						buy_response: Command.Buy_Response;
 						buy_response.player_id = player.id;
 						buy_response.present_id = present.id;
-						buy_response.item_kind = present.kind;
+						buy_response.item_kind = xx present.kind;
 						buy_response.success = false;
 						buy_response.why = .Not_Enough_Points;
 						add_single_reply(response, player.id, buy_response);
@@ -4984,7 +4986,6 @@ process_client_only :: (
 		scene.end_scene_countdown = end_level.next_level_scheduled_in_seconds;
 		scene.end_scene_countdown_started = true;
 		scene.next_id = end_level.next_scene_id;
-		scene.client.end_level = end_level;
 
 		get_leaderboard: Command.Get_Terrain_Leaderboard;
 		get_leaderboard.terrain_id = scene.info.id;

@@ -23,7 +23,11 @@ Control_Kind :: enum {
 	Capture_Once;
 	Capture_Start;
 	Capture_Stop;
+	Capture_Video_Start;
+	Capture_Video_Stop;
+	Capture_Video_Status;
 	Layout;
+	End_Level_Preview;
 }
 
 Control_Command :: struct {
@@ -34,6 +38,10 @@ Control_Command :: struct {
 	y: s32;
 	count: s32;
 	layout: Platform.Layout;
+	preview_action: Platform.End_Level_Preview_Action;
+	video_fps: s32 = 30;
+	video_path: [1024] u8;
+	video_path_count: s32;
 }
 
 Control_Line :: struct {
@@ -60,6 +68,7 @@ State :: struct {
 	mouse_y: s32;
 	wheel: s32;
 	layout_override := Platform.Layout.Unknown;
+	end_level_preview_action: Platform.End_Level_Preview_Action;
 
 	commands: [..] Control_Command;
 	queue: [..] Control_Line;
@@ -67,6 +76,7 @@ State :: struct {
 	batch_active := false;
 	response: [..] u8;
 	pending_capture_reply := false;
+	video_command: #type (state: *State, cmd: Control_Command);
 }
 
 key_from_name :: (name: string) -> Platform.Key, bool {
@@ -99,7 +109,11 @@ is_session_kind :: (kind: Control_Kind) -> bool {
 		case .Capture_Once; #through;
 		case .Capture_Start; #through;
 		case .Capture_Stop; #through;
-		case .Layout; return true;
+		case .Capture_Video_Start; #through;
+		case .Capture_Video_Stop; #through;
+		case .Capture_Video_Status; #through;
+		case .Layout; #through;
+		case .End_Level_Preview; return true;
 		case; return true;
 	}
 }
@@ -149,9 +163,25 @@ parse_line :: (line: string, state: *State) -> bool {
 
 parse_command :: (text: string) -> Control_Command, bool {
 	cmd: Control_Command;
+	raw := trim(text);
+	has_rest, raw_verb, raw_rest := split_from_left(raw, #char " ");
+	if equal_nocase(raw_verb, "capture_video") {
+		video_cmd, ok := parse_video_command(ifx has_rest then trim(raw_rest) else "");
+		return video_cmd, ok;
+	}
 	t := control_normalize(text);
 	found, verb, rest := split_from_left(t, #char " ");
 	if !found {
+		if scan2(t, "preview_end_level") {
+			cmd.kind = .End_Level_Preview;
+			cmd.preview_action = .Show;
+			return cmd, true;
+		}
+		if scan2(t, "hide_end_level") {
+			cmd.kind = .End_Level_Preview;
+			cmd.preview_action = .Hide;
+			return cmd, true;
+		}
 		if scan2(t, "pause") {
 			cmd.kind = .Pause;
 			return cmd, true;
@@ -304,7 +334,11 @@ apply_input_command :: (state: *State, cmd: Control_Command) {
 		case .Capture_Once;
 		case .Capture_Start;
 		case .Capture_Stop;
+		case .Capture_Video_Start;
+		case .Capture_Video_Stop;
+		case .Capture_Video_Status;
 		case .Layout;
+		case .End_Level_Preview;
 		case;
 	}
 }
@@ -368,9 +402,18 @@ apply_session_command :: (state: *State, cmd: Control_Command) {
 		case .Capture_Stop;
 			state.capture_enabled = false;
 			append_response(state, "ok capture_enabled=false\n");
+		case .Capture_Video_Start; #through;
+		case .Capture_Video_Stop; #through;
+		case .Capture_Video_Status;
+			if state.video_command state.video_command(state, cmd);
+			else append_response(state, "error capture_video unsupported\n");
 		case .Layout;
 			state.layout_override = cmd.layout;
 			append_response(state, "ok layout\n");
+		case .End_Level_Preview;
+			state.end_level_preview_action = cmd.preview_action;
+			if state.paused && state.step_frames == 0 state.step_frames = 1;
+			append_response(state, "ok end_level_preview\n");
 		case;
 	}
 }
@@ -497,6 +540,8 @@ merge_into_frame_info :: (state: *State, info: *Platform.Frame_Info) {
 	}
 	info.capture_frame = state.capture_requested || state.capture_enabled;
 	info.capture_serial = state.capture_serial;
+	info.end_level_preview_action = state.end_level_preview_action;
+	state.end_level_preview_action = .None;
 	info.quit = info.quit || state.quit_requested;
 	if state.paused {
 		info.delta_time = CONTROL_FIXED_DT;
@@ -543,4 +588,46 @@ control_normalize :: (text: string) -> string {
 	}
 	if kept.count == 0 return "";
 	return join(..kept, separator = " ");
+}
+
+// Parse before normalization: file paths retain their original case and spaces.
+parse_video_command :: (text: string) -> Control_Command, bool {
+	cmd: Control_Command;
+	cmd.kind = .Capture_Video_Status;
+	if text.count == 0 return cmd, true;
+	found, action, args := split_from_left(text, #char " ");
+	args = trim(args);
+	if equal_nocase(action, "status") return cmd, args.count == 0;
+	if equal_nocase(action, "stop") {
+		cmd.kind = .Capture_Video_Stop;
+		return cmd, args.count == 0;
+	}
+	if !equal_nocase(action, "start") return cmd, false;
+	cmd.kind = .Capture_Video_Start;
+	if args.count == 0 return cmd, true;
+	_, first, remaining := split_from_left(args, #char " ");
+	digits := first.count > 0;
+	for first if it < #char "0" || it > #char "9" digits = false;
+	if digits {
+		fps := 0;
+		for first {
+			fps = fps * 10 + (it - #char "0");
+			if fps > 60 return cmd, false;
+		}
+		if fps < 1 return cmd, false;
+		cmd.video_fps = xx fps;
+		args = trim(remaining);
+	}
+	if args.count == 0 return cmd, true;
+	if args[0] == #char "\"" {
+		if args.count < 3 || args[args.count - 1] != #char "\"" return cmd, false;
+		args = slice(args, 1, args.count - 2);
+	}
+	if args.count >= cmd.video_path.count return cmd, false;
+	for args {
+		if it < 32 || it == #char "\"" || it == #char ";" || it == #char "#" return cmd, false;
+	}
+	memcpy(cmd.video_path.data, args.data, args.count);
+	cmd.video_path_count = xx args.count;
+	return cmd, true;
 }

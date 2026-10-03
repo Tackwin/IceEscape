@@ -19,6 +19,7 @@ STB :: #import "stb_image";
 #import "Curl";
 Win32 :: #import "Windows";
 #load "Win32_Control.jai";
+#load "Win32_Video.jai";
 
 sdl_window: *SDL_Window;
 sdl_gl_context: SDL_GLContext;
@@ -352,6 +353,7 @@ win32_get_frame_info :: (info: *Frame_Info) {
 	platform_state.message_arrived_cursor_pulled = pushed;
 
 	Control.merge_into_frame_info(*win32_control.state, info);
+	info.capture_video_frame = video_frame_requested;
 
 	// info.file_change_count = platform_state.frame_file_change_count;
 	// for 0..platform_state.frame_file_change_count-1 {
@@ -780,6 +782,8 @@ init_platform :: () -> Platform {
 	platform.connect_server = win32_connect_server;
 	platform.is_server_connected = win32_is_server_connected;
 	platform.write_file = win32_write_file;
+	platform.write_capture_file = win32_write_capture_file;
+	platform.capture_video_frame = win32_control_video_frame;
 	platform.read_entire_file = win32_read_entire_file;
 	platform.load_image = win32_load_image;
 	platform.free_image = win32_free_image;
@@ -1346,9 +1350,13 @@ main :: () {
 		}
 
 		ticking := Control.should_tick(win32_control.state);
+		if ticking && !win32_control.state.quit_requested && win32_control.state.paused && win32_video_active() && !win32_video_can_submit() {
+			ticking = false; // Keep polling controls while deterministic encoding catches up.
+			SDL_Delay(1);
+		}
 		if ticking {
 			Control.consume_frame_line(*win32_control.state);
-			Control.begin_tick(*win32_control.state);
+			win32_control_begin_tick(*win32_control);
 
 			if dll {
 				file := Win32.CreateFileA(identity_cstr(GAME_DLL), Win32.FILE_GENERIC_READ);
@@ -1376,6 +1384,7 @@ main :: () {
 				}
 			}
 
+			win32_control_end_video_tick();
 			capture_wrote := win32_control_note_capture(*win32_control);
 			Control.end_tick(*win32_control.state, capture_wrote);
 			Control.process_ready_lines(*win32_control.state);

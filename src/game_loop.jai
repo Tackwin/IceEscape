@@ -118,12 +118,13 @@ process_game :: (
 
 	sync_scene: *Command.Sync_Scene = isa(command.payload, Command.Sync_Scene);
 	if sync_scene {
+		state.play_session.client.end_level_round_id = 0;
 		Scene.clear_scene_run(*state.scene);
 		Terrain.parse_terrain(sync_scene.terrain, *state.scene);
 		state.scene.id = sync_scene.id;
-		state.scene.info = sync_scene.info;
+		state.scene.info = Scene.read_info_message(sync_scene.info);
 		state.scene.end_scene_countdown_started = false;
-		state.scene.params = sync_scene.params;
+		state.scene.params = .{ auto_revive = sync_scene.params.auto_revive, mode = xx sync_scene.params.mode, personal_share_weight = sync_scene.params.personal_share_weight };
 		state.scene.auto_revive |= sync_scene.params.auto_revive;
 		Scene.init_camera(*state.scene);
 		// Remove all players not present in the sync.
@@ -181,11 +182,16 @@ process_game :: (
 			Scene.process(*state.scene, make_command(it), controls.time, response);
 		}
 
-		state.scene.server_rng = sync_scene.rng;
+		state.scene.server_rng.s = sync_scene.rng.s;
 		return true;
 	}
 
-	return Scene.process(*state.scene, command, controls.time, response);
+	processed := Scene.process(*state.scene, command, controls.time, response);
+	if processed {
+		leaderboard := isa(command.payload, Command.Get_Terrain_Leaderboard);
+		if leaderboard update_end_level_record(app_user, leaderboard.*);
+	}
+	return processed;
 }
 
 gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
@@ -241,8 +247,13 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 			label.aabb_max - label.aabb_min + v2(16), GUI.compact_button_skin(*store), 0);
 	}
 
-	if state.scene.end_scene_countdown_started {
-		GUI.push_end_screen(*app_user.gui_state, state.scene, *store);
+	if state.scene.end_scene_countdown_started && !app_user.end_level_preview.active {
+		presentation: Play_Session.Presentation;
+		presentation.clock = to_float64_seconds(controls.time - state.scene.end_scene_countdown_time);
+		presentation.countdown_remaining = state.scene.end_scene_countdown - presentation.clock;
+		result := Play_Session.find_result(*state.play_session, state.play_session.client.end_level_round_id);
+		if result
+			GUI.push_end_screen(*app_user.gui_state, result.*, presentation, *store);
 	}
 
 	GUI.push_breaking_news(*app_user.gui_state, state.news, *store);
@@ -296,6 +307,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		if ret.leave_instance_clicked {
 			command: Command.Leave_Instance;
 			send_web_message(app.platform, controls.time, make_command(command));
+			request_play_session(app_user, -1, -1, 0);
 			state.screen_state = .Menu;
 			state.playing.escape_menu_open = false;
 		}
@@ -599,6 +611,7 @@ game_loop :: (app_user: *App_User) -> bool {
 	update_game_loop(app_user);
 	sounding(*state, *state.scene, store, app.platform);
 
+	push_end_level_preview(app_user);
 	draw_console(*app_user.console, *app_user.gui_state);
 
 	// Flush the command buffer

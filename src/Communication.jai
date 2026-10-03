@@ -1,12 +1,10 @@
-#import "Scene";
 #import "Basic";
 #import "String";
 #import "Algebra";
-#import "Profile";
 #import "Compiler";
 #import "Math";
 #import "Tagged_Union";
-Rand :: #import "Rand";
+#scope_file
 
 #scope_export
 Big_Asset :: struct {
@@ -71,7 +69,87 @@ Sum_Type :: struct(types: ..Type) {
 	};
 }
 
+// Wire schema only. Do not import Scene, Profile or Play_Session here.
+// New command kinds are appended so existing discriminants stay stable.
+// The serializer is still positional, not protobuf: deploy the matching client
+// and server together when changing a message layout.
 Command :: struct {
+	Statistics :: struct {
+		win_count: int;
+		death_count: int;
+		revive_count: int;
+	}
+	Scene_Info :: struct {
+		id: int;
+		name: [128] u8;
+		author_profile_id: int = -1;
+	}
+	Scene_Parameters :: struct {
+		auto_revive := false;
+		mode: enum { Standard :: 0; Bomberman :: 1; };
+		personal_share_weight: float64 = 1;
+	}
+	Rng_State :: struct { s: [2] u64; }
+	Item_Kind :: enum { A :: 0; B :: 1; }
+
+	Player_Result :: struct {
+		player_id: int;
+		display_name: string;
+		icon_id: int;
+		death_count: int;
+		revive_count: int;
+		win_count: int;
+		score: int;
+		dividend: float64;
+		participant_id: int = -1;
+	}
+	Level_Record :: struct {
+		status: enum { Loading; Missing; Available; } = .Loading;
+		time_ms: int;
+		holder: string;
+	}
+	Level_Result :: struct {
+		level_id: int = -1;
+		level_name: string;
+		next_level_name: string;
+		duration_ms: int;
+		winner_id: int = -1;
+		most_death_id: int = -1;
+		most_revive_id: int = -1;
+		players: [] Player_Result;
+		revives: [] int; // Row-major reviver * roster size + revived.
+		ranked_player_ids: [] int;
+		has_player_statistics: bool;
+		record: Level_Record;
+		personal_share_weight: float64 = 1;
+		round_id: int;
+	}
+	Session_Participant :: struct {
+		id: int;
+		profile_id: int = -1;
+		player_id: int = -1;
+		display_name: string;
+		icon_id: int;
+		active: bool;
+		death_count: int;
+		revive_count: int;
+		win_count: int;
+		score: int;
+	}
+	Ask_Play_Session :: struct {
+		request_id: int;
+		// Always asks for the sender's current session, never an arbitrary one.
+	}
+	Ans_Play_Session :: struct {
+		request_id: int;
+		status: enum { Available; No_Instance; Rejected; } = .Rejected;
+		instance_id: int = -1;
+		session_id: int = -1;
+		revision: int;
+		participants: [] Session_Participant;
+		completed_levels: [] Level_Result;
+	}
+
 	Connect :: struct {
 		token: int;
 		profile_id: int;
@@ -205,6 +283,7 @@ Command :: struct {
 		standin_id: int = -1;
 	}
 	End_Level :: struct {
+		result: Level_Result;
 		winner_id: int;
 		next_scene_id: int;
 		next_level_scheduled_in_seconds := 60.0;
@@ -215,6 +294,9 @@ Command :: struct {
 		best_scores_id: [5] int = .[-1, -1, -1, -1, -1];
 
 		time := 0.0;
+		instance_id: int = -1;
+		session_id: int = -1;
+		session_revision: int;
 	}
 	Sync_Clock :: struct {
 		t: float64;
@@ -273,7 +355,7 @@ Command :: struct {
 		info: Scene_Info;
 		params: Scene_Parameters;
 		terrain: string;
-		rng: Rand.State;
+		rng: Rng_State;
 		clock : float64;
 		players: [] Sync_Player; // Would usually point to a temporary buffer.
 		skulls: [] Sync_Skull;
@@ -285,6 +367,9 @@ Command :: struct {
 		safe_zones: [] Sync_Safe_Zone;
 		standins: [] Sync_Stand_In;
 		power_ups: [] Sync_Power_Up;
+		instance_id: int = -1;
+		session_id: int = -1;
+		session_revision: int;
 	}
 	Sync_Stand_In :: struct {
 		standin_id: int;
@@ -355,13 +440,13 @@ Command :: struct {
 	Buy_Ask :: struct {
 		present_id: int;
 		player_id: int;
-		item_kind: Present.Kind;
+		item_kind: Item_Kind;
 	}
 
 	Buy_Response :: struct {
 		present_id: int;
 		player_id: int;
-		item_kind: Present.Kind;
+		item_kind: Item_Kind;
 		success: bool;
 
 		Why :: enum {
@@ -421,6 +506,7 @@ Command :: struct {
 			Kicked;
 			Already_In;
 		}
+		instance_id: int = -1;
 	}
 
 	Ask_Enter_Custom_Instance :: struct {
@@ -585,7 +671,8 @@ Command :: struct {
 		Ask_List_Terrain, Ans_List_Terrain, Login, Set_Passcode, Get_Profile_Stats, Set_Username,
 		Get_Username, Get_Terrain_Leaderboard, Signal_Pick, Get_Instance_Tab_Stats, Terrain_Edit,
 		Ask_Enter_Quick_Instance, Set_Thumbnail, Get_Thumbnail, Asset_Chunk, Create_Bomberman,
-		Ans_Create_Bomberman, Pickup_Power_Up, Sync_Camp_Ice
+		Ans_Create_Bomberman, Pickup_Power_Up, Sync_Camp_Ice,
+		Ask_Play_Session, Ans_Play_Session
 	);
 	payload: Payload_t;
 	sent_timestamp: float64;

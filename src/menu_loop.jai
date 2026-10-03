@@ -149,7 +149,7 @@ process_menu :: (app_user: *App_User, command: Command) -> bool {
 
 	get_profile_stats := isa(command.payload, Command.Get_Profile_Stats);
 	if get_profile_stats {
-		state.menu.profile.stats = get_profile_stats.stats;
+		state.menu.profile.stats = .{ win_count = get_profile_stats.stats.win_count, death_count = get_profile_stats.stats.death_count, revive_count = get_profile_stats.stats.revive_count };
 		return true;
 	}
 
@@ -385,30 +385,36 @@ draw_lobby_header :: (gui: *GUI.GUI_State, menu: *Menu, store: *Store) {
 	GUI.box(gui, .{ 1290, 44 }, .Right);
 
 	GUI.box(gui, .{ 360, 44 }, .Right, gap = .{ 8, 0 });
+	GUI.box(gui, .{ 48, 32 }, .Down);
+	GUI.space(gui, 6);
 	if lobby_button(gui, "Login", "lobby_login", store, .{ 48, 32 }, 11) {
 		menu.login_popup_open = true;
 		menu.create_instance.open = false;
 		menu.create_bomberman.open = false;
 	}
-	_, reveal_pressed :=
-		lobby_button(gui, "", "lobby_reveal_passcode", store, .{ 34, 40 }, icon = GUI.EYE_SLOT);
-	passcode_text := "---- --- ----";
+	GUI.end(gui);
+	GUI.box(gui, .{ 48, 32 }, .Down);
+	GUI.space(gui, 6);
+	_, reveal_pressed := lobby_button(
+		gui, "", "lobby_reveal_passcode", store, .{ 38, 32 }, icon = GUI.EYE_SLOT
+	);
+	GUI.end(gui);
+	passcode_text := "____ ___ ____";
 	if reveal_pressed && menu.passstring.count > 0 passcode_text = menu.passstring;
 	GUI.box(gui, .{ 160, 40 });
+		GUI.space(gui, 8);
 		GUI.label_box(
-			gui, "YOUR PASSCODE", .{ 160, 16 }, 9, GUI.GOLD_ACCENT, id = "lobby_passcode_label"
+			gui, "YOUR PASSCODE", .{ 160, 14 }, 9, GUI.GOLD_ACCENT, id = "lobby_passcode_label"
 		);
 		GUI.label_box(
-			gui, passcode_text, .{ 160, 24 }, 13, GUI.TEXT_NORMAL, id = "lobby_passcode_value"
+			gui, passcode_text, .{ 160, 14 }, 13, GUI.TEXT_NORMAL, id = "lobby_passcode_value", align = .Bottom_Left
 		);
 	GUI.end(gui);
 	GUI.end(gui);
 
 	GUI.box(gui, .{ 570, 44 });
-	GUI.label_box(gui, "THE FROZEN REALMS", .{ 570, 12 }, 8, GUI.TEXT_MUTE, .Center, "lobby_brand_kicker");
-	GUI.label_box(gui, "ICE ESCAPE", .{ 570, 32 }, 30, GUI.GOLD_ACCENT, .Center, "lobby_brand_title");
+	GUI.label_box(gui, "ADARENA", .{ 570, 48 }, 30, GUI.GOLD_ACCENT, .Center, "lobby_brand_title");
 	GUI.end(gui);
-	GUI.label_box(gui, "Multiplayer lobby", .{ 360, 44 }, 11, GUI.TEXT_NORMAL, .Center_Right, "lobby_status");
 	GUI.end(gui);
 	GUI.end(gui);
 }
@@ -666,8 +672,6 @@ draw_lobby_right :: (
 	if lobby_button(gui, "Level editor", "editor_btn", store, .{ 136, 34 }, 12)
 		app_user.state.screen_state = .Editor;
 	GUI.end(gui);
-	GUI.label_box(gui, "A frozen world. A shared escape.", .{ 598, 34 }, 11,
-		GUI.TEXT_MUTE, .Center, "lobby_footer_tagline");
 	GUI.label_box(gui, tprint("Version: %", version_string), .{ 360, 34 }, 9,
 		GUI.TEXT_MUTE, .Center_Right, "version_label");
 	GUI.end(gui);
@@ -715,7 +719,7 @@ menu_loop :: (_app: *App) -> bool {
 		0,
 	);
 
-	if !state.is_connected {
+	if !state.is_connected && !app_user.end_level_preview.active {
 		no_connection_ret := GUI.push_no_connection(*app_user.gui_state, *app_user.store);
 
 		if no_connection_ret.retry_clicked {
@@ -749,6 +753,7 @@ menu_loop :: (_app: *App) -> bool {
 		draw_lobby_right(app_user, *app_user.gui_state, *state.menu, *app_user.store);
 	}
 
+	push_end_level_preview(app_user);
 	draw_console(*app_user.console, *app_user.gui_state);
 
 	frame := WRender.begin_frame(*framegraph, controls.time);

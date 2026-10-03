@@ -1299,12 +1299,12 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 			case .TERRAIN_SNOW_FLAT_LARGE;
 				return 0.05;
 			case .TERRAIN_SNOW_PILE;
-				return 0.015;
+				return 0.05;
 			case .TERRAIN_SNOWFLAKE_A;
 			case .TERRAIN_SNOWFLAKE_B;
 			case .TERRAIN_SNOWFLAKE_C;
 			case .ROCK_SMALL;
-				return 0.15;
+				return 0.20;
 			case .ROCK_MEDIUM;
 				return 0.075;
 			case .ROCK_LARGE;

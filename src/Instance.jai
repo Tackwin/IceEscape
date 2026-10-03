@@ -4,6 +4,7 @@
 // A Person is what makes it possible to connect a User to a Profile to a Player in an Instance.
 
 Scene :: #import "Scene";
+Play_Session :: #import "Play_Session";
 Terrain :: #import "Terrain";
 #import "Xar";
 #import "Math";
@@ -11,9 +12,10 @@ Terrain :: #import "Terrain";
 #import "Basic";
 #import "Utils";
 #import "String";
-#import "Profile";
 #import "Hash_Table";
 #import "Communication";
+#import "Common";
+#import "Pool";
 
 #scope_export
 Person :: struct {
@@ -24,7 +26,7 @@ Person :: struct {
 
 	last_seen_time: Apollo_Time;
 
-	run_stats: Statistics;
+	participant_id: int = -1;
 }
 
 End_Scene_Event :: struct {
@@ -67,6 +69,7 @@ Instance :: struct {
 	pick_scene_id: int;
 	playing_scene_id: int;
 	persons: [..] Person;
+	play_session: Play_Session.Play_Session;
 
 	scenes: Xar(Scene.Scene, 2, 20);
 	scene_parameters: Scene.Scene_Parameters;
@@ -105,6 +108,72 @@ Instance :: struct {
 	}
 }
 
+init_play_session :: (instance: *Instance, allocator := context.allocator) {
+	// Called after the instance id is assigned. Do not allocate in a Scene pool:
+	// a session spans runs, and Instances themselves can move in the server array.
+	if !instance.play_session.initialized
+		Play_Session.init(*instance.play_session, allocator, instance.id, 1);
+}
+
+make_instance_sync_scene :: (instance: *Instance, scene: *Scene.Scene) -> Command.Sync_Scene {
+	init_play_session(instance);
+	message := Scene.make_sync_scene(scene, scene.params);
+	message.instance_id = instance.id;
+	message.session_id = instance.play_session.id;
+	message.session_revision = instance.play_session.revision;
+	return message;
+}
+
+make_end_level_message :: (instance: *Instance, scene: *Scene.Scene, result: Play_Session.Result) -> Command.End_Level {
+	message: Command.End_Level;
+	message.result = Play_Session.make_result_message(result);
+	message.winner_id = result.winner_id;
+	message.next_scene_id = scene.next_id;
+	message.next_level_scheduled_in_seconds = max(cast(float64) 0,
+		scene.end_scene_countdown - to_float64_seconds(current_time_monotonic() - scene.end_scene_countdown_time)).(float32);
+	message.time = (result.duration_ms / 1000.0).(float32);
+	message.most_death_id = result.most_death_id;
+	message.most_revive_id = result.most_revive_id;
+	for i: 0..min(message.best_scores_id.count, result.ranked_player_ids.count)-1
+		message.best_scores_id[i] = result.ranked_player_ids[i];
+	message.instance_id = instance.id;
+	message.session_id = instance.play_session.id;
+	message.session_revision = instance.play_session.revision;
+	return message;
+}
+
+consume_level_events :: (instance: *Instance, scene: *Scene.Scene) {
+	session := *instance.play_session;
+	broadcast_cursor := 0;
+	for event: instance.frame_result.level_events {
+		level := Play_Session.ensure_level(session, scene.id, event.run_generation);
+		if #complete event.kind == {
+			case .Participation;
+				Play_Session.register_level_player(session, level, event.player_id, event.icon_id);
+			case .Death;
+				Play_Session.record_level_death(session, level, event.player_id);
+			case .Revive;
+				Play_Session.record_level_revive(session, level, event.player_id, event.other_player_id);
+			case .Finish;
+				if level.completed_round_id continue;
+				for i: broadcast_cursor..event.broadcast_index-1
+					queue_scene_scoped_broadcast(instance, scene.id, instance.frame_result.broadcast[i]);
+				broadcast_cursor = event.broadcast_index;
+				next_scene := find_by_scene_id(instance, scene.next_id);
+				next_name := ifx next_scene then string_from_arr(next_scene.info.name) else "";
+				settled := Play_Session.complete_level(session, level, scene.info.id,
+					string_from_arr(scene.info.name), next_name, event.player_id,
+					event.duration_ms, scene.params.personal_share_weight);
+				queue_scene_scoped_broadcast(instance, scene.id, make_command(make_end_level_message(instance, scene, settled.*)));
+		}
+	}
+	for i: broadcast_cursor..instance.frame_result.broadcast.count-1
+		queue_scene_scoped_broadcast(instance, scene.id, instance.frame_result.broadcast[i]);
+	// A wipe can occur inside update_scene. Retire that generation's ledger even
+	// when the frame has no events after the restart; completed history is untouched.
+	Play_Session.ensure_level(session, scene.id, scene.run_generation);
+}
+
 reload :: (instance: *Instance) {
 	for *instance.scenes {
 		Scene.reload(it);
@@ -112,6 +181,7 @@ reload :: (instance: *Instance) {
 }
 
 free :: (instance: *Instance) {
+	Play_Session.free(*instance.play_session);
 	array_free(instance.persons);
 	for *instance.scenes
 		Scene.free(it);
@@ -283,7 +353,7 @@ handle_file_change :: (instance: *Instance, path: string) {
 				if scene {
 					Scene.clear_scene_run(scene);
 					Terrain.parse_terrain(data, scene);
-					sync_scene := Scene.make_sync_scene(scene, scene.params);
+					sync_scene := make_instance_sync_scene(instance, scene);
 					queue_scene_scoped_broadcast(instance, scene_id, make_command(sync_scene));
 				}
 			}
@@ -378,9 +448,10 @@ process :: (
 			if person {
 				sync_stats: Command.Sync_Stats;
 				sync_stats.player_id = it;
-				sync_stats.death = person.run_stats.death_count;
-				sync_stats.revive = person.run_stats.revive_count;
-				sync_stats.wins = person.run_stats.win_count;
+				participant := Play_Session.find_participant(*instance.play_session, person.participant_id);
+				sync_stats.death = participant.death_count;
+				sync_stats.revive = participant.revive_count;
+				sync_stats.wins = participant.win_count;
 				queue_send(instance, make_command(sync_stats), sender_user_id);
 				return true;
 			}
@@ -447,19 +518,24 @@ move_playing_scene :: (instance: *Instance, scene_id: int, should_register := fa
 		return;
 
 	if should_register {
-		for old_scene.players {
+		level := Play_Session.find_level(*instance.play_session, old_scene.id, old_scene.run_generation);
+		result := ifx level then Play_Session.find_result(*instance.play_session, level.completed_round_id) else null;
+		if result for result.players {
 			event: End_Scene_Event;
-			event.user_id = player_id_to_user_id(instance, it.id);
-			event.scene_id = old_scene.info.id;
-			event.time_ms = (scene.server.clock * 1000).(int);
-			event.revive_count = it.server.revive_count;
-			event.death_count = it.server.death_count;
-			event.winner = it.id == scene.client.end_level.winner_id;
+			event.user_id = player_id_to_user_id(instance, it.player_id);
+			participant := Play_Session.find_participant(*instance.play_session, it.participant_id);
+			if participant event.user_id = player_id_to_user_id(instance, participant.player_id);
+			event.scene_id = result.level_id;
+			event.time_ms = result.duration_ms;
+			event.revive_count = it.revive_count;
+			event.death_count = it.death_count;
+			event.winner = it.player_id == result.winner_id;
 			array_add(*instance.end_scene_events, event);
 		}
 	}
 
 	Scene.restart(scene, scene.params);
+	Play_Session.ensure_level(*instance.play_session, scene.id, scene.run_generation);
 	current_time := current_time_monotonic();
 
 	for old_scene.players {
@@ -470,7 +546,7 @@ move_playing_scene :: (instance: *Instance, scene_id: int, should_register := fa
 		Scene.process(scene, make_command(spawn), current_time, null);
 	}
 
-	sync_scene := Scene.make_sync_scene(scene, scene.params);
+	sync_scene := make_instance_sync_scene(instance, scene);
 	for * scene.players {
 		user := player_id_to_user_id(instance, it.id);
 		if user >= 0 {
@@ -483,7 +559,7 @@ move_playing_scene :: (instance: *Instance, scene_id: int, should_register := fa
 	}
 	instance.playing_scene_id = scene_id;
 
-	old_scene.players.count = 0;
+	if old_scene != scene old_scene.players.count = 0;
 }
 gc_persons :: (instance: *Instance) {
 	now := current_time_monotonic();
@@ -499,6 +575,7 @@ gc_persons :: (instance: *Instance) {
 update_instance :: (instance: *Instance, dt: float32) {
 	if instance.persons.count == 0
 		return;
+	init_play_session(instance);
 
 	Scene.clear(*instance.process_response);
 	time := current_time_monotonic();
@@ -554,17 +631,16 @@ update_instance :: (instance: *Instance, dt: float32) {
 		Scene.make(*instance.frame_result);
 
 	for * scene: instance.scenes {
+		Play_Session.ensure_level(*instance.play_session, scene.id, scene.run_generation);
 		Scene.clear_frame_result_frame(*instance.frame_result);
 		Scene.update_scene(scene, time, dt, *instance.frame_result);
-
-		for instance.frame_result.broadcast {
-			queue_scene_scoped_broadcast(instance, scene.id, it);
-		}
 
 		for instance.frame_result.died_player_id {
 			person := find_person_by_player_id(instance, it);
 			if person {
-				person.run_stats.death_count += 1;
+				participant := Play_Session.find_participant(*instance.play_session, person.participant_id);
+				participant.death_count += 1;
+				instance.play_session.revision += 1;
 
 				player := Scene.find_by_player_id(scene, it);
 				if player {
@@ -579,7 +655,9 @@ update_instance :: (instance: *Instance, dt: float32) {
 		for instance.frame_result.revived_someone_player_id {
 			person := find_person_by_player_id(instance, it);
 			if person {
-				person.run_stats.revive_count += 1;
+				participant := Play_Session.find_participant(*instance.play_session, person.participant_id);
+				participant.revive_count += 1;
+				instance.play_session.revision += 1;
 
 				player := Scene.find_by_player_id(scene, it);
 				if player {
@@ -591,14 +669,16 @@ update_instance :: (instance: *Instance, dt: float32) {
 			}
 		}
 
-		should_end_level := false;
 		for instance.frame_result.win_player_id {
 			person := find_person_by_player_id(instance, it);
 			if person {
-				should_end_level = true;
-				person.run_stats.win_count += 1;
+				participant := Play_Session.find_participant(*instance.play_session, person.participant_id);
+				participant.win_count += 1;
+				instance.play_session.revision += 1;
 			}
 		}
+
+		consume_level_events(instance, scene);
 
 		for instance.frame_result.move_instance_to_world {
 			move_player_to_currently_playing_world(
@@ -644,8 +724,13 @@ resync_old_person :: (instance: *Instance, user_id: int) {
 	for * instance.scenes {
 		player := Scene.find_by_player_id(it, person.player_id);
 		if player {
-			cmd := make_command(Scene.make_sync_scene(it, it.params));
+			cmd := make_command(make_instance_sync_scene(instance, it));
 			queue_send(instance, cmd, user_id);
+			if it.end_scene_countdown_started {
+				level := Play_Session.find_level(*instance.play_session, it.id, it.run_generation);
+				result := ifx level then Play_Session.find_result(*instance.play_session, level.completed_round_id) else null;
+				if result queue_send(instance, make_command(make_end_level_message(instance, it, result.*)), user_id);
+			}
 
 			spawn: Command.Spawn;
 			spawn.player_id = person.player_id;
@@ -660,19 +745,21 @@ resync_old_person :: (instance: *Instance, user_id: int) {
 }
 
 add_new_person :: (
-	instance: *Instance, user_id: int
+	instance: *Instance, user_id: int, profile_id: int = -1, display_name: string = ""
 ) -> bool {
+	pick_scene := find_by_scene_id(instance, instance.pick_scene_id);
+	if !pick_scene return false;
 	new_person: Person;
 	new_person.person_id = instance.id_generation;
 	new_person.player_id = instance.id_generation;
+	init_play_session(instance);
 	new_person.user_id = user_id;
+	new_person.profile_id = profile_id;
+	new_person.participant_id = Play_Session.join(*instance.play_session, new_person.player_id, profile_id, display_name);
 	new_person.last_seen_time = current_time_monotonic();
 	array_add(*instance.persons, new_person);
 
 	instance.id_generation += 1;
-	pick_scene := find_by_scene_id(instance, instance.pick_scene_id);
-	if !pick_scene
-		return false;
 
 	// Notify existing players in the pick scene about the new person
 	for instance.persons {
@@ -688,7 +775,7 @@ add_new_person :: (
 	}
 
 	Scene.spawn_player(pick_scene, new_person.player_id, -1);
-	queue_send(instance, make_command(Scene.make_sync_scene(pick_scene, pick_scene.params)), user_id);
+	queue_send(instance, make_command(make_instance_sync_scene(instance, pick_scene)), user_id);
 
 	spawn: Command.Spawn;
 	spawn.player_id = new_person.player_id;
@@ -704,6 +791,8 @@ remove_person :: (instance: *Instance, user_id: int) {
 	person := find_person_by_user_id(instance, user_id);
 	if !person
 		return;
+
+	Play_Session.leave(*instance.play_session, person.participant_id);
 
 	// Notify existing players in the pick scene about the departing person
 	scene := find_scene_of_player_id(instance, person.player_id);
@@ -770,7 +859,7 @@ move_player_to_currently_playing_world :: (
 	Scene.process(new_scene, make_command(spawn), current_time_monotonic(), null);
 
 	// Send a sync of the new scene to the moved player.
-	sync_scene := Scene.make_sync_scene(new_scene, new_scene.params);
+	sync_scene := make_instance_sync_scene(instance, new_scene);
 	user_id := player_id_to_user_id(instance, player_id);
 	queue_send(instance, make_command(sync_scene), user_id);
 

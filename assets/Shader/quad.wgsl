@@ -48,6 +48,12 @@ struct VertexOutput {
 	let instance = instanceData[instanceIndex];
 
 	var p = pos[vertexIndex] * instance.size + instance.pos;
+	if (instance.rotation != 0.0) {
+		let local = (pos[vertexIndex] - vec2f(0.5)) * instance.size;
+		let c = cos(instance.rotation);
+		let s = sin(instance.rotation);
+		p = instance.pos + instance.size * 0.5 + vec2f(c*local.x - s*local.y, s*local.x + c*local.y);
+	}
 	p = p / uniforms.size * 2.0 - 1.0;
 	p.y = -p.y;
 
@@ -90,6 +96,26 @@ fn address_uv(uv: vec2f, wrap_uvs: bool) -> vec2f {
 	let sample_uv = address_uv(uv, repeat_uvs);
 
 	var color = instance.color;
+	if ((instance.z30sdf2 & 4u) != 0u) {
+		// Analytic anti-aliased coin: rotation uses the existing instance field.
+		let p = uv * 2.0 - 1.0;
+		let radius = length(p);
+		let aa = max(fwidth(radius), 0.015);
+		let coverage = 1.0 - smoothstep(1.0-aa, 1.0, radius);
+		if ((instance.z30sdf2 & 8u) != 0u) {
+			return vec4f(color.rgb, color.a * coverage);
+		}
+		let rim = smoothstep(0.78, 0.83, radius);
+		let bevel = 0.9 + 0.25 * dot(p, normalize(vec2f(-1.0, -1.0)));
+		let face = color.rgb * (0.88 + 0.22 * instance.outline);
+		var gold = mix(face, color.rgb * bevel, rim);
+		let ring = 1.0 - smoothstep(0.015, 0.015+aa, abs(radius - 0.72));
+		gold *= 1.0 - ring * 0.27;
+		let stem = (1.0-smoothstep(0.08, 0.08+aa, abs(p.x))) * (1.0-smoothstep(0.34, 0.34+aa, abs(p.y)));
+		let caps = (1.0-smoothstep(0.23, 0.23+aa, abs(p.x))) * (1.0-smoothstep(0.05, 0.05+aa, abs(abs(p.y)-0.30)));
+		gold *= 1.0 - max(stem, caps) * 0.46;
+		return vec4f(gold, color.a * coverage);
+	}
 	if (abs(instance.texture_rect.z) > 0.0 && abs(instance.texture_rect.w) > 0.0) {
 		if ((instance.z30sdf2 & 1u) != 0u) {
 			var msd = textureSample(sdfMap, sdfSampler, address_uv(uv, false), 0).rgb;

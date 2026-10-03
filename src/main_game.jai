@@ -19,6 +19,7 @@ WRender :: #import "WRender";
 PNG :: #import "PNG";
 Scene :: #import "Scene";
 GUI :: #import "GUI";
+Play_Session :: #import "Play_Session";
 
 process_complete_ntp :: (state: *State, ntp: Command.NTP) {
 	result: State.NTP_Result;
@@ -74,6 +75,7 @@ App_User :: struct {
 	console: Console_State;
 
 	counter := 0;
+	end_level_preview: End_Level_Preview;
 }
 
 #program_export "app_update_loop" app_update_loop :: (app: *App) {
@@ -130,6 +132,7 @@ App_User :: struct {
 	GUI.begin_frame(*app_user.gui_state, app_user.allocated_frame_info, *app_user.controls, app_user.state.keyboard_layout);
 	handle_debug_local_server(app_user);
 	handle_console(app_user);
+	handle_end_level_preview(app_user);
 
 	commands := parse_web_message(*app_user.state, app_user.allocated_frame_info);
 	for command: commands {
@@ -217,8 +220,60 @@ handle_end_asset :: (app_user: *App_User, asset: *Big_Asset) {
 	table_remove(*state.pending_big_assets, asset.id);
 }
 
+request_play_session :: (app_user: *App_User, instance_id: int, session_id: int, revision: int) {
+	session := *app_user.state.play_session;
+	session.client.expected_instance_id = instance_id;
+	session.client.expected_session_id = session_id;
+	session.client.expected_revision = revision;
+	request := Play_Session.begin_sync(session);
+	send_web_message(app_user.state.platform, app_user.state.current_time, make_command(request));
+}
+
 process_main :: (app_user: *App_User, command: Command) -> bool {
 	state := *app_user.state;
+	session := *state.play_session;
+
+	connect := isa(command.payload, Command.Connect);
+	if connect {
+		// Connection/profile bookkeeping is shared even when reconnecting in Game.
+		process_menu(app_user, command);
+		request_play_session(app_user, -1, -1, 0);
+		return true;
+	}
+	answer := isa(command.payload, Command.Ans_Play_Session);
+	if answer {
+		if Play_Session.apply_sync(session, answer.*) refresh_end_level_presentation(app_user);
+		return true;
+	}
+	entry := isa(command.payload, Command.Ans_Enter_Instance);
+	if entry {
+		if entry.reason == .Accepted || entry.reason == .Return || entry.reason == .Already_In
+			request_play_session(app_user, entry.instance_id, -1, 0);
+		else if entry.reason == .Kicked request_play_session(app_user, -1, -1, 0);
+		return true;
+	}
+	custom_entry := isa(command.payload, Command.Ans_Enter_Custom_Instance);
+	if custom_entry && custom_entry.reason == .Accepted
+		request_play_session(app_user, custom_entry.instance_id, -1, 0);
+
+	sync_scene := isa(command.payload, Command.Sync_Scene);
+	if sync_scene {
+		changed := session.instance_id != sync_scene.instance_id ||
+			session.id != sync_scene.session_id || session.revision < sync_scene.session_revision;
+		already_requested := session.client.sync_pending &&
+			session.client.expected_instance_id == sync_scene.instance_id &&
+			session.client.expected_session_id == sync_scene.session_id &&
+			session.client.expected_revision >= sync_scene.session_revision;
+		if changed && !already_requested
+			request_play_session(app_user, sync_scene.instance_id, sync_scene.session_id, sync_scene.session_revision);
+	}
+	end_level := isa(command.payload, Command.End_Level);
+	if end_level {
+		// An old instance's packet cannot alter the current session or countdown.
+		if session.client.expected_instance_id >= 0 && end_level.instance_id != session.client.expected_instance_id return true;
+		if session.client.expected_session_id >= 0 && end_level.session_id != session.client.expected_session_id return true;
+		capture_end_level_result(app_user, end_level.*);
+	}
 
 	asset_chunk := isa(command.payload, Command.Asset_Chunk);
 	if asset_chunk {
@@ -247,6 +302,7 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	app.user_data = app_user.(*void);
 	app_user.app = app;
 	app_user.state.platform = app.platform;
+	Play_Session.init(*app_user.state.play_session, context.allocator);
 	app_user.graphics.gpu = app.platform.gpu;
 	WRender.init_graphics(app.platform, *app_user.graphics);
 	WRender.graphics = *app_user.graphics;
@@ -346,14 +402,22 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 		app_user.store.texture_queues.count = 0;
 	}
 
-	app_user.framegraph.capture_requested = app_user.allocated_frame_info.capture_frame;
+	app_user.framegraph.capture_requested = app_user.allocated_frame_info.capture_frame || app_user.allocated_frame_info.capture_video_frame;
+	capture_generation := app_user.framegraph.capture_generation;
 	to_present := WRender.present_frame(*app_user.framegraph, *app_user.store);
 	if app_user.framegraph.take_screenshot {
 		WRender.screenshot_frame(*app_user.framegraph, *app_user.store, _app.platform);
 		app_user.framegraph.take_screenshot = false;
 	}
-	if app_user.allocated_frame_info.capture_frame {
-		write_capture_png(app_user, _app.platform);
+	if to_present && app_user.framegraph.capture_generation != capture_generation {
+		if app_user.allocated_frame_info.capture_frame write_capture_png(app_user, _app.platform);
+		if app_user.allocated_frame_info.capture_video_frame && _app.platform.capture_video_frame {
+			_app.platform.capture_video_frame(
+				app_user.framegraph.capture_rgb,
+				app_user.framegraph.capture_width.(int),
+				app_user.framegraph.capture_height.(int)
+			);
+		}
 	}
 	if to_present
 		_app.platform.gpu.surfacePresent(app_user.graphics.surface);
@@ -384,12 +448,14 @@ write_capture_png :: (app_user: *App_User, platform: *Platform) {
 	encoded.allocator = temp;
 	if !PNG.write_rgb(rgb, width, height, *encoded) return;
 	path := tprint("captures/frame_%.png", app_user.allocated_frame_info.capture_serial);
-	platform.write_file(path, encoded);
+	if platform.write_capture_file platform.write_capture_file(path, encoded);
+	else platform.write_file(path, encoded);
 }
 #load "menu_loop.jai";
 #load "game_loop.jai";
 #load "editor_loop.jai";
 #load "Console.jai";
+#load "End_Level.jai";
 
 #program_export "app_quit" app_quit :: (_app: *App) {
 }
@@ -424,6 +490,7 @@ State :: struct {
 
 	platform: *Platform;
 	scene: Scene.Scene;
+	play_session: Play_Session.Play_Session;
 
 	is_connected := false;
 	is_communication_established := false;

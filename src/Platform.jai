@@ -134,6 +134,12 @@ Web_Message :: struct {
 	sender: Connection;
 }
 
+End_Level_Preview_Action :: enum {
+	None;
+	Show;
+	Hide;
+}
+
 Frame_Info :: struct {
 	time: Apollo_Time;
 
@@ -155,12 +161,14 @@ Frame_Info :: struct {
 
 	capture_frame := false;
 	capture_serial: u64;
+	capture_video_frame := false;
 
 	message_received: [1024] Web_Message;
 	message_received_count := 0;
 
 	file_change: [1024] string;
 	file_change_count := 0;
+	end_level_preview_action: End_Level_Preview_Action;
 }
 
 Audio :: struct {
@@ -624,6 +632,8 @@ Platform :: struct {
 	list_files : #type (path: string, rec: bool) -> [] string = null;
 	read_entire_file: #type (path: string, data: [] u8) -> int = null;
 	write_file: #type (path: string, data: [] u8) -> bool = null;
+	write_capture_file: #type (path: string, data: [] u8) -> bool = null;
+	capture_video_frame: #type (rgb: [] u8, width: int, height: int) = null;
 	load_image: #type (data: [] u8) -> Image = null;
 	free_image: #type (image: *Image) = null;
 

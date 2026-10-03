@@ -62,10 +62,12 @@ win32_control_open :: (control: *Win32_Control) -> bool {
 	control.state.commands.allocator = context.allocator;
 	control.state.queue.allocator = context.allocator;
 	control.state.response.allocator = context.allocator;
+	control.state.video_command = win32_control_video_command;
 	return control.pipe != INVALID_HANDLE_VALUE;
 }
 
 win32_control_shutdown :: (control: *Win32_Control) {
+	win32_video_shutdown();
 	if control.connected {
 		DisconnectNamedPipe(control.pipe);
 		control.connected = false;
@@ -107,6 +109,12 @@ win32_control_reply_and_disconnect :: (control: *Win32_Control) {
 }
 
 win32_control_poll :: (control: *Win32_Control) {
+	win32_video_poll();
+	now := SDL_GetPerformanceCounter();
+	if video_clock != 0 && win32_video_active() && !control.state.paused && !control.state.quit_requested {
+		video_phase += (now - video_clock).(float64) / SDL_GetPerformanceFrequency();
+	}
+	video_clock = now;
 	win32_control_try_accept(control);
 	if !control.connected return;
 	if control.client_waiting {
@@ -156,11 +164,87 @@ win32_control_poll :: (control: *Win32_Control) {
 	}
 }
 
+// This flag comes from the exclusive PNG write in the game callback.
 win32_control_note_capture :: (control: *Win32_Control) -> bool {
-	if !control.state.capture_requested && !control.state.pending_capture_reply {
-		return false;
+	return capture_write_ok;
+}
+
+capture_write_ok := false;
+video_clock: u64;
+video_fps := 30;
+video_phase: float64;
+video_repeat: int;
+video_frame_requested := false;
+video_frame_submitted := false;
+video_skipped: u64;
+video_readback_failures: u64;
+
+win32_control_video_command :: (state: *Control.State, cmd: Control.Control_Command) {
+	response: string;
+	if cmd.kind == .Capture_Video_Start {
+		path: string = .{ data = cmd.video_path.data, count = cmd.video_path_count };
+		response = win32_video_start(path, cmd.video_fps, Control.CAPTURE_WIDTH, Control.CAPTURE_HEIGHT);
+		if begins_with(response, "ok ") {
+			video_fps = cmd.video_fps;
+			video_phase = 0;
+			video_skipped = 0;
+			video_readback_failures = 0;
+			video_clock = SDL_GetPerformanceCounter();
+		}
+	} else if cmd.kind == .Capture_Video_Stop {
+		response = win32_video_stop();
+	} else {
+		response = tprint("% timing=% skipped=% readback_failures=%",
+			trim_right(win32_video_status(), "\r\n"),
+			ifx state.paused then "simulation" else "live",
+			video_skipped, video_readback_failures);
 	}
-	path := Control.capture_path(control.state.capture_serial);
-	data, ok := read_entire_file(path,, temp);
-	return ok && data.count > 8;
+	Control.append_response(state, trim_right(response, "\r\n"));
+	Control.append_response(state, "\n");
+}
+
+win32_control_begin_tick :: (control: *Win32_Control) {
+	capture_write_ok = false;
+	Control.begin_tick(*control.state);
+	if control.state.capture_requested {
+		// Serial numbers survive old runs by skipping every existing destination.
+		while Win32.GetFileAttributesA(to_c_string(Control.capture_path(control.state.capture_serial),, temp)) != Win32.INVALID_FILE_ATTRIBUTES {
+			control.state.capture_serial += 1;
+		}
+	}
+	video_frame_requested = false;
+	video_frame_submitted = false;
+	video_repeat = 0;
+	if !win32_video_active() || control.state.quit_requested return;
+	if control.state.paused video_phase += Control.CONTROL_FIXED_DT;
+	due := floor(video_phase * video_fps + 0.000001).(int);
+	if due <= 0 || !win32_video_can_submit() return;
+	// Cap catch-up after a long stall to keep worker work bounded as well as memory.
+	video_repeat = min(due, 60);
+	video_skipped += xx (due - video_repeat);
+	video_phase -= due.(float64) / video_fps;
+	video_frame_requested = true;
+}
+
+win32_control_end_video_tick :: () {
+	if video_frame_requested && !video_frame_submitted {
+		video_readback_failures += 1;
+		video_phase += video_repeat.(float64) / video_fps;
+	}
+}
+
+win32_control_video_frame :: (rgb: [] u8, width: int, height: int) {
+	video_frame_submitted = win32_video_submit(rgb, width, height, video_repeat);
+}
+
+win32_write_capture_file :: (path: string, data: [] u8) -> bool {
+	file := Win32.CreateFileA(to_c_string(path,, temp), Win32.GENERIC_WRITE,
+		Win32.FILE_SHARE_READ, null, Win32.CREATE_NEW, Win32.FILE_ATTRIBUTE_NORMAL);
+	if file == Win32.INVALID_HANDLE_VALUE return false;
+	written: Win32.DWORD;
+	ok := Win32.WriteFile(file, data.data, xx data.count, *written, null);
+	Win32.CloseHandle(file);
+	capture_write_ok = ok != 0 && written == data.count;
+	if !capture_write_ok Win32.DeleteFileA(to_c_string(path,, temp));
+	return capture_write_ok;
 }

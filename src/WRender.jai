@@ -4948,6 +4948,24 @@ render_gates_regular_closed :: (
 		return;
 
 	commit_geometry(frame, pass, *store.gate_close_model, instanced.count);
+	
+	{
+		instances := append_sdf_instance_buffer(frame);
+		for scene.gates {
+			if !(!it.is_end && it.is_closed)
+				continue;
+
+			instances.count += 1;
+			sdf := *instances[instances.count - 1];
+			sdf.* = make_sdf_circle(
+				position=it.position + v3(0.0, 0.0, 0.01),
+				radius=sqrt(2.0)/2,
+				outline_thickness=0.02,
+				color=.{ 0.5, 0.3, 0.3, 0.4 }
+			);
+		}
+		commit_sdf(frame, *frame.sdf, instances.count);
+	}
 }
 
 render_gates_finished_open :: (
@@ -4993,6 +5011,24 @@ render_gates_finished_closed :: (
 		return;
 
 	commit_geometry(frame, pass, *store.gate_finish_close_model, instanced.count);
+	
+	{
+		instances := append_sdf_instance_buffer(frame);
+		for scene.gates {
+			if !(!it.is_end && it.is_closed)
+				continue;
+
+			instances.count += 1;
+			sdf := *instances[instances.count - 1];
+			sdf.* = make_sdf_circle(
+				position=it.position + v3(0.0, 0.0, 0.01),
+				radius=sqrt(2.0)/2,
+				outline_thickness=0.02,
+				color=.{ 0.5, 0.3, 0.3, 0.4 }
+			);
+		}
+		commit_sdf(frame, *frame.sdf, instances.count);
+	}
 }
 
 render_shurikens :: (

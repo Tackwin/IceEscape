@@ -189,6 +189,8 @@ model_id_to_slot :: (id: Scene.Model_Id) -> V2f {
 
 GUI_State :: struct {
 	Quad :: struct {
+		FLAG_COIN :: 4;
+		FLAG_COIN_SHADOW :: 8;
 		pos: V2f;
 		size: V2f;
 		color: V4f = .{ 1.0, 1.0, 1.0, 1.0 };
@@ -198,6 +200,9 @@ GUI_State :: struct {
 		late := false;
 		custom_texture_idx := -1;
 		address_mode: Texture_Address_Mode = .Clamp;
+		flags: u32;
+		rotation: float32;
+		coin_face: float32 = 1;
 	}
 	quads: [..] Quad;
 
@@ -1601,173 +1606,7 @@ push_point_ui :: (state: *GUI_State, player: Scene.Player, store: *Store) {
 	);
 }
 
-push_end_screen :: (state: *GUI_State, scene: Scene.Scene, store: *Store) {
-	display_player_icon :: (
-		player_id: int, p: V2f, z := 10.0, size := 24
-	) #expand {
-		player := Scene.find_by_player_id(scene, player_id);
-		if !player
-			return;
-		push_quad_screen(
-			state,
-			pos = .{ p.x - size, p.y - size },
-			size = .{ size * 2, size * 2 },
-			color = v3(GOLD_ACCENT),
-			z = z + 0.1
-		);
-		push_quad_screen(
-			state,
-			pos = .{ p.x - size - 1, p.y - size - 1 },
-			size = .{ 2 * size, 2 * size },
-			color = v3(LOBBY_ACTION_BLUE),
-			z = z + 0.2
-		);
-		push_quad_texture(
-			state,
-			pos = .{ p.x - size - 1, p.y - size - 1 },
-			size = .{ 2 * size - 2, 2 * size - 2 },
-			color = .{ 1.0, 1.0, 1.0 },
-			tex_slot = model_id_to_slot(xx player.server.model_id),
-			z = z + 0.3
-		);
-	}
-	center := v2(state.controls.window_size.x / 2, state.controls.window_size.y / 4);
-	size   := v2(1024.0 - 128, 258.0);
-
-	window_aabb := pos_size(center - size / 2.0, size);
-	push_felt_panel(state, store, window_aabb.min, size, 9.9);
-
-	atom_label(
-		state,
-		"Level cleared",
-		v2(center.x, top(window_aabb) + 8),
-		z = 11.0,
-		align=.Top_Center,
-		scale=24,
-		color = GOLD_ACCENT
-	);
-	dt := to_float64_seconds(state.controls.time - scene.end_scene_countdown_time);
-	dt = scene.end_scene_countdown - dt;
-	text := tprint("% seconds before next level !", ceil(dt).(s64));
-	atom_label(
-		state,
-		text,
-		v2(center.x, top(window_aabb) + 32 + 8),
-		z = 11.0,
-		align=.Top_Center,
-		scale=16,
-		color = TEXT_MUTE
-	);
-
-	push_quad_screen(
-		state,
-		pos_size(window_aabb.min.x, window_aabb.min.y + 64, width(window_aabb), 1),
-		v3(LOBBY_SEPARATOR),
-		z = 10.2
-	);
-	atom_label(
-		state,
-		"Winner:",
-		v2(center.x - 8, top(window_aabb) + 64 + 32),
-		z = 11.0,
-		align=.Center_Right,
-		scale=24,
-		color = TEXT_MUTE
-	);
-	display_player_icon(
-		scene.client.end_level.winner_id, .{ center.x + 8 + 24, top(window_aabb) + 64 + 32 }, z = 10
-	);
-	push_quad_screen(
-		state,
-		pos_size(window_aabb.min.x, window_aabb.min.y + 64 + 64, width(window_aabb), 1),
-		v3(LOBBY_SEPARATOR),
-		z = 10.2
-	);
-	atom_label(
-		state,
-		"Most deaths",
-		v2(window_aabb.min.x + width(window_aabb) / 4, top(window_aabb) + 64 + 64 + 16),
-		z = 11.0,
-		align=.Center,
-		scale=16,
-		color = TEXT_NORMAL
-	);
-	push_quad_screen(
-		state,
-		pos_size(center.x, window_aabb.min.y + 64 + 32, 1, 64 + 32),
-		v3(LOBBY_SEPARATOR),
-		z = 10.2
-	);
-	atom_label(
-		state,
-		"Most revives",
-		v2(window_aabb.min.x + 3 * width(window_aabb) / 4, top(window_aabb) + 64 + 64 + 16),
-		z = 11.0,
-		align=.Center,
-		scale=16,
-		color = TEXT_MUTE
-	);
-	push_quad_screen(
-		state,
-		pos_size(window_aabb.min.x, window_aabb.min.y + 64 + 64 + 64 + 32, width(window_aabb), 1),
-		v3(LOBBY_SEPARATOR),
-		z = 10.2
-	);
-	time := scene.client.end_level.time;
-	minutes := floor(time / 60);
-	seconds := fmod_cycling(time, 60);
-	milliseconds := frac(time) * 1000;
-	atom_label(
-		state,
-		tprint(
-			"Time: %:%s %ms",
-			formatInt(minutes.(int), minimum_digits = 3, padding = #char "_"),
-			formatInt(seconds.(int), minimum_digits = 2, padding = #char "_"),
-			formatInt(milliseconds.(int), minimum_digits = 3, padding = #char "_")
-		),
-		v2(window_aabb.min.x + 1 * width(window_aabb) / 4, top(window_aabb) + 64 + 64 + 64 + 32 + 16),
-		z = 11.0,
-		align=.Center,
-		scale=16,
-		color = TEXT_NORMAL
-	);
-
-	wr_string := "WR xx:xx s xx ms";
-	{
-		wr_time_ms := scene.client.leaderboard.wr_time_ms;
-		wr_minutes := wr_time_ms / 60000;
-		wr_seconds := (wr_time_ms / 1000) % 60;
-		wr_milliseconds := wr_time_ms % 1000;
-
-		username := "Anonymous";
-		if scene.client.leaderboard.wr_username.count > 0 {
-			username = scene.client.leaderboard.wr_username;
-		}
-
-		wr_string = tprint(
-			"WR %:%s %ms (%)",
-			formatInt(wr_minutes.(int), minimum_digits = 3, padding = #char "_"),
-			formatInt(wr_seconds.(int), minimum_digits = 2, padding = #char "_"),
-			formatInt(wr_milliseconds.(int), minimum_digits = 3, padding = #char "_"),
-			username
-		);
-	}
-	atom_label(
-		state,
-		wr_string,
-		v2(window_aabb.min.x + 3 * width(window_aabb) / 4, top(window_aabb) + 64 + 64 + 64 + 32 + 16),
-		z = 11.0,
-		align=.Center,
-		scale=16,
-		color = TEXT_NORMAL
-	);
-	push_quad_screen(
-		state,
-		pos_size(window_aabb.min.x, window_aabb.min.y + 64 + 64 + 64 + 32 + 32 + 2, width(window_aabb), 1),
-		v3(LOBBY_SEPARATOR),
-		z = 10.2
-	);
-}
+#load "GUI_End_Level.jai";
 
 
 push_death_indicator :: (state: *GUI_State, scene: Scene.Scene) {
@@ -2138,10 +1977,13 @@ push_escape_menu :: (state: *GUI_State, args: Escape_Menu_Args, store: *Store = 
 
 	row(state, pos + v2(32.0, 64.0), .Right, z = 12, align = .Top_Left);
 	if store {
-		ret.resume_clicked, _ = themed_button(state, store, "Resume", "resume", .{ 200, 40 }, LOBBY_ACTION_BLUE);
+		ret.resume_clicked, _ = themed_button(
+			state, store, "Resume", "resume", .{ 215, 40 }, LOBBY_ACTION_BLUE
+		);
 		space(state, 16);
-		ret.leave_instance_clicked, _ = themed_button(state, store, "Leave Instance", "leave",
-			.{ 200, 40 }, LOBBY_BUTTON_DARK);
+		ret.leave_instance_clicked, _ = themed_button(
+			state, store, "Leave Instance", "leave", .{ 215, 40 }, LOBBY_BUTTON_DARK
+		);
 	} else {
 		ret.resume_clicked = button(state, "Resume", id = "resume");
 		space(state, 16);
@@ -3418,7 +3260,7 @@ checkbox :: (
 	if state.checked {
 		checked_color := ifx skin.texture then v3(LOBBY_READY) else v3(GREEN_BRIGHT);
 		push_quad_screen(
-			gui, lower_left + .{ 4, 4 }, .{ size - 8, size - 8 }, checked_color, z + 2
+			gui, lower_left + .{ 4, 4 }, .{ size - 8, size - 8 }, checked_color, z + 0.1
 		);
 	}
 
@@ -3622,7 +3464,9 @@ dropdown :: (
 			// Draw option background
 			if skin.texture {
 				option_skin := skin;
-				option_skin.fill_color = v4(bg_color, 1);
+				if bg_color.x != 1.0 || bg_color.y != 1.0 || bg_color.z != 1.0 {
+					option_skin.fill_color = v4(bg_color, 1);
+				}
 				push_nine_slice(gui, option_aabb.min, option_aabb.max - option_aabb.min, option_skin, z + 1.0);
 				text_color = TEXT_NORMAL;
 			} else {
@@ -3714,7 +3558,7 @@ labeled_dropdown :: (
 		id = xx string_id("label")
 	);
 
-	dropdown_width := min(width - widget_width(gui, "label") - padding * 3, 64 + 32);
+	dropdown_width := min(width - widget_width(gui, "label") - padding * 3, 64 + 64);
 	dropdown_comp := dropdown(
 		gui,
 		options,
