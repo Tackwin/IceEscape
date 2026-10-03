@@ -227,6 +227,7 @@ LOSER_MP3_PATH :: "assets/Sound/loser.mp3";
 #insert #run embed_data("PRESENT_WGSL", "Shader/present.wgsl", #filepath);
 #insert #run embed_data("QUAD_WGSL", "Shader/quad.wgsl", #filepath);
 #insert #run embed_data("SDF_WGSL", "Shader/sdf.wgsl", #filepath);
+#insert #run embed_data("TRAIL_WGSL", "Shader/trail.wgsl", #filepath);
 
 
 HORN_CAR_0_MP3_PATH :: "assets/Sound/horn_car0.mp3";
@@ -407,6 +408,7 @@ load_everything :: (platform: Platform) {
 			"PRESENT_WGSL",
 			"QUAD_WGSL",
 			"SDF_WGSL",
+			"TRAIL_WGSL",
 			"COLORMAPS_PNG",
 			"TERRAIN_TILE_ALBEDO_PNG",
 			"TERRAIN_TILE_NORMAL_PNG",

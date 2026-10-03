@@ -63,6 +63,7 @@ Store :: struct #type_info_none {
 	geometry_shader: WRender.WShader;
 	geometry_shadow_shader: WRender.WShader;
 	sdf_shader: WRender.WShader;
+	trail_shader: WRender.WShader;
 
 	terrain_tree_snow_a: WRender.Model;
 	terrain_tree_snow_b: WRender.Model;
@@ -776,6 +777,9 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 
 	store.sdf_shader.code = xx Assets.SDF_WGSL;
 	store.sdf_shader.input = .{};
+
+	store.trail_shader.code = xx Assets.TRAIL_WGSL;
+	store.trail_shader.input = .{};
 
 	prop_colormap_png := Assets.load_png(Assets.COLORMAPS_PNG,, temp);
 	store.colormaps = WRender.WTexture.make_from_image(prop_colormap_png, "colormaps");

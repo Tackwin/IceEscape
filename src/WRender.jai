@@ -745,6 +745,7 @@ Frame :: struct {
 	geometry: Pass(WFramegraph.Uniforms);
 	editor: Pass(WFramegraph.Uniforms);
 	sdf: Pass(WFramegraph.Sdf_Uniform);
+	trail: Pass(WFramegraph.Trail_Uniform);
 	ui: Pass(WFramegraph.UI_Uniform);
 
 	cpu: [..] u8;
@@ -778,6 +779,10 @@ WFramegraph :: struct {
 	sdfModule: WGPUShaderModule;
 	sdfPipeline: WGPURenderPipeline;
 	sdfBindGroupLayout: WGPUBindGroupLayout;
+	trailModule: WGPUShaderModule;
+	trailPipeline: WGPURenderPipeline;
+	trailBindGroupLayout: WGPUBindGroupLayout;
+	trailTextureBindGroupLayout: WGPUBindGroupLayout;
 
 	instanceBindGroupLayout: WGPUBindGroupLayout;
 	textureBindGroupLayout: WGPUBindGroupLayout;
@@ -852,6 +857,33 @@ WFramegraph :: struct {
 		padding1: u32;
 		padding2: u32;
 		padding3: u32;
+	}
+	Trail_Uniform :: struct {
+		view_projection: M4f;
+		camera_position: V3f;
+		padding: float32;
+	}
+	Trail_Point :: struct {
+		position: V3f; // 12
+		thickness: float32; // 16
+		uv_x: float32; // 20
+		padding0: u32 = 0; // 24
+		padding1: u32 = 0; // 28
+		padding2: u32 = 0; // 32
+	} // 32
+	Trail_Instance :: struct {
+		MAX_POINTS :: 8;
+		FLAG_TEXTURED :: 1;
+		FLAG_UV_REPEAT :: 2;
+		FLAG_DEPTH_TEST :: 4;
+
+		points: [MAX_POINTS] Trail_Point; // 8 * 32 = 256
+		color: V4f = .{ 1, 1, 1, 1 }; // 256 + 16 = 272
+		texture_rect: V4f = .{ 0, 0, 1, 1 }; // 272 + 16 = 288
+		point_count: u32; // 288 + 4 = 292
+		flags: u32 = FLAG_DEPTH_TEST; // 292 + 4 = 296
+		texture_layer: u32; // 296 + 4 = 300
+		padding: u32; // 300 + 4 = 304
 	}
 
 	Present_Uniform :: struct {
@@ -1146,6 +1178,76 @@ init_sdf_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
 	framegraph.sdfPipeline = graphics.gpu.deviceCreateRenderPipeline(graphics.device, *pipeline);
 	framegraph.sdfBindGroupLayout = graphics.gpu.renderPipelineGetBindGroupLayout(
 		framegraph.sdfPipeline, 0
+	);
+}
+
+init_trail_pipeline :: (framegraph: *WFramegraph, store: *Store.Store) {
+	assert(size_of(WFramegraph.Trail_Point) == 32, "Trail point layout must be 32 bytes");
+	assert(size_of(WFramegraph.Trail_Instance) == 304, "Trail instance layout must be 304 bytes");
+	assert(size_of(WFramegraph.Trail_Uniform) == 80, "Trail uniform layout must be 80 bytes");
+
+	desc: WGPUShaderModuleDescriptor = .{};
+	wgsl: WGPUShaderSourceWGSL = .{};
+	wgsl.code = toWGPUStringView(store.trail_shader.code);
+	wgsl.chain.next = null;
+	wgsl.chain.sType = .ShaderSourceWGSL;
+	desc.nextInChain = *wgsl.chain;
+	framegraph.trailModule = graphics.gpu.deviceCreateShaderModule(graphics.device, *desc);
+
+	pipeline: WGPURenderPipelineDescriptor = .{};
+	pipeline.label = toWGPUStringView("Trail Pipeline");
+	pipeline.layout = null;
+	pipeline.vertex.module = framegraph.trailModule;
+	pipeline.vertex.entryPoint = toWGPUStringView("vs");
+	pipeline.vertex.bufferCount = 0;
+	pipeline.vertex.buffers = null;
+	pipeline.primitive.topology = .WGPUPrimitiveTopology_TriangleStrip;
+	pipeline.primitive.stripIndexFormat = .Undefined;
+	pipeline.primitive.frontFace = .CCW;
+	pipeline.primitive.cullMode = .None;
+	pipeline.primitive.unclippedDepth = 0;
+
+	depth: WGPUDepthStencilState = .{};
+	depth.format = .Depth32Float;
+	depth.depthWriteEnabled = 0;
+	depth.depthCompare = .LessEqual;
+	depth.stencilFront = .{};
+	depth.stencilBack = .{};
+	depth.stencilReadMask = 0;
+	depth.stencilWriteMask = 0;
+	depth.depthBias = 0;
+	depth.depthBiasSlopeScale = 0.0;
+	depth.depthBiasClamp = 0.0;
+	pipeline.depthStencil = *depth;
+
+	pipeline.multisample.count = xx framegraph.settings.multisamples;
+	pipeline.multisample.mask = 0xFFFFFFFF;
+	pipeline.multisample.alphaToCoverageEnabled = 0;
+
+	fragment: WGPUFragmentState = .{};
+	fragment.module = framegraph.trailModule;
+	fragment.entryPoint = toWGPUStringView("fs");
+	targets: [1] WGPUColorTargetState;
+	targets[0].format = .RGBA16Float;
+	blend: WGPUBlendState = .{};
+	blend.color.operation = .Add;
+	blend.color.srcFactor = .SrcAlpha;
+	blend.color.dstFactor = .OneMinusSrcAlpha;
+	blend.alpha.operation = .Add;
+	blend.alpha.srcFactor = .One;
+	blend.alpha.dstFactor = .OneMinusSrcAlpha;
+	targets[0].blend = *blend;
+	targets[0].writeMask = WGPUColorWriteMask_All;
+	fragment.targets = targets.data;
+	fragment.targetCount = targets.count;
+	pipeline.fragment = *fragment;
+
+	framegraph.trailPipeline = graphics.gpu.deviceCreateRenderPipeline(graphics.device, *pipeline);
+	framegraph.trailBindGroupLayout = graphics.gpu.renderPipelineGetBindGroupLayout(
+		framegraph.trailPipeline, 0
+	);
+	framegraph.trailTextureBindGroupLayout = graphics.gpu.renderPipelineGetBindGroupLayout(
+		framegraph.trailPipeline, 1
 	);
 }
 
@@ -1623,6 +1725,7 @@ init_framegraph :: (framegraph: *WFramegraph, store: *Store.Store) {
 
 	init_quad_pipeline(framegraph, store);
 	init_sdf_pipeline(framegraph, store);
+	init_trail_pipeline(framegraph, store);
 
 	if framegraph.geometryBindGroup
 		graphics.gpu.bindGroupRelease(framegraph.geometryBindGroup);
@@ -1744,6 +1847,53 @@ sdf_instance_bind_group :: (
 
 	memcpy(frame.cpu.data + frame.cpu_cursor, *uniforms, size_of(type_of(uniforms)));
 	frame.cpu_cursor += size_of(type_of(uniforms));
+
+	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
+}
+
+trail_instance_bind_group :: (
+	framegraph: *WFramegraph,
+	frame: *Frame,
+	uniforms: WFramegraph.Trail_Uniform
+) -> WGPUBindGroup {
+	align_up(*frame.cpu_cursor, 256);
+
+	desc: WGPUBindGroupDescriptor = .{};
+	desc.label = toWGPUStringView("Trail Instance Bind Group");
+	desc.layout = framegraph.trailBindGroupLayout;
+	entries: [2] WGPUBindGroupEntry;
+	entries[0].binding = 0;
+	entries[0].buffer = framegraph.frame_buffer;
+	entries[0].offset = xx frame.cpu_cursor;
+	entries[0].size = size_of(WFramegraph.Trail_Uniform);
+	entries[1].binding = 1;
+	entries[1].buffer = framegraph.frame_buffer;
+	entries[1].offset = 0;
+	entries[1].size = xx frame.cpu.count;
+	desc.entryCount = entries.count;
+	desc.entries = entries.data;
+
+	memcpy(frame.cpu.data + frame.cpu_cursor, *uniforms, size_of(type_of(uniforms)));
+	frame.cpu_cursor += size_of(type_of(uniforms));
+
+	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
+}
+
+trail_texture_bind_group :: (
+	framegraph: *WFramegraph,
+	texture: WTexture,
+	name: string = "Trail Texture"
+) -> WGPUBindGroup {
+	desc: WGPUBindGroupDescriptor = .{};
+	desc.label = toWGPUStringView(name);
+	desc.layout = framegraph.trailTextureBindGroupLayout;
+	entries: [2] WGPUBindGroupEntry;
+	entries[0].binding = 0;
+	entries[0].textureView = texture.view;
+	entries[1].binding = 1;
+	entries[1].sampler = texture.sampler;
+	desc.entryCount = entries.count;
+	desc.entries = entries.data;
 
 	return graphics.gpu.deviceCreateBindGroup(graphics.device, *desc);
 }
@@ -1907,6 +2057,15 @@ append_sdf_instance_buffer :: (frame: *Frame) -> [] WFramegraph.Sdf_Instance {
 	return data;
 }
 
+append_trail_instance_buffer :: (frame: *Frame) -> [] WFramegraph.Trail_Instance {
+	align_up(*frame.cpu_cursor, size_of(WFramegraph.Trail_Instance));
+
+	data: [] WFramegraph.Trail_Instance;
+	data.data = (frame.cpu.data + frame.cpu_cursor).(*WFramegraph.Trail_Instance);
+	data.count = 0;
+	return data;
+}
+
 // Screen-space positions and sizes use logical 1366x768 pixels; world instances use local units.
 make_sdf_instance :: (
 	shape: WFramegraph.Sdf_Shape,
@@ -2035,6 +2194,39 @@ make_sdf_line :: (
 	);
 }
 
+// Thickness is the full world-space width. Set endpoint thicknesses to zero for tapered ends.
+// Each point's uv_x is explicit; the shader supplies the cross-trail coordinate in [-1, 1].
+make_trail_instance :: (
+	points: [] WFramegraph.Trail_Point,
+	color: V4f = .{ 1, 1, 1, 1 },
+	textured: bool = false,
+	texture_rect: V4f = .{ 0, 0, 1, 1 },
+	texture_layer: u32 = 0,
+	repeat_uv_x: bool = false,
+	depth_test: bool = true
+) -> WFramegraph.Trail_Instance {
+	instance: WFramegraph.Trail_Instance;
+	instance = .{};
+	instance.flags = 0;
+	instance.color = color;
+	instance.texture_rect = texture_rect;
+	instance.texture_layer = texture_layer;
+	instance.point_count = 0;
+	for points {
+		if it_index >= WFramegraph.Trail_Instance.MAX_POINTS
+			break;
+		instance.points[it_index] = it;
+		instance.point_count += 1;
+	}
+	if textured
+		instance.flags |= instance.FLAG_TEXTURED;
+	if repeat_uv_x
+		instance.flags |= instance.FLAG_UV_REPEAT;
+	if depth_test
+		instance.flags |= instance.FLAG_DEPTH_TEST;
+	return instance;
+}
+
 commit_geometry :: (
 	frame: *Frame, pass: *Frame.Pass, model: *Model, count: int, part_idx: int = -1
 ) {
@@ -2098,6 +2290,26 @@ commit_sdf :: (frame: *Frame, pass: *Frame.Pass, count: int) {
 	frame.cpu_cursor += xx (count * stride);
 }
 
+// All instances in one commit share a texture and are emitted by one instanced draw call.
+// The texture is ignored by constant-color trails, but must still be valid for the bind group.
+commit_trails :: (
+	frame: *Frame,
+	pass: *Frame.Pass,
+	count: int,
+	texture: *WTexture = null
+) {
+	if count <= 0
+		return;
+
+	stride := size_of(WFramegraph.Trail_Instance);
+	draw: Frame.Draw;
+	draw.instance_count = count;
+	draw.instance_start = frame.cpu_cursor / stride;
+	draw.custom_texture = texture;
+	array_add(*pass.draws, draw);
+	frame.cpu_cursor += xx (count * stride);
+}
+
 Extra :: struct {
 	Number :: struct {
 		M: M4f;
@@ -2155,6 +2367,7 @@ reserve_frame :: (frame: *Frame) {
 	array_reserve(*frame.shadow.draws, 1024 * 1024);
 	array_reserve(*frame.geometry.draws, 1024 * 1024);
 	array_reserve(*frame.sdf.draws, 4096);
+	array_reserve(*frame.trail.draws, 4096);
 	array_reserve(*frame.ui.draws, 1024 * 1024);
 }
 
@@ -2164,6 +2377,7 @@ reset_frame :: (frame: *Frame, current_time: Apollo_Time) {
 	frame.geometry.draws.count = 0;
 	frame.editor.draws.count = 0;
 	frame.sdf.draws.count = 0;
+	frame.trail.draws.count = 0;
 	frame.ui.draws.count = 0;
 	frame.ui.current_custom_texture = null;
 	frame.current_time = current_time;
@@ -2422,6 +2636,11 @@ present_frame_to :: (
 		sdf_bind_group = sdf_instance_bind_group(framegraph, frame, frame.sdf.uniforms);
 	defer if sdf_bind_group
 		graphics.gpu.bindGroupRelease(sdf_bind_group);
+	trail_bind_group: WGPUBindGroup = null;
+	if frame.trail.draws.count > 0
+		trail_bind_group = trail_instance_bind_group(framegraph, frame, frame.trail.uniforms);
+	defer if trail_bind_group
+		graphics.gpu.bindGroupRelease(trail_bind_group);
 	ui_bind_group := ui_instance_bind_group(
 		framegraph, frame, frame.ui.uniforms, store.ui_atlas, store.verdana_atlas
 	);
@@ -2454,7 +2673,7 @@ present_frame_to :: (
 		
 		last_bind_group: *WGPUBindGroup = null;
 		for * frame.shadow.draws {
-			if it.second_bind_group != last_bind_group {
+			if it.second_bind_group && it.second_bind_group != last_bind_group {
 				graphics.gpu.renderPassEncoderSetBindGroup(
 					pass, 1, it.second_bind_group.*, 0, null
 				);
@@ -2550,7 +2769,7 @@ present_frame_to :: (
 
 		last_bind_group: *WGPUBindGroup = null;
 		for * frame.geometry.draws {
-			if it.second_bind_group != last_bind_group {
+			if it.second_bind_group && it.second_bind_group != last_bind_group {
 				graphics.gpu.renderPassEncoderSetBindGroup(
 					pass, 1, it.second_bind_group.*, 0, null
 				);
@@ -2660,7 +2879,7 @@ present_frame_to :: (
 		);
 		last_bind_group: *WGPUBindGroup = null;
 		for * frame.editor.draws {
-			if it.second_bind_group != last_bind_group {
+			if it.second_bind_group && it.second_bind_group != last_bind_group {
 				graphics.gpu.renderPassEncoderSetBindGroup(
 					pass, 1, it.second_bind_group.*, 0, null
 				);
@@ -2689,6 +2908,59 @@ present_frame_to :: (
 					xx it.instance_start
 				);
 			}
+		}
+		graphics.gpu.renderPassEncoderEnd(pass);
+	}
+	if frame.trail.draws.count > 0 {
+		attachment: WGPURenderPassColorAttachment;
+		attachment.view = framegraph.hdrTexture.view;
+		attachment.depthSlice = DEPTH_SLICE_UNDEFINED;
+		attachment.loadOp = .Load;
+		attachment.storeOp = .Store;
+		attachment.clearValue = .{ 0.0, 0.0, 0.0, 0.0 };
+
+		depth_attachment: WGPURenderPassDepthStencilAttachment;
+		depth_attachment.view = framegraph.depthView;
+		depth_attachment.depthLoadOp = .Load;
+		depth_attachment.depthStoreOp = .Store;
+		depth_attachment.depthClearValue = 1.0;
+		depth_attachment.stencilLoadOp = .Undefined;
+		depth_attachment.stencilStoreOp = .Undefined;
+		depth_attachment.stencilClearValue = 0;
+
+		pass_desc: WGPURenderPassDescriptor = .{};
+		pass_desc.label = toWGPUStringView("Trail Pass");
+		pass_desc.colorAttachments = *attachment;
+		pass_desc.colorAttachmentCount = 1;
+		pass_desc.depthStencilAttachment = *depth_attachment;
+		pass := graphics.gpu.commandEncoderBeginRenderPass(encoder, *pass_desc);
+		defer graphics.gpu.renderPassEncoderRelease(pass);
+
+		graphics.gpu.renderPassEncoderSetPipeline(pass, framegraph.trailPipeline);
+		graphics.gpu.renderPassEncoderSetBindGroup(pass, 0, trail_bind_group, 0, null);
+		created_bind_groups: [..] WGPUBindGroup;
+		created_bind_groups.allocator = temp;
+		defer for created_bind_groups
+			graphics.gpu.bindGroupRelease(it);
+
+		for *frame.trail.draws {
+			if it.instance_count <= 0
+				continue;
+			texture := it.custom_texture;
+			if !texture
+				texture = *store.particle_texture;
+			texture_bind_group := trail_texture_bind_group(framegraph, texture.*);
+			array_add(*created_bind_groups, texture_bind_group);
+			graphics.gpu.renderPassEncoderSetBindGroup(
+				pass, 1, texture_bind_group, 0, null
+			);
+			graphics.gpu.renderPassEncoderDraw(
+				pass,
+				xx (WFramegraph.Trail_Instance.MAX_POINTS * 2),
+				xx it.instance_count,
+				0,
+				xx it.instance_start
+			);
 		}
 		graphics.gpu.renderPassEncoderEnd(pass);
 	}
@@ -3079,6 +3351,9 @@ render_scene :: (
 	frame.sdf.uniforms = .{};
 	frame.sdf.uniforms.view_projection = frame.geometry.uniforms.P * frame.geometry.uniforms.V;
 	frame.sdf.uniforms.viewport_size = .{ 1366, 768 };
+	frame.trail.uniforms = .{};
+	frame.trail.uniforms.view_projection = frame.geometry.uniforms.P * frame.geometry.uniforms.V;
+	frame.trail.uniforms.camera_position = camera_center;
 
 	frame.geometry.uniforms.shadowV = Scene.look_at(
 		camera_center + V3f.{ 100, 100, 100 }, camera_center, V3f.{ 0, 1, 0 }
@@ -3483,7 +3758,10 @@ render_gui :: (
 		item.instance.color = it.color;
 		// Sort on the actual depth. Low shader bits are flags, not fractional depth.
 		item.z = it.z;
-		if it.address_mode == GUI.Texture_Address_Mode.Repeat item.instance.z30sdf2 = 2;
+		item.instance.z30sdf2 = it.flags;
+		if it.address_mode == GUI.Texture_Address_Mode.Repeat item.instance.z30sdf2 |= 2;
+		item.instance.rotation = it.rotation;
+		item.instance.outline = it.coin_face;
 		item.instance.texture_rect = it.texture_rect;
 		if it.custom_texture
 			item.custom_texture = it.custom_texture.(*WTexture);
@@ -3728,6 +4006,52 @@ render_extra_quads :: (
 render_wind_zones :: (
 	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
+	random01 :: (seed: float32) -> float32 {
+		value := sin(seed * 12.9898) * 43758.5453;
+		return (value - floor(value)).(float32);
+	}
+	lattice_vector :: (x: int, y: int, z: int, w: int) -> V3f {
+		key := (x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ (w * 2654435761);
+		// Negative lattice coordinates are valid; keep the seed nonnegative before converting to u64.
+		state := seed((key & 0x7FFFFFFFFFFFFFFF).(u64));
+		a := ((random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
+		b := ((random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
+		c := ((random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
+		return .{ a, b, c };
+	}
+	blend_vector :: (a: V3f, b: V3f, t: float32) -> V3f {
+		return a + (b - a) * t;
+	}
+	wind_noise_slice :: (x: int, y: int, z: int, w: int, ux: float32, uy: float32, uz: float32) -> V3f {
+		bottom0 := blend_vector(lattice_vector(x, y, z, w), lattice_vector(x + 1, y, z, w), ux);
+		bottom1 := blend_vector(lattice_vector(x, y + 1, z, w), lattice_vector(x + 1, y + 1, z, w), ux);
+		top0 := blend_vector(lattice_vector(x, y, z + 1, w), lattice_vector(x + 1, y, z + 1, w), ux);
+		top1 := blend_vector(lattice_vector(x, y + 1, z + 1, w), lattice_vector(x + 1, y + 1, z + 1, w), ux);
+		return blend_vector(blend_vector(bottom0, bottom1, uy), blend_vector(top0, top1, uy), uz);
+	}
+	// One 4D vector field for every zone; 1.25 world units per spatial noise cell.
+	wind_noise :: (world_position: V3f, clock: float64) -> V3f {
+		p := world_position / 1.25;
+		x := floor(p.x).(int);
+		y := floor(p.y).(int);
+		z := floor(p.z).(int);
+		w_coord := clock;
+		w := floor(w_coord).(int);
+		fx := p.x - x.(float32);
+		fy := p.y - y.(float32);
+		fz := p.z - z.(float32);
+		fw := (w_coord - w.(float64)).(float32);
+		ux := fx * fx * (3.0 - 2.0 * fx);
+		uy := fy * fy * (3.0 - 2.0 * fy);
+		uz := fz * fz * (3.0 - 2.0 * fz);
+		uw := fw * fw * (3.0 - 2.0 * fw);
+		return blend_vector(
+			wind_noise_slice(x, y, z, w, ux, uy, uz),
+			wind_noise_slice(x, y, z, w + 1, ux, uy, uz),
+			uw
+		);
+	}
+
 	instanced := append_instance_buffer(frame);
 
 	for scene.wind_zones {
@@ -3742,6 +4066,95 @@ render_wind_zones :: (
 	if instanced.count > 0 {
 		commit_geometry(frame, pass, *store.indicator_outline_model, instanced.count);
 	}
+
+	// The zone parameters and the clock are the entire state of this effect.
+	trail_instanced := append_trail_instance_buffer(frame);
+	for scene.wind_zones {
+		zone := it;
+		if zone.size.x <= 0.0 || zone.size.y <= 0.0 || zone.strength <= 0.0
+			continue;
+		direction_length := sqrt(zone.dir.x * zone.dir.x + zone.dir.y * zone.dir.y);
+		if direction_length <= 0.0001
+			continue;
+		direction := zone.dir / direction_length;
+		trail_count := clamp((zone.size.x * zone.size.y * 1.5).(int), 8, 48);
+		for 0..trail_count - 1 {
+			seed := zone.id.(float32) * 131.0 + it.(float32) * 17.0;
+			angle := (random01(seed + 8.0) - 0.5) * 0.18;
+			c := cos(angle).(float32);
+			s := sin(angle).(float32);
+			trail_direction := V2f.{
+				direction.x * c - direction.y * s,
+				direction.x * s + direction.y * c
+			};
+			anchor := v2(zone.position) + V2f.{
+				zone.size.x * (0.05 + 0.9 * random01(seed + 1.0)),
+				zone.size.y * (0.05 + 0.9 * random01(seed + 2.0))
+			};
+
+			// Intersect the streamline through this anchor with the zone's AABB.
+			back_distance := FLOAT32_MAX;
+			front_distance := FLOAT32_MAX;
+			if trail_direction.x > 0.0001 {
+				back_distance = min(back_distance, (anchor.x - zone.position.x) / trail_direction.x);
+				front_distance = min(front_distance, (zone.position.x + zone.size.x - anchor.x) / trail_direction.x);
+			} else if trail_direction.x < -0.0001 {
+				back_distance = min(back_distance, (zone.position.x + zone.size.x - anchor.x) / -trail_direction.x);
+				front_distance = min(front_distance, (anchor.x - zone.position.x) / -trail_direction.x);
+			}
+			if trail_direction.y > 0.0001 {
+				back_distance = min(back_distance, (anchor.y - zone.position.y) / trail_direction.y);
+				front_distance = min(front_distance, (zone.position.y + zone.size.y - anchor.y) / trail_direction.y);
+			} else if trail_direction.y < -0.0001 {
+				back_distance = min(back_distance, (zone.position.y + zone.size.y - anchor.y) / -trail_direction.y);
+				front_distance = min(front_distance, (anchor.y - zone.position.y) / -trail_direction.y);
+			}
+			length := back_distance + front_distance;
+			if length < 0.1
+				continue;
+
+			segment_length := min(length * 0.55, 1.6 + random01(seed + 3.0) * 0.8);
+			travel_length := length + segment_length;
+			speed := max(0.2, zone.strength).(float32) * (1.8 + random01(seed + 4.0) * 0.6);
+			phase := scene.client.clock.(float32) * speed / travel_length + random01(seed + 5.0);
+			phase -= floor(phase);
+			head := phase * travel_length;
+			start_distance := max(0.0, head - segment_length);
+			end_distance := min(length, head);
+			if end_distance - start_distance < 0.05
+				continue;
+
+			fade := min(1.0, min(phase * 8.0, (1.0 - phase) * 8.0));
+			width := 0.02 + random01(seed + 6.0) * 0.03;
+			height := zone.position.z + 0.2 + random01(seed + 7.0) * 1.6;
+			back_position := anchor - trail_direction * back_distance;
+			points := NewArray(8, WFramegraph.Trail_Point,, temp);
+			for 0..7 {
+				t := it.(float32) / 7.0;
+				position := back_position + trail_direction * (start_distance + (end_distance - start_distance) * t);
+				points[it].position = v3(position, height);
+				points[it].thickness = width * min(1.0, min(t * 4.0, (1.0 - t) * 4.0));
+				points[it].uv_x = t;
+			}
+			// Displace the completed straight trail without weakening the field at zone borders.
+			amplitude := 0.24 * zone.strength / (1.0 + zone.strength);
+			for 0..7 {
+				noise := wind_noise(points[it].position, scene.client.clock);
+				side := noise.x * -trail_direction.y + noise.y * trail_direction.x;
+				points[it].position += V3f.{
+					-trail_direction.y * side * amplitude,
+					 trail_direction.x * side * amplitude,
+					 noise.z * amplitude * 0.5
+				};
+			}
+			trail_instanced.count += 1;
+			trail_instanced[trail_instanced.count - 1] = make_trail_instance(
+				points, color = .{ 0.75, 0.9, 1.0, 0.95 * fade }
+			);
+		}
+	}
+	if trail_instanced.count > 0
+		commit_trails(frame, *frame.trail, trail_instanced.count);
 }
 
 render_within_zones :: (
@@ -4027,6 +4440,24 @@ render_camp_ices :: (
 	}
 	if instanced.count > 0
 		commit_geometry(frame, pass, *store.camp_ice_full_model, instanced.count);
+
+	if pass != *frame.geometry
+		return;
+
+	trail_instanced := append_trail_instance_buffer(frame);
+	for scene.camp_ices {
+		points := NewArray(2, WFramegraph.Trail_Point,, temp);
+		points[0].position = v3(it.position.x, it.position.y, it.position.z + 2.0);
+		points[0].thickness = 0.1;
+		points[0].uv_x = 0.0;
+		points[1].position = v3(it.position.x + cos(scene.client.clock).(float32), it.position.y + sin(scene.client.clock).(float32), it.position.z + 3.0);
+		points[1].thickness = 0.1;
+		points[1].uv_x = 0.0;
+		trail_instanced.count += 1;
+		trail_instanced[trail_instanced.count - 1] = make_trail_instance(points);
+	}
+	if trail_instanced.count > 0
+		commit_trails(frame, *frame.trail, trail_instanced.count);
 }
 
 render_bombs :: (
