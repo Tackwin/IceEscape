@@ -115,11 +115,12 @@ fn point_position(instance: TrailInstance, index: u32) -> vec3<f32> {
 	let edge_width = max(fwidth(input.uv.y), 0.000001);
 	let coverage = 1.0 - smoothstep(1.0 - edge_width, 1.0, abs(input.uv.y));
 
+	// Derivatives must run before any per-instance branch and UV wrapping.
+	var texture_uv = vec2<f32>(input.uv.x, input.uv.y * 0.5 + 0.5);
+	var texture_uv_dx = dpdx(texture_uv);
+	var texture_uv_dy = dpdy(texture_uv);
 	var sampled_color = vec4<f32>(1.0);
 	if ((instance.flags & FLAG_TEXTURED) != 0u) {
-		var texture_uv = vec2<f32>(input.uv.x, input.uv.y * 0.5 + 0.5);
-		var texture_uv_dx = dpdx(texture_uv);
-		var texture_uv_dy = dpdy(texture_uv);
 		if ((instance.flags & FLAG_UV_REPEAT) != 0u) {
 			texture_uv.x = fract(texture_uv.x);
 		}

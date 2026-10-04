@@ -122,6 +122,13 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 	jai_exports  = mainInstance.exports;
 	jai_exports.wasm_init_buffers();
 	controls_buffer_data = Number(jai_exports.wasm_get_controls_buffer());
+	text_input_controls = new Uint32Array(jai_exports.memory.buffer, controls_buffer_data, 64);
+	text_input_shared = new Uint8Array(jai_exports.memory.buffer,
+		Number(getU64(controls_buffer_data, Control_Text_Buffer)), getU32(controls_buffer_data, Control_Text_Capacity));
+	text_edit_shared = new Uint8Array(jai_exports.memory.buffer,
+		Number(getU64(controls_buffer_data, Control_Text_Edit_Buffer)), getU32(controls_buffer_data, Control_Text_Edit_Capacity));
+	text_input_pending = new Uint8Array(text_input_shared.length);
+	text_edit_pending = new Uint8Array(text_edit_shared.length);
 	sync_mobile_layout();
 
 	{
@@ -146,15 +153,13 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 	game_worker = worker;
 
 	worker.onmessage = async e => {
-		if (typeof e.data.text_input_active === "boolean") {
-			set_text_input_active(e.data.text_input_active);
-		}
 		if (e.data.ready) {
 			worker.postMessage({ start: true });
 
 			const main_loop = WebAssembly.promising(jai_exports.wasm_main_loop);
 
 			const frame = async () => {
+				sync_text_input();
 				await main_loop();
 				flush_audio_commands();
 				requestAnimationFrame(frame);
@@ -361,6 +366,14 @@ const Control_Token = 148;
 const Control_Is_Mobile = 152;
 const Control_Touch_Release = 153;
 const Control_Touch_Down = 154;
+const Control_Text_Active = 156;
+const Control_Text_Count = 160;
+const Control_Text_Lock = 164;
+const Control_Text_Edit_Count = 168;
+const Control_Text_Buffer = 176;
+const Control_Text_Capacity = 184;
+const Control_Text_Edit_Buffer = 192;
+const Control_Text_Edit_Capacity = 200;
 const Control_Audio_Command_Cursor = 1024;
 const Control_Audio_Command_Buffer = 1024;
 
@@ -384,25 +397,65 @@ let mobile_touch = {
 const controls_ready = () => !!(jai_exports && jai_exports.memory);
 
 // The hidden editor lets the browser resolve layout, dead keys, IME, and paste.
-// Only committed text crosses to the update worker; gameplay still uses keys.
+// Committed UTF-8 and edit keys use shared memory; gameplay still uses keys.
 let text_input_active = false;
 let text_input_composing = false;
 let text_input_composition_commit = null;
 let text_input_element = null;
 const text_input_encoder = new TextEncoder();
+let text_input_controls;
+let text_input_shared;
+let text_edit_shared;
+let text_input_pending;
+let text_input_count = 0;
+let text_edit_pending;
+let text_edit_count = 0;
 const keyboard_down = new Map();
 
+const flush_text_input = () => {
+	if (!text_input_active || !(text_input_count || text_edit_count)) return;
+	if (Atomics.compareExchange(text_input_controls, Control_Text_Lock / 4, 0, 1) !== 0) return;
+	try {
+		const count = Atomics.load(text_input_controls, Control_Text_Count / 4);
+		const edit_count = Atomics.load(text_input_controls, Control_Text_Edit_Count / 4);
+		if (count + text_input_count <= text_input_shared.length) {
+			text_input_shared.set(text_input_pending.subarray(0, text_input_count), count);
+			Atomics.store(text_input_controls, Control_Text_Count / 4, count + text_input_count);
+		}
+		if (edit_count + text_edit_count <= text_edit_shared.length) {
+			text_edit_shared.set(text_edit_pending.subarray(0, text_edit_count), edit_count);
+			Atomics.store(text_input_controls, Control_Text_Edit_Count / 4, edit_count + text_edit_count);
+		}
+		text_input_count = 0;
+		text_edit_count = 0;
+	} finally {
+		Atomics.store(text_input_controls, Control_Text_Lock / 4, 0);
+	}
+};
+
+const sync_text_input = () => {
+	set_text_input_active(Atomics.load(text_input_controls, Control_Text_Active / 4) !== 0);
+	flush_text_input();
+};
+
 const queue_text_input = (text) => {
-	if (!text_input_active || !game_worker || !text) return;
+	if (!text_input_active || !text_input_shared || !text) return;
+	if (text.length > text_input_shared.length) return;
 	// GUI inputs are single line. Preserve all printable Unicode code points.
 	text = text.replace(/[\u0000-\u001f\u007f]/g, "");
 	if (!text) return;
 	const bytes = text_input_encoder.encode(text);
-	game_worker.postMessage({ text_input: bytes }, [bytes.buffer]);
+	if (text_input_count + bytes.length > text_input_pending.length) return;
+	text_input_pending.set(bytes, text_input_count);
+	text_input_count += bytes.length;
+	flush_text_input();
 };
 
 const queue_text_edit_key = (key) => {
-	if (text_input_active && game_worker) game_worker.postMessage({ text_input_edit_key: key });
+	if (!text_input_active || !text_edit_shared) return;
+	if (text_edit_count === text_edit_pending.length) return;
+	text_edit_pending[text_edit_count++] = key;
+	flush_text_input();
 };
 
 const clear_text_input_editor = () => {
@@ -487,6 +540,10 @@ const set_text_input_active = (active) => {
 		focus_text_input_editor();
 	} else if (document.activeElement === text_input_element) {
 		text_input_element.blur();
+	}
+	if (!active) {
+		text_input_count = 0;
+		text_edit_count = 0;
 	}
 };
 
@@ -2024,10 +2081,8 @@ jai_imports.jsAdapterRequestDevice = new WebAssembly.Suspending(
 			features.push(feature_name);
 		}
 
-		const limit_ptr = getU64(descriptor_ptr, 8 + 16 + 8 + 8); // ??
-		const defaultQueue_ptr = getU64(descriptor_ptr, 8 + 16 + 8 + 8 + 8); // ??
-		const deviceLostCallback_ptr = getU64(descriptor_ptr, 8 + 16 + 8 + 8 + 8 + 8); // ??
-		const uncapturedExceptions_ptr = getU64(descriptor_ptr, 8 + 16 + 8 + 8 + 8 + 8 + 8);
+		// Jai passes the address of the embedded callback info explicitly.
+		const uncapturedExceptions_ptr = getU64(params_ptr, 16);
 
 		const uncapturedExceptionsCallback = getU64(uncapturedExceptions_ptr, 8);
 		const uncapturedExceptionsUserData1 = getU64(uncapturedExceptions_ptr, 16);
@@ -2052,22 +2107,25 @@ jai_imports.jsAdapterRequestDevice = new WebAssembly.Suspending(
 
 		device.addEventListener('uncapturederror', event => {
 			console.error("WebGPU uncaptured error:", event.error);
-			const userData1 = uncapturedExceptionsUserData1;
-			const userData2 = uncapturedExceptionsUserData2;
-
+			if (uncapturedExceptionsCallback === 0n) return;
+			const message_bytes = new TextEncoder().encode(event.error.message);
 			const string_ptr = jai_exports.context_alloc(
-				jai_context, BigInt(event.error.message.length)
+				jai_context, BigInt(message_bytes.length)
 			);
-
-			jai_exports.jaiAdapterRequestDeviceErrorCallback(
-				jai_context,
-				BigInt(device_idx),
-				BigInt(string_ptr),
-				BigInt(event.error.message.length),
-				BigInt(uncapturedExceptionsCallback),
-				BigInt(uncapturedExceptionsUserData1),
-				BigInt(uncapturedExceptionsUserData2)
-			);
+			new Uint8Array(jai_exports.memory.buffer, Number(string_ptr), message_bytes.length).set(message_bytes);
+			try {
+				jai_exports.jaiAdapterRequestDeviceErrorCallback(
+					jai_context,
+					BigInt(device_idx),
+					BigInt(string_ptr),
+					BigInt(message_bytes.length),
+					uncapturedExceptionsCallback,
+					uncapturedExceptionsUserData1,
+					uncapturedExceptionsUserData2
+				);
+			} finally {
+				jai_exports.context_free(jai_context, string_ptr);
+			}
 		});
 		setU64(returns_ptr, 0, object_map_counter);
 	}

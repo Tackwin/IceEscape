@@ -9,7 +9,17 @@ pressed: [Key_COUNT] bool;
 
 web_buffer: [] u8;
 controls_buffer: [] u8;
-text_input_buffer: [..] u8;
+text_input_buffer: [] u8;
+text_input_shared: [] u8;
+text_edit_keys: [] u8;
+Control_Text_Active :: 156;
+Control_Text_Count :: 160;
+Control_Text_Lock :: 164;
+Control_Text_Edit_Count :: 168;
+Control_Text_Buffer :: 176;
+Control_Text_Capacity :: 184;
+Control_Text_Edit_Buffer :: 192;
+Control_Text_Edit_Capacity :: 200;
 last_frame: Apollo_Time;
 last_frame_init := false;
 #scope_export
@@ -51,18 +61,33 @@ wasm_sleep :: (ms: int) {
 }
 
 wasm_set_text_input_active :: (active: bool) {
-	js_set_text_input_active :: (active: bool) #foreign;
-	js_set_text_input_active(active);
+	// The browser polls this shared field; no JS call or worker message.
+	compare_and_swap((controls_buffer.data + Control_Text_Active).(*u32), xx !active, xx active);
 }
 
 wasm_read_text_input :: (info: *Frame_Info) {
-	js_get_text_input :: (destination: *u8, capacity: int) -> int #foreign;
-	count := js_get_text_input(null, 0);
-	if count <= 0 return;
-	array_resize(*text_input_buffer, count);
-	read := js_get_text_input(text_input_buffer.data, text_input_buffer.count);
-	if read > 0 {
-		info.text_input = .{data = text_input_buffer.data, count = read};
+	// Consume the entire contiguous batch, then make it empty for the next frame.
+	lock := (controls_buffer.data + Control_Text_Lock).(*u32);
+	if !compare_and_swap(lock, 0, 1) return;
+	defer compare_and_swap(lock, 1, 0);
+	count_ptr := (controls_buffer.data + Control_Text_Count).(*u32);
+	edit_count_ptr := (controls_buffer.data + Control_Text_Edit_Count).(*u32);
+	count := count_ptr.*.(int);
+	edit_count := edit_count_ptr.*.(int);
+	count_ptr.* = 0;
+	edit_count_ptr.* = 0;
+	if (controls_buffer.data + Control_Text_Active).(*u32).* == 0 return;
+	assert(count <= text_input_shared.count && edit_count <= text_edit_keys.count);
+	if count > 0 {
+		memcpy(text_input_buffer.data, text_input_shared.data, count);
+		info.text_input = .{data = text_input_buffer.data, count = count};
+	}
+	for i: 0..edit_count - 1 {
+		key := text_edit_keys[i];
+		if key < Key_COUNT {
+			info.keys.pressed[key] = true;
+			info.keys.just_pressed[key] = true;
+		}
 	}
 }
 
@@ -118,11 +143,6 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 		info.keys.pressed[it] = controls_buffer.data[it] > 0;
 	}
 	wasm_read_text_input(info);
-	js_get_text_input_edit_key :: () -> s32 #foreign;
-	edit_key := js_get_text_input_edit_key();
-	if edit_key >= 0 && edit_key < Key_COUNT {
-		info.keys.pressed[edit_key] = true;
-	}
 
 	frame_buffer_count: u64 = 0;
 	js_get_web_message_received_buffer_count :: (count_ptr: *u64) #foreign;
@@ -600,17 +620,18 @@ wasmAdapterRelease :: (adapter: WGPUAdapter) -> void #c_call {
 // we expose these so that you can allocate memory from js if you need to
 #program_export jaiAdapterRequestDeviceErrorCallback :: (
 	ctx: *#Context,
-	device: *WGPUDevice,
+	device: WGPUDevice,
 	message: *void,
 	message_count: u64,
 	cb: *void,
 	userdata1: *void,
 	userdata2: *void
 ) -> void #c_call {
+	if !cb return;
 	push_context,defer_pop ctx;
 	typed_cb := cb.(WGPUUncapturedErrorCallback);
 	typed_cb(
-		device, .Unknown, .{ data = xx message, length = xx message_count }, userdata1, userdata2
+		*device, .Unknown, .{ data = xx message, length = xx message_count }, userdata1, userdata2
 	);
 }
 wasmAdapterRequestDevice :: (
@@ -624,9 +645,11 @@ wasmAdapterRequestDevice :: (
 	params: struct {
 		adapter: WGPUAdapter;
 		descriptor: *WGPUDeviceDescriptor;
+		uncapturedErrorCallbackInfo: *WGPUUncapturedErrorCallbackInfo;
 	};
 	params.adapter = adapter;
 	params.descriptor = descriptor;
+	params.uncapturedErrorCallbackInfo = *descriptor.uncapturedErrorCallbackInfo;
 	jsAdapterRequestDevice(*params, *device);
 	callbackInfo.callback(.Success, device, .{}, callbackInfo.userdata1, callbackInfo.userdata2);
 	return .{};
@@ -1386,7 +1409,18 @@ update_thread_temporary_storage_data: [TEMPORARY_STORAGE_SIZE] u8 #align 64;
 	app.allocator = context.allocator;
 	app.user_data = null;
 
-	controls_buffer = NewArray(1024 + 1024 * size_of(Audio_Command), u8);
+	text_capacity :: 1024;
+	edit_capacity :: 64;
+	// Include the audio cursor's reserved command slot before the text storage.
+	text_offset :: 1024 + 1025 * size_of(Audio_Command);
+	controls_buffer = NewArray(text_offset + text_capacity + edit_capacity, u8);
+	text_input_buffer = NewArray(text_capacity, u8, false);
+	text_input_shared = .{data = controls_buffer.data + text_offset, count = text_capacity};
+	text_edit_keys = .{data = text_input_shared.data + text_capacity, count = edit_capacity};
+	(controls_buffer.data + Control_Text_Buffer).(*u64).* = text_input_shared.data.(u64);
+	(controls_buffer.data + Control_Text_Capacity).(*u32).* = xx text_capacity;
+	(controls_buffer.data + Control_Text_Edit_Buffer).(*u64).* = text_edit_keys.data.(u64);
+	(controls_buffer.data + Control_Text_Edit_Capacity).(*u32).* = xx edit_capacity;
 	audio_command_cursor = xx (controls_buffer.data + 1024);
 	audio_command_cursor.* = 0;
 	audio_commands.data = xx (controls_buffer.data + 1024 + size_of(Audio_Command));

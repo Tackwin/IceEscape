@@ -781,6 +781,10 @@ begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Con
 		info.keys.pressed,
 		info.keys.just_released
 	);
+	// Event-based clients can report a press even on consecutive frames.
+	for i: 0..Platform.Key_COUNT - 1 {
+		state.controls.keys.just_pressed[i] |= info.keys.just_pressed[i];
+	}
 	state.controls.mouse_pos.x = info.mouse_position.x;
 	state.controls.mouse_pos.y = info.mouse_position.y;
 	state.controls.mouse_wheel = info.mouse_wheel;
