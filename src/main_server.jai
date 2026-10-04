@@ -207,6 +207,7 @@ handle_end_asset :: (server: *Server, asset: *Big_Asset, platform: *Platform) {
 }
 
 process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platform) -> bool {
+	if process_server_debug(server, cmd, sender) return true;
 	version_info := isa(cmd.payload, Command.Version_Info);
 	if version_info {
 		reply: Command.Version_Info;
@@ -363,6 +364,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 
 					command: Command.Login;
 					command.feedback = .Accepted;
+					command.profile_id = user.profile_id;
 					append_queue(server, command, sender);
 				} else {
 					command: Command.Login;
@@ -373,6 +375,22 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 
 			return true;
 		}
+	}
+
+	ask_delete_terrain := isa(cmd.payload, Command.Ask_Delete_Terrain);
+	if ask_delete_terrain {
+		reply: Command.Ans_Delete_Terrain;
+		reply.terrain_id = ask_delete_terrain.terrain_id;
+		user := find_user_by_connection(server, sender);
+		if user && user.profile_id >= 0 {
+			Deleted :: struct { id: int; }
+			// Ownership is checked atomically by the server, never trusted from UI.
+			_, reply.success = sql_load(platform, server.db,
+				sql("UPDATE terrain_infos SET deleted = 1 WHERE id = ? AND author_profile_id = ? RETURNING id",
+					ask_delete_terrain.terrain_id, user.profile_id), Deleted);
+		}
+		append_queue(server, reply, sender);
+		return true;
 	}
 
 	load_terrain := isa(cmd.payload, Command.Load_Terrain);
@@ -392,12 +410,13 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			terrain_info, has_info := sql_load(
 				platform,
 				server.db,
-				sql("SELECT * FROM terrain_infos WHERE id = ?", load_terrain.terrain_id),
+				sql("SELECT * FROM terrain_infos WHERE id = ? AND COALESCE(deleted, 0) = 0", load_terrain.terrain_id),
 				DB_Terrain_Infos
 			);
 
+			reply: Command.Load_Terrain;
+			reply.terrain_id = -1;
 			if has_ascii && has_info {
-				reply: Command.Load_Terrain;
 				reply.terrain_id = load_terrain.terrain_id;
 				reply.ascii = terrain_ascii.ascii;
 				reply.info = Command.Scene_Info.{};
@@ -408,8 +427,8 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 					terrain_info.name.data,
 					min(terrain_info.name.count, reply.info.name.count)
 				);
-				append_queue(server, reply, sender);
 			}
+			append_queue(server, reply, sender);
 		}
 
 		return true;
@@ -469,7 +488,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			info, found = sql_load(
 				platform,
 				server.db,
-				sql("SELECT * FROM terrain_infos WHERE name = ?", get_terrain_leaderboard.scene_name),
+				sql("SELECT * FROM terrain_infos WHERE name = ? AND COALESCE(deleted, 0) = 0", get_terrain_leaderboard.scene_name),
 				DB_Terrain_Infos
 			);
 			if found
@@ -562,7 +581,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 					platform,
 					server.db,
 					sql(
-						"SELECT id FROM terrain_infos WHERE name = ? AND author_profile_id = ?",
+						"SELECT id FROM terrain_infos WHERE name = ? AND author_profile_id = ? AND COALESCE(deleted, 0) = 0",
 						name,
 						user.profile_id
 					),
@@ -681,6 +700,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 			id: int;
 			name: string;
 			author_name: string;
+			author_profile_id: int;
 			created_ms: int;
 		};
 		filter_pattern := "%";
@@ -695,10 +715,11 @@ SELECT
 	ti.id,
 	ti.name,
 	u.username AS author_name,
+	ti.author_profile_id,
 	ti.created_ms
 FROM terrain_infos ti
 LEFT JOIN profile_usernames u ON ti.author_profile_id = u.id
-WHERE ti.name LIKE ?
+WHERE ti.name LIKE ? AND COALESCE(ti.deleted, 0) = 0
 SELECT_QUERY, filter_pattern),
 			Info
 		);
@@ -707,6 +728,7 @@ SELECT_QUERY, filter_pattern),
 		reply.terrains_id = NewArray(entries.count, int,, temp);
 		reply.terrains_name = NewArray(entries.count, string,, temp);
 		reply.authors_name = NewArray(entries.count, string,, temp);
+		reply.authors_profile_id = NewArray(entries.count, int,, temp);
 		reply.creation_time_ms = NewArray(entries.count, s64,, temp);
 		reply.correlation_id = ask_terrain_list.correlation_id;
 	
@@ -714,6 +736,7 @@ SELECT_QUERY, filter_pattern),
 			reply.terrains_id[it] = entries[it].id;
 			reply.terrains_name[it] = tprint("%", entries[it].name);
 			reply.authors_name[it] = tprint("%", entries[it].author_name);
+			reply.authors_profile_id[it] = entries[it].author_profile_id;
 			reply.creation_time_ms[it] = entries[it].created_ms;
 		}
 		append_queue(server, reply, sender);
@@ -870,7 +893,7 @@ SELECT_QUERY, filter_pattern),
 				platform,
 				server.db,
 				sql(
-					"SELECT ascii_id FROM terrain_asciis WHERE id = ? ORDER BY created_ms DESC LIMIT 1",
+					"SELECT ta.ascii_id FROM terrain_asciis ta JOIN terrain_infos ti ON ti.id = ta.id WHERE ta.id = ? AND COALESCE(ti.deleted, 0) = 0 ORDER BY ta.created_ms DESC LIMIT 1",
 					get_thumbnail.terrain_id
 				),
 				DB_Terrain_Ascii
@@ -1123,7 +1146,7 @@ init_quick_instance :: (
 	terrain_info, has_info := sql_load(
 		platform,
 		server.db,
-		sql("SELECT * FROM terrain_infos WHERE id = ?", terrain_id),
+		sql("SELECT * FROM terrain_infos WHERE id = ? AND COALESCE(deleted, 0) = 0", terrain_id),
 		DB_Terrain_Infos
 	);
 
@@ -1160,7 +1183,7 @@ init_instance_bomberman :: (
 	for sql_loads(
 		platform,
 		server.db,
-		sql("SELECT terrain_id FROM terrain_bomberman_entry WHERE max_players >= ?", max_player_count),
+		sql("SELECT be.terrain_id FROM terrain_bomberman_entry be JOIN terrain_infos ti ON ti.id = be.terrain_id WHERE be.max_players >= ? AND COALESCE(ti.deleted, 0) = 0", max_player_count),
 		DB_Terrain_Bomberman_Entry
 	) {
 		array_add(*entries, it.terrain_id);
@@ -1184,7 +1207,7 @@ init_instance_bomberman :: (
 	terrain_info, has_info := sql_load(
 		platform,
 		server.db,
-		sql("SELECT * FROM terrain_infos WHERE id = ?", pick_id),
+		sql("SELECT * FROM terrain_infos WHERE id = ? AND COALESCE(deleted, 0) = 0", pick_id),
 		DB_Terrain_Infos
 	);
 	if !has_info
@@ -1209,7 +1232,7 @@ init_instance_bomberman :: (
 	terrain_info, has_info = sql_load(
 		platform,
 		server.db,
-		sql("SELECT * FROM terrain_infos WHERE id = ?", id),
+		sql("SELECT * FROM terrain_infos WHERE id = ? AND COALESCE(deleted, 0) = 0", id),
 		DB_Terrain_Infos
 	);
 
@@ -1274,7 +1297,7 @@ init_instance_with_terrain_ids :: (
 		terrain_info, has_info := sql_load(
 			platform,
 			server.db,
-			sql("SELECT * FROM terrain_infos WHERE id = ?", terrain_id),
+			sql("SELECT * FROM terrain_infos WHERE id = ? AND COALESCE(deleted, 0) = 0", terrain_id),
 			DB_Terrain_Infos
 		);
 
@@ -1375,6 +1398,17 @@ server_receive_tick :: (platform: *Platform, server: *Server) {
 		if user {
 			instance := find_instance_by_id(server, user.instance_id);
 			if instance {
+				if instance.received_count >= instance.received.count {
+					request := isa(cmd.payload, Command.Debug_Request);
+					if request {
+						reply: Command.Debug_Reply;
+						reply.kind = request.kind;
+						reply.status = .Rejected;
+						reply.message = "Server input queue is full; retry the command.";
+						append_queue(server, reply, msg.sender);
+					}
+					continue;
+				}
 				instance.received[instance.received_count].command = cmd;
 				instance.received[instance.received_count].sender_user_id = user.id;
 				instance.received_count += 1;
@@ -1528,6 +1562,7 @@ gc_instances :: (server: *Server) {
 
 #load "embeded_database.jai";
 
+
 ensure_database :: (app: *App) {
 	app_user := app.user_data.(*App_User);
 	app_user.server.db = open_database(app.platform, GAME_SERVER_DB);
@@ -1628,5 +1663,67 @@ server_loop :: (app: *App) {
 
 #program_export "app_quit" app_quit :: (app: *App) {
 	quit_database(app.platform, app.user_data.(*App_User).server.db);
+}
+
+// The transport connection, never a client-supplied player id, identifies the
+// requesting person. Keep kicks here so User and Instance membership agree.
+process_server_debug :: (server: *Server, command: Command, sender: Connection) -> bool {
+	if isa(command.payload, Command.Debug_Reply) ||
+		isa(command.payload, Command.Sync_Block_Rock) || isa(command.payload, Command.Sync_Gate) ||
+		isa(command.payload, Command.Sync_Player) || isa(command.payload, Command.Die) ||
+		isa(command.payload, Command.Respawn) || isa(command.payload, Command.Wipe_Scene) ||
+		isa(command.payload, Command.Terrain_Edit) || isa(command.payload, Command.Spawn) ||
+		isa(command.payload, Command.Quit) || isa(command.payload, Command.New_Terrain) return true;
+
+	request := isa(command.payload, Command.Debug_Request);
+	legacy := isa(command.payload, Command.Cheat_Action);
+	if !request && (!legacy || legacy.kind != .Kick) return false;
+	value: Command.Debug_Request;
+	if request value = request.*;
+	else { value.kind = .Kick; value.target_id = legacy.player_id; }
+	reply: Command.Debug_Reply;
+	reply.kind = value.kind;
+	reply.status = .Rejected;
+	reply.message = "Join an instance first.";
+	user := find_user_by_connection(server, sender);
+	if !user || user.id < 0 { append_queue(server, reply, sender); return true; }
+	instance := find_instance_by_id(server, user.instance_id);
+	if !instance { append_queue(server, reply, sender); return true; }
+	person := find_person_by_user_id(instance, user.id);
+	if !person { append_queue(server, reply, sender); return true; }
+	reply.sender_player_id = person.player_id;
+	reply.host_player_id = debug_host_player_id(instance);
+	if value.kind == .Who_Host {
+		reply.status = .Accepted;
+		reply.message = "Host is the lowest player id in this instance.";
+		append_queue(server, reply, sender);
+		return true;
+	}
+	if person.player_id != reply.host_player_id {
+		reply.message = "Only the host may run this command.";
+		append_queue(server, reply, sender);
+		return true;
+	}
+	if value.kind != .Kick return false; // Queue scene mutations in Instance.
+	target := find_person_by_player_id(instance, value.target_id);
+	if !target || value.target_id < 0 {
+		reply.status = .Invalid;
+		reply.message = "Player id is not in this instance.";
+		append_queue(server, reply, sender);
+		return true;
+	}
+	target_user_id := target.user_id;
+	target_user := find_user_by_id(server, target_user_id);
+	remove_person(instance, target_user_id);
+	if target_user {
+		target_user.instance_id = -1;
+		kicked: Command.Ans_Enter_Instance;
+		kicked.reason = .Kicked;
+		append_queue(server, kicked, target_user.connection);
+	}
+	reply.status = .Accepted;
+	reply.message = tprint("Kicked player %.", value.target_id);
+	append_queue(server, reply, sender);
+	return true;
 }
 

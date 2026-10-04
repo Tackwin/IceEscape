@@ -687,6 +687,9 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 				pos := *jukebox.position;
 				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
 					continue;
+				dir := *jukebox.direction;
+				if scan2(line, "- direction: % % %", *dir.x, *dir.y, *dir.z)
+					continue;
 
 				print("Error reading jukebox, unrecognized line: % (L%)\n", line, cursor);
 			}

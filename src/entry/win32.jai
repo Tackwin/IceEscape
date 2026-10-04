@@ -110,8 +110,13 @@ map_sdl_to_key :: (key: SDL_Keycode) -> Key {
 		case SDLK_RETURN; return Key.Enter;
 		case SDLK_KP_ENTER; return Key.Enter;
 		case SDLK_MINUS; return Key.Minus;
+		case SDLK_LCTRL; return Key.Control;
+		case SDLK_RCTRL; return Key.Control;
+		case SDLK_DELETE; return Key.Delete;
+		case SDLK_HOME; return Key.Home;
+		case SDLK_END; return Key.End;
 	}
-	return xx key;
+	return cast(Key) -1;
 }
 
 Message :: struct {
@@ -281,6 +286,9 @@ Platform_State :: struct {
 	display_width: s32;
 	display_height: s32;
 	pressed: [Key_COUNT] bool;
+	pending_text: [..] u8;
+	frame_text: [..] u8;
+	text_input_active := false;
 	mouse_wheel := 0;
 	want_quit := false;
 
@@ -292,6 +300,19 @@ Platform_State :: struct {
 }
 platform_state: Platform_State;
 win32_control: Win32_Control;
+
+win32_set_text_input_active :: (active: bool) {
+	if active == platform_state.text_input_active return;
+	platform_state.text_input_active = active;
+	if active SDL_StartTextInput();
+	else SDL_StopTextInput();
+}
+
+win32_append_text :: (text: string) {
+	old_count := platform_state.pending_text.count;
+	array_resize(*platform_state.pending_text, old_count + text.count);
+	memcpy(platform_state.pending_text.data + old_count, text.data, text.count);
+}
 
 win32_get_frame_info :: (info: *Frame_Info) {
 	info.* = .{};
@@ -319,6 +340,12 @@ win32_get_frame_info :: (info: *Frame_Info) {
 	info.window_focused =  (SDL_GetWindowFlags(sdl_window) & SDL_WINDOW_MOUSE_FOCUS) > 0;
 	info.quit = platform_state.want_quit;
 	info.mouse_wheel = platform_state.mouse_wheel;
+	// Keep this storage alive through the entire frame, including GUI rendering.
+	old_frame := platform_state.frame_text;
+	platform_state.frame_text = platform_state.pending_text;
+	platform_state.pending_text = old_frame;
+	platform_state.pending_text.count = 0;
+	info.text_input = .{ platform_state.frame_text.count, platform_state.frame_text.data };
 
 	GetKeyboardLayout :: (n: Win32.DWORD) -> Win32.HANDLE #foreign user32;
 	LANG_ENGLISH :: 0x09;
@@ -788,6 +815,7 @@ init_platform :: () -> Platform {
 	platform.load_image = win32_load_image;
 	platform.free_image = win32_free_image;
 	platform.get_frame_info = win32_get_frame_info;
+	platform.set_text_input_active = win32_set_text_input_active;
 	platform.end_frame = win32_end_frame;
 	platform.send_web_message = send_web_message;
 	platform.get_token = win32_get_token;
@@ -1252,20 +1280,29 @@ platform_frame :: () {
 			if event.button.button == SDL_BUTTON_RIGHT  platform_state.pressed[Key.MouseRight] = false;
 			if event.button.button == SDL_BUTTON_MIDDLE platform_state.pressed[Key.MouseMiddle] = false;
 		}
-		// if event.type == SDL_TEXTINPUT {
-		//     io.AddInputCharactersUTF8(io, xx event.text.text.data);
-		// }
+		if event.type == SDL_TEXTINPUT && platform_state.text_input_active {
+			text: string = .{ c_style_strlen(xx event.text.text.data), xx event.text.text.data };
+			win32_append_text(text);
+		}
 		if event.type == SDL_KEYUP {
 			key := event.key.keysym.sym;
 			map := map_sdl_to_key(xx key);
-			if map < platform_state.pressed.count
+			if map >= 0 && map < platform_state.pressed.count
 				platform_state.pressed[map] = false;
 		}
 		if event.type == SDL_KEYDOWN {
 			key := event.key.keysym.sym;
 			map := map_sdl_to_key(xx key);
-			if map < platform_state.pressed.count
+			if map >= 0 && map < platform_state.pressed.count
 				platform_state.pressed[map] = true;
+			if platform_state.text_input_active && key == SDLK_v && event.key.repeat == 0 && (event.key.keysym.mod & SDL_Keymod.KMOD_CTRL) != 0 {
+				SDL_free :: (memory: *void) #foreign SDL2;
+				clipboard := SDL_GetClipboardText();
+				if clipboard {
+					win32_append_text(.{ c_style_strlen(clipboard), clipboard });
+					SDL_free(clipboard);
+				}
+			}
 			// kmod := SDL_GetModState();
 			// io.KeyShift = ((kmod & KMOD_SHIFT) != 0);
 			// io.KeyCtrl = ((kmod & KMOD_CTRL) != 0);
@@ -1274,6 +1311,10 @@ platform_frame :: () {
 		}
 		if event.type == SDL_QUIT
 			platform_state.want_quit = true;
+		if event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_LOST {
+			for *platform_state.pressed it.* = false;
+			platform_state.pending_text.count = 0;
+		}
 		if event.type == SDL_WINDOWEVENT
 		&& event.window.event == SDL_WINDOWEVENT_CLOSE
 		&& event.window.windowID == SDL_GetWindowID(sdl_window)

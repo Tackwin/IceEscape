@@ -771,6 +771,10 @@ gc_user_state :: (state: *GUI_State) {
 begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Controls.State, layout_override: Platform.Layout = .AZERTY) {
 	// Copy controls from previous frame to out_controls
 	out_controls.* = state.controls;
+	out_controls.text_input = "";
+	state.controls.text_input = info.text_input;
+	state.controls.text_input_active = false;
+	state.controls.text_input_consumed = false;
 
 	state.controls.keys = Platform.advance_keys(
 		state.controls.keys,
@@ -787,6 +791,8 @@ begin_frame :: (state: *GUI_State, info: Platform.Frame_Info, out_controls: *Con
 	state.controls.captured_keyboard = false;
 	state.controls.captured_mouse = false;
 	state.controls.is_mobile = info.is_mobile;
+	state.controls.touch_just_pressed = info.touch_down && !state.controls.touch_down;
+	state.controls.touch_down = info.touch_down;
 	state.controls.delta_time = info.delta_time;
 	state.controls.time = info.time;
 	// Use the user's preferred layout override instead of the auto-detected one
@@ -2278,14 +2284,16 @@ atom_label :: (
 
 	cursor := pos;
 	ret.gui_char_start_index = gui.chars.count;
-	for text {
-		glyph := gui.main_font.glyphs[it];
-		if generate_offsets ret.offsets[it_index + 1] = cursor.x - pos.x;
-		if glyph.unicode != it
-			continue;
+	byte_offset := 0;
+	while byte_offset < text.count {
+		codepoint, next_offset := Platform.text_next(text, byte_offset);
+		glyph := Platform.text_glyph(gui.main_font, codepoint);
+		if generate_offsets {
+			for byte_offset..next_offset - 1 ret.offsets[it] = cursor.x - pos.x;
+		}
 
 		char: GUI_State.Char;
-		char.id = it;
+		char.id = glyph.unicode;
 		char.pos.x = cursor.x + glyph.planex * scale;
 		char.pos.y = cursor.y - glyph.planeh * scale;
 		char.size.x = (glyph.planew - glyph.planex) * scale;
@@ -2296,7 +2304,7 @@ atom_label :: (
 
 		cursor.x += glyph.advance * scale;
 		if generate_offsets {
-			ret.offsets[it_index + 1] = cursor.x - pos.x;
+			ret.offsets[next_offset] = cursor.x - pos.x;
 		}
 
 		aabb_min.x = min(aabb_min.x, char.pos.x);
@@ -2305,6 +2313,7 @@ atom_label :: (
 		aabb_max.y = max(aabb_max.y, char.pos.y + char.size.y);
 		ret.baseline_y_from_bottom = min(ret.baseline_y_from_bottom, glyph.planey * scale);
 		array_add(*gui.chars, char);
+		byte_offset = next_offset;
 	}
 	ret.gui_char_count = gui.chars.count - ret.gui_char_start_index;
 	if ret.gui_char_count == 0 {
@@ -2492,6 +2501,22 @@ Input_Text_Result :: struct {
 	committed := false;
 }
 
+text_byte_boundary :: (text: string, offset: int) -> int {
+	offset = clamp(offset, 0, text.count);
+	i := 0;
+	while i < offset {
+		_, next := Platform.text_next(text, i);
+		if next > offset break;
+		i = next;
+	}
+	return i;
+}
+
+input_character_advance :: (gui: *GUI_State, codepoint: int, font_size: float, password_mask: bool) -> float {
+	if password_mask codepoint = #char "*";
+	return Platform.text_glyph(gui.main_font, codepoint).advance * font_size;
+}
+
 atom_input_text :: (
 	gui: *GUI_State,
 	buf: *String,
@@ -2536,16 +2561,18 @@ atom_input_text :: (
 
 	if comp.just_pressed {
 		comp.keyboard_focused = true;
-		state.cursor = clamp(state.display_start, 0, buf.count);
+		state.cursor = text_byte_boundary(view(buf), state.display_start);
 		x := comp.aabb.min.x + margin;
 		font_size := ifx dark_style then text_size else scale * 0.6;
 		current_text := view(buf);
-		for i: state.cursor..current_text.count - 1 {
-			c := ifx password_mask then #char "*" else current_text[i];
-			advance := gui.main_font.glyphs[c].advance * font_size;
+		i := state.cursor;
+		while i < current_text.count {
+			codepoint, next := Platform.text_next(current_text, i);
+			advance := input_character_advance(gui, codepoint, font_size, password_mask);
 			if gui.controls.mouse_pos.x < x + advance / 2 break;
 			x += advance;
-			state.cursor = i + 1;
+			state.cursor = next;
+			i = next;
 		}
 	}
 
@@ -2553,86 +2580,57 @@ atom_input_text :: (
 		comp.keyboard_focused = false;
 	}
 
-	if comp.keyboard_focused && gui.controls.just_pressed[Platform.Key.Enter] {
-		result.committed = true;
-		if unfocus_on_commit {
-			comp.keyboard_focused = false;
-		}
-	}
-
 	if comp.keyboard_focused {
 		gui.controls.captured_keyboard = true;
-		state.cursor = clamp(state.cursor, 0, buf.count);
+		gui.controls.text_input_active = true;
+		state.cursor = text_byte_boundary(view(buf), state.cursor);
 		if cursor_to_end {
 			state.cursor = buf.count;
 		}
 
-		handle_add :: (key: int, to_add: string) #expand {
-			if gui.controls.just_pressed[key] {
-				if max_chars < 0 || buf.count + to_add.count <= max_chars {
+		if !gui.controls.text_input_consumed {
+			gui.controls.text_input_consumed = true;
+			committed_text := gui.controls.text_input;
+			character_count := Platform.text_character_count(view(buf));
+			i := 0;
+			while i < committed_text.count {
+				codepoint, next := Platform.text_next(committed_text, i);
+				if codepoint >= 32 && codepoint != 127 && (max_chars < 0 || character_count < max_chars) {
+					to_add := slice(committed_text, i, next - i);
 					insert(buf, state.cursor, to_add);
 					state.cursor += to_add.count;
+					character_count += 1;
 					result.changed = true;
 				}
+				i = next;
 			}
 		}
-
-		if gui.controls.pressed[Platform.Key.Shift] {
-			#insert #run -> string {
-				sb: String_Builder;
-				for 65..90 {
-					char8 := it.(u8);
-					char: string;
-					char.data = *char8;
-					char.count = 1;
-					print_to_builder(*sb, "handle_add(xx Platform.Key.%, \"%\");\n", char, char);
-				}
-				return builder_to_string(*sb);
-			};
-		}
-		else {
-			#insert #run -> string {
-				sb: String_Builder;
-				for 65..90 {
-					char8Up := it.(u8);
-					char8 := (it + 32).(u8);
-					char: string;
-					char.data = *char8;
-					char.count = 1;
-					charUp: string;
-					charUp.data = *char8Up;
-					charUp.count = 1;
-					print_to_builder(*sb, "handle_add(xx Platform.Key.%, \"%\");\n", charUp, char);
-				}
-				return builder_to_string(*sb);
-			};
-		}
-		handle_add(xx Platform.Key._0, "0");
-		handle_add(xx Platform.Key._1, "1");
-		handle_add(xx Platform.Key._2, "2");
-		handle_add(xx Platform.Key._3, "3");
-		handle_add(xx Platform.Key._4, "4");
-		handle_add(xx Platform.Key._5, "5");
-		handle_add(xx Platform.Key._6, "6");
-		handle_add(xx Platform.Key._7, "7");
-		handle_add(xx Platform.Key._8, "8");
-		handle_add(xx Platform.Key._9, "9");
-		handle_add(xx Platform.Key.Space, " ");
-		handle_add(xx Platform.Key.Period, ".");
-		handle_add(xx Platform.Key.Minus, "-");
 
 		if gui.controls.just_pressed[xx Platform.Key.Backspace] {
 			if state.cursor > 0 && buf.count > 0 {
-				remove_range(buf, state.cursor - 1, 1);
-				state.cursor -= 1;
+				previous := Platform.text_previous(view(buf), state.cursor);
+				remove_range(buf, previous, state.cursor - previous);
+				state.cursor = previous;
 				result.changed = true;
 			}
 		}
-		if gui.controls.just_pressed[xx Platform.Key.Left] {
-			state.cursor = max(0, state.cursor - 1);
+		if gui.controls.just_pressed[Platform.Key.Delete] && state.cursor < buf.count {
+			_, next := Platform.text_next(view(buf), state.cursor);
+			remove_range(buf, state.cursor, next - state.cursor);
+			result.changed = true;
 		}
-		if gui.controls.just_pressed[xx Platform.Key.Right] {
-			state.cursor = min(buf.count, state.cursor + 1);
+		if gui.controls.just_pressed[xx Platform.Key.Left] {
+			state.cursor = Platform.text_previous(view(buf), state.cursor);
+		}
+		if gui.controls.just_pressed[xx Platform.Key.Right] && state.cursor < buf.count {
+			_, next := Platform.text_next(view(buf), state.cursor);
+			state.cursor = next;
+		}
+		if gui.controls.just_pressed[Platform.Key.Home] state.cursor = 0;
+		if gui.controls.just_pressed[Platform.Key.End] state.cursor = buf.count;
+		if gui.controls.just_pressed[Platform.Key.Enter] {
+			result.committed = true;
+			if unfocus_on_commit comp.keyboard_focused = false;
 		}
 	}
 
@@ -2651,38 +2649,47 @@ atom_input_text :: (
 
 	font_size := ifx dark_style then text_size else scale * 0.6;
 	inner_width := max(0.0, width - 2 * margin - 2);
-	if password_mask {
-		masked := NewArray(text.count, u8,, temp);
-		for *masked it.* = #char "*";
-		text = .{ masked.count, masked.data };
-	}
-	state.cursor = clamp(state.cursor, 0, text.count);
+	state.cursor = text_byte_boundary(text, state.cursor);
 	state.display_start = 0;
 	if comp.keyboard_focused {
 		caret_width := 0.0;
-		for i: 0..state.cursor - 1 caret_width += gui.main_font.glyphs[text[i]].advance * font_size;
+		i := 0;
+		while i < state.cursor {
+			codepoint, next := Platform.text_next(text, i);
+			caret_width += input_character_advance(gui, codepoint, font_size, password_mask);
+			i = next;
+		}
 		while caret_width > inner_width && state.display_start < state.cursor {
-			caret_width -= gui.main_font.glyphs[text[state.display_start]].advance * font_size;
-			state.display_start += 1;
+			codepoint, next := Platform.text_next(text, state.display_start);
+			caret_width -= input_character_advance(gui, codepoint, font_size, password_mask);
+			state.display_start = next;
 		}
 	}
 	visible_end := state.display_start;
 	visible_width := 0.0;
 	while visible_end < text.count {
-		next_width := visible_width + gui.main_font.glyphs[text[visible_end]].advance * font_size;
+		codepoint, next := Platform.text_next(text, visible_end);
+		next_width := visible_width + input_character_advance(gui, codepoint, font_size, password_mask);
 		if next_width > inner_width break;
 		visible_width = next_width;
-		visible_end += 1;
+		visible_end = next;
 	}
 	displayed := ifx text.count == 0 then fit_text(gui, placeholder, font_size, inner_width)
-		else slice(text, state.display_start, visible_end);
+		else slice(text, state.display_start, visible_end - state.display_start);
+	caret_offset := state.cursor - state.display_start;
+	if password_mask && text.count > 0 {
+		masked := NewArray(Platform.text_character_count(displayed), u8,, temp);
+		for *masked it.* = #char "*";
+		caret_offset = Platform.text_character_count(slice(text, state.display_start, min(state.cursor, visible_end) - state.display_start));
+		displayed = .{ masked.count, masked.data };
+	}
 	label := atom_label(gui, displayed, comp.aabb.min, font_size, z = z + 0.03,
 		color = ifx dark_style then (ifx text.count > 0 then V4f.{ 0.86, 0.88, 0.85, 1 } else V4f.{ 0.48, 0.56, 0.58, 1 })
 			else (ifx comp.keyboard_focused then GRAY_00 else GRAY_60), generate_offsets = true);
 	atom_label_replace(gui, *label, .{ comp.aabb.min + v2(margin, 0), comp.aabb.max - v2(margin, 0) }, .Center_Left);
 	if comp.keyboard_focused {
 		cursor_x := comp.aabb.min.x + margin;
-		if text.count > 0 cursor_x += label.offsets[clamp(state.cursor - state.display_start, 0, label.offsets.count - 1)];
+		if text.count > 0 cursor_x += label.offsets[clamp(caret_offset, 0, label.offsets.count - 1)];
 		push_quad_screen(gui, .{ cursor_x, comp.aabb.min.y + (scale - font_size) / 2 }, .{ 1, font_size },
 			ifx dark_style then V3f.{ 0.85, 0.74, 0.51 } else v3(GRAY_00), z + 0.04);
 	}
@@ -2692,14 +2699,22 @@ atom_input_text :: (
 
 fit_text :: (gui: *GUI_State, text: string, scale: float32, max_width: float32) -> string {
 	width := 0.0;
-	for text width += gui.main_font.glyphs[it].advance * scale;
+	i := 0;
+	while i < text.count {
+		codepoint, next := Platform.text_next(text, i);
+		width += Platform.text_glyph(gui.main_font, codepoint).advance * scale;
+		i = next;
+	}
 	if width <= max_width return text;
-	dots_width := gui.main_font.glyphs[#char "."].advance * scale * 3;
+	dots_width := Platform.text_glyph(gui.main_font, #char ".").advance * scale * 3;
 	if max_width < dots_width return "";
 	width = 0;
-	for text {
-		width += gui.main_font.glyphs[it].advance * scale;
-		if width + dots_width > max_width return tprint("%...", slice(text, 0, it_index));
+	i = 0;
+	while i < text.count {
+		codepoint, next := Platform.text_next(text, i);
+		width += Platform.text_glyph(gui.main_font, codepoint).advance * scale;
+		if width + dots_width > max_width return tprint("%...", slice(text, 0, i));
+		i = next;
 	}
 	return text;
 }
@@ -4097,6 +4112,42 @@ Int_Input :: struct {
 	edit_cursor: int;
 }
 
+numeric_text_input :: (gui: *GUI_State, storage: [] u8, length: *int, cursor: *int, floating: bool) {
+	gui.controls.captured_keyboard = true;
+	gui.controls.text_input_active = true;
+	if !gui.controls.text_input_consumed {
+		gui.controls.text_input_consumed = true;
+		text := gui.controls.text_input;
+		i := 0;
+		while i < text.count {
+			codepoint, next := Platform.text_next(text, i);
+			allowed := (codepoint >= #char "0" && codepoint <= #char "9") ||
+				codepoint == #char "-" || codepoint == #char "+";
+			if floating && (codepoint == #char "." || codepoint == #char "e" || codepoint == #char "E") allowed = true;
+			if allowed && length.* < storage.count - 1 {
+				for < j: length.*..cursor.* + 1 storage[j] = storage[j - 1];
+				storage[cursor.*] = xx codepoint;
+				length.* += 1;
+				cursor.* += 1;
+			}
+			i = next;
+		}
+	}
+	if gui.controls.just_pressed[Platform.Key.Backspace] && cursor.* > 0 {
+		for i: cursor.* - 1..length.* - 2 storage[i] = storage[i + 1];
+		length.* -= 1;
+		cursor.* -= 1;
+	}
+	if gui.controls.just_pressed[Platform.Key.Delete] && cursor.* < length.* {
+		for i: cursor.*..length.* - 2 storage[i] = storage[i + 1];
+		length.* -= 1;
+	}
+	if gui.controls.just_pressed[Platform.Key.Left] cursor.* = max(0, cursor.* - 1);
+	if gui.controls.just_pressed[Platform.Key.Right] cursor.* = min(length.*, cursor.* + 1);
+	if gui.controls.just_pressed[Platform.Key.Home] cursor.* = 0;
+	if gui.controls.just_pressed[Platform.Key.End] cursor.* = length.*;
+}
+
 float_input :: (
 	gui: *GUI_State,
 	width: float,
@@ -4176,53 +4227,7 @@ float_input :: (
 
 		// Handle keyboard input for text editing
 		if widget.keyboard_focused {
-			handle_char :: (key: int, char: u8, shift_char: u8 = 0) #expand {
-				if gui.controls.just_pressed[key] {
-					if state.edit_text_len < 31 {
-						actual_char := ifx gui.controls.pressed[Platform.Key.Shift] && shift_char != 0 then shift_char else char;
-						// Shift characters after cursor
-						for < i: state.edit_text_len..state.edit_cursor + 1 {
-							state.edit_text[i] = state.edit_text[i - 1];
-						}
-						state.edit_text[state.edit_cursor] = actual_char;
-						state.edit_text_len += 1;
-						state.edit_cursor += 1;
-					}
-				}
-			}
-
-			// Numbers
-			handle_char(xx Platform.Key._0, #char "0");
-			handle_char(xx Platform.Key._1, #char "1");
-			handle_char(xx Platform.Key._2, #char "2");
-			handle_char(xx Platform.Key._3, #char "3");
-			handle_char(xx Platform.Key._4, #char "4");
-			handle_char(xx Platform.Key._5, #char "5");
-			handle_char(xx Platform.Key._6, #char "6");
-			handle_char(xx Platform.Key._7, #char "7");
-			handle_char(xx Platform.Key._8, #char "8");
-			handle_char(xx Platform.Key._9, #char "9");
-			handle_char(xx Platform.Key.Period, #char ".");
-			handle_char(xx Platform.Key.Minus, #char "-");
-
-			// Backspace
-			if gui.controls.just_pressed[Platform.Key.Backspace] {
-				if state.edit_cursor > 0 && state.edit_text_len > 0 {
-					for i: state.edit_cursor - 1..state.edit_text_len - 2 {
-						state.edit_text[i] = state.edit_text[i + 1];
-					}
-					state.edit_text_len -= 1;
-					state.edit_cursor -= 1;
-				}
-			}
-
-			// Arrow keys
-			if gui.controls.just_pressed[Platform.Key.Left] {
-				state.edit_cursor = max(0, state.edit_cursor - 1);
-			}
-			if gui.controls.just_pressed[Platform.Key.Right] {
-				state.edit_cursor = min(state.edit_text_len, state.edit_cursor + 1);
-			}
+			numeric_text_input(gui, state.edit_text, *state.edit_text_len, *state.edit_cursor, true);
 
 			// Enter to confirm
 			if gui.controls.just_pressed[Platform.Key.Enter] {
@@ -4394,51 +4399,7 @@ int_input :: (
 
 		// Handle keyboard input for text editing
 		if widget.keyboard_focused {
-			handle_char :: (key: int, char: u8) #expand {
-				if gui.controls.just_pressed[key] {
-					if state.edit_text_len < 31 {
-						// Shift characters after cursor
-						for < i: state.edit_text_len..state.edit_cursor + 1 {
-							state.edit_text[i] = state.edit_text[i - 1];
-						}
-						state.edit_text[state.edit_cursor] = char;
-						state.edit_text_len += 1;
-						state.edit_cursor += 1;
-					}
-				}
-			}
-
-			// Numbers
-			handle_char(xx Platform.Key._0, #char "0");
-			handle_char(xx Platform.Key._1, #char "1");
-			handle_char(xx Platform.Key._2, #char "2");
-			handle_char(xx Platform.Key._3, #char "3");
-			handle_char(xx Platform.Key._4, #char "4");
-			handle_char(xx Platform.Key._5, #char "5");
-			handle_char(xx Platform.Key._6, #char "6");
-			handle_char(xx Platform.Key._7, #char "7");
-			handle_char(xx Platform.Key._8, #char "8");
-			handle_char(xx Platform.Key._9, #char "9");
-			handle_char(xx Platform.Key.Minus, #char "-");
-
-			// Backspace
-			if gui.controls.just_pressed[Platform.Key.Backspace] {
-				if state.edit_cursor > 0 && state.edit_text_len > 0 {
-					for i: state.edit_cursor - 1..state.edit_text_len - 2 {
-						state.edit_text[i] = state.edit_text[i + 1];
-					}
-					state.edit_text_len -= 1;
-					state.edit_cursor -= 1;
-				}
-			}
-
-			// Arrow keys
-			if gui.controls.just_pressed[Platform.Key.Left] {
-				state.edit_cursor = max(0, state.edit_cursor - 1);
-			}
-			if gui.controls.just_pressed[Platform.Key.Right] {
-				state.edit_cursor = min(state.edit_text_len, state.edit_cursor + 1);
-			}
+			numeric_text_input(gui, state.edit_text, *state.edit_text_len, *state.edit_cursor, false);
 
 			// Enter to confirm
 			if gui.controls.just_pressed[Platform.Key.Enter] {

@@ -24,14 +24,14 @@ end {
         }
     }
     if ($Command -and $Command.Count -gt 0) {
-        $parts.Add(($Command -join " ").Trim())
+        $parts.Add(($Command -join " "))
     }
     $text = $null
     if ($parts.Count -gt 0) {
-        $text = ($parts -join "`n").TrimEnd()
+        $text = ($parts -join "`n").TrimEnd([char[]]"`r`n")
     }
     elseif ([Console]::IsInputRedirected) {
-        $text = [Console]::In.ReadToEnd().TrimEnd()
+        $text = [Console]::In.ReadToEnd().TrimEnd([char[]]"`r`n")
     }
     else {
         throw "Usage: arena_control.ps1 <command...>   or   arena_control.ps1 -Body <lines>"

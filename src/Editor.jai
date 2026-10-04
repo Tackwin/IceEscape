@@ -27,7 +27,8 @@ editable_entities_type :: Type.[
 	Scene.Turn_Table,
 	Scene.AntiAir,
 	Scene.Robot,
-	Scene.Wind_Zone
+	Scene.Wind_Zone,
+	Scene.Jukebox
 ];
 
 Editor :: struct {

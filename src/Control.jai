@@ -28,6 +28,7 @@ Control_Kind :: enum {
 	Capture_Video_Status;
 	Layout;
 	End_Level_Preview;
+	Text;
 }
 
 Control_Command :: struct {
@@ -42,6 +43,8 @@ Control_Command :: struct {
 	video_fps: s32 = 30;
 	video_path: [1024] u8;
 	video_path_count: s32;
+	text_bytes: [1024] u8;
+	text_count: s32;
 }
 
 Control_Line :: struct {
@@ -69,6 +72,7 @@ State :: struct {
 	wheel: s32;
 	layout_override := Platform.Layout.Unknown;
 	end_level_preview_action: Platform.End_Level_Preview_Action;
+	text_input: [..] u8;
 
 	commands: [..] Control_Command;
 	queue: [..] Control_Line;
@@ -97,6 +101,7 @@ key_to_name :: (key: Platform.Key) -> string {
 is_session_kind :: (kind: Control_Kind) -> bool {
 	if #complete kind == {
 		case .Key; return false;
+		case .Text; return false;
 		case .Mouse; return false;
 		case .Mouse_Delta; return false;
 		case .Wheel; return false;
@@ -132,6 +137,23 @@ parse_text :: (text: string, state: *State) -> bool {
 }
 
 parse_line :: (line: string, state: *State) -> bool {
+	// Text occupies its whole line: punctuation such as '#' and ';' is data.
+	raw_text_line := trim_left(line);
+	if starts_with(raw_text_line, "text ") {
+		text := slice(raw_text_line, 5, raw_text_line.count - 5);
+		cmd: Control_Command;
+		cmd.kind = .Text;
+		if text.count > cmd.text_bytes.count return false;
+		cmd.text_count = xx text.count;
+		memcpy(cmd.text_bytes.data, text.data, text.count);
+		parsed: Control_Line;
+		parsed.is_frame = true;
+		parsed.first = xx state.commands.count;
+		parsed.count = 1;
+		array_add(*state.commands, cmd);
+		array_add(*state.queue, parsed);
+		return true;
+	}
 	found, code, _ := split_from_left(line, #char "#");
 	stripped := trim(ifx found then code else line);
 	parsed: Control_Line;
@@ -310,6 +332,10 @@ parse_command :: (text: string) -> Control_Command, bool {
 
 apply_input_command :: (state: *State, cmd: Control_Command) {
 	if #complete cmd.kind == {
+		case .Text;
+			old := state.text_input.count;
+			array_resize(*state.text_input, old + cmd.text_count);
+			memcpy(state.text_input.data + old, cmd.text_bytes.data, cmd.text_count);
 		case .Key;
 			index := cmd.key.(int);
 			if index >= 0 && index < state.key_down.count {
@@ -351,6 +377,7 @@ append_response :: (state: *State, text: string) {
 
 apply_session_command :: (state: *State, cmd: Control_Command) {
 	if #complete cmd.kind == {
+		case .Text;
 		case .Key;
 		case .Mouse;
 		case .Mouse_Delta;
@@ -527,6 +554,13 @@ capture_path :: (serial: u64) -> string {
 }
 
 merge_into_frame_info :: (state: *State, info: *Platform.Frame_Info) {
+	if state.text_input.count > 0 {
+		combined := talloc_string(info.text_input.count + state.text_input.count);
+		memcpy(combined.data, info.text_input.data, info.text_input.count);
+		memcpy(combined.data + info.text_input.count, state.text_input.data, state.text_input.count);
+		info.text_input = combined;
+		state.text_input.count = 0;
+	}
 	for i: 0..state.key_down.count-1 {
 		info.keys.pressed[i] = info.keys.pressed[i] || state.key_down[i];
 	}

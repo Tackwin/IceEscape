@@ -494,6 +494,12 @@ make_sync_scene :: (scene: *Scene, params: Scene_Parameters) -> Command.Sync_Sce
 	sync_scene.safe_zones = NewArray(scene.safe_zones.count, Command.Sync_Safe_Zone, false,, temp);
 	sync_scene.standins = NewArray(scene.stand_in.count, Command.Sync_Stand_In, false,, temp);
 	sync_scene.power_ups = NewArray(scene.power_ups.count, Command.Sync_Power_Up, false,, temp);
+	sync_scene.tile_kinds = NewArray(scene.terrain.tiles.count, int, false,, temp);
+	for scene.terrain.tiles sync_scene.tile_kinds[it_index] = it.kind.(int);
+	sync_scene.gates = NewArray(scene.gates.count, Command.Sync_Gate, false,, temp);
+	for scene.gates sync_scene.gates[it_index] = .{ it.id, it.is_closed };
+	sync_scene.block_rocks = NewArray(scene.block_rocks.count, Command.Sync_Block_Rock, false,, temp);
+	for scene.block_rocks sync_scene.block_rocks[it_index] = .{ it.id, it.exploded };
 	
 	for * sync_scene.players {
 		it.* = make_sync_player(*scene.players[it_index]);
@@ -909,8 +915,9 @@ Power_Up :: struct {
 Jukebox :: struct {
 	id: int;
 	last_coin_clock := 0.0;
-	position: V3f;
 	coin_count := 0;
+	position: V3f; @edit @picking
+	direction: V3f; @edit @normalize
 }
 
 Prop :: struct {
@@ -1565,7 +1572,7 @@ Gate :: struct {
 	direction: V3f; @edit @normalize
 	is_closed := true;
 
-	pressbutton_ids: ISpan(int);
+	pressbutton_ids: ISpan(int); @edit @scene_indices
 
 	wait_for_key_id := -1; @edit
 	wait_for_trigger_id := -1; @edit
@@ -1607,6 +1614,7 @@ Player :: struct {
 		target_direction := V3f.{ 1, 0, 0 };
 		walking_toward_position := V3f.{ 0, 0, 0 };
 		walking_toward := false;
+		walking_strength := 1.0;
 		slipping := false;
 		speed := 3.5;
 		turning_speed := 360 * 1.1;
@@ -2097,6 +2105,21 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 	// 	scene.camera.target_target = scene.camera.target;
 	// }
 
+
+	if controls.is_mobile && (controls.joystick_active || controls.joystick_released) {
+		player := find_by_player_id(scene, scene.controlled_player_id);
+		if player && !player.server.dead && scene.state == .Normal {
+			// Convert the screen-space stick into the camera's ground-plane axes.
+			forward := normalize(v2(scene.camera.target - scene.camera.position));
+			right := V2f.{ forward.y, -forward.x };
+			command: Command.Move;
+			command.player_id = player.id;
+			command.is_joystick = true;
+			command.joystick = right * controls.joystick.x - forward * controls.joystick.y;
+			add(result, scene.id, command);
+			process(scene, make_command(command), controls.time, null);
+		}
+	}
 
 	if !controls.captured_mouse {
 		left_triggered := controls.just_pressed[Platform.Key.MouseLeft];
@@ -4336,7 +4359,7 @@ update_player :: (scene: Scene, player: *Player, dt: float32) {
 			dist := norm(dt_pos);
 			dt_pos = normalize(dt_pos);
 
-			dist = min(dist, player.server.speed * dt);
+			dist = min(dist, player.server.speed * player.server.walking_strength * dt);
 			wanted_position := player.server.position + dt_pos * dist;
 
 			can:, wanted_position = can_execute_player_motion(scene, player.server.position, wanted_position, player);
@@ -4718,6 +4741,15 @@ process_client_only :: (
 			Allocator.{ pool_allocator_proc, *scene.run_pool }
 		);
 		scene.client.leaderboard_run_counter = scene.run_generation;
+		return true;
+	}
+
+	sync_block_rock := isa(command.payload, Command.Sync_Block_Rock);
+	if sync_block_rock {
+		for * scene.block_rocks if it.id == sync_block_rock.rock_id {
+			it.exploded = sync_block_rock.exploded;
+			return true;
+		}
 		return true;
 	}
 
@@ -5181,30 +5213,41 @@ process :: (scene: Scene, skull: *Skull, command: Command, response: *Process_Re
 process :: (scene: Scene, player: *Player, command: Command, response: *Process_Response) -> bool {
 	move : *Command.Move = isa(command.payload, Command.Move);
 	if move && move.player_id == player.id {
-		if #complete player.server.confirmed_tile == {
-			case .Ice;
-				player.server.target_direction = normalize(
-					v3(move.ground_target - v2(player.server.position))
-				);
+		if move.is_joystick {
+			strength := clamp(norm(move.joystick), 0.0, 1.0);
+			if player.server.slipping {
+				if strength > 0.0
+					player.server.target_direction = normalize(v3(move.joystick));
 				player.server.walking_toward = false;
-			case .Slippy_Ice;
-			case .Grass;
-				player.server.walking_toward = true;
-				player.server.walking_toward_position = v3(move.ground_target);
-			case .None;
-			case .Dirt;
-			case .Funny_Ice;
-				player.server.target_direction = normalize(
-					v3(v2(player.server.position) - move.ground_target)
-				);
-				player.server.walking_toward = false;
-
+			} else {
+				player.server.walking_strength = strength;
+				player.server.walking_toward = strength > 0.0;
+				player.server.walking_toward_position = player.server.position + v3(move.joystick) * 0.5;
+			}
+		} else {
+			player.server.walking_strength = 1.0;
+			if #complete player.server.confirmed_tile == {
+				case .Ice;
+					player.server.target_direction = normalize(
+						v3(move.ground_target - v2(player.server.position))
+					);
+					player.server.walking_toward = false;
+				case .Slippy_Ice;
+				case .Grass;
+					player.server.walking_toward = true;
+					player.server.walking_toward_position = v3(move.ground_target);
+				case .None;
+				case .Dirt;
+				case .Funny_Ice;
+					player.server.target_direction = normalize(
+						v3(v2(player.server.position) - move.ground_target)
+					);
+					player.server.walking_toward = false;
+			}
 		}
 
 		if scene.is_server && response {
-			reply: Command.Move;
-			reply.player_id = player.id;
-			reply.ground_target = move.ground_target;
+			reply := move.*;
 			add(response, scene.id, reply);
 		}
 
@@ -5819,6 +5862,19 @@ camp_ice
 		);
 	}
 
+	for * scene.jukeboxes {
+		print_to_builder(
+			*sb,
+			#string JUKEBOX
+jukebox
+- position: % % %
+- direction: % % %
+			JUKEBOX,
+			it.position.x, it.position.y, it.position.z,
+			it.direction.x, it.direction.y, it.direction.z
+		);
+	}
+
 	for * scene.skulls {
 		print_to_builder(
 			*sb,
@@ -5978,4 +6034,62 @@ ROBOT,
 	}
 	
 	return builder_to_string(*sb);
+}
+
+// Invoked only by Instance after sender/host validation, after the frame result
+// was cleared. Normal death events and broadcasts reach the scoring pipeline.
+apply_debug :: (scene: *Scene, request: Command.Debug_Request, result: *Frame_Result) -> bool, string {
+	if request.kind == .Kill || request.kind == .Kill_Self {
+		player := find_by_player_id(scene, request.target_id);
+		if !player return false, "Player id was not found.";
+		if player.server.dead return false, "Player is already dead.";
+		server_die(scene, player, current_time_monotonic(), result, v3(FLOAT32_MAX, FLOAT32_MAX, FLOAT32_MAX), 0);
+		return true, tprint("Killed player %.", request.target_id);
+	}
+	if request.kind == .Revive || request.kind == .Revive_Self {
+		player := find_by_player_id(scene, request.target_id);
+		if !player return false, "Player id was not found.";
+		if !player.server.dead return false, "Player is already alive.";
+		spawn_into(player, scene.*);
+		player.server.need_respawn = false;
+		for * scene.tombstones if it.player_id == request.target_id remove it;
+		respawn: Command.Respawn;
+		respawn.player_id = request.target_id;
+		push_broadcast(result, respawn);
+		push_broadcast(result, make_sync_player(player));
+		return true, tprint("Revived player %.", request.target_id);
+	}
+	if request.kind == .Edit {
+		if request.tile_kind < 0 || request.tile_kind > 5 return false, "Tile kind must be 0..5.";
+		tile := get_tile(scene.*, .{ request.tile_x, request.tile_y });
+		if !tile return false, "Tile coordinates are outside the terrain.";
+		tile.kind = xx request.tile_kind;
+		edit: Command.Terrain_Edit;
+		edit.tile_x = request.tile_x; edit.tile_y = request.tile_y;
+		edit.tile_w = 1; edit.tile_h = 1; edit.new_tile = request.tile_kind;
+		push_broadcast(result, edit);
+		return true, tprint("Edited tile (%, %) to kind %.", request.tile_x, request.tile_y, request.tile_kind);
+	}
+	if request.kind == .Open_Gate {
+		for * scene.gates if it.id == request.target_id {
+			it.is_closed = false;
+			it.wait_for_key_id = -1; it.wait_for_trigger_id = -1; it.pressbutton_ids.count = 0;
+			sync: Command.Sync_Gate;
+			sync.gate_id = it.id; sync.is_closed = false;
+			push_broadcast(result, sync);
+			return true, tprint("Opened gate %.", request.target_id);
+		}
+		return false, "Gate id was not found in your scene.";
+	}
+	if request.kind == .Break_Rock {
+		for * scene.block_rocks if it.id == request.target_id {
+			it.exploded = true;
+			sync: Command.Sync_Block_Rock;
+			sync.rock_id = it.id; sync.exploded = true;
+			push_broadcast(result, sync);
+			return true, tprint("Broke rock %.", request.target_id);
+		}
+		return false, "Rock id was not found in your scene.";
+	}
+	return false, "Unknown scene debug operation.";
 }

@@ -3784,7 +3784,7 @@ render_gui :: (
 	for gui_state.chars {
 		item: UI_Draw_Item;
 
-		glyph := font.glyphs[it.id];
+		glyph := text_glyph(font, it.id);
 
 		item.instance.pos = it.pos;
 		item.instance.size = it.size;
@@ -4631,7 +4631,7 @@ render_jukeboxes :: (
 		instance.* = .{};
 		M := M4f.translate(it.position);
 		M *= to_rotation_matrix(
-			axis_angle(v3(0.0, 0, 1), (0.5 * 2 * 3.1415926).(float32))
+			from_unit_vectors(v3(1.0, 0.0, 0.0), it.direction)
 		);
 		instance.M = M;
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
@@ -5034,6 +5034,26 @@ render_gates_finished_closed :: (
 render_shurikens :: (
 	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
+	{
+		instanced := append_sdf_instance_buffer(frame);
+
+		for scene.shurikens {
+			frame := Scene.find_by_frame_id(scene, it.frame_id);
+			if !frame
+				continue;
+			M := Scene.compute_moving_frame_server_world_matrix(scene, frame);
+			pos := M * v4(it.server.position, 1);
+			instanced.count += 1;
+			sdf := *instanced[instanced.count - 1];
+			sdf.* = make_sdf_circle(
+				position=v3(pos.x, pos.y, 0.01),
+				radius=it.server.radius_hitbox,
+				outline_thickness=0.02,
+				color=.{ 0.5, 0.3, 0.3, 0.4 }
+			);
+		}
+		commit_sdf(frame, *frame.sdf, instanced.count);
+	}
 	instanced := append_instance_buffer(frame);
 	for scene.shurikens {
 		instanced.count += 1;
@@ -5209,6 +5229,25 @@ render_safezones :: (
 render_skulls :: (
 	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
+	if false {
+		instances := append_sdf_instance_buffer(frame);
+
+		for scene.skulls {
+			instances.count += 1;
+			instance := *instances[instances.count - 1];
+			M := Scene.compute_skull_matrix(scene, it);
+			pos := M * v4(0.0, 0.0, 0.0, 1.0);
+			instance.* = make_sdf_circle(
+				position=v3(pos.x, pos.y, 0.01),
+				radius=0.25,
+				outline_thickness=0.02,
+				color=.{ 0.5, 0.3, 0.3, 0.4 }
+			);
+		}
+
+		commit_sdf(frame, *frame.sdf, instances.count);
+	}
+
 	instanced := append_instance_buffer(frame);
 	for * scene.skulls {
 		instanced.count += 1;

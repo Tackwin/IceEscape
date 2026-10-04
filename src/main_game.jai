@@ -132,6 +132,10 @@ App_User :: struct {
 	GUI.begin_frame(*app_user.gui_state, app_user.allocated_frame_info, *app_user.controls, app_user.state.keyboard_layout);
 	handle_debug_local_server(app_user);
 	handle_console(app_user);
+	defer {
+		app_user.console.app_user = null;
+		app_user.console.arguments = "";
+	}
 	handle_end_level_preview(app_user);
 
 	commands := parse_web_message(*app_user.state, app_user.allocated_frame_info);
@@ -172,6 +176,13 @@ App_User :: struct {
 	}
 
 	handle_sending_assets(app_user);
+	if app.platform.set_text_input_active {
+		text_input_active := app_user.gui_state.controls.text_input_active;
+		if app_user.state.screen_state == .Editor {
+			text_input_active = app_user.state.editor.gui_state.controls.text_input_active;
+		}
+		app.platform.set_text_input_active(text_input_active);
+	}
 }
 
 handle_sending_assets :: (app_user: *App_User) {
@@ -232,6 +243,11 @@ request_play_session :: (app_user: *App_User, instance_id: int, session_id: int,
 process_main :: (app_user: *App_User, command: Command) -> bool {
 	state := *app_user.state;
 	session := *state.play_session;
+	debug_reply := isa(command.payload, Command.Debug_Reply);
+	if debug_reply {
+		console_debug_reply(app_user, debug_reply.*);
+		return true;
+	}
 
 	connect := isa(command.payload, Command.Connect);
 	if connect {

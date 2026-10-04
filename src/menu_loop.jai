@@ -121,6 +121,7 @@ process_menu :: (app_user: *App_User, command: Command) -> bool {
 	connect := isa(command.payload, Command.Connect);
 	if connect {
 		state.is_connected = true;
+		state.menu.profile.id = connect.profile_id;
 		state.menu.passcode = connect.passcode;
 		state.menu.passstring = code_to_string(connect.passcode);
 		state.platform.set_token(connect.token);
@@ -270,6 +271,7 @@ process_menu :: (app_user: *App_User, command: Command) -> bool {
 	login := isa(command.payload, Command.Login);
 	if login {
 		if login.feedback == .Accepted {
+			state.menu.profile.id = login.profile_id;
 			if state.menu.passstring
 				free(state.menu.passstring);
 			pw := GUI.view(*state.menu.login_popup_password);

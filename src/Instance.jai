@@ -95,6 +95,8 @@ Instance :: struct {
 
 	received: [1024] Received;
 	received_count := 0;
+	debug_pending: [128] Debug_Pending;
+	debug_pending_count := 0;
 
 	last_activity_time: Apollo_Time;
 	max_inactive_duration := 60.0 * 60.0; // seconds
@@ -415,16 +417,23 @@ init_instance :: (instance: *Instance) {
 process :: (
 	instance: *Instance, command: Command, sender_user_id: int, response: *Scene.Process_Response
 ) -> bool {
+	if process_instance_debug(instance, command, sender_user_id) return true;
+	respawn_request := isa(command.payload, Command.Ask_Respawn);
+	if respawn_request {
+		person := find_person_by_user_id(instance, sender_user_id);
+		if !person || person.player_id != respawn_request.player_id return true;
+	}
 	cheat_action: *Command.Cheat_Action = isa(command.payload, Command.Cheat_Action);
 	if cheat_action {
+		person := find_person_by_user_id(instance, sender_user_id);
+		if !person || person.player_id != debug_host_player_id(instance) return true;
 		if cheat_action.kind == .Next_Level {
-			for * scene: instance.scenes
-				move_playing_scene(instance, scene.next_id);
+			scene := find_by_scene_id(instance, instance.playing_scene_id);
+			if scene move_playing_scene(instance, scene.next_id);
 			return true;
 		}
 		if cheat_action.kind == .Reset_Level {
-			for * scene: instance.scenes
-				move_playing_scene(instance, scene.id);
+			move_playing_scene(instance, instance.playing_scene_id);
 			return true;
 		}
 		if cheat_action.kind == .Reset_Progression {
@@ -633,6 +642,7 @@ update_instance :: (instance: *Instance, dt: float32) {
 	for * scene: instance.scenes {
 		Play_Session.ensure_level(*instance.play_session, scene.id, scene.run_generation);
 		Scene.clear_frame_result_frame(*instance.frame_result);
+		apply_instance_debug(instance, scene);
 		Scene.update_scene(scene, time, dt, *instance.frame_result);
 
 		for instance.frame_result.died_player_id {
@@ -885,4 +895,103 @@ move_player_to_currently_playing_world :: (
 		quit.player_id = player_id;
 		queue_send(instance, make_command(quit), player_id_to_user_id(instance, it.id));
 	}
+}
+
+Debug_Pending :: struct {
+	request: Command.Debug_Request;
+	sender_user_id: int;
+	scene_id: int;
+	run_generation: int;
+}
+
+debug_host_player_id :: (instance: *Instance) -> int {
+	host := -1;
+	for instance.persons {
+		if it.player_id >= 0 && it.user_id >= 0 && (host < 0 || it.player_id < host) host = it.player_id;
+	}
+	return host;
+}
+
+debug_reply :: (instance: *Instance, request: Command.Debug_Request, sender_user_id: int,
+	status: Debug_Status, message: string) {
+	reply: Command.Debug_Reply;
+	reply.kind = request.kind;
+	reply.status = status;
+	reply.host_player_id = debug_host_player_id(instance);
+	person := find_person_by_user_id(instance, sender_user_id);
+	if person reply.sender_player_id = person.player_id;
+	reply.message = message;
+	queue_send(instance, make_command(reply), sender_user_id);
+}
+
+process_instance_debug :: (instance: *Instance, command: Command, sender_user_id: int) -> bool {
+	request := isa(command.payload, Command.Debug_Request);
+	if !request return false;
+	person := find_person_by_user_id(instance, sender_user_id);
+	if !person { debug_reply(instance, request.*, sender_user_id, .Rejected, "You are not in this instance."); return true; }
+	if request.kind == .Who_Host {
+		debug_reply(instance, request.*, sender_user_id, .Accepted, "Host is the lowest player id in this instance.");
+		return true;
+	}
+	if person.player_id != debug_host_player_id(instance) {
+		debug_reply(instance, request.*, sender_user_id, .Rejected, "Only the host may run this command."); return true;
+	}
+	if request.kind.(int) < Debug_Operation.Kill_Self.(int) || request.kind.(int) > Debug_Operation.Who_Host.(int) || request.kind == .Kick {
+		debug_reply(instance, request.*, sender_user_id, .Invalid, "Unknown debug operation."); return true;
+	}
+	value := request.*;
+	scene: *Scene.Scene;
+	if value.kind == .Next_Level || value.kind == .Prev_Level || value.kind == .Wipe_Level {
+		scene = find_by_scene_id(instance, instance.playing_scene_id);
+	} else if value.kind == .Kill || value.kind == .Revive || value.kind == .Kill_Self || value.kind == .Revive_Self {
+		if value.kind == .Kill_Self || value.kind == .Revive_Self value.target_id = person.player_id;
+		if value.target_id >= 0 && find_person_by_player_id(instance, value.target_id)
+			scene = find_scene_of_player_id(instance.*, value.target_id);
+	} else {
+		scene = find_scene_of_player_id(instance.*, person.player_id);
+	}
+	if !scene { debug_reply(instance, value, sender_user_id, .Invalid, "Target player or level was not found."); return true; }
+	if instance.debug_pending_count >= instance.debug_pending.count {
+		debug_reply(instance, value, sender_user_id, .Rejected, "Debug command queue is full."); return true;
+	}
+	instance.debug_pending[instance.debug_pending_count] = .{ value, sender_user_id, scene.id, scene.run_generation };
+	instance.debug_pending_count += 1;
+	return true;
+}
+
+apply_instance_debug :: (instance: *Instance, scene: *Scene.Scene) {
+	remaining := 0;
+	for i: 0..instance.debug_pending_count-1 {
+		pending := instance.debug_pending[i];
+		if pending.scene_id != scene.id { instance.debug_pending[remaining] = pending; remaining += 1; continue; }
+		request := pending.request;
+		person := find_person_by_user_id(instance, pending.sender_user_id);
+		if !person || person.player_id != debug_host_player_id(instance) {
+			debug_reply(instance, request, pending.sender_user_id, .Rejected, "Only the current host may run this command."); continue;
+		}
+		if pending.run_generation != scene.run_generation {
+			debug_reply(instance, request, pending.sender_user_id, .Rejected, "Level changed before the command could run."); continue;
+		}
+		message := "";
+		success := false;
+		if request.kind == .Next_Level || request.kind == .Prev_Level || request.kind == .Wipe_Level {
+			target_scene_id := scene.id;
+			if request.kind == .Next_Level target_scene_id = scene.next_id;
+			if request.kind == .Prev_Level {
+				target_scene_id = -1;
+				for instance.scenes if it.id != instance.pick_scene_id && it.next_id == scene.id { target_scene_id = it.id; break; }
+			}
+			if target_scene_id < 0 || !find_by_scene_id(instance, target_scene_id) {
+				message = "No level exists in that direction.";
+			} else {
+				move_playing_scene(instance, target_scene_id);
+				success = true;
+				message = tprint("Playing level %.", target_scene_id);
+			}
+		} else {
+			success, message = Scene.apply_debug(scene, request, *instance.frame_result);
+		}
+		debug_reply(instance, request, pending.sender_user_id, ifx success then .Accepted else .Invalid, message);
+	}
+	instance.debug_pending_count = remaining;
 }

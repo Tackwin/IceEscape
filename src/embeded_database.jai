@@ -58,7 +58,7 @@ embed_database_default_rosters :: (app: *App) {
 		info, found := sql_load(
 			app.platform,
 			app_user.server.db,
-			sql("SELECT * FROM terrain_infos WHERE name = ?", it),
+			sql("SELECT * FROM terrain_infos WHERE name = ? AND COALESCE(deleted, 0) = 0", it),
 			DB_Terrain_Infos
 		);
 		if !found

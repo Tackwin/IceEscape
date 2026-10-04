@@ -22,6 +22,9 @@ Console_State :: struct {
 	history: [..] string;
 	history_index := -1;
 	end_level_preview_action: End_Level_Preview_Action;
+	// Borrowed only during the synchronous update/command invocation.
+	app_user: *App_User;
+	arguments: string;
 }
 
 init_console :: (app_user: *App_User) {
@@ -52,6 +55,7 @@ console_print :: (c: *Console_State, fmt: string, args: .. Any) {
 
 handle_console :: (app_user: *App_User) {
 	c := *app_user.console;
+	c.app_user = app_user;
 	c.ate_input = false;
 
 	pressed := app_user.gui_state.controls.just_pressed;
@@ -234,7 +238,7 @@ run_console_line :: (c: *Console_State, raw: string) {
 	name := line;
 	rest: string;
 	for line {
-		if it == #char " " {
+		if console_argument_space(it) {
 			name.count = it_index;
 			rest.data = line.data + it_index;
 			rest.count = line.count - it_index;
@@ -243,13 +247,10 @@ run_console_line :: (c: *Console_State, raw: string) {
 		}
 	}
 
-	if rest.count > 0 {
-		console_print(c, "v1: commands take no arguments.");
-		return;
-	}
-
 	for console_commands {
 		if it.name == name {
+			c.arguments = rest;
+			defer c.arguments = "";
 			it.invoke(c);
 			return;
 		}
@@ -269,13 +270,17 @@ console_push_history :: (c: *Console_State, line: string) {
 }
 
 help :: (c: *Console_State) {
+	if !console_no_arguments(c, "help") return;
 	console_print(c, "% command(s):", console_commands.count);
 	for console_commands {
-		console_print(c, "  %", it.name);
+		console_print(c, "  %", console_command_usage(it.name));
 	}
+	console_print(c, "Tile kinds: None=0, Ice=1, Grass=2, Slippy_Ice=3, Dirt=4, Funny_Ice=5.");
+	console_print(c, "Tile names ignore case. who_host reports the server host player_id.");
 } @console
 
 clear :: (c: *Console_State) {
+	if !console_no_arguments(c, "clear") return;
 	for c.lines {
 		free(it);
 	}
@@ -283,11 +288,207 @@ clear :: (c: *Console_State) {
 } @console
 
 previewendlevel :: (c: *Console_State) {
+	if !console_no_arguments(c, "previewendlevel") return;
 	c.end_level_preview_action = .Show;
 	console_print(c, "Showing dummy end-level results. Countdown held; animation clock running.");
 } @console
 
 hideendlevel :: (c: *Console_State) {
+	if !console_no_arguments(c, "hideendlevel") return;
 	c.end_level_preview_action = .Hide;
 	console_print(c, "End-level preview hidden.");
+} @console
+
+console_argument_space :: (c: u8) -> bool {
+	return c == #char " " || c == #char "\t" || c == #char "\r" || c == #char "\n";
+}
+
+console_take_argument :: (remaining: *string) -> string {
+	while remaining.count > 0 && console_argument_space(remaining.data[0]) {
+		remaining.data += 1;
+		remaining.count -= 1;
+	}
+	argument := remaining.*;
+	argument.count = 0;
+	while argument.count < remaining.count && !console_argument_space(remaining.data[argument.count]) argument.count += 1;
+	remaining.data += argument.count;
+	remaining.count -= argument.count;
+	return argument;
+}
+
+console_no_arguments :: (c: *Console_State, usage: string) -> bool {
+	remaining := c.arguments;
+	if console_take_argument(*remaining).count == 0 return true;
+	console_print(c, "usage: %", usage);
+	return false;
+}
+
+// Accumulate against the unsigned magnitude limit before multiplication. This
+// accepts the full signed int range without overflow or a lossy scan conversion.
+console_parse_integer :: (input: string, signed_allowed: bool) -> int, bool {
+	text := input;
+	if text.count == 0 return 0, false;
+	negative := false;
+	if signed_allowed && (text[0] == #char "-" || text[0] == #char "+") {
+		negative = text[0] == #char "-";
+		text.data += 1;
+		text.count -= 1;
+	}
+	if text.count == 0 return 0, false;
+	limit: u64 = 0x7fff_ffff_ffff_ffff;
+	if negative limit = 0x8000_0000_0000_0000;
+	value: u64;
+	for text {
+		if it < #char "0" || it > #char "9" return 0, false;
+		digit: u64 = xx (it - #char "0");
+		if value > (limit - digit) / 10 return 0, false;
+		value = value * 10 + digit;
+	}
+	if negative {
+		if value == 0x8000_0000_0000_0000 return -9223372036854775807 - 1, true;
+		return -cast(int) value, true;
+	}
+	return cast(int) value, true;
+}
+
+console_equal_fold :: (a: string, b: string) -> bool {
+	if a.count != b.count return false;
+	for 0..a.count-1 {
+		left := a[it];
+		right := b[it];
+		if left >= #char "A" && left <= #char "Z" left += 32;
+		if right >= #char "A" && right <= #char "Z" right += 32;
+		if left != right return false;
+	}
+	return true;
+}
+
+console_parse_tile_kind :: (text: string) -> int, bool {
+	value, valid := console_parse_integer(text, false);
+	if valid return value, value >= 0 && value <= 5;
+	names := enum_names(Scene.Tile.Kind);
+	for names if console_equal_fold(it, text) return it_index, true;
+	return 0, false;
+}
+
+console_command_usage :: (name: string) -> string {
+	if name == "kill" return "kill <player_id>";
+	if name == "res" return "res <player_id>";
+	if name == "kick" return "kick <player_id>";
+	if name == "edit" return "edit <x> <y> <tile_kind>";
+	if name == "open" return "open <gate_id>";
+	if name == "break_rock" return "break_rock <rock_id>";
+	return name;
+}
+
+console_debug_send :: (c: *Console_State, request: Command.Debug_Request) {
+	app_user := c.app_user;
+	if !app_user || !app_user.state.is_communication_established || !app_user.state.is_connected {
+		console_print(c, "error: not connected to a server.");
+		return;
+	}
+	// The server owns permission checks and all mutations, including self
+	// operations. Do not alter the local scene before authoritative sync arrives.
+	send_web_message(app_user.state.platform, app_user.state.current_time, make_command(request));
+}
+
+console_debug_without_arguments :: (c: *Console_State, kind: Debug_Operation, usage: string) {
+	if !console_no_arguments(c, usage) return;
+	request: Command.Debug_Request;
+	request.kind = kind;
+	console_debug_send(c, request);
+}
+
+console_debug_target :: (c: *Console_State, kind: Debug_Operation, usage: string) {
+	remaining := c.arguments;
+	argument := console_take_argument(*remaining);
+	value, valid := console_parse_integer(argument, false);
+	if !valid || console_take_argument(*remaining).count != 0 {
+		console_print(c, "usage: % (id must be a nonnegative integer)", usage);
+		return;
+	}
+	request: Command.Debug_Request;
+	request.kind = kind;
+	request.target_id = value;
+	console_debug_send(c, request);
+}
+
+console_debug_reply :: (app_user: *App_User, reply: Command.Debug_Reply) {
+	c := *app_user.console;
+	label := "ok";
+	if reply.status == .Rejected label = "rejected";
+	if reply.status == .Invalid label = "invalid";
+	console_print(c, "%: %", label, reply.message);
+	if reply.kind == .Who_Host && reply.status == .Accepted {
+		if reply.host_player_id < 0 {
+			console_print(c, "host: none");
+		} else {
+			if reply.host_player_id == reply.sender_player_id {
+				console_print(c, "host player_id: % (you)", reply.host_player_id);
+			} else {
+				console_print(c, "host player_id: %", reply.host_player_id);
+			}
+		}
+	}
+}
+
+killme :: (c: *Console_State) {
+	console_debug_without_arguments(c, .Kill_Self, "killme");
+} @console
+
+kill :: (c: *Console_State) {
+	console_debug_target(c, .Kill, "kill <player_id>");
+} @console
+
+resme :: (c: *Console_State) {
+	console_debug_without_arguments(c, .Revive_Self, "resme");
+} @console
+
+res :: (c: *Console_State) {
+	console_debug_target(c, .Revive, "res <player_id>");
+} @console
+
+next_level :: (c: *Console_State) {
+	console_debug_without_arguments(c, .Next_Level, "next_level");
+} @console
+
+wipe_level :: (c: *Console_State) {
+	console_debug_without_arguments(c, .Wipe_Level, "wipe_level");
+} @console
+
+prev_level :: (c: *Console_State) {
+	console_debug_without_arguments(c, .Prev_Level, "prev_level");
+} @console
+
+kick :: (c: *Console_State) {
+	console_debug_target(c, .Kick, "kick <player_id>");
+} @console
+
+edit :: (c: *Console_State) {
+	remaining := c.arguments;
+	x, x_valid := console_parse_integer(console_take_argument(*remaining), true);
+	y, y_valid := console_parse_integer(console_take_argument(*remaining), true);
+	kind, kind_valid := console_parse_tile_kind(console_take_argument(*remaining));
+	if !x_valid || !y_valid || !kind_valid || console_take_argument(*remaining).count != 0 {
+		console_print(c, "usage: edit <x> <y> <tile_kind> (integer coordinates; tile kind 0..5 or name)");
+		return;
+	}
+	request: Command.Debug_Request;
+	request.kind = .Edit;
+	request.tile_x = x;
+	request.tile_y = y;
+	request.tile_kind = kind;
+	console_debug_send(c, request);
+} @console
+
+open :: (c: *Console_State) {
+	console_debug_target(c, .Open_Gate, "open <gate_id>");
+} @console
+
+break_rock :: (c: *Console_State) {
+	console_debug_target(c, .Break_Rock, "break_rock <rock_id>");
+} @console
+
+who_host :: (c: *Console_State) {
+	console_debug_without_arguments(c, .Who_Host, "who_host");
 } @console

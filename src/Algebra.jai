@@ -442,6 +442,12 @@ to_axis_angle :: (q: Q($T)) -> V3(T), T {
 from_unit_vectors :: (a: V3($T), b: V3(T)) -> Q(T) {
 	if (a.x == -b.x && a.y == -b.y && a.z == -b.z) {
 		axis := normalize(cross(V3f.{1, 0, 0}, a));
+		if a.x == 1.0 || a.x == -1.0
+			axis = normalize(cross(V3f.{0, 1, 0}, a));
+		if axis == V3f.{0, 0, 0}
+			axis = normalize(cross(V3f.{0, 0, 1}, a));
+		if axis == V3f.{0, 0, 0}
+			axis = v3(0.154687, 0.1674, 0.123456);
 		return axis_angle(axis, PI);
 	}
 	half := normalize(a + b);

@@ -434,8 +434,8 @@ load_font :: (csv: string) -> Font {
 	for lines {
 		g: Glyph;
 
-		if scan2(
-			it,
+		if !scan2(
+			trim(it),
 			"%,%,%,%,%,%,%,%,%,%",
 			*g.unicode,
 			*g.advance,
@@ -451,7 +451,7 @@ load_font :: (csv: string) -> Font {
 			continue;
 		}
 
-		if g.unicode >= 256 {
+		if g.unicode <= 0 || g.unicode > 0x10FFFF || (g.unicode >= 0xD800 && g.unicode <= 0xDFFF) {
 			continue;
 		}
 
@@ -460,7 +460,11 @@ load_font :: (csv: string) -> Font {
 		g.atlasy = atlas_h - g.atlash;
 		g.atlash = atlas_h - old_y;
 
-		font.glyphs[g.unicode] = g;
+		if g.unicode < font.glyphs.count {
+			font.glyphs[g.unicode] = g;
+		} else {
+			array_add(*font.extra_glyphs, g);
+		}
 	}
 
 	return font;

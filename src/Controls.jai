@@ -5,12 +5,20 @@ Platform ::  #import "Platform";
 
 State :: struct {
 	using keys: Platform.Keys;
+	text_input: string;
+	text_input_active := false;
+	text_input_consumed := false;
 
 	mouse_pos: V2f;
 	mouse_wheel: s64;
 	window_size:   V2f;
 
 	is_mobile := false;
+	touch_down := false;
+	touch_just_pressed := false;
+	joystick_active := false;
+	joystick_released := false;
+	joystick: V2f;
 	captured_keyboard := false;
 	captured_mouse := false;
 

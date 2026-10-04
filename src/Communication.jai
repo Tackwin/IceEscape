@@ -73,6 +73,22 @@ Sum_Type :: struct(types: ..Type) {
 // New command kinds are appended so existing discriminants stay stable.
 // The serializer is still positional, not protobuf: deploy the matching client
 // and server together when changing a message layout.
+Debug_Operation :: enum {
+	Kill_Self;
+	Kill;
+	Revive_Self;
+	Revive;
+	Next_Level;
+	Wipe_Level;
+	Prev_Level;
+	Kick;
+	Edit;
+	Open_Gate;
+	Break_Rock;
+	Who_Host;
+}
+Debug_Status :: enum { Accepted; Rejected; Invalid; }
+
 Command :: struct {
 	Statistics :: struct {
 		win_count: int;
@@ -164,6 +180,7 @@ Command :: struct {
 			Wrong_Password;
 			Rejected;
 		}
+		profile_id: int = -1;
 	}
 	Set_Passcode :: struct {
 		passcode: u64;
@@ -171,6 +188,8 @@ Command :: struct {
 	Move :: struct {
 		player_id: int;
 		ground_target: V2f;
+		is_joystick := false;
+		joystick: V2f;
 	}
 	Get_Profile_Stats :: struct {
 		stats: Statistics;
@@ -370,6 +389,9 @@ Command :: struct {
 		instance_id: int = -1;
 		session_id: int = -1;
 		session_revision: int;
+		tile_kinds: [] int;
+		gates: [] Sync_Gate;
+		block_rocks: [] Sync_Block_Rock;
 	}
 	Sync_Stand_In :: struct {
 		standin_id: int;
@@ -537,6 +559,13 @@ Command :: struct {
 		info: Scene_Info;
 		ascii: string;
 	}
+	Ask_Delete_Terrain :: struct {
+		terrain_id: int;
+	}
+	Ans_Delete_Terrain :: struct {
+		terrain_id: int;
+		success: bool;
+	}
 	Ask_List_Terrain :: struct {
 		correlation_id: int;
 		filter: string;
@@ -547,6 +576,7 @@ Command :: struct {
 		terrains_name: [] string;
 		authors_name: [] string;
 		creation_time_ms: [] s64;
+		authors_profile_id: [] int;
 	}
 
 	Create_Instance :: struct {
@@ -658,6 +688,25 @@ Command :: struct {
 		asset: Asset_Info;
 	}
 
+	Debug_Request :: struct {
+		kind: Debug_Operation;
+		target_id: int = -1;
+		tile_x: int;
+		tile_y: int;
+		tile_kind: int;
+	}
+	Debug_Reply :: struct {
+		kind: Debug_Operation;
+		status: Debug_Status;
+		host_player_id: int = -1;
+		sender_player_id: int = -1;
+		message: string;
+	}
+	Sync_Block_Rock :: struct {
+		rock_id: int;
+		exploded: bool;
+	}
+
 	Payload_t :: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
 		Quit, Die, Respawn, Spawn_Coin, Despawn_Coin, Sync_Key, Sync_Gate, NTP, Sync_Scene, Connect,
@@ -672,7 +721,8 @@ Command :: struct {
 		Get_Username, Get_Terrain_Leaderboard, Signal_Pick, Get_Instance_Tab_Stats, Terrain_Edit,
 		Ask_Enter_Quick_Instance, Set_Thumbnail, Get_Thumbnail, Asset_Chunk, Create_Bomberman,
 		Ans_Create_Bomberman, Pickup_Power_Up, Sync_Camp_Ice,
-		Ask_Play_Session, Ans_Play_Session
+		Ask_Play_Session, Ans_Play_Session, Ask_Delete_Terrain, Ans_Delete_Terrain,
+		Debug_Request, Debug_Reply, Sync_Block_Rock
 	);
 	payload: Payload_t;
 	sent_timestamp: float64;

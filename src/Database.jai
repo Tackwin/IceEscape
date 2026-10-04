@@ -55,6 +55,7 @@ DB_Terrain_Infos :: struct {
 	name: string;
 	author_profile_id: int;
 	created_ms: int;
+	deleted := false;
 }
 
 DB_Terrain_Ascii :: struct {

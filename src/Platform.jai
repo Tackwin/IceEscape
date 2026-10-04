@@ -98,6 +98,9 @@ Key :: enum s32 {
 	Enter;
 	Control;
 	Minus;
+	Delete;
+	Home;
+	End;
 }
 Key_COUNT :: #run enum_values_as_s64(Key).count;
 
@@ -146,11 +149,14 @@ Frame_Info :: struct {
 	layout: Layout;
 
 	keys: Keys;
+	// Committed UTF-8 text, owned by the client until the next frame.
+	text_input: string;
 
 	mouse_position: V2f;
 	window_size: V2f;
 	framebuffer_size: V2f;
 	is_mobile := false;
+	touch_down := false;
 	quit := false;
 
 	window_focused := false;
@@ -262,6 +268,79 @@ Font :: struct {
 	atlas_width: int;
 	atlas_height: int;
 	glyphs: [256] Glyph;
+	extra_glyphs: [..] Glyph;
+}
+
+// Offsets are byte offsets into UTF-8 strings. Invalid input advances one byte
+// and displays a replacement, so a malformed string cannot stall the renderer.
+text_next :: (text: string, offset: int) -> int, int {
+	if offset < 0 || offset >= text.count return 0, text.count;
+	first := text[offset];
+	if first < 0x80 return first.(int), offset + 1;
+	length := 0;
+	value := 0;
+	minimum := 0;
+	if first >= 0xC2 && first <= 0xDF {
+		length = 2; value = first & 0x1F; minimum = 0x80;
+	} else if first >= 0xE0 && first <= 0xEF {
+		length = 3; value = first & 0x0F; minimum = 0x800;
+	} else if first >= 0xF0 && first <= 0xF4 {
+		length = 4; value = first & 0x07; minimum = 0x10000;
+	} else return 0xFFFD, offset + 1;
+	if offset + length > text.count return 0xFFFD, offset + 1;
+	for i: 1..length - 1 {
+		byte := text[offset + i];
+		if (byte & 0xC0) != 0x80 return 0xFFFD, offset + 1;
+		value = (value << 6) | (byte & 0x3F);
+	}
+	if value < minimum || value > 0x10FFFF || (value >= 0xD800 && value <= 0xDFFF)
+		return 0xFFFD, offset + 1;
+	return value, offset + length;
+}
+
+text_previous :: (text: string, offset: int) -> int {
+	offset = clamp(offset, 0, text.count);
+	if offset == 0 return 0;
+	end := offset;
+	offset -= 1;
+	while offset > 0 && (text[offset] & 0xC0) == 0x80 offset -= 1;
+	_, next := text_next(text, offset);
+	if next != end return end - 1;
+	return offset;
+}
+
+text_character_count :: (text: string) -> int {
+	count := 0;
+	offset := 0;
+	while offset < text.count {
+		_, offset = text_next(text, offset);
+		count += 1;
+	}
+	return count;
+}
+
+font_find_glyph :: (font: *Font, codepoint: int) -> Glyph, bool {
+	if codepoint > 0 && codepoint < font.glyphs.count {
+		glyph := font.glyphs[codepoint];
+		if glyph.unicode == codepoint return glyph, true;
+	}
+	for font.extra_glyphs {
+		if it.unicode == codepoint return it, true;
+	}
+	return .{}, false;
+}
+
+text_glyph :: (font: *Font, codepoint: int) -> Glyph {
+	glyph, found := font_find_glyph(font, codepoint);
+	if found return glyph;
+	// Preserve the original character in the string while drawing a visible
+	// fallback from the current atlas. New CSV glyphs need no input changes.
+	for int.[0xFFFD, #char "?", #char " "] {
+		glyph, found = font_find_glyph(font, it);
+		if found return glyph;
+	}
+	glyph.advance = 0.5;
+	return glyph;
 }
 
 Sql_Bind :: struct {
@@ -617,6 +696,7 @@ Platform :: struct {
 	set_token:        #type (token: int)     = null;
 	get_frame_info:   #type (info: *Frame_Info) = null;
 	end_frame:        #type ()               = null;
+	set_text_input_active: #type (active: bool) = null;
 
 	get_current_time: #type () -> Apollo_Time = null;
 	to_calendar: #type (time: Apollo_Time) -> Calendar_Time = null;

@@ -1,6 +1,7 @@
 Game_Page :: struct {
 	rebuild_pipelines := false;
 	sound_enabled := false;
+	joystick_active := false;
 
 	Stats :: struct {
 		win_count := 0;
@@ -181,6 +182,15 @@ process_game :: (
 		for sync_scene.standins {
 			Scene.process(*state.scene, make_command(it), controls.time, response);
 		}
+		if sync_scene.tile_kinds.count == state.scene.terrain.tiles.count {
+			for * state.scene.terrain.tiles it.kind = xx sync_scene.tile_kinds[it_index];
+		}
+		for sync_scene.gates {
+			Scene.process(*state.scene, make_command(it), controls.time, response);
+		}
+		for sync_scene.block_rocks {
+			Scene.process(*state.scene, make_command(it), controls.time, response);
+		}
 
 		state.scene.server_rng.s = sync_scene.rng.s;
 		return true;
@@ -196,6 +206,48 @@ process_game :: (
 
 gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 	using app_user;
+
+	controls.joystick = .{};
+	controls.joystick_active = false;
+	controls.joystick_released = false;
+	was_joystick_active := state.game.joystick_active;
+	if gui_state.controls.is_mobile && scene.state == .Normal && !scene.end_scene_countdown_started
+		&& !state.playing.escape_menu_open && !console.open && !controls.pressed[Key.Tab]
+		&& !app_user.end_level_preview.active {
+		base_radius :: 112.0;
+		thumb_radius :: 44.0;
+		thumb_travel :: 64.0;
+		joystick_base_atlas_rect :: V4f.{ 0.0, 7.0 / 16.0, 3.0 / 16.0, 3.0 / 16.0 };
+		joystick_thumb_atlas_rect :: V4f.{ 3.0 / 16.0, 9.0 / 16.0, 1.0 / 16.0, 1.0 / 16.0 };
+		center := gui_state.controls.window_size - v2(base_radius + 28);
+		offset := gui_state.controls.mouse_pos - center;
+		if norm(offset) <= base_radius {
+			controls.captured_mouse = true;
+			gui_state.controls.captured_mouse = true;
+		}
+		if gui_state.controls.touch_just_pressed && norm(offset) <= base_radius
+			state.game.joystick_active = true;
+		state.game.joystick_active &= gui_state.controls.touch_down;
+		if state.game.joystick_active {
+			offset /= max(1.0, norm(offset) / thumb_travel);
+			controls.joystick = offset / thumb_travel;
+			if norm(controls.joystick) < 0.08 controls.joystick = .{};
+			controls.joystick_active = true;
+		} else {
+			offset = .{};
+		}
+		GUI.push_quad_custom_texture(*gui_state, center - v2(base_radius), v2(base_radius * 2),
+			*store.ui_atlas, joystick_base_atlas_rect, z = 20, color = .{ 1, 1, 1, 0.75 });
+		GUI.push_quad_custom_texture(*gui_state, center + offset - v2(thumb_radius), v2(thumb_radius * 2),
+			*store.ui_atlas, joystick_thumb_atlas_rect, z = 21, color = .{ 1, 1, 1, 0.9 });
+	} else {
+		state.game.joystick_active = false;
+	}
+	controls.joystick_released = was_joystick_active && !state.game.joystick_active;
+	if controls.joystick_active || controls.joystick_released {
+		controls.captured_mouse = true;
+		gui_state.controls.captured_mouse = true;
+	}
 
 	GUI.push_action_palette(*gui_state, scene, *store);
 	GUI.push_buy_prompt(*gui_state, *scene, *store);
@@ -409,7 +461,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 
 input_game_loop :: (app_user: *App_User) {
 	using app_user;
-	if console.open || console.ate_input return;
+	if (console.open || console.ate_input) && !controls.joystick_released return;
 	if controls.just_pressed[Key.Escape] {
 		app_user.state.playing.escape_menu_open = !app_user.state.playing.escape_menu_open;
 	}
@@ -476,7 +528,7 @@ input_game_loop :: (app_user: *App_User) {
 	}
 
 	Scene.clear(*process_response);
-	if !app_user.gui_state.handled_mouse {
+	if !app_user.gui_state.handled_mouse || controls.joystick_active || controls.joystick_released {
 		Scene.input(*state.scene, *controls, *process_response);
 	}
 }

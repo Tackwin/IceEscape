@@ -17,12 +17,15 @@ Editor_Page :: struct {
 	show_load_dialog := false;
 	load_filter: GUI.String;
 	load_result_page := 0;
+	load_error: string;
 
 	Terrain_Entry :: struct {
 		name: string;
 		author: string;
+		author_profile_id: int = -1;
 		created_ms: s64;
 		id: int;
+		delete_pending: bool;
 	}
 	terrain_list: [..] Terrain_Entry;
 	terrain_list_pool: Pool;
@@ -53,6 +56,16 @@ Editor_Page :: struct {
 	multiple_posititon_offset: V3f;
 
 	wait_for_screenshot_generation_set_thumbnail := -1;
+}
+
+EDITOR_TERRAIN_LIST_ID :: 2;
+
+request_editor_terrain_list :: (app_user: *App_User) {
+	page := *app_user.state.editor_page;
+	request: Command.Ask_List_Terrain;
+	request.correlation_id = EDITOR_TERRAIN_LIST_ID;
+	request.filter = GUI.view(*page.load_filter);
+	send_web_message(app_user.state.platform, app_user.state.current_time, make_command(request));
 }
 
 process_editor :: (app_user: *App_User, command: Command) -> bool {
@@ -96,6 +109,18 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 		return true;
 	}
 
+	deleted := isa(command.payload, Command.Ans_Delete_Terrain);
+	if deleted {
+		for *page.terrain_list if it.id == deleted.terrain_id it.delete_pending = false;
+		if deleted.success {
+			page.load_error = "";
+			request_editor_terrain_list(app_user);
+		} else {
+			page.load_error = "Could not remove terrain (ownership or database error).";
+		}
+		return true;
+	}
+
 	get_thumbnail := isa(command.payload, Command.Get_Thumbnail);
 	if get_thumbnail {
 		big_asset := table_find_pointer(*page.big_assets_receiving, get_thumbnail.asset.id);
@@ -125,12 +150,17 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 
 	ans_list_terrain := isa(command.payload, Command.Ans_List_Terrain);
 	if ans_list_terrain {
-		for page.terrain_list
+		if ans_list_terrain.correlation_id != EDITOR_TERRAIN_LIST_ID return false;
+		for page.terrain_list {
 			free(it.name.data,, page.terrain_list.allocator);
+			free(it.author.data,, page.terrain_list.allocator);
+		}
 		page.terrain_list.allocator = .{ pool_allocator_proc, *page.terrain_list_pool };
 		array_resize(*page.terrain_list, ans_list_terrain.terrains_id.count);
 		for * page.terrain_list {
 			it.id = ans_list_terrain.terrains_id[it_index];
+			it.author_profile_id = ans_list_terrain.authors_profile_id[it_index];
+			it.delete_pending = false;
 			it.name = sprint(
 				ans_list_terrain.terrains_name[it_index],, page.terrain_list.allocator
 			);
@@ -949,6 +979,7 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 					selected_entity_type, selected_entity_ptr, field.path, float
 				);
 
+				GUI.row(gui);
 				float_result := GUI.labeled_float_input(
 					gui,
 					tprint("%:", field.path),
@@ -962,12 +993,14 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 				if float_result.changed {
 					current_value.* = float_result.value;
 				}
+				GUI.end(gui);
 			}
 			if field.type.type == .INTEGER {
 				current_value := member_pointer(
 					selected_entity_type, selected_entity_ptr, field.path, int
 				);
 
+				GUI.row(gui);
 				int_result := GUI.labeled_int_input(
 					gui,
 					tprint("%:", field.path),
@@ -980,10 +1013,12 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 				if int_result.changed {
 					current_value.* = int_result.value;
 				}
+				GUI.end(gui);
 			}
 			if field.type.type == .ENUM {
 				enum_info := field.type.(*Type_Info_Enum);
 				
+				GUI.row(gui);
 				dropdown := GUI.labeled_dropdown(
 					gui,
 					tprint("%:", field.path),
@@ -999,6 +1034,7 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 					);
 					current_value.* = enum_info.values[dropdown.selected_index];
 				}
+				GUI.end(gui);
 			}
 			if field.type.type == .STRUCT {
 				struct_info := field.type.(*Type_Info_Struct);
@@ -1106,6 +1142,7 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 					}
 					GUI.end(gui);
 
+					GUI.row(gui);
 					size_result := GUI.labeled_v2_input(
 						gui,
 						tprint("Size: %", field.display_name),
@@ -1122,7 +1159,61 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 							pos.*.x + size_result.value.x, pos.*.y + size_result.value.y, size.*.z
 						);
 					}
+					GUI.end(gui);
 
+				}
+				if struct_info.name == "ISpan" {
+					scene := *editor.scene;
+					indices := member_pointer(
+						selected_entity_type, selected_entity_ptr, field.path, Scene.ISpan(int)
+					);
+					GUI.row(gui);
+					add_button := GUI.labeled_text_button(
+						gui, "Add", "Add", content_width, 24, id="add_index"
+					);
+					if add_button {
+						if indices.count + indices.index == scene.indices.count {
+							array_add(*scene.indices, 0);
+							indices.count += 1;
+						} else {
+							// dumb relocation to make room for the new index at the end.
+							// One more for the new index.
+							for 0..indices.count-1
+								array_add(*scene.indices, scene.indices[indices.index + it]);
+							array_add(*scene.indices, 0);
+							indices.count += 1;
+							indices.index = scene.indices.count - indices.count;
+						}
+					}
+					GUI.end(gui);
+					for 0..indices.count-1 {
+						index := scene.indices[indices.index + it];
+						GUI.row(gui);
+						res := GUI.labeled_int_input(
+							gui,
+							tprint("%:", it),
+							content_width - 64,
+							24,
+							value = index,
+							min_value = 0,
+							id = tprint("entry_%", it),
+						);
+						if res.changed {
+							scene.indices[indices.index + it] = res.value;
+						}
+						GUI.space(gui, 48);
+						clicked, _, __ := GUI.button(
+							gui,
+							"Rem",
+							id = tprint("entry_%_button", it)
+						);
+						if clicked {
+							for j: it+1..indices.count-1
+								scene.indices[indices.index + j - 1] = scene.indices[indices.index + j];
+							indices.count -= 1;
+						}
+						GUI.end(gui);
+					}
 				}
 			}
 			if field.type.type == .BOOL {
@@ -1130,6 +1221,7 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 					selected_entity_type, selected_entity_ptr, field.path, bool
 				);
 
+				GUI.row(gui);
 				checkbox := GUI.labeled_checkbox(
 					gui,
 					tprint("%:", field.path),
@@ -1141,6 +1233,7 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 				if checkbox.just_checked {
 					current_value.* = checkbox.checked;
 				}
+				GUI.end(gui);
 			}
 		}
 
@@ -1477,9 +1570,8 @@ draw_editor_toolbar :: (
 	load_clicked, _, _ := GUI.button(gui, "Load", id = "load_btn");
 	if load_clicked {
 		// Refresh file list
-		ask_list_terrain: Command.Ask_List_Terrain;
-		ask_list_terrain.filter = GUI.view(*page.load_filter);
-		send_web_message(state.platform, gui.controls.time, make_command(ask_list_terrain));
+		page.load_error = "";
+		request_editor_terrain_list(app_user);
 		page.show_load_dialog = true;
 	}
 
@@ -1621,12 +1713,14 @@ draw_load_dialog :: (
 
 	// Input for filter
 	if GUI.labeled_input_text(
-		gui, "Filter", *page.load_filter, dialog_width - 16, 24, label_color = GUI.GRAY_80, placeholder = "<filter>"
+		gui, "Filter", *page.load_filter,
+		dialog_width - 16, 24, max_input_width = dialog_width - 16,
+		label_color = GUI.GRAY_80, placeholder = "<filter>"
 	).changed {
-		ask_list_terrain: Command.Ask_List_Terrain;
-		ask_list_terrain.filter = GUI.view(*page.load_filter);
-		send_web_message(platform, gui.controls.time, make_command(ask_list_terrain));
+		request_editor_terrain_list(app_user);
 	}
+	if page.load_error.count > 0
+		GUI.label(gui, page.load_error, scale = 14, color = GUI.TEXT_NORMAL);
 
 	// // List of files
 	draw_load_terrain_list(app_user, page, gui);
@@ -1738,7 +1832,7 @@ draw_load_terrain_list :: (app_user: *App_User, page: *Editor_Page, gui: *GUI.GU
 	terrain_list_view.count = end - beg;
 	terrain_list_view.data = page.terrain_list.data + beg;
 
-	for terrain_list_view {
+	for *terrain_list_view {
 		GUI.push_id(gui, it_index);
 		defer GUI.pop_id(gui);
 
@@ -1758,6 +1852,9 @@ draw_load_terrain_list :: (app_user: *App_User, page: *Editor_Page, gui: *GUI.GU
 		}
 
 		cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
+		can_remove := app_user.state.is_connected && app_user.state.menu.profile.id >= 0 &&
+			it.author_profile_id == app_user.state.menu.profile.id;
+		actions_width := ifx can_remove then 160.0 else 78.0;
 		date := tprint(
 			"%/% %:%",
 			cal.day_of_month_starting_at_0 + 1, cal.month_starting_at_0 + 1, cal.hour, cal.minute
@@ -1783,21 +1880,29 @@ draw_load_terrain_list :: (app_user: *App_User, page: *Editor_Page, gui: *GUI.GU
 		GUI.atom_label(
 			gui,
 			date,
-			row_aabb.min + v2(terrain_entry_row_width - 78, 36.0),
+			row_aabb.min + v2(terrain_entry_row_width - actions_width, 36.0),
 			z = z + 1,
 			scale = 14,
 			color = GUI.GRAY_20,
 			align = .Top_Right
 		);
 
-		load_clicked := GUI.text_button(
-			gui,
-			"Load",
-			row_aabb.min + v2(terrain_entry_row_width - 12, terrain_entry_row_height / 2),
-			z = z + 1,
-			id = tprint("load_btn_%", it.id),
-			align = .Center_Right
-		);
+		GUI.row(gui, row_aabb.min + v2(terrain_entry_row_width - 12, terrain_entry_row_height / 2),
+			.Left, z = z + 1, align = .Center_Right);
+		load_clicked := GUI.button(gui, "Load", id = tprint("load_btn_%", it.id));
+		if can_remove {
+			GUI.space(gui, 8);
+			if it.delete_pending {
+				GUI.label(gui, "...", color = GUI.GRAY_10, id = "remove_pending");
+			} else if GUI.button(gui, "Remove", id = tprint("remove_btn_%", it.id)) {
+				it.delete_pending = true;
+				page.load_error = "";
+				request: Command.Ask_Delete_Terrain;
+				request.terrain_id = it.id;
+				send_web_message(platform, gui.controls.time, make_command(request));
+			}
+		}
+		GUI.end(gui);
 		if load_clicked {
 			load_terrain_cmd: Command.Load_Terrain;
 			load_terrain_cmd.terrain_id = it.id;
