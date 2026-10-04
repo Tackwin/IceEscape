@@ -17,8 +17,21 @@ let workerInstance;
 let jai_exports; // contains procedures and globals from the loaded wasm module
 
 const jai_imports = {};
+let text_input_active = false;
+let text_input_chunks = [];
+let text_input_byte_count = 0;
+let text_input_edit_keys = [];
+let text_input_edit_key_down = false;
 
 self.onmessage = e => {
+	if (e.data.text_input && text_input_active) {
+		const bytes = e.data.text_input;
+		text_input_chunks.push(bytes);
+		text_input_byte_count += bytes.byteLength;
+	}
+	if (Number.isInteger(e.data.text_input_edit_key) && text_input_active) {
+		text_input_edit_keys.push(e.data.text_input_edit_key);
+	}
 	if (e.data.module && e.data.memory) {
 		jai_imports.memory = e.data.memory;
 		const imports = {
@@ -45,6 +58,47 @@ self.onmessage = e => {
 			setInterval(workerInstance.exports.wasm_worker_loop, 0)
 	}
 }
+
+// Both imports run synchronously on this worker. Its message handler cannot
+// append another chunk between the size query and copy, so no UTF-8 is truncated.
+jai_imports.js_get_text_input = (destination, capacity) => {
+	if (Number(capacity) === 0) return BigInt(text_input_byte_count);
+	if (Number(capacity) < text_input_byte_count) return 0n;
+	const bytes = new Uint8Array(jai_exports.memory.buffer,
+		Number(destination), text_input_byte_count);
+	let offset = 0;
+	for (const chunk of text_input_chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	text_input_chunks = [];
+	text_input_byte_count = 0;
+	return BigInt(offset);
+};
+
+jai_imports.js_get_text_input_edit_key = () => {
+	// A released tick between presses lets GUI.advance_keys observe every edit.
+	if (text_input_edit_key_down) {
+		text_input_edit_key_down = false;
+		return -1;
+	}
+	if (text_input_edit_keys.length === 0) return -1;
+	text_input_edit_key_down = true;
+	return text_input_edit_keys.shift();
+};
+
+jai_imports.js_set_text_input_active = (active) => {
+	active = !!active;
+	if (text_input_active === active) return;
+	text_input_active = active;
+	if (!active) {
+		text_input_chunks = [];
+		text_input_byte_count = 0;
+		text_input_edit_keys = [];
+		text_input_edit_key_down = false;
+	}
+	postMessage({ text_input_active: active });
+};
 
 
 let web_buffer = new Uint8Array(1024*1024*32);

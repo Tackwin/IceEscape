@@ -9,6 +9,7 @@ pressed: [Key_COUNT] bool;
 
 web_buffer: [] u8;
 controls_buffer: [] u8;
+text_input_buffer: [..] u8;
 last_frame: Apollo_Time;
 last_frame_init := false;
 #scope_export
@@ -49,6 +50,22 @@ wasm_sleep :: (ms: int) {
 	js_sleep(ms);
 }
 
+wasm_set_text_input_active :: (active: bool) {
+	js_set_text_input_active :: (active: bool) #foreign;
+	js_set_text_input_active(active);
+}
+
+wasm_read_text_input :: (info: *Frame_Info) {
+	js_get_text_input :: (destination: *u8, capacity: int) -> int #foreign;
+	count := js_get_text_input(null, 0);
+	if count <= 0 return;
+	array_resize(*text_input_buffer, count);
+	read := js_get_text_input(text_input_buffer.data, text_input_buffer.count);
+	if read > 0 {
+		info.text_input = .{data = text_input_buffer.data, count = read};
+	}
+}
+
 wasm_get_frame_info :: (info: *Frame_Info) {
 	info.* = .{};
 
@@ -78,11 +95,13 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	Window_H :: 144;
 	Is_Mobile :: 152;
 	Touch_Release :: 153;
+	Touch_Down :: 154;
 	info.mouse_position.x = xx (controls_buffer.data + Mouse_X).(*u32).*;
 	info.mouse_position.y = xx (controls_buffer.data + Mouse_Y).(*u32).*;
 	info.mouse_wheel = xx (controls_buffer.data + Mouse_Wheel).(*s32).* / 1000;
 	(controls_buffer.data + Mouse_Wheel).(*s32).* = 0;
 	info.is_mobile = (controls_buffer.data + Is_Mobile).(*u8).* != 0;
+	info.touch_down = (controls_buffer.data + Touch_Down).(*u8).* != 0;
 	info.keys.just_released[Key.MouseLeft] = (controls_buffer.data + Touch_Release).(*u8).* != 0;
 	(controls_buffer.data + Touch_Release).(*u8).* = 0;
 
@@ -97,6 +116,12 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	};
 	for 0..Key_COUNT-1 {
 		info.keys.pressed[it] = controls_buffer.data[it] > 0;
+	}
+	wasm_read_text_input(info);
+	js_get_text_input_edit_key :: () -> s32 #foreign;
+	edit_key := js_get_text_input_edit_key();
+	if edit_key >= 0 && edit_key < Key_COUNT {
+		info.keys.pressed[edit_key] = true;
 	}
 
 	frame_buffer_count: u64 = 0;
@@ -350,6 +375,7 @@ init_platform :: () -> Platform {
 	platform.load_image = wasm_load_image;
 	platform.free_image = wasm_free_image;
 	platform.get_frame_info = wasm_get_frame_info;
+	platform.set_text_input_active = wasm_set_text_input_active;
 	platform.get_current_time = wasm_get_current_time;
 	platform.is_released = wasm_is_released;
 	platform.to_calendar = wasm_to_calendar;

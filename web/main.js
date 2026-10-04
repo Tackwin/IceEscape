@@ -95,6 +95,7 @@ const create_fullscreen_canvas = (text) => {
 const jai_imports = {};
 let jai_exports; // contains procedures and globals from the loaded wasm module
 let jai_context; // *Runtime_Support.first_thread_context
+let game_worker = null;
 
 const initialize_wasm_module = async (module_path, initial_pages = 0) => {
     // If you forget to implement something jai_imports expects, the Proxy below will log a nice error.
@@ -142,8 +143,12 @@ const initialize_wasm_module = async (module_path, initial_pages = 0) => {
 	hide_loader();
 
 	const worker = new Worker("worker.js", { type: "module" });
+	game_worker = worker;
 
 	worker.onmessage = async e => {
+		if (typeof e.data.text_input_active === "boolean") {
+			set_text_input_active(e.data.text_input_active);
+		}
 		if (e.data.ready) {
 			worker.postMessage({ start: true });
 
@@ -343,7 +348,10 @@ const Key_Down = 60;
 const Key_Enter = 61;
 const Key_Control = 62;
 const Key_Minus = 63;
-const Key_Count = 64;
+const Key_Delete = 64;
+const Key_Home = 65;
+const Key_End = 66;
+const Key_Count = 67;
 const Mouse_X = 128;
 const Mouse_Y = 132;
 const Mouse_Wheel = 136;
@@ -352,6 +360,7 @@ const Window_H = 144;
 const Control_Token = 148;
 const Control_Is_Mobile = 152;
 const Control_Touch_Release = 153;
+const Control_Touch_Down = 154;
 const Control_Audio_Command_Cursor = 1024;
 const Control_Audio_Command_Buffer = 1024;
 
@@ -373,6 +382,114 @@ let mobile_touch = {
 	timer: null,
 };
 const controls_ready = () => !!(jai_exports && jai_exports.memory);
+
+// The hidden editor lets the browser resolve layout, dead keys, IME, and paste.
+// Only committed text crosses to the update worker; gameplay still uses keys.
+let text_input_active = false;
+let text_input_composing = false;
+let text_input_composition_commit = null;
+let text_input_element = null;
+const text_input_encoder = new TextEncoder();
+const keyboard_down = new Map();
+
+const queue_text_input = (text) => {
+	if (!text_input_active || !game_worker || !text) return;
+	// GUI inputs are single line. Preserve all printable Unicode code points.
+	text = text.replace(/[\u0000-\u001f\u007f]/g, "");
+	if (!text) return;
+	const bytes = text_input_encoder.encode(text);
+	game_worker.postMessage({ text_input: bytes }, [bytes.buffer]);
+};
+
+const queue_text_edit_key = (key) => {
+	if (text_input_active && game_worker) game_worker.postMessage({ text_input_edit_key: key });
+};
+
+const clear_text_input_editor = () => {
+	if (text_input_element) text_input_element.value = "";
+	text_input_composing = false;
+	text_input_composition_commit = null;
+};
+
+const ensure_text_input_editor = () => {
+	if (text_input_element) return text_input_element;
+	const editor = document.createElement("textarea");
+	editor.id = "arena-text-input";
+	editor.tabIndex = -1;
+	editor.setAttribute("aria-label", "Arena text input");
+	editor.setAttribute("autocomplete", "off");
+	editor.setAttribute("autocorrect", "off");
+	editor.setAttribute("autocapitalize", "off");
+	editor.spellcheck = false;
+	editor.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;resize:none;border:0;padding:0;font-size:16px;";
+	editor.addEventListener("compositionstart", () => {
+		text_input_composing = true;
+		text_input_composition_commit = null;
+	});
+	editor.addEventListener("compositionend", (event) => {
+		text_input_composing = false;
+		queue_text_input(event.data);
+		// Some browsers emit a final input after compositionend. Do not insert it twice.
+		text_input_composition_commit = event.data || null;
+		editor.value = "";
+	});
+	editor.addEventListener("input", (event) => {
+		if (text_input_composing || event.isComposing) return;
+		if (text_input_composition_commit !== null) {
+			const duplicate = event.data === text_input_composition_commit
+				|| editor.value === text_input_composition_commit;
+			text_input_composition_commit = null;
+			if (duplicate) {
+				editor.value = "";
+				return;
+			}
+		}
+		queue_text_input(editor.value || event.data);
+		editor.value = "";
+	});
+	editor.addEventListener("beforeinput", (event) => {
+		if (text_input_composing || event.isComposing) return;
+		// Software keyboards can edit without firing keyboard events.
+		if (event.inputType === "deleteContentBackward" || event.inputType === "deleteWordBackward") {
+			event.preventDefault();
+			queue_text_edit_key(Key_Backspace);
+		} else if (event.inputType === "deleteContentForward" || event.inputType === "deleteWordForward") {
+			event.preventDefault();
+			queue_text_edit_key(Key_Delete);
+		}
+		if (event.inputType === "insertLineBreak" || event.inputType === "insertParagraph") {
+			event.preventDefault();
+			queue_text_edit_key(Key_Enter);
+		}
+	});
+	document.addEventListener("paste", (event) => {
+		if (!text_input_active || !event.clipboardData) return;
+		event.preventDefault();
+		queue_text_input(event.clipboardData.getData("text/plain"));
+		clear_text_input_editor();
+	});
+	document.body.appendChild(editor);
+	text_input_element = editor;
+	return editor;
+};
+
+const focus_text_input_editor = () => {
+	if (!text_input_active || !document.hasFocus()) return;
+	const editor = ensure_text_input_editor();
+	if (document.activeElement !== editor) editor.focus({ preventScroll: true });
+};
+
+const set_text_input_active = (active) => {
+	if (text_input_active === active) return;
+	text_input_active = active;
+	clear_text_input_editor();
+	if (active) {
+		focus_text_input_editor();
+	} else if (document.activeElement === text_input_element) {
+		text_input_element.blur();
+	}
+};
+
 const getControlsBufferU8 = () => {
 	return new Uint8Array(jai_exports.memory.buffer, controls_buffer_data, 256);
 }
@@ -487,6 +604,7 @@ const reset_pointer_input = () => {
 	mobile_touch.long_press = false;
 	mobile_touch.cancelled = false;
 	mobile_touch.pointer_id = -1;
+	if (controls_ready()) Atomics.store(getControlsBufferU8(), Control_Touch_Down, 0);
 	set_mouse_button(0, false);
 	set_mouse_button(1, false);
 	set_mouse_button(2, false);
@@ -616,34 +734,61 @@ const mapKeyNameToKeyIndex = (e) => {
 		case "enter": return Key_Enter;
 		case "control": return Key_Control;
 		case "-": return Key_Minus;
+		case "delete": return Key_Delete;
+		case "home": return Key_Home;
+		case "end": return Key_End;
 		default: return -1;
 	}
 };
 
 document.addEventListener("keydown", (e) => {
 	if (!controls_ready()) return;
+	if (text_input_active && (text_input_composing || e.isComposing || e.keyCode === 229)) return;
+	text_input_composition_commit = null;
 	const keyIndex = mapKeyNameToKeyIndex(e.key);
+	const editing_key = [Key_Backspace, Key_Delete, Key_Left, Key_Right,
+		Key_Up, Key_Down, Key_Home, Key_End, Key_Enter, Key_Escape, Key_Tab].includes(keyIndex);
+	if (text_input_active && editing_key) {
+		// A quick down/up can occur between worker ticks. Queue every press and
+		// repeat so the GUI receives a complete pulse without a second held key.
+		keyboard_down.delete(e.code || e.key);
+		Atomics.store(getControlsBufferU8(), keyIndex, 0);
+		queue_text_edit_key(keyIndex);
+		e.preventDefault();
+		return;
+	}
 	if (0 <= keyIndex && keyIndex < Key_Count) {
+		keyboard_down.set(e.code || e.key, keyIndex);
 		Atomics.store(getControlsBufferU8(), keyIndex, 1);
-		if (e.preventDefault) {
+	}
+	if (text_input_active) {
+		if (document.activeElement !== text_input_element && !e.ctrlKey && !e.metaKey
+			&& !e.altKey && Array.from(e.key).length === 1)
+		{
+			queue_text_input(e.key);
 			e.preventDefault();
 		}
+		// Allow native text and clipboard shortcuts to reach the hidden editor.
+		return;
 	}
+	if (keyIndex >= 0) e.preventDefault();
 });
 
 document.addEventListener("keyup", (e) => {
 	if (!controls_ready()) return;
-	const keyIndex = mapKeyNameToKeyIndex(e.key);
+	const identity = e.code || e.key;
+	const keyIndex = keyboard_down.has(identity)
+		? keyboard_down.get(identity) : mapKeyNameToKeyIndex(e.key);
+	keyboard_down.delete(identity);
 	if (0 <= keyIndex && keyIndex < Key_Count) {
 		Atomics.store(getControlsBufferU8(), keyIndex, 0);
-		if (e.preventDefault) {
-			e.preventDefault();
-		}
+		if (!text_input_active) e.preventDefault();
 	}
 });
 
 document.addEventListener("pointerdown", (e) => {
 	if (!controls_ready()) return;
+	if (e.pointerType === "touch" && (!e.isPrimary || mobile_touch.active)) return;
 	update_pointer_position(e.clientX, e.clientY);
 
 	if (e.pointerType !== "touch") {
@@ -660,6 +805,7 @@ document.addEventListener("pointerdown", (e) => {
 	mobile_touch.pointer_id = e.pointerId;
 	mobile_touch.start_x = e.clientX;
 	mobile_touch.start_y = e.clientY;
+	Atomics.store(getControlsBufferU8(), Control_Touch_Down, 1);
 	mobile_touch.timer = setTimeout(() => {
 		if (!mobile_touch.active || mobile_touch.cancelled) return;
 		mobile_touch.long_press = true;
@@ -669,6 +815,8 @@ document.addEventListener("pointerdown", (e) => {
 
 document.addEventListener("pointerup", (e) => {
 	if (!controls_ready()) return;
+	focus_text_input_editor();
+	if (e.pointerType === "touch" && (!mobile_touch.active || e.pointerId !== mobile_touch.pointer_id)) return;
 	update_pointer_position(e.clientX, e.clientY);
 
 	if (e.pointerType !== "touch") {
@@ -686,6 +834,7 @@ document.addEventListener("pointerup", (e) => {
 	}
 	mobile_touch.active = false;
 	mobile_touch.pointer_id = -1;
+	Atomics.store(getControlsBufferU8(), Control_Touch_Down, 0);
 }, { passive: false });
 
 document.addEventListener("pointercancel", (e) => {
@@ -697,6 +846,7 @@ document.addEventListener("pointercancel", (e) => {
 
 document.addEventListener("pointermove", (e) => {
 	if (!controls_ready()) return;
+	if (e.pointerType === "touch" && (!mobile_touch.active || e.pointerId !== mobile_touch.pointer_id)) return;
 	update_pointer_position(e.clientX, e.clientY);
 
 	if (e.pointerType !== "touch") return;
@@ -718,6 +868,14 @@ if (window.visualViewport) {
 	window.visualViewport.addEventListener("resize", sync_mobile_layout);
 }
 window.addEventListener("blur", reset_pointer_input);
+window.addEventListener("blur", () => {
+	if (controls_ready()) {
+		for (const keyIndex of keyboard_down.values()) Atomics.store(getControlsBufferU8(), keyIndex, 0);
+	}
+	keyboard_down.clear();
+	clear_text_input_editor();
+});
+window.addEventListener("focus", focus_text_input_editor);
 sync_mobile_layout();
 
 document.addEventListener("wheel", (e) => {
