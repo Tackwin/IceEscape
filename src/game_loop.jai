@@ -217,8 +217,8 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 		base_radius :: 112.0;
 		thumb_radius :: 44.0;
 		thumb_travel :: 64.0;
-		joystick_base_atlas_rect :: V4f.{ 0.0, 7.0 / 16.0, 3.0 / 16.0, 3.0 / 16.0 };
-		joystick_thumb_atlas_rect :: V4f.{ 3.0 / 16.0, 9.0 / 16.0, 1.0 / 16.0, 1.0 / 16.0 };
+		joystick_base_atlas_rect :: V4f.{ 0.0, 6.0 / 16.0, 3.0 / 16.0, 3.0 / 16.0 };
+		joystick_thumb_atlas_rect :: V4f.{ 3.0 / 16.0, 6.0 / 16.0, 1.0 / 16.0, 1.0 / 16.0 };
 		center := gui_state.controls.window_size - v2(base_radius + 28);
 		offset := gui_state.controls.mouse_pos - center;
 		if norm(offset) <= base_radius {

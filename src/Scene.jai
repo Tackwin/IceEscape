@@ -5216,7 +5216,7 @@ process :: (scene: Scene, player: *Player, command: Command, response: *Process_
 		if move.is_joystick {
 			strength := clamp(norm(move.joystick), 0.0, 1.0);
 			if player.server.slipping {
-				if strength > 0.0
+				if strength > 0.0 && player.server.confirmed_tile != .Slippy_Ice
 					player.server.target_direction = normalize(v3(move.joystick));
 				player.server.walking_toward = false;
 			} else {
