@@ -91,7 +91,7 @@ push_end_screen :: (
 	if presentation.clock >= Play_Session.SETTLEMENT_SECONDS status = "Settlement complete";
 	else if presentation.clock >= Play_Session.RECURSIVE_START status = "Round 2 of 2  /  recursive difference";
 	else if presentation.clock >= Play_Session.INITIAL_HOLD_SECONDS + Play_Session.DIRECT_SECONDS status = "Direct shares settled";
-	else if presentation.clock >= Play_Session.INITIAL_HOLD_SECONDS status = "Round 1 of 2  /  direct winner shares";
+	else if presentation.clock >= Play_Session.INITIAL_HOLD_SECONDS status = "Round 1 of 2  /  direct trophy shares";
 	label_box(gui, status, .{ width - 180, 24 }, 14, GOLD_ACCENT, id = "status");
 	if page_count > 1 {
 		previous, pressed := themed_button(gui, store, "<", "previous", .{ 32, 24 }, enabled = page.page > 0);
@@ -142,7 +142,7 @@ push_end_screen :: (
 	label_box(gui, wr, .{ width, 20 }, 13, TEXT_NORMAL, .Center, "record");
 	label_box(gui, tprint("Next: %  /  % seconds", result.next_level_name,
 		ceil(max(cast(float64) 0, presentation.countdown_remaining)).(int)), .{ width, 20 }, 13, TEXT_MUTE, .Center, "next_level");
-	label_box(gui, "A 1,000-point base award, then direct shares and recursive dividends.",
+	label_box(gui, "Winner: 1,000 points. Other finishers: 900. Plus revive shares.",
 		.{ width, 18 }, 12, TEXT_MUTE, .Center, "explanation");
 	end(gui);
 	end(gui);
@@ -216,16 +216,20 @@ dividend_launch :: (animation: *Dividend_Animation, result: Play_Session.Result,
 	animation.coin_count = 0;
 	n := result.players.count;
 	seed: u32 = 73519;
+	// Keep the same packet density for one source; bound it when many finishers pay shares.
+	sources := 0;
+	for slot: 0..animation.slot_count-1
+		if Play_Session.base_reward(result, animation.players[slot]) > 0 sources += 1;
+	max_packets := min(16, animation.MAX_COINS / max(1, sources * (animation.slot_count - 1)));
 	for source: 0..animation.slot_count-1 for destination: 0..animation.slot_count-1 {
 		if source == destination continue;
 		i := animation.players[destination]; j := animation.players[source];
 		amount: float64;
 		if phase == 1 {
-			if result.players[j].player_id != result.winner_id continue;
-			amount = result.client.direct_scores[i];
+			amount = Play_Session.base_reward(result, j) * result.revives[i*n+j].(float64) / result.client.share_denominators[j];
 		} else amount = result.client.secondary_transfers[i*n+j];
 		if amount < 0.01 continue;
-		count := clamp(ceil(amount / 45).(int), 3, 16);
+		count := clamp(ceil(amount / 45).(int), 3, max_packets);
 		if phase == 3 count = clamp(ceil(amount / 32).(int), 2, 6);
 		for packet: 0..count-1 {
 			assert(animation.coin_count < animation.MAX_COINS);
@@ -351,7 +355,7 @@ dividend_update :: (animation: *Dividend_Animation, result: Play_Session.Result,
 		for visible if it && animation.slot_count < animation.MAX_SLOTS {
 			slot := animation.slot_count; animation.slot_count += 1;
 			animation.players[slot] = it_index; animation.bounds[slot] = bounds[it_index];
-			if result.players[it_index].player_id == result.winner_id animation.received[slot] = Play_Session.WINNER_REWARD;
+			animation.received[slot] = Play_Session.base_reward(result, it_index);
 		}
 	}
 	target := clamp(clock, cast(float64) 0, cast(float64) Play_Session.SETTLEMENT_SECONDS);
@@ -365,8 +369,7 @@ dividend_update :: (animation: *Dividend_Animation, result: Play_Session.Result,
 dividend_counter :: (animation: *Dividend_Animation, result: Play_Session.Result, index: int, clock: float64) -> int {
 	if clock >= Play_Session.SETTLEMENT_SECONDS return result.players[index].score;
 	if clock < Play_Session.INITIAL_HOLD_SECONDS || clock < animation.clock {
-		if result.players[index].player_id == result.winner_id return Play_Session.WINNER_REWARD;
-		return 0;
+		return Play_Session.base_reward(result, index).(int);
 	}
 	for slot: 0..animation.slot_count-1 if animation.players[slot] == index {
 		return min(result.players[index].score, max(0, floor(animation.received[slot]).(int)));

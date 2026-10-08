@@ -1600,13 +1600,19 @@ push_scene_ui :: (state: *GUI_State, scene: Scene.Scene, store: *Store) {
 
 	begin(state, .{ 0, 0 }, GUI_State.Direction.Down);
 	defer end(state);
+	height := ifx scene.pity_time_started then 70.0 else 48.0;
 	push_nine_slice(
-		state, flow(state).cursor, v2(top_left_width, 48.0),  compact_button_skin(store), color = .{ 1.0, 1.0, 1.0, 0.85 });
+		state, flow(state).cursor, v2(top_left_width, height),  compact_button_skin(store), color = .{ 1.0, 1.0, 1.0, 0.85 });
 	move_cursor(state, .{ top_left_padding, top_left_padding + 16.0 });
 
 	name_anchor := flow(state).cursor;
 	time_anchor := name_anchor + v2(top_left_width - 2 * top_left_padding, 0);
 	share_anchor := name_anchor + v2(0.0, 16);
+	if scene.pity_time_started {
+		remaining := ceil(Scene.pity_time_remaining(scene, state.controls.time)).(int);
+		atom_label(state, tprint("Trophy claimed! %s left to finish", remaining),
+			share_anchor + v2(0.0, 22.0), 14, 1, align = .Bottom_Left, outline = true, color = GOLD_ACCENT);
+	}
 
 	name: string;
 	name.data = scene.info.name.data;

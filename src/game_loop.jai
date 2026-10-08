@@ -125,6 +125,12 @@ process_game :: (
 		state.scene.id = sync_scene.id;
 		state.scene.info = Scene.read_info_message(sync_scene.info);
 		state.scene.end_scene_countdown_started = false;
+		if sync_scene.pity_time >= 0 {
+			state.scene.pity_time_started = true;
+			state.scene.pity_time = sync_scene.pity_time;
+			state.scene.pity_time_start = controls.time;
+			state.scene.pity_time_winner_id = sync_scene.pity_time_winner_id;
+		}
 		state.scene.params = .{ auto_revive = sync_scene.params.auto_revive, mode = xx sync_scene.params.mode, personal_share_weight = sync_scene.params.personal_share_weight };
 		state.scene.auto_revive |= sync_scene.params.auto_revive;
 		Scene.init_camera(*state.scene);

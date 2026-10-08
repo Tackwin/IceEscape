@@ -156,6 +156,8 @@ consume_level_events :: (instance: *Instance, scene: *Scene.Scene) {
 				Play_Session.record_level_death(session, level, event.player_id);
 			case .Revive;
 				Play_Session.record_level_revive(session, level, event.player_id, event.other_player_id);
+			case .Trophy_Pickup;
+				Play_Session.record_level_trophy(session, level, event.player_id);
 			case .Finish;
 				if level.completed_round_id continue;
 				for i: broadcast_cursor..event.broadcast_index-1

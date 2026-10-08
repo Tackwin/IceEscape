@@ -17,6 +17,7 @@ Player_Result :: struct {
 	score: int;
 	// Unscaled recursive score, before integer rounding.
 	dividend: float64;
+	picked_trophy: bool;
 }
 
 Record :: struct {
@@ -306,6 +307,12 @@ register_level_player :: (session: *Play_Session, level: *Level_Attempt, player_
 	array_add(*level.level_players, .{ player_id = player_id, participant_id = participant_id, icon_id = icon_id });
 }
 
+record_level_trophy :: (session: *Play_Session, level: *Level_Attempt, player_id: int) {
+	if level.completed_round_id return;
+	player := find_level_player(session, level, player_id);
+	if player player.picked_trophy = true;
+}
+
 record_level_death :: (session: *Play_Session, level: *Level_Attempt, player_id: int) {
 	if level.completed_round_id return;
 	player := find_level_player(session, level, player_id);
@@ -412,7 +419,7 @@ make_result_message :: (result: Result, allocator := temp) -> Communication.Comm
 			player_id = it.player_id, participant_id = it.participant_id,
 			display_name = copy_string(it.display_name), icon_id = it.icon_id,
 			death_count = it.death_count, revive_count = it.revive_count,
-			win_count = it.win_count, score = it.score, dividend = it.dividend
+			win_count = it.win_count, score = it.score, dividend = it.dividend, picked_trophy = it.picked_trophy
 		};
 	}
 	message.revives = NewArray(result.revives.count, int);
@@ -442,7 +449,7 @@ read_result_message :: (message: Communication.Command.Level_Result, result: *Re
 			player_id = it.player_id, participant_id = it.participant_id,
 			display_name = it.display_name, icon_id = it.icon_id,
 			death_count = it.death_count, revive_count = it.revive_count,
-			win_count = it.win_count, score = it.score, dividend = it.dividend
+			win_count = it.win_count, score = it.score, dividend = it.dividend, picked_trophy = it.picked_trophy
 		};
 	}
 	source.revives = message.revives;
@@ -524,6 +531,14 @@ apply_sync :: (session: *Play_Session, message: Communication.Command.Ans_Play_S
 }
 
 WINNER_REWARD :: 1000;
+TROPHY_REWARD :: 900;
+
+base_reward :: (result: Result, index: int) -> float64 {
+	player := result.players[index];
+	if player.player_id == result.winner_id return WINNER_REWARD;
+	if player.picked_trophy return TROPHY_REWARD;
+	return 0;
+}
 // k in diag(total revives) + k I - R. Must stay strictly positive.
 PERSONAL_SHARE_WEIGHT :: 1.0;
 SETTLEMENT_ROUNDS :: 2;
@@ -569,7 +584,7 @@ calculate :: (result: *Result, allocator := context.allocator) {
 		result.client.share_denominators[j] = denominator;
 		matrix[j * n + j] += denominator;
 	}
-	rhs[winner] = WINNER_REWARD;
+	for i: 0..n-1 rhs[i] = base_reward(result.*, i);
 	for column: 0..n-1 {
 		pivot := column;
 		for row: column+1..n-1 {
@@ -596,8 +611,8 @@ calculate :: (result: *Result, allocator := context.allocator) {
 		rhs[i] /= matrix[i*n+i];
 		rhs[i] = max(cast(float64) 0, rhs[i]);
 	}
-	// Keep the natural solution x = b + S*x. The winner's base award is
-	// 1000, but returning shares can increase their final score too.
+	// Keep the natural solution x = b + S*x, including all trophy awards.
+	// Returning shares can increase any final score above its base award.
 	for *player: result.players {
 		player.dividend = result.client.share_denominators[it_index] * rhs[it_index];
 		player.score = floor(player.dividend).(int);
@@ -628,8 +643,7 @@ smooth :: (t: float64) -> float64 {
 displayed_score :: (result: Result, index: int, clock: float64) -> int {
 	player := result.players[index];
 	if clock >= SETTLEMENT_SECONDS return player.score;
-	base: float64 = 0;
-	if player.player_id == result.winner_id base = WINNER_REWARD;
+	base := base_reward(result, index);
 	if result.client.direct_scores.count != result.players.count return base.(int);
 	amount := base + (result.client.direct_scores[index] - base) * smooth((clock - INITIAL_HOLD_SECONDS) / DIRECT_SECONDS);
 	if clock >= RECURSIVE_START amount += (player.dividend - result.client.direct_scores[index]) * smooth((clock - RECURSIVE_START) / RECURSIVE_SECONDS);
@@ -651,17 +665,17 @@ prepare_presentation :: (result: *Result, allocator := context.allocator, alloca
 		result.client.share_denominators[j] = denominator;
 	}
 	if winner < 0 return;
-	for i: 0..n-1
-		result.client.direct_scores[i] = WINNER_REWARD * result.revives[i*n+winner].(float64) / result.client.share_denominators[winner];
-	result.client.direct_scores[winner] = WINNER_REWARD;
+	for i: 0..n-1 {
+		result.client.direct_scores[i] = base_reward(result.*, i);
+		for j: 0..n-1
+			result.client.direct_scores[i] += base_reward(result.*, j) * result.revives[i*n+j].(float64) / result.client.share_denominators[j];
+	}
 	// First round: d = b + S*b.
 	// Second round: x - d = S*(x - b), since x = b + S*x.
-	// Include the winner as a source: their returning dividends are above
-	// the base award and also generate additional shares for everyone else.
+	// Every trophy picker is a source of direct and returning shares.
 	for i: 0..n-1 for j: 0..n-1 {
 		if i == j continue;
-		remaining := result.players[j].dividend;
-		if j == winner remaining -= WINNER_REWARD;
+		remaining := result.players[j].dividend - base_reward(result.*, j);
 		result.client.secondary_transfers[i*n+j] = result.revives[i*n+j].(float64) * remaining / result.client.share_denominators[j];
 	}
 

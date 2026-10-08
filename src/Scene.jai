@@ -263,6 +263,12 @@ Scene :: struct {
 	end_scene_countdown_time: Apollo_Time;
 	end_scene_countdown := 30.0;
 	end_scene_countdown_started := false;
+	pity_time := 30.0;
+	pity_time_started := false; @clear("run")
+	pity_time_start: Apollo_Time;
+	pity_time_winner_id: int = -1;
+	pity_time_finish_ms: int;
+	trophy_player_ids: [..] int; @allocate("lifetime") @clear("run")
 
 	client_rng: Rand.State;
 	server_rng: Rand.State;
@@ -482,6 +488,10 @@ make_sync_scene :: (scene: *Scene, params: Scene_Parameters) -> Command.Sync_Sce
 	sync_scene.id = scene.id;
 	sync_scene.info = make_info_message(scene.info);
 	sync_scene.clock = scene.server.clock;
+	if scene.pity_time_started {
+		sync_scene.pity_time = pity_time_remaining(scene.*, current_time_monotonic()).(float);
+		sync_scene.pity_time_winner_id = scene.pity_time_winner_id;
+	}
 	sync_scene.params = .{ auto_revive = params.auto_revive, mode = xx params.mode, personal_share_weight = params.personal_share_weight };
 	sync_scene.terrain = scene.terrain.text;
 	sync_scene.players = NewArray(scene.players.count, Command.Sync_Player, false,, temp);
@@ -672,7 +682,7 @@ make_sync_safe_zone :: (safe_zone: *Safe_Zone) -> Command.Sync_Safe_Zone {
 // Ordered simulation facts. Instance routes them into Play_Session; generation
 // distinguishes a wipe/retry even when it happens partway through this frame.
 Level_Event :: struct {
-	kind: enum { Participation; Death; Revive; Finish; };
+	kind: enum { Participation; Death; Revive; Trophy_Pickup; Finish; };
 	run_generation: int;
 	player_id: int;
 	other_player_id: int;
@@ -2238,6 +2248,8 @@ update_scene :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_R
 	scene.client.clock = damp_snap(scene.client.clock, scene.server.clock, 10.0, dt, 1.0);
 	if #complete scene.state == {
 		case .Normal;
+			if scene.is_server && result && scene.pity_time_started && pity_time_remaining(scene.*, time) <= 0
+				finish_level(scene, time, result);
 			update_normal(scene, time, dt, result);
 		case .Wipe_Fade_In;
 			t := to_float64_seconds(time - scene.fade_screen.start).(float32);
@@ -3270,20 +3282,15 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		}
 	}
 
-	// >RULE First player to reach a trophy wins.
-	if !scene.end_scene_countdown_started for * scene.trophies {
+	// >RULE The first trophy pickup wins; others can finish during pity_time.
+	if scene.is_server && result && !scene.end_scene_countdown_started for * scene.trophies {
 		p := v2(it.position);
 
 		for * player: scene.players {
-			if player.server.dead
-				continue;
-
+			if player.server.dead || player.server.model_id <= 0 continue;
 			q := v2(player.server.position);
 			d := norm(p - q);
-			if d < 0.25 {
-				win_level(scene, player.id, time, result);
-				break it;
-			}
+			if d < 0.25 pick_up_trophy(scene, player.id, time, result);
 		}
 	}
 
@@ -3567,14 +3574,34 @@ push_level_participation :: (scene: *Scene, player_id: int, result: *Frame_Resul
 		player_id = player_id, icon_id = player.server.model_id });
 }
 
-win_level :: (scene: *Scene, player_id: int, time: Apollo_Time, result: *Frame_Result) {
-	if scene.end_scene_countdown_started return;
-	if result {
-		push_level_participation(scene, player_id, result);
-		array_add(*result.level_events, .{ kind = .Finish, run_generation = scene.run_generation,
-			player_id = player_id, duration_ms = (scene.server.clock * 1000).(int),
-			broadcast_index = result.broadcast.count });
-	}
+pity_time_remaining :: (scene: Scene, time: Apollo_Time) -> float64 {
+	return max(cast(float64) 0, scene.pity_time - to_float64_seconds(time - scene.pity_time_start));
+}
+
+pick_up_trophy :: (scene: *Scene, player_id: int, time: Apollo_Time, result: *Frame_Result) {
+	if !scene.is_server || !result || scene.end_scene_countdown_started return;
+	for scene.trophy_player_ids if it == player_id return;
+	array_add(*scene.trophy_player_ids, player_id);
+	push_level_participation(scene, player_id, result);
+	array_add(*result.level_events, .{ kind = .Trophy_Pickup, run_generation = scene.run_generation,
+		player_id = player_id });
+	if scene.pity_time_started return;
+	scene.pity_time_started = true;
+	scene.pity_time = 30;
+	scene.pity_time_start = time;
+	scene.pity_time_winner_id = player_id;
+	scene.pity_time_finish_ms = (scene.server.clock * 1000).(int);
+	array_add(*result.win_player_id, player_id);
+	push_broadcast(result, Command.Pity_Time.{ winner_id = player_id, pity_time = scene.pity_time });
+}
+
+finish_level :: (scene: *Scene, time: Apollo_Time, result: *Frame_Result) {
+	if !scene.is_server || !result || !scene.pity_time_started || scene.end_scene_countdown_started return;
+	player_id := scene.pity_time_winner_id;
+	array_add(*result.level_events, .{ kind = .Finish, run_generation = scene.run_generation,
+		player_id = player_id, duration_ms = scene.pity_time_finish_ms,
+		broadcast_index = result.broadcast.count });
+	scene.pity_time_started = false;
 
 	scene.end_scene_countdown_started = true;
 	scene.end_scene_countdown_time = time;
@@ -3592,8 +3619,6 @@ win_level :: (scene: *Scene, player_id: int, time: Apollo_Time, result: *Frame_R
 		}
 	}
 
-	if result
-		array_add(*result.win_player_id, player_id);
 }
 
 player_has_revived_other_player :: (
@@ -3781,7 +3806,7 @@ server_die :: (
 	}
 
 	if result {
-		if !any_alive {
+		if !any_alive && !scene.pity_time_started {
 			push_broadcast(result, Command.Wipe_Scene.{});
 			result.restarted = true;
 			restart(scene, scene.params);
@@ -4772,6 +4797,7 @@ process_client_only :: (
 
 	wipe_scene: *Command.Wipe_Scene = isa(command.payload, Command.Wipe_Scene);
 	if wipe_scene {
+		scene.pity_time_started = false;
 		scene.fade_screen.start = time;
 		scene.state = .Wipe_Fade_In;
 		return true;
@@ -5016,8 +5042,18 @@ process_client_only :: (
 		}
 	}
 
+	pity: *Command.Pity_Time = isa(command.payload, Command.Pity_Time);
+	if pity {
+		scene.pity_time_started = true;
+		scene.pity_time = pity.pity_time;
+		scene.pity_time_start = time;
+		scene.pity_time_winner_id = pity.winner_id;
+		return true;
+	}
+
 	end_level: *Command.End_Level = isa(command.payload, Command.End_Level);
 	if end_level {
+		scene.pity_time_started = false;
 		scene.end_scene_countdown_time = time;
 		scene.end_scene_countdown = end_level.next_level_scheduled_in_seconds;
 		scene.end_scene_countdown_started = true;

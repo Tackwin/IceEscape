@@ -118,6 +118,7 @@ Command :: struct {
 		score: int;
 		dividend: float64;
 		participant_id: int = -1;
+		picked_trophy: bool;
 	}
 	Level_Record :: struct {
 		status: enum { Loading; Missing; Available; } = .Loading;
@@ -301,6 +302,10 @@ Command :: struct {
 		play_world_id: int;
 		standin_id: int = -1;
 	}
+	Pity_Time :: struct {
+		winner_id: int;
+		pity_time: float;
+	}
 	End_Level :: struct {
 		result: Level_Result;
 		winner_id: int;
@@ -392,6 +397,8 @@ Command :: struct {
 		tile_kinds: [] int;
 		gates: [] Sync_Gate;
 		block_rocks: [] Sync_Block_Rock;
+		pity_time: float = -1; // Remaining seconds; negative means inactive.
+		pity_time_winner_id: int = -1;
 	}
 	Sync_Stand_In :: struct {
 		standin_id: int;
@@ -722,7 +729,7 @@ Command :: struct {
 		Ask_Enter_Quick_Instance, Set_Thumbnail, Get_Thumbnail, Asset_Chunk, Create_Bomberman,
 		Ans_Create_Bomberman, Pickup_Power_Up, Sync_Camp_Ice,
 		Ask_Play_Session, Ans_Play_Session, Ask_Delete_Terrain, Ans_Delete_Terrain,
-		Debug_Request, Debug_Reply, Sync_Block_Rock
+		Debug_Request, Debug_Reply, Sync_Block_Rock, Pity_Time
 	);
 	payload: Payload_t;
 	sent_timestamp: float64;
