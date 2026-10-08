@@ -252,53 +252,7 @@ gui_game_loop :: (app_user: *App_User, scene: Scene.Scene) {
 	GUI.push_action_palette(*gui_state, scene, *store);
 	GUI.push_buy_prompt(*gui_state, *scene, *store);
 
-	{
-		name: string;
-		name.data = state.scene.info.name.data;
-		name.count = state.scene.info.name.count;
-		for name if it == 0 { name.count = it_index; break; }
-		label := GUI.atom_label(
-			*app_user.gui_state,
-			name,
-			V2f.{ 12, 10 },
-			24,
-			1,
-			align = .Top_Left,
-			outline = true,
-			color = GUI.GOLD_ACCENT
-		);
-		GUI.push_nine_slice(*app_user.gui_state, label.aabb_min - v2(8),
-			label.aabb_max - label.aabb_min + v2(16), GUI.compact_button_skin(*store), 0);
-
-		player := Scene.find_by_player_id(state.scene, state.scene.controlled_player_id);
-		if player {
-			GUI.push_point_ui(*app_user.gui_state, player, *store);
-		}
-	}
-	{
-		time := state.scene.client.clock;
-		minutes := floor(time / 60);
-		seconds := fmod_cycling(time, 60);
-		milliseconds := frac(time) * 1000;
-		label := GUI.atom_label(
-			*app_user.gui_state,
-			tprint(
-				"%:%s %ms",
-				formatInt(minutes.(int), minimum_digits = 3, padding = #char "_"),
-				formatInt(seconds.(int), minimum_digits = 2, padding = #char "_"),
-				formatInt(milliseconds.(int), minimum_digits = 3, padding = #char "_")
-			),
-			.{ app_user.gui_state.controls.window_size.x - 12, 10 },
-			scale=18,
-			z=1,
-			align = .Top_Right,
-			outline = true,
-			color = GUI.TEXT_NORMAL
-		);
-		GUI.push_nine_slice(*app_user.gui_state, label.aabb_min - v2(8),
-			label.aabb_max - label.aabb_min + v2(16), GUI.compact_button_skin(*store), 0);
-	}
-
+	GUI.push_scene_ui(*app_user.gui_state, state.scene, *app_user.store);
 	if state.scene.end_scene_countdown_started && !app_user.end_level_preview.active {
 		presentation: Play_Session.Presentation;
 		presentation.clock = to_float64_seconds(controls.time - state.scene.end_scene_countdown_time);

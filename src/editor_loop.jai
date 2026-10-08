@@ -103,6 +103,8 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 				}
 				new_save_dialog_input.count += 1;
 			}
+			editor.terrain_width = editor.scene.terrain.tiles_count.x;
+			editor.terrain_height = editor.scene.terrain.tiles_count.y;
 
 			GUI.set(*page.save_dialog_input, new_save_dialog_input);
 		}
@@ -240,6 +242,39 @@ init_empty_terrain :: (editor: *Editor, width: int, height: int) {
 reset_entity_selection :: (editor: *Editor, page: *Editor_Page) {
 	page.placing_entity_type = null;
 	page.selected.count = 0;
+}
+
+edit_terrain_size :: (
+	editor: *Editor,
+	prepend_width: int,
+	prepend_height: int,
+	append_width: int,
+	append_height: int
+) {
+	old_w := editor.terrain_width;
+	old_h := editor.terrain_height;
+	editor.terrain_width += prepend_width + append_width;
+	editor.terrain_height += prepend_height + append_height;
+
+	new_tiles := NewArray(editor.terrain_width * editor.terrain_height, Scene.Tile,, temp);
+	for i: 0..new_tiles.count - 1 {
+		new_tiles[i] = .{ kind = .Dirt };
+	}
+	for y: 0..old_h - 1 {
+		for x: 0..old_w - 1 {
+			new_x := x + prepend_width;
+			new_y := y + prepend_height;
+			new_idx := new_x + new_y * editor.terrain_width;
+			old_idx := x + y * old_w;
+			new_tiles[new_idx] = editor.scene.terrain.tiles[old_idx];
+		}
+	}
+	array_resize(*editor.scene.terrain.tiles, new_tiles.count);
+	editor.scene.terrain.tiles_count.x = editor.terrain_width;
+	editor.scene.terrain.tiles_count.y = editor.terrain_height;
+	for i: 0..new_tiles.count - 1 {
+		editor.scene.terrain.tiles[i] = new_tiles[i];
+	}
 }
 
 resize_terrain :: (editor: *Editor, new_width: int, new_height: int) {
@@ -825,37 +860,23 @@ draw_scene_edit_content :: (
 		GUI.label(gui, "Grow", id = "resize_label");
 		clicked := GUI.button(gui, "left", id = "grow_left");
 		if clicked {
-			resize_terrain(editor, editor.terrain_width + 1, editor.terrain_height);
-			for y: 0..editor.terrain_height - 1 {
-				for < x: editor.terrain_width - 1..1 {
-					editor.scene.terrain.tiles[x + y * editor.terrain_width] =
-						editor.scene.terrain.tiles[(x - 1) + y * editor.terrain_width];
-				}
-			}
+			edit_terrain_size(editor, 1, 0, 0, 0);
 			editor.scene.origin_tile_space.x += 1.0;
 		}
 		clicked = GUI.button(gui, "right", id = "grow_right");
 		if clicked {
-			resize_terrain(editor, editor.terrain_width + 1, editor.terrain_height);
+			edit_terrain_size(editor, 0, 0, 1, 0);
 		}
 		clicked = GUI.button(gui, "up", id = "grow_up");
 		if clicked {
-			resize_terrain(editor, editor.terrain_width, editor.terrain_height + 1);
-			for x: 0..editor.terrain_width - 1 {
-				for < y: editor.terrain_height - 1..1 {
-					editor.scene.terrain.tiles[x + y * editor.terrain_width] =
-						editor.scene.terrain.tiles[x + (y - 1) * editor.terrain_width];
-				}
-			}
+			edit_terrain_size(editor, 0, 0, 0, 1);
 		}
 		clicked = GUI.button(gui, "down", id = "grow_down");
 		if clicked {
-			resize_terrain(editor, editor.terrain_width, editor.terrain_height + 1);
+			edit_terrain_size(editor, 0, 1, 0, 0);
 			editor.scene.origin_tile_space.y += 1.0;
 		}
-
 	}
-
 }
 
 draw_entity_picker_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {

@@ -1594,6 +1594,71 @@ push_ms_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, 
 	}
 }
 
+push_scene_ui :: (state: *GUI_State, scene: Scene.Scene, store: *Store) {
+	top_left_width := 300.0;
+	top_left_padding := 8.0;
+
+	begin(state, .{ 0, 0 }, GUI_State.Direction.Down);
+	defer end(state);
+	push_nine_slice(
+		state, flow(state).cursor, v2(top_left_width, 48.0),  compact_button_skin(store), color = .{ 1.0, 1.0, 1.0, 0.85 });
+	move_cursor(state, .{ top_left_padding, top_left_padding + 16.0 });
+
+	name_anchor := flow(state).cursor;
+	time_anchor := name_anchor + v2(top_left_width - 2 * top_left_padding, 0);
+	share_anchor := name_anchor + v2(0.0, 16);
+
+	name: string;
+	name.data = scene.info.name.data;
+	name.count = scene.info.name.count;
+	for name if it == 0 { name.count = it_index; break; }
+	label := atom_label(
+		state,
+		name,
+		flow(state).cursor,
+		18,
+		1,
+		align = .Bottom_Left,
+		outline = true,
+		color = GOLD_ACCENT
+	);
+
+	
+	time := scene.client.clock;
+	minutes := floor(time / 60);
+	seconds := fmod_cycling(time, 60);
+	milliseconds := frac(time) * 1000;
+	time_label := atom_label(
+		state,
+		tprint(
+			"%:%s %ms",
+			formatInt(minutes.(int), minimum_digits = 3, padding = #char "_"),
+			formatInt(seconds.(int), minimum_digits = 2, padding = #char "_"),
+			formatInt(milliseconds.(int), minimum_digits = 3, padding = #char "_")
+		),
+		time_anchor,
+		scale=14,
+		z=1,
+		align = .Bottom_Right,
+		outline = true,
+		color = TEXT_NORMAL
+	);
+
+	player := Scene.find_by_player_id(scene, scene.controlled_player_id);
+	if player {
+		share_label := atom_label(
+			state,
+			tprint("Share: %", player.server.souls),
+			share_anchor,
+			14,
+			1,
+			align = .Bottom_Left,
+			outline = true,
+			color = TEXT_NORMAL
+		);
+	}
+}
+
 push_point_ui :: (state: *GUI_State, player: Scene.Player, store: *Store) {
 	cursor := V2f.{ 12, 40 + 12 };
 

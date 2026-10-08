@@ -759,6 +759,7 @@ AntiAir :: struct {
 	client: struct {
 		t := 0.0;
 		next_target: V2f = .{ FLOAT32_MAX, FLOAT32_MAX };
+		canon_direction: V2f = .{ 1, 0 };
 	}
 }
 
@@ -3158,8 +3159,8 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			if gate.is_closed && gate.wait_for_key_id == it.id {
 				q := gate.position;
 
-				d := norm(p - q);
-				if d < 0.5 {
+				d := norm(v2(p - q));
+				if d < sqrt(2.0) / 2 {
 					holder := it.holder;
 
 					gate.is_closed = false;
@@ -3827,6 +3828,9 @@ update_antiair :: (scene: Scene, antiair: *AntiAir, dt: float32) {
 	antiair.client.t = damp(antiair.client.t, antiair.server.t, 10.0, dt);
 	if 0.1 < antiair.client.t && antiair.client.t + 1 < antiair.cooldown
 		antiair.client.next_target = antiair.server.next_target;
+	canon_dir := normalize(antiair.client.next_target - v2(antiair.position));
+	antiair.client.canon_direction = damp(antiair.client.canon_direction, canon_dir, 10.0, dt);
+	antiair.client.canon_direction = normalize(antiair.client.canon_direction);
 	if antiair.client.t > antiair.cooldown {
 		antiair.client.t = 0.0;
 	}
@@ -4434,7 +4438,7 @@ can_execute_player_motion :: (
 		if it.is_closed {
 			d := norm(target - it.position);
 
-			if d < sqrt(2.0)/2 {
+			if d < 0.9 * sqrt(2.0) / 2 {
 				if it.wait_for_key_id >= 0 {
 					key := find_by_key_id(scene, it.wait_for_key_id);
 					if key && key.holder == player.id {
@@ -5991,7 +5995,7 @@ WIND_ZONE,
 			#string ANTI_AIR
 antiair
 - position: % % %
-- target: % % % %
+- target_aabb: % % % %
 - cooldown: %
 - radius: %
 - offset_time: %

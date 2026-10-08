@@ -525,6 +525,9 @@ operator * :: (v: Q($T), f: T) -> Q(T) #symmetric {
 operator * :: (v: V2($T), f: T) -> V2(T) #symmetric {
 	return .{ v.x * f, v.y * f };
 }
+operator * :: (v: V2($T), f: float64) -> V2(T) #symmetric {
+	return .{ (v.x * f).(T), (v.y * f).(T) };
+}
 operator / :: (v: V2($T), f: T) -> V2(T) {
 	return .{ v.x / f, v.y / f };
 }

@@ -233,6 +233,7 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 				}
 				aabb: AABBf;
 				if scan2(line, "- target_aabb: % % % %", *aabb.min.x, *aabb.min.y, *aabb.max.x, *aabb.max.y) {
+					antiair.target_aabb = aabb;
 					continue;
 				}
 				if scan2(line, "- cooldown: %", *antiair.cooldown)

@@ -4003,55 +4003,223 @@ render_extra_quads :: (
 	commit_geometry(frame, pass, *store.tile_model, instanced.count);
 }
 
-render_wind_zones :: (
-	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+lattice_vector :: (x: int, y: int, z: int, w: int, seed_value: s64) -> V3f {
+	key := (x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ (w * 2654435761) ^ (seed_value * 6364136223846793005);
+	// Negative lattice coordinates are valid; keep the seed nonnegative before converting to u64.
+	state := seed((key & 0x7FFFFFFFFFFFFFFF).(u64));
+	a := ((random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
+	b := ((random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
+	c := ((random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
+	return .{ a, b, c };
+}
+blend_vector :: (a: V3f, b: V3f, t: float32) -> V3f {
+	return a + (b - a) * t;
+}
+wind_noise_slice :: (
+	x: int, y: int, z: int, w: int, ux: float32, uy: float32, uz: float32, sv: s64
+) -> V3f {
+	bottom0 := blend_vector(
+		lattice_vector(x, y, z, w, sv), lattice_vector(x + 1, y, z, w, sv), ux
+	);
+	bottom1 := blend_vector(
+		lattice_vector(x, y + 1, z, w, sv), lattice_vector(x + 1, y + 1, z, w, sv), ux
+	);
+	top0 := blend_vector(
+		lattice_vector(x, y, z + 1, w, sv), lattice_vector(x + 1, y, z + 1, w, sv), ux
+	);
+	top1 := blend_vector(
+		lattice_vector(x, y + 1, z + 1, w, sv), lattice_vector(x + 1, y + 1, z + 1, w, sv), ux
+	);
+	return blend_vector(blend_vector(bottom0, bottom1, uy), blend_vector(top0, top1, uy), uz);
+}
+// One 4D vector field for every zone; 1.25 world units per spatial noise cell.
+wind_noise :: (world_position: V3f, clock: float64, seed_value: s64) -> V3f {
+	p := world_position / 1.25;
+	x := floor(p.x).(int);
+	y := floor(p.y).(int);
+	z := floor(p.z).(int);
+	w_coord := clock;
+	w := floor(w_coord).(int);
+	fx := p.x - x.(float32);
+	fy := p.y - y.(float32);
+	fz := p.z - z.(float32);
+	fw := (w_coord - w.(float64)).(float32);
+	ux := fx * fx * (3.0 - 2.0 * fx);
+	uy := fy * fy * (3.0 - 2.0 * fy);
+	uz := fz * fz * (3.0 - 2.0 * fz);
+	uw := fw * fw * (3.0 - 2.0 * fw);
+	return blend_vector(
+		wind_noise_slice(x, y, z, w, ux, uy, uz, seed_value),
+		wind_noise_slice(x, y, z, w + 1, ux, uy, uz, seed_value),
+		uw
+	);
+}
+
+append_trail_wind_box :: (
+	seed_value: int,
+	box_pos: V3f,
+	box_size: V3f,
+	clock: float32,
+	trail_count: int,
+	direction: V3f,
+	strength: float,
+	trail_instanced: *[] WFramegraph.Trail_Instance,
+	nominal_color: V4f = .{ 0.75, 0.9, 1.0, 0.95 },
+	nominal_thickness: float = 0.035
 ) {
+	direction_length := norm(direction);
+	if direction_length <= 0.0001 || trail_count <= 0 || strength <= 0.0
+		|| box_size.x <= 0.0 || box_size.y <= 0.0 || box_size.z <= 0.0
+		|| nominal_thickness <= 0.0 || nominal_color.w <= 0.0
+		return;
+	unit_direction := direction / direction_length;
+
 	random01 :: (seed: float32) -> float32 {
 		value := sin(seed * 12.9898) * 43758.5453;
 		return (value - floor(value)).(float32);
 	}
-	lattice_vector :: (x: int, y: int, z: int, w: int) -> V3f {
-		key := (x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ (w * 2654435761);
-		// Negative lattice coordinates are valid; keep the seed nonnegative before converting to u64.
-		state := seed((key & 0x7FFFFFFFFFFFFFFF).(u64));
-		a := ((random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
-		b := ((random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
-		c := ((random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
-		return .{ a, b, c };
-	}
-	blend_vector :: (a: V3f, b: V3f, t: float32) -> V3f {
-		return a + (b - a) * t;
-	}
-	wind_noise_slice :: (x: int, y: int, z: int, w: int, ux: float32, uy: float32, uz: float32) -> V3f {
-		bottom0 := blend_vector(lattice_vector(x, y, z, w), lattice_vector(x + 1, y, z, w), ux);
-		bottom1 := blend_vector(lattice_vector(x, y + 1, z, w), lattice_vector(x + 1, y + 1, z, w), ux);
-		top0 := blend_vector(lattice_vector(x, y, z + 1, w), lattice_vector(x + 1, y, z + 1, w), ux);
-		top1 := blend_vector(lattice_vector(x, y + 1, z + 1, w), lattice_vector(x + 1, y + 1, z + 1, w), ux);
-		return blend_vector(blend_vector(bottom0, bottom1, uy), blend_vector(top0, top1, uy), uz);
-	}
-	// One 4D vector field for every zone; 1.25 world units per spatial noise cell.
-	wind_noise :: (world_position: V3f, clock: float64) -> V3f {
-		p := world_position / 1.25;
-		x := floor(p.x).(int);
-		y := floor(p.y).(int);
-		z := floor(p.z).(int);
-		w_coord := clock;
-		w := floor(w_coord).(int);
-		fx := p.x - x.(float32);
-		fy := p.y - y.(float32);
-		fz := p.z - z.(float32);
-		fw := (w_coord - w.(float64)).(float32);
-		ux := fx * fx * (3.0 - 2.0 * fx);
-		uy := fy * fy * (3.0 - 2.0 * fy);
-		uz := fz * fz * (3.0 - 2.0 * fz);
-		uw := fw * fw * (3.0 - 2.0 * fw);
-		return blend_vector(
-			wind_noise_slice(x, y, z, w, ux, uy, uz),
-			wind_noise_slice(x, y, z, w + 1, ux, uy, uz),
-			uw
+	for 0..trail_count - 1 {
+		seed := seed_value.(float32) * 131.0 + it.(float32) * 17.0;
+		angle := (random01(seed + 8.0) - 0.5) * 0.18;
+		c := cos(angle).(float32);
+		s := sin(angle).(float32);
+		trail_direction := V3f.{
+			unit_direction.x * c - unit_direction.y * s,
+			unit_direction.x * s + unit_direction.y * c,
+			unit_direction.z
+		};
+		anchor := box_pos + V3f.{
+			box_size.x * (0.05 + 0.9 * random01(seed + 1.0)),
+			box_size.y * (0.05 + 0.9 * random01(seed + 2.0)),
+			box_size.z * (0.05 + 0.9 * random01(seed + 7.0))
+		};
+
+		// Intersect the streamline through this anchor with the zone's AABB.
+		back_distance := FLOAT32_MAX;
+		front_distance := FLOAT32_MAX;
+		if trail_direction.x > 0.0001 {
+			back_distance = min(back_distance, (anchor.x - box_pos.x) / trail_direction.x);
+			front_distance = min(front_distance, (box_pos.x + box_size.x - anchor.x) / trail_direction.x);
+		} else if trail_direction.x < -0.0001 {
+			back_distance = min(back_distance, (box_pos.x + box_size.x - anchor.x) / -trail_direction.x);
+			front_distance = min(front_distance, (anchor.x - box_pos.x) / -trail_direction.x);
+		}
+		if trail_direction.y > 0.0001 {
+			back_distance = min(back_distance, (anchor.y - box_pos.y) / trail_direction.y);
+			front_distance = min(front_distance, (box_pos.y + box_size.y - anchor.y) / trail_direction.y);
+		} else if trail_direction.y < -0.0001 {
+			back_distance = min(back_distance, (box_pos.y + box_size.y - anchor.y) / -trail_direction.y);
+			front_distance = min(front_distance, (anchor.y - box_pos.y) / -trail_direction.y);
+		}
+		if trail_direction.z > 0.0001 {
+			back_distance = min(back_distance, (anchor.z - box_pos.z) / trail_direction.z);
+			front_distance = min(front_distance, (box_pos.z + box_size.z - anchor.z) / trail_direction.z);
+		} else if trail_direction.z < -0.0001 {
+			back_distance = min(back_distance, (box_pos.z + box_size.z - anchor.z) / -trail_direction.z);
+			front_distance = min(front_distance, (anchor.z - box_pos.z) / -trail_direction.z);
+		}
+		length := back_distance + front_distance;
+		if length < 0.1
+			continue;
+
+		segment_length := min(length * 0.55, 1.6 + random01(seed + 3.0) * 0.8);
+		travel_length := length + segment_length;
+		speed := max(0.2, strength).(float32) * (1.8 + random01(seed + 4.0) * 0.6);
+		phase := clock.(float32) * speed / travel_length + random01(seed + 5.0);
+		phase -= floor(phase);
+		head := phase * travel_length;
+		start_distance := max(0.0, head - segment_length);
+		end_distance := min(length, head);
+		if end_distance - start_distance < 0.05
+			continue;
+
+		fade := min(1.0, min(phase * 8.0, (1.0 - phase) * 8.0));
+		width := nominal_thickness * (0.02 + random01(seed + 6.0) * 0.03) / 0.035;
+		back_position := anchor - trail_direction * back_distance;
+		points := NewArray(8, WFramegraph.Trail_Point,, temp);
+		for 0..7 {
+			t := it.(float32) / 7.0;
+			position := back_position + trail_direction * (start_distance + (end_distance - start_distance) * t);
+			points[it].position = position;
+			points[it].thickness = width * min(1.0, min(t * 4.0, (1.0 - t) * 4.0));
+			points[it].uv_x = t;
+		}
+		// Displace the completed straight trail without weakening the field at zone borders.
+		amplitude := 0.24 * strength / (1.0 + strength);
+		for 0..7 {
+			noise := wind_noise(points[it].position, clock, 0);
+			noise.z *= 0.5;
+			noise -= trail_direction * dot(noise, trail_direction);
+			points[it].position += noise * amplitude;
+		}
+		trail_instanced.count += 1;
+		color := nominal_color;
+		color.w *= fade;
+		trail_instanced.data[trail_instanced.count - 1] = make_trail_instance(
+			points, color = color
 		);
 	}
+}
 
+// time is normalized over one burst. Endpoints and times outside [0, 1] emit nothing.
+append_trail_burst_sphere :: (
+	seed_value: int,
+	sphere_pos: V3f,
+	sphere_radius: float,
+	time: float32,
+	trail_count: int,
+	strength: float,
+	trail_instanced: *[] WFramegraph.Trail_Instance,
+	nominal_color: V4f = .{ 1.0, 0.65, 0.2, 1.0 },
+	nominal_thickness: float = 0.05
+) {
+	if !(time > 0.0 && time < 1.0) || sphere_radius <= 0.0 || trail_count <= 0
+		|| strength <= 0.0 || nominal_thickness <= 0.0 || nominal_color.w <= 0.0
+		return;
+
+	// Reset a local RNG on every call; neither frame rate nor array ordering affects the burst.
+	random_state := seed((seed_value & 0x7FFFFFFFFFFFFFFF).(u64));
+	fade := min(1.0, time * 12.0) * (1.0 - time) * (1.0 - time);
+	color := nominal_color;
+	color.w *= fade;
+	amplitude := sphere_radius * 0.24 * strength / (1.0 + strength);
+	for 0..trail_count - 1 {
+		// Uniform z and azimuth sample the sphere without clustering at its poles.
+		z := random_uniform(*random_state, -1.0, 1.0);
+		angle := random_uniform(*random_state, 0.0, 2.0 * PI);
+		ring_radius := sqrt(max(0.0, 1.0 - z * z));
+		trail_direction := V3f.{ ring_radius * cos(angle), ring_radius * sin(angle), z };
+		reach := sphere_radius * random_uniform(*random_state, 0.75, 1.0);
+		lag := random_uniform(*random_state, 0.08, 0.2);
+		width := nominal_thickness * random_uniform(*random_state, 0.65, 1.35);
+		head_distance := reach * ease_out_quad(time);
+		tail_distance := reach * ease_out_quad(max(0.0, time - lag));
+		if head_distance - tail_distance <= sphere_radius * 0.00001
+			continue;
+
+		points := NewArray(8, WFramegraph.Trail_Point,, temp);
+		for 0..7 {
+			t := it.(float32) / 7.0;
+			distance := tail_distance + (head_distance - tail_distance) * t;
+			position := sphere_pos + trail_direction * distance;
+			noise := wind_noise(position, time, 0);
+			noise.z *= 0.5;
+			noise -= trail_direction * dot(noise, trail_direction);
+			// Keep the impact point fixed and taper displacement at the outer sphere.
+			radial_fraction := distance / sphere_radius;
+			position += noise * (amplitude * 4.0 * radial_fraction * (1.0 - radial_fraction));
+			points[it].position = position;
+			points[it].thickness = width * min(1.0, min(t * 4.0, (1.0 - t) * 4.0));
+			points[it].uv_x = t;
+		}
+		trail_instanced.count += 1;
+		trail_instanced.data[trail_instanced.count - 1] = make_trail_instance(points, color = color);
+	}
+}
+
+render_wind_zones :: (
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+) {
 	instanced := append_instance_buffer(frame);
 
 	for scene.wind_zones {
@@ -4078,80 +4246,16 @@ render_wind_zones :: (
 			continue;
 		direction := zone.dir / direction_length;
 		trail_count := clamp((zone.size.x * zone.size.y * 1.5).(int), 8, 48);
-		for 0..trail_count - 1 {
-			seed := zone.id.(float32) * 131.0 + it.(float32) * 17.0;
-			angle := (random01(seed + 8.0) - 0.5) * 0.18;
-			c := cos(angle).(float32);
-			s := sin(angle).(float32);
-			trail_direction := V2f.{
-				direction.x * c - direction.y * s,
-				direction.x * s + direction.y * c
-			};
-			anchor := v2(zone.position) + V2f.{
-				zone.size.x * (0.05 + 0.9 * random01(seed + 1.0)),
-				zone.size.y * (0.05 + 0.9 * random01(seed + 2.0))
-			};
-
-			// Intersect the streamline through this anchor with the zone's AABB.
-			back_distance := FLOAT32_MAX;
-			front_distance := FLOAT32_MAX;
-			if trail_direction.x > 0.0001 {
-				back_distance = min(back_distance, (anchor.x - zone.position.x) / trail_direction.x);
-				front_distance = min(front_distance, (zone.position.x + zone.size.x - anchor.x) / trail_direction.x);
-			} else if trail_direction.x < -0.0001 {
-				back_distance = min(back_distance, (zone.position.x + zone.size.x - anchor.x) / -trail_direction.x);
-				front_distance = min(front_distance, (anchor.x - zone.position.x) / -trail_direction.x);
-			}
-			if trail_direction.y > 0.0001 {
-				back_distance = min(back_distance, (anchor.y - zone.position.y) / trail_direction.y);
-				front_distance = min(front_distance, (zone.position.y + zone.size.y - anchor.y) / trail_direction.y);
-			} else if trail_direction.y < -0.0001 {
-				back_distance = min(back_distance, (zone.position.y + zone.size.y - anchor.y) / -trail_direction.y);
-				front_distance = min(front_distance, (anchor.y - zone.position.y) / -trail_direction.y);
-			}
-			length := back_distance + front_distance;
-			if length < 0.1
-				continue;
-
-			segment_length := min(length * 0.55, 1.6 + random01(seed + 3.0) * 0.8);
-			travel_length := length + segment_length;
-			speed := max(0.2, zone.strength).(float32) * (1.8 + random01(seed + 4.0) * 0.6);
-			phase := scene.client.clock.(float32) * speed / travel_length + random01(seed + 5.0);
-			phase -= floor(phase);
-			head := phase * travel_length;
-			start_distance := max(0.0, head - segment_length);
-			end_distance := min(length, head);
-			if end_distance - start_distance < 0.05
-				continue;
-
-			fade := min(1.0, min(phase * 8.0, (1.0 - phase) * 8.0));
-			width := 0.02 + random01(seed + 6.0) * 0.03;
-			height := zone.position.z + 0.2 + random01(seed + 7.0) * 1.6;
-			back_position := anchor - trail_direction * back_distance;
-			points := NewArray(8, WFramegraph.Trail_Point,, temp);
-			for 0..7 {
-				t := it.(float32) / 7.0;
-				position := back_position + trail_direction * (start_distance + (end_distance - start_distance) * t);
-				points[it].position = v3(position, height);
-				points[it].thickness = width * min(1.0, min(t * 4.0, (1.0 - t) * 4.0));
-				points[it].uv_x = t;
-			}
-			// Displace the completed straight trail without weakening the field at zone borders.
-			amplitude := 0.24 * zone.strength / (1.0 + zone.strength);
-			for 0..7 {
-				noise := wind_noise(points[it].position, scene.client.clock);
-				side := noise.x * -trail_direction.y + noise.y * trail_direction.x;
-				points[it].position += V3f.{
-					-trail_direction.y * side * amplitude,
-					 trail_direction.x * side * amplitude,
-					 noise.z * amplitude * 0.5
-				};
-			}
-			trail_instanced.count += 1;
-			trail_instanced[trail_instanced.count - 1] = make_trail_instance(
-				points, color = .{ 0.75, 0.9, 1.0, 0.95 * fade }
-			);
-		}
+		append_trail_wind_box(
+			zone.id,
+			v3(zone.position.x, zone.position.y, 0.05),
+			v3(zone.size.x, zone.size.y, 1.0),
+			scene.client.clock.(float32),
+			trail_count,
+			v3(direction),
+			zone.strength,
+			*trail_instanced
+		);
 	}
 	if trail_instanced.count > 0
 		commit_trails(frame, *frame.trail, trail_instanced.count);
@@ -4238,6 +4342,22 @@ render_explosions :: (
 		return;
 
 	commit_geometry(frame, pass, *store.unit_sphere_model, instanced.count);
+
+	trail_instanced := append_trail_instance_buffer(frame);
+	for scene.explosions {
+		if it.lifetime <= 0.0
+			continue;
+		time := (it.age - it.delay) / it.lifetime;
+		// Hash the fixed impact position, not an array index that changes when bursts expire.
+		burst_seed := (fnv1a_hash(xx *it.position, size_of(V3f)) & 0x7FFFFFFFFFFFFFFF).(int);
+		explosion_time := 2 * sqrt(time / 2);
+		append_trail_burst_sphere(
+			burst_seed, it.position, it.max_size, explosion_time, 24, 1.0, *trail_instanced,
+			nominal_color = .{ 1.0, 0.65, 0.2, 1.0 }, nominal_thickness = 0.05
+		);
+	}
+	if trail_instanced.count > 0
+		commit_trails(frame, *frame.trail, trail_instanced.count);
 }
 
 render_gravestones :: (
@@ -4298,8 +4418,7 @@ render_antiairs :: (
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
-		dt := normalize(v3(it.server.next_target, 0.0) - it.position);
-		dt.z = 0;
+		dt := v3(it.client.canon_direction, 0.0);
 		dt = normalize(dt);
 		R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, dt));
 		M := M4f.translate(it.position + V3f.{ -0.5, 0, 0.7 } * 0.7 * 0.8);
@@ -4314,9 +4433,7 @@ render_antiairs :: (
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
-		dt := normalize(v3(it.server.next_target, 0.0) - it.position);
-		dt.z = 0;
-		dt = normalize(dt);
+		dt := v3(it.client.canon_direction, 0.0);
 		{
 			R := to_rotation_matrix(from_unit_vectors(V3f.{ 1, 0, 0 }, dt));
 			dt = v3(R * V4f.{ 0.58, 0.0, 0.82, 0.0 });
@@ -4446,15 +4563,16 @@ render_camp_ices :: (
 
 	trail_instanced := append_trail_instance_buffer(frame);
 	for scene.camp_ices {
-		points := NewArray(2, WFramegraph.Trail_Point,, temp);
-		points[0].position = v3(it.position.x, it.position.y, it.position.z + 2.0);
-		points[0].thickness = 0.1;
-		points[0].uv_x = 0.0;
-		points[1].position = v3(it.position.x + cos(scene.client.clock).(float32), it.position.y + sin(scene.client.clock).(float32), it.position.z + 3.0);
-		points[1].thickness = 0.1;
-		points[1].uv_x = 0.0;
-		trail_instanced.count += 1;
-		trail_instanced[trail_instanced.count - 1] = make_trail_instance(points);
+		append_trail_wind_box(
+			it.id,
+			it.position + V3f.{ -0.5, -0.5, 0.2 },
+			.{ 1.0, 1.0, 2.0 },
+			scene.client.clock.(float32),
+			12,
+			.{ 0.0, 0.0, 1.0 },
+			0.5,
+			*trail_instanced
+		);
 	}
 	if trail_instanced.count > 0
 		commit_trails(frame, *frame.trail, trail_instanced.count);
@@ -4463,6 +4581,24 @@ render_camp_ices :: (
 render_bombs :: (
 	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
+	{
+		instanced := append_sdf_instance_buffer(frame);
+		for scene.bombs {
+			if it.holder != -1
+				continue;
+			instance := make_sdf_circle(
+				v3(v2(it.client.position), 0.01),
+				it.server.radius_hitbox,
+				0.02,
+				.{ 0.4, 0.4, 0.4, 0.4 }
+			);
+			instanced.count += 1;
+			instanced[instanced.count - 1] = instance;
+		}
+		if instanced.count > 0
+			commit_sdf(frame, *frame.sdf, instanced.count);
+	}
+
 	instanced := append_instance_buffer(frame);
 	for scene.bombs {
 		instanced.count += 1;
