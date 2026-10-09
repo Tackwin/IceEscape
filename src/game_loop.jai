@@ -98,6 +98,8 @@ process_game :: (
 	if note_played {
 		jukebox := Scene.find_by_jukebox_id(state.scene, note_played.jukebox_id);
 		if jukebox {
+			jukebox.hit_time = state.scene.client.clock;
+			if note_played.tune_finished jukebox.tune_end_time = state.scene.client.clock;
 			trigger: Scene.Sound_Trigger;
 			trigger.kind = .Note;
 			trigger.pitch = xx note_played.pitch;
@@ -632,7 +634,7 @@ game_loop :: (app_user: *App_User) -> bool {
 
 	// Rendering
 	frame := WRender.begin_frame(*framegraph, controls.time);
-	WRender.render_scene(frame, *framegraph, state.scene, store);
+	WRender.render_scene(frame, *framegraph, state.scene, store, delta_time = controls.delta_time);
 	WRender.render_gui(frame, *framegraph, app_user.gui_state, *store);
 	WRender.end_frame(*framegraph, frame);
 

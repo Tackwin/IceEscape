@@ -927,32 +927,59 @@ Power_Up :: struct {
 Jukebox :: struct {
 	// Absolute MIDI pitches (C4 = 60), one note per coin; rhythms/rests are omitted.
 	PIANO_ROLL :: int.[
-		// Mii Channel: F#4 A4 C#5 A4 F#4 D4 D4 D4 C#4 D4.
+		// Mii Channel.
 		// https://github.com/robsoncouto/arduino-songs/blob/master/miichannel/miichannel.ino
 		66, 69, 73, 69, 66, 62, 62, 62, 61, 62,
-		// Megalovania: D4 D4 D5 A4 Ab4 G4 F4 D4 F4 G4.
-		// https://piano-nova.com/songs/megalovania
+		66, 69, 73, 69, 65, 76, 75, 74,
+		// Megalovania.
+		// https://intro.nyuadim.com/2024/04/24/week-11-music-box-2/
 		62, 62, 74, 69, 68, 67, 65, 62, 65, 67,
-		// Harry Potter / Hedwig's Theme: B4 E5 G5 F#5 E5 B5 A5 F#5 E5 G5.
+		60, 60, 74, 69, 68, 67, 65, 62, 65, 67,
+		59, 59, 74, 69, 68, 67, 65, 62, 65, 67,
+		58, 58, 74, 69, 68, 67, 65, 62, 65, 67,
+		// Harry Potter / Hedwig's Theme.
 		// https://www.piano-keyboard-guide.com/piano-notes-for-harry-potter-theme-song-ludwigs-theme-easy-tutorial/
+		// D# and F-natural in the first cadence: https://app.hoffmanacademy.com/lessons/piano/hedwigs-theme/video/
 		71, 76, 79, 78, 76, 83, 81, 78, 76, 79,
-		// Tetris / Korobeiniki: E5 B4 C5 D5 C5 B4 A4 A4 C5 E5.
+		78, 75, 77, 71, 71, 76, 79, 78, 76, 83,
+		86, 85, 84, 80, 84, 83, 82, 78, 79, 76,
+		// Tetris / Korobeiniki.
 		// https://github.com/robsoncouto/arduino-songs/blob/master/tetris/tetris.ino
 		76, 71, 72, 74, 72, 71, 69, 69, 72, 76,
-		// Portal / Still Alive: G5 F#5 E5 E5 F#5 A4 G5 F#5 E5 E5.
+		74, 72, 71, 72, 74, 76, 72, 69, 69, 74,
+		77, 81, 79, 77, 76, 72, 76, 74, 72, 71,
+		71, 72, 74, 76, 72, 69, 69,
+		// Portal / Still Alive.
 		// https://pianoletternotes.blogspot.com/2018/04/still-alive-portal.html
 		79, 78, 76, 76, 78, 69, 79, 78, 76, 76,
-		// Mario 1-Up: E5 G5 E6 C6 D6 G6 (the complete six-note jingle).
+		78, 74, 76, 69, 69, 76, 78, 79, 76, 73,
+		74, 76, 69, 69, 78,
+		// Mario 1-Up (the six-note jingle, repeated twice).
 		// https://mariofreepianosheetmusic.wordpress.com/wp-content/uploads/2015/05/mario-sheet-music-1-up-mushroom-sound.pdf
-		76, 79, 88, 84, 86, 91,
-		// The Pink Panther: D#4 E4 F#4 G4 D#4 E4 F#4 G4 C5 B4.
-		// https://www.piano-keyboard-guide.com/how-to-play-the-pink-panther-theme-song-easy-piano-tutorial-for-beginners/
-		63, 64, 66, 67, 63, 64, 66, 67, 72, 71,
+		76, 79, 88, 84, 86, 91, 76, 79, 88, 84,
+		86, 91
+	];
+
+	Tune_Range :: struct {
+		start: int;
+		end: int; // Exclusive.
+	}
+	TUNE_RANGES :: Tune_Range.[
+		.{ 0, 18 }, // Mii Channel.
+		.{ 18, 58 }, // Megalovania.
+		.{ 58, 88 }, // Harry Potter / Hedwig's Theme.
+		.{ 88, 125 }, // Tetris / Korobeiniki.
+		.{ 125, 150 }, // Portal / Still Alive.
+		.{ 150, 162 }, // Mario 1-Up (the six-note jingle, repeated twice).
 	];
 
 	id: int;
 	last_coin_clock := 0.0;
 	coin_count := 0;
+	hit_time: float64 = -1.0;
+	current_up_vector: V3f = .{ 0, 0, 1 };
+	current_scale: float = 1.0;
+	tune_end_time: float64 = -1.0;
 	position: V3f; @edit @picking
 	direction: V3f; @edit @normalize
 }
@@ -3125,6 +3152,12 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				note_index := (seed % Jukebox.PIANO_ROLL.count + jukebox.coin_count % Jukebox.PIANO_ROLL.count) % Jukebox.PIANO_ROLL.count;
 				cmd: Command.Note_Played;
 				cmd.pitch = Jukebox.PIANO_ROLL[note_index];
+				for range: Jukebox.TUNE_RANGES {
+					if note_index == range.end - 1 {
+						cmd.tune_finished = true;
+						break;
+					}
+				}
 				cmd.jukebox_id = jukebox.id;
 				cmd.from_coin_id = it.id;
 

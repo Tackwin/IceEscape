@@ -642,6 +642,7 @@ Command :: struct {
 		jukebox_id: int;
 
 		from_coin_id: int;
+		tune_finished: bool;
 	}
 	Get_Terrain_Leaderboard_Entry :: struct {
 		username: string;

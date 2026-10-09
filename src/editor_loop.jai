@@ -2049,7 +2049,7 @@ editor_render :: (app_user: *App_User) {
 	frame := WRender.begin_frame(framegraph, app_user.state.current_time);
 
 	// Render the scene (terrain)
-	WRender.render_scene(frame, framegraph, editor.scene, store, in_editor = true);
+	WRender.render_scene(frame, framegraph, editor.scene, store, in_editor = true, delta_time = editor.gui_state.controls.delta_time);
 	WRender.render_editor(frame, framegraph, editor, store);
 
 	// Render the GUI

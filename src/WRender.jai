@@ -3336,7 +3336,8 @@ render_scene :: (
 	store: Store.Store,
 	in_editor: bool = false,
 	custom_camera_pos := V3f_MAX,
-	custom_camera_target := V3f_MAX
+	custom_camera_target := V3f_MAX,
+	delta_time: float = 0.0
 ) {
 	camera_center := scene.camera.position;
 	camera_target := scene.camera.target;
@@ -3433,7 +3434,7 @@ render_scene :: (
 		render_bombs(frame, *frame.shadow, scene, store, *extra);
 		render_camp_ices(frame, *frame.shadow, scene, store, *extra);
 		render_pressbuttons(frame, *frame.shadow, scene, store, *extra);
-		render_jukeboxes(frame, *frame.shadow, scene, store, *extra);
+		render_jukeboxes(frame, *frame.shadow, scene, store, *extra, delta_time);
 		render_traps(frame, *frame.shadow, scene, store, *extra);
 		render_extra(frame, *frame.shadow, store, *extra);
 		//render_mark(framegraph, encoder, shadowPass, scene, store);
@@ -3719,7 +3720,7 @@ render_scene :: (
 		render_power_ups(frame, *frame.geometry, scene, store, *extra);
 		render_turn_tables(frame, *frame.geometry, scene, store, *extra);
 		render_pressbuttons(frame, *frame.geometry, scene, store, *extra);
-		render_jukeboxes(frame, *frame.geometry, scene, store, *extra);
+		render_jukeboxes(frame, *frame.geometry, scene, store, *extra, delta_time);
 		render_block_rocks(frame, *frame.geometry, scene, store, *extra);
 		render_bombs(frame, *frame.geometry, scene, store, *extra);
 		render_camp_ices(frame, *frame.geometry, scene, store, *extra);
@@ -4758,17 +4759,33 @@ render_pressbuttons_radio :: (
 }
 
 render_jukeboxes :: (
-	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra,
+	frame_dt: float
 ) {
 	instanced := append_instance_buffer(frame);
-	for scene.jukeboxes {
+	for * scene.jukeboxes {
+		// Advance in the first scene pass; the other pass uses the same pose.
+		dt := scene.client.clock - it.hit_time;
+		target_up_vector: V3f = .{ 0, 0, 1 };
+		target_scale: float = 1.0;
+		if it.hit_time >= 0 && dt >= 0 && dt < 0.75 {
+			amount := 1.0 - smoothstep(dt.(float32), 0.0, 0.75);
+			noise := wind_noise(it.position, scene.client.clock * 14.0, 0);
+			target_up_vector = normalize(V3f.{ 0.18 * amount * noise.x, 0.18 * amount * noise.y, 1 });
+			target_scale += amount * (0.06 * cos((dt * 30.0).(float32)) + 0.04 * noise.z);
+		}
+		it.current_up_vector = normalize(damp(it.current_up_vector, target_up_vector, 25.0, frame_dt));
+		it.current_scale = damp(it.current_scale, target_scale, 25.0, frame_dt);
+
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
 		instance.* = .{};
 		M := M4f.translate(it.position);
+		M *= to_rotation_matrix(from_unit_vectors(V3f.{ 0, 0, 1 }, it.current_up_vector));
 		M *= to_rotation_matrix(
 			from_unit_vectors(v3(1.0, 0.0, 0.0), it.direction)
 		);
+		M4f.scale(*M, V3f.{ it.current_scale, it.current_scale, it.current_scale });
 		instance.M = M;
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
@@ -4776,6 +4793,19 @@ render_jukeboxes :: (
 		return;
 
 	commit_geometry(frame, pass, *store.jukebox_model, instanced.count);
+	if pass != *frame.geometry return;
+
+	trail_instanced := append_trail_instance_buffer(frame);
+	for scene.jukeboxes {
+		if it.tune_end_time < 0 continue;
+		time := ((scene.client.clock - it.tune_end_time) / 0.65).(float32);
+		burst_seed := (fnv1a_hash(xx *it.position, size_of(V3f)) & 0x7FFFFFFFFFFFFFFF).(int);
+		append_trail_burst_sphere(
+			burst_seed, it.position + V3f.{ 0, 0, 0.8 }, 1.9, time, 64, 0.8, *trail_instanced,
+			nominal_color = .{ 1.0, 0.85, 0.35, 1.0 }, nominal_thickness = 0.025
+		);
+	}
+	if trail_instanced.count > 0 commit_trails(frame, *frame.trail, trail_instanced.count);
 }
 
 render_traps :: (
