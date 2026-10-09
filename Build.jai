@@ -932,6 +932,7 @@ build_2 :: () {
 			"-profile=tools/ssh.tlp",
 			"put",
 			"-o",
+			"-s", // Include the piano sample bank in Sound/Notes.
 			"./assets/Sound/*",
 			"www/tackwin/assets/Sound"
 		);

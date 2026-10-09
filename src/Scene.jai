@@ -8,6 +8,7 @@
 #import "Xar";
 #import "Common";
 #import "Hash_Table";
+#import "Hash";
 #import "Terrain";
 #import "Store";
 Platform :: #import "Platform";
@@ -924,6 +925,31 @@ Power_Up :: struct {
 }
 
 Jukebox :: struct {
+	// Absolute MIDI pitches (C4 = 60), one note per coin; rhythms/rests are omitted.
+	PIANO_ROLL :: int.[
+		// Mii Channel: F#4 A4 C#5 A4 F#4 D4 D4 D4 C#4 D4.
+		// https://github.com/robsoncouto/arduino-songs/blob/master/miichannel/miichannel.ino
+		66, 69, 73, 69, 66, 62, 62, 62, 61, 62,
+		// Megalovania: D4 D4 D5 A4 Ab4 G4 F4 D4 F4 G4.
+		// https://piano-nova.com/songs/megalovania
+		62, 62, 74, 69, 68, 67, 65, 62, 65, 67,
+		// Harry Potter / Hedwig's Theme: B4 E5 G5 F#5 E5 B5 A5 F#5 E5 G5.
+		// https://www.piano-keyboard-guide.com/piano-notes-for-harry-potter-theme-song-ludwigs-theme-easy-tutorial/
+		71, 76, 79, 78, 76, 83, 81, 78, 76, 79,
+		// Tetris / Korobeiniki: E5 B4 C5 D5 C5 B4 A4 A4 C5 E5.
+		// https://github.com/robsoncouto/arduino-songs/blob/master/tetris/tetris.ino
+		76, 71, 72, 74, 72, 71, 69, 69, 72, 76,
+		// Portal / Still Alive: G5 F#5 E5 E5 F#5 A4 G5 F#5 E5 E5.
+		// https://pianoletternotes.blogspot.com/2018/04/still-alive-portal.html
+		79, 78, 76, 76, 78, 69, 79, 78, 76, 76,
+		// Mario 1-Up: E5 G5 E6 C6 D6 G6 (the complete six-note jingle).
+		// https://mariofreepianosheetmusic.wordpress.com/wp-content/uploads/2015/05/mario-sheet-music-1-up-mushroom-sound.pdf
+		76, 79, 88, 84, 86, 91,
+		// The Pink Panther: D#4 E4 F#4 G4 D#4 E4 F#4 G4 C5 B4.
+		// https://www.piano-keyboard-guide.com/how-to-play-the-pink-panther-theme-song-easy-piano-tutorial-for-beginners/
+		63, 64, 66, 67, 63, 64, 66, 67, 72, 71,
+	];
+
 	id: int;
 	last_coin_clock := 0.0;
 	coin_count := 0;
@@ -3094,8 +3120,11 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		for * jukebox: scene.jukeboxes {
 			dt := norm(jukebox.position - pos);
 			if dt < 0.5 {
+				// Position fixes the starting offset; only the server advances the roll.
+				seed := (fnv1a_hash(xx *jukebox.position, size_of(V3f)) & 0x7FFFFFFFFFFFFFFF).(int);
+				note_index := (seed % Jukebox.PIANO_ROLL.count + jukebox.coin_count % Jukebox.PIANO_ROLL.count) % Jukebox.PIANO_ROLL.count;
 				cmd: Command.Note_Played;
-				cmd.pitch = jukebox.coin_count;
+				cmd.pitch = Jukebox.PIANO_ROLL[note_index];
 				cmd.jukebox_id = jukebox.id;
 				cmd.from_coin_id = it.id;
 
@@ -3104,7 +3133,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				jukebox.coin_count += 1;
 				jukebox.last_coin_clock = xx scene.server.clock;
 				remove it;
-				continue;
+				continue it;
 			}
 		}
 	}

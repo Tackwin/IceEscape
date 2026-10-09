@@ -5,6 +5,7 @@ Platform :: #import "Platform";
 Scene :: #import "Scene";
 #import "String";
 #import "Basic";
+#import "Math";
 #import "Algebra";
 #import "Hash_Table";
 #import "Xar";
@@ -209,7 +210,7 @@ Store :: struct #type_info_none {
 
 	drone_buzzing_0_wav: Platform.Audio;
 
-	note_wav: Platform.Audio;
+	note_samples: [Assets.NOTE_SAMPLES.count] Platform.Audio;
 
 	explosion_0_mp3: Platform.Audio;
 	explosion_1_mp3: Platform.Audio;
@@ -335,6 +336,30 @@ get_drone_buzzing :: (store: Store, idx: int) -> *Platform.Audio {
 		return *store.drone_buzzing_0_wav;
 	}
 	return null;
+}
+
+get_note_sound :: (store: Store, midi_note: int) -> Platform.Audio {
+	audio: Platform.Audio;
+	audio.id = -1;
+	if midi_note < 0 || midi_note > 127 return audio;
+
+	closest := -1;
+	distance := 128;
+	for Assets.NOTE_SAMPLES {
+		if !store.note_samples[it_index].loaded continue;
+		delta := abs(midi_note - it.midi_note);
+		if delta < distance {
+			closest = it_index;
+			distance = delta;
+		}
+	}
+	if closest < 0 return audio;
+
+	audio = store.note_samples[closest];
+	audio.pitch = xx (midi_note - Assets.NOTE_SAMPLES[closest].midi_note);
+	audio.fade_in = 0; // Keep the piano's attack.
+	audio.repeating = false;
+	return audio;
 }
 
 get_explosion_sound :: (store: Store, idx: int) -> *Platform.Audio {
@@ -568,7 +593,7 @@ get_wprop :: (store: Store, id: Assets.Prop_Id) -> *WRender.Model {
 Audio_Data_Key :: enum int {
 	SNOWFLAKES_AND_LIGHTS;
 	CLICK;
-	NOTE;
+	NOTE; // Reserved; the jukebox now uses the sample range below.
 	FOOTSTEP_SNOW_0;
 	FOOTSTEP_SNOW_1;
 	FOOTSTEP_SNOW_2;
@@ -608,6 +633,7 @@ Audio_Data_Key :: enum int {
 	COIN_LAUNCH;
 	LOSER;
 	POINT_UP;
+	NOTE_SAMPLES_BEGIN;
 }
 
 start_data_fetch :: (
@@ -636,14 +662,17 @@ load_ready_audio :: (
 	key: int,
 	data: [] u8
 ) {
+	note_index := key - cast(int) Audio_Data_Key.NOTE_SAMPLES_BEGIN;
+	if note_index >= 0 && note_index < store.note_samples.count {
+		platform.load_audio(data, false, *store.note_samples[note_index]);
+		return;
+	}
 	audio_key: Audio_Data_Key = xx key;
 	if audio_key == {
 		case .SNOWFLAKES_AND_LIGHTS;
 			platform.load_audio(data, true, *store.snowflakes_and_lights_mp3);
 		case .CLICK;
 			platform.load_audio(data, false, *store.click_wav);
-		case .NOTE;
-			platform.load_audio(data, true, *store.note_wav);
 		case .FOOTSTEP_SNOW_0;
 			platform.load_audio(data, true, *store.footstep_snow_0_mp3);
 		case .FOOTSTEP_SNOW_1;
@@ -927,7 +956,11 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 
 	start_data_fetch(platform, store, Assets.SNOWFLAKES_AND_LIGHTS_MP3_PATH, xx Audio_Data_Key.SNOWFLAKES_AND_LIGHTS);
 	start_data_fetch(platform, store, Assets.CLICK_WAV_PATH, xx Audio_Data_Key.CLICK);
-	start_data_fetch(platform, store, Assets.NOTE_WAV_PATH, xx Audio_Data_Key.NOTE);
+	for Assets.NOTE_SAMPLES {
+		path := it.path;
+		#if Assets.RUNTIME path = tprint("../%", path); // Native launcher runs from bin/.
+		start_data_fetch(platform, store, path, cast(int) Audio_Data_Key.NOTE_SAMPLES_BEGIN + it_index);
+	}
 	start_data_fetch(platform, store, Assets.FOOTSTEP_SNOW_0_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_SNOW_0);
 	start_data_fetch(platform, store, Assets.FOOTSTEP_SNOW_1_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_SNOW_1);
 	start_data_fetch(platform, store, Assets.FOOTSTEP_SNOW_2_MP3_PATH, xx Audio_Data_Key.FOOTSTEP_SNOW_2);

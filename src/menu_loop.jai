@@ -225,7 +225,8 @@ process_menu :: (app_user: *App_User, command: Command) -> bool {
 				it.author = sprint("%", ans_list_terrain.authors_name[it_index]);
 			}
 		} else if ans_list_terrain.correlation_id == 1 {
-			for * state.menu.create_instance.roster_list {
+			// Catalogue refreshes do not own or invalidate the chosen roster.
+			for * state.menu.create_instance.terrain_entries {
 				free(it.name);
 				free(it.author);
 			}
@@ -237,6 +238,7 @@ process_menu :: (app_user: *App_User, command: Command) -> bool {
 				it.name = sprint("%", ans_list_terrain.terrains_name[it_index]);
 				it.author = sprint("%", ans_list_terrain.authors_name[it_index]);
 				it.created_ms = ans_list_terrain.creation_time_ms[it_index];
+				it.selected = create_instance_roster_index(*state.menu.create_instance, it.id) >= 0;
 
 				if !thumbnail_here_or_coming(*app_user.store, it.id) {
 					get_thumbnail: Command.Get_Thumbnail;
@@ -765,56 +767,70 @@ menu_loop :: (_app: *App) -> bool {
 	return true;
 }
 
-push_create_instance_menu :: (
-	app_user: *App_User,
-	gui: *GUI.GUI_State,
-	menu: *Menu
-) {
-	popup := GUI.begin_window(
-		gui,
-		gui.controls.window_size / 2,
-		V2f.{ 1280, 720 },
-		GUI.Align.Center,
-		"create_instance_popup",
-		10, modal = true, store = *app_user.store
-	);
+push_create_instance_menu :: (app_user: *App_User, gui: *GUI.GUI_State, menu: *Menu) {
+	size := V2f.{ min(1280.0, gui.controls.window_size.x - 32), min(720.0, gui.controls.window_size.y - 32) };
+	popup := GUI.begin_window(gui, gui.controls.window_size / 2, size, .Center,
+		"create_instance_popup", 10, modal = true, store = *app_user.store);
 	defer GUI.end_window(gui, "create_instance_popup");
+	GUI.box(gui, popup.size - v2(16.0), inset = v2(16.0));
+	defer GUI.end(gui);
+	content_width := popup.size.x - 48;
+	content_height := popup.size.y - 48;
+	GUI.label_box(gui, "Create Instance", .{ content_width, 32 }, 24, GUI.GOLD_ACCENT, .Center, "title");
+	GUI.horizontal_rule(gui, content_width);
+	GUI.space(gui, 12);
 
-	GUI.atom_label(
-		gui,
-		"Create Instance",
-		popup.pos + V2f.{ popup.size.x / 2, 4 },
-		scale = 24,
-		z = 10.1,
-		align = GUI.Align.Top_Center,
-		color = GUI.GOLD_ACCENT
-	);
+	Drag :: struct {
+		terrain_id: int = -1;
+		press_pos: V2f;
+		moved: bool;
+	}
+	drag, _ := GUI.widget(gui, "terrain_drag", Drag);
+	if drag.terrain_id >= 0 && norm(gui.controls.mouse_pos - drag.press_pos) > 6 drag.moved = true;
+	GUI.box(gui, .{ content_width, content_height - 45 }, .Right, gap = .{ 12, 0 }, z = 11);
+	defer GUI.end(gui);
+	param_width := min(288.0, content_width * 0.25);
+	list_width := (content_width - param_width - 24) * 0.54;
+	roster_width := content_width - param_width - list_width - 24;
+	panel_height := content_height - 45;
+	pressed_id := draw_create_instance_terrain_panel(app_user, gui, menu, .{ list_width, panel_height }, drag.moved);
+	if pressed_id >= 0 {
+		drag.terrain_id = pressed_id;
+		drag.press_pos = gui.controls.mouse_pos;
+		drag.moved = false;
+	}
+	roster_bounds, roster_page, page_size := draw_create_instance_roster_panel(app_user, gui, menu, .{ roster_width, panel_height });
+	draw_create_instance_param_panel(app_user, gui, menu, .{ param_width, panel_height });
 
-	GUI.push_quad_screen(
-		gui,
-		popup.pos + V2f.{ 0, 32 },
-		V2f.{ popup.size.x, 1 },
-		v3(GUI.LOBBY_SEPARATOR),
-		z = 10.1
-	);
-
-	cursor := 32.0 + 8 + 8;
-
-	content_aabb := pos_size(popup.pos + V2f.{ 40, 40 }, popup.size - V2f.{ 80, 80 });
-
-	terrain_list_aabb := content_aabb;
-	terrain_list_aabb = span_x(terrain_list_aabb, 0.0, 0.5);
-
-	roster_list_aabb := content_aabb;
-	roster_list_aabb = span_x(roster_list_aabb, 0.5, 0.75);
-
-	param_aabb := content_aabb;
-	param_aabb = span_x(param_aabb, 0.75, 1.0);
-
-	draw_create_instance_terrain_panel(app_user, gui, menu, terrain_list_aabb);
-	draw_create_instance_roster_panel(app_user, gui, menu, roster_list_aabb);
-	draw_create_instance_param_panel(app_user, gui, menu, param_aabb);
-
+	// Dragging inserts into the visible roster; an ordinary row click also adds it.
+	if drag.terrain_id >= 0 {
+		over_roster := in(roster_bounds, gui.controls.mouse_pos);
+		index := min(menu.create_instance.roster_list.count, roster_page * page_size +
+			max(0, floor((gui.controls.mouse_pos.y - roster_bounds.min.y + 42) / 84).(int)));
+		if drag.moved && over_roster {
+			y := min(roster_bounds.max.y - 2, roster_bounds.min.y + (index - roster_page * page_size) * 84);
+			GUI.push_quad_screen(gui, .{ roster_bounds.min.x, y }, .{ width(roster_bounds), 2 }, v3(GUI.GOLD_ACCENT), 12);
+		}
+		if gui.controls.just_released[Key.MouseLeft] {
+			if drag.moved && over_roster for entry: menu.create_instance.terrain_entries {
+				if entry.id == drag.terrain_id {
+					add_create_instance_terrain(*menu.create_instance, entry, index);
+					break;
+				}
+			}
+			drag.terrain_id = -1;
+			drag.moved = false;
+		} else if !gui.controls.pressed[Key.MouseLeft] {
+			drag.terrain_id = -1;
+			drag.moved = false;
+		} else if drag.moved {
+			for entry: menu.create_instance.terrain_entries if entry.id == drag.terrain_id {
+				GUI.atom_label(gui, GUI.fit_text(gui, entry.name, 14, 240),
+					gui.controls.mouse_pos + v2(16.0, 12.0), 14, 12.1, .Top_Left, GUI.GOLD_ACCENT, outline = true);
+				break;
+			}
+		}
+	}
 }
 
 push_create_bomberman_menu :: (
@@ -949,403 +965,229 @@ push_create_bomberman_menu :: (
 
 }
 
-draw_create_instance_param_panel :: (
-	app: *App_User,
-	gui: *GUI.GUI_State,
-	menu: *Menu,
-	aabb: AABBf
-) {
-	store := *app.store;
-	platform := app.app.platform;
+create_instance_roster_index :: (create: *Create_Instance, terrain_id: int) -> int {
+	for create.roster_list if it.id == terrain_id return it_index;
+	return -1;
+}
 
-	GUI.push_id(gui, 456);
-	defer GUI.pop_id(gui);
-
-	// vertical separator
-	GUI.push_quad_screen(
-		gui,
-		pos = v2(aabb.min.x - 1, aabb.min.y),
-		size = v2(1.0, height(aabb)),
-		color = v3(GUI.LOBBY_SEPARATOR),
-		z = 26.1
-	);
-	GUI.atom_label(
-		gui,
-		"Parameters",
-		v2(aabb.min.x + 8, aabb.min.y + 8),
-		scale = 16,
-		color = GUI.GOLD_ACCENT,
-		z = 26.2,
-		align = .Top_Left
-	);
-	GUI.push_quad_screen(
-		gui,
-		pos = v2(aabb.min.x + 4, aabb.min.y + 32),
-		size = v2(width(aabb) - 8, 1),
-		color = v3(GUI.LOBBY_SEPARATOR),
-		z = 26.1
-	);
-
-	GUI.column(gui, v2(aabb.min.x + 8, aabb.min.y + 40), z = 26.2, align = .Top_Left);
-	defer GUI.end(gui);
-	
-	GUI.labeled_input_text(
-		gui,
-		"Name",
-		*menu.create_instance.name,
-		width(aabb) - 8,
-		24,
-		scale = 16,
-		max_chars = 8,
-		id = "instance_name_input",
-		label_color = GUI.TEXT_NORMAL,
-		skin = GUI.compact_button_skin(store, GUI.LOBBY_BUTTON_DARK), dark_style = true,
-	);
-
-	create_instance_private := GUI.labeled_checkbox(
-		gui, "Private Instance", width(aabb) - 8, 16, id = "private_instance_checkbox",
-		label_color = GUI.TEXT_NORMAL, skin = GUI.compact_button_skin(store, GUI.LOBBY_BUTTON_DARK)
-	).checked;
-
-	if create_instance_private {
-		GUI.labeled_input_text(
-			gui,
-			"Password",
-			*menu.create_instance.password,
-			width(aabb) - 8,
-			24,
-			scale = 16,
-			placeholder = "****",
-			max_chars = 8,
-			id = "private_instance_password_input",
-			label_color = GUI.TEXT_NORMAL,
-			skin = GUI.compact_button_skin(store, GUI.LOBBY_BUTTON_DARK), dark_style = true,
-		);
+add_create_instance_terrain :: (create: *Create_Instance, entry: Create_Instance.Terrain_Entry, index: int = -1) {
+	if create_instance_roster_index(create, entry.id) >= 0 return;
+	owned := entry;
+	owned.name = copy_string(entry.name);
+	owned.author = copy_string(entry.author);
+	owned.selected = true;
+	index = ifx index < 0 then create.roster_list.count else clamp(index, 0, create.roster_list.count);
+	array_add(*create.roster_list, owned);
+	for reverse: 0..create.roster_list.count - index - 2 {
+		i := create.roster_list.count - reverse - 1;
+		create.roster_list[i] = create.roster_list[i - 1];
 	}
+	create.roster_list[index] = owned;
+}
 
-	create_instance_auto_revive := GUI.labeled_checkbox(
-		gui,
-		"Auto revive",
-		width(aabb) - 8,
-		16,
-		id = "auto_revive_checkbox",
-		label_color = GUI.TEXT_NORMAL, skin = GUI.compact_button_skin(store, GUI.LOBBY_BUTTON_DARK)
-	).checked;
+remove_create_instance_terrain :: (create: *Create_Instance, index: int) {
+	if index < 0 || index >= create.roster_list.count return;
+	free(create.roster_list[index].name);
+	free(create.roster_list[index].author);
+	for i: index..create.roster_list.count - 2 create.roster_list[i] = create.roster_list[i + 1];
+	create.roster_list.count -= 1;
+}
 
-	GUI.row(gui, v2(aabb.max.x - 8 - (116 * 2 + 16), aabb.max.y - 8),
-		.Right, align = .Bottom_Left);
+// Shared card contents keep labels, thumbnails and actions inside their column.
+draw_create_instance_terrain_card :: (
+	app: *App_User, gui: *GUI.GUI_State, entry: Create_Instance.Terrain_Entry, size: V2f,
+	selected: bool, roster_index: int = -1, roster_count: int = 0, dragging := false
+) -> int, bool {
+	GUI.push_id(gui, entry.id);
+	defer GUI.pop_id(gui);
+	bounds := GUI.box(gui, size, .Right, inset = v2(6.0), gap = .{ 8, 0 });
 	defer GUI.end(gui);
-	create_clicked, _ := GUI.themed_button(gui, store, "Create", "create_instance_button",
-		.{ 116, 36 }, GUI.LOBBY_ACTION_BLUE);
-	if create_clicked {
+	z := GUI.flow(gui).z;
+	_, widget := GUI.widget_sized(gui, "terrain_card", struct {}, bounds, z,
+		ifx roster_index < 0 then GUI.GUI_State.Widget.Physical.Mouse_Left else .Empty);
+	color := ifx widget.hovered then GUI.LOBBY_ROW_HOVER else
+		(ifx selected then GUI.LOBBY_ROW_SELECTED else GUI.LOBBY_BUTTON_DARK);
+	GUI.push_quad_screen(gui, bounds, v3(color), z, a = 0.95);
+
+	action_width := min(ifx roster_index >= 0 then 88.0 else 56.0, size.x * 0.4);
+	thumbnail_width := min(48.0, max(0.0, size.x - 28 - action_width - 80));
+	if thumbnail_width > 0 {
+		thumbnail := GUI.box(gui, .{ thumbnail_width, 64 });
+		quad := GUI.push_late_quad_screen(gui, thumbnail.min + v2(0.0, (64 - thumbnail_width) / 2), v2(thumbnail_width), GUI.GRAY_70, z + 0.05);
+		quad.custom_texture_idx = user_texture_idx_thumbnail_for(*app.store, entry.id);
+		if quad.custom_texture_idx >= 0 quad.texture_rect = .{ 0, 0, 1, 1 };
+		GUI.end(gui);
+	}
+	text_width := max(1.0, size.x - 20 - action_width - (ifx thumbnail_width > 0 then thumbnail_width + 8 else 0));
+	GUI.box(gui, .{ text_width, 64 }, z = z + 0.1);
+	name := ifx roster_index >= 0 then tprint("%. %", roster_index + 1, entry.name) else entry.name;
+	GUI.label_box(gui, GUI.fit_text(gui, name, 16, text_width), .{ text_width, 24 }, 16, GUI.TEXT_NORMAL, id = "name");
+	GUI.label_box(gui, GUI.fit_text(gui, ifx entry.author.count > 0 then entry.author else "Anonymous", 13, text_width),
+		.{ text_width, 20 }, 13, GUI.TEXT_MUTE, id = "author");
+	cal := app.app.platform.to_calendar(milliseconds_to_apollo(entry.created_ms));
+	date := tprint("%/% %:%", cal.day_of_month_starting_at_0 + 1, cal.month_starting_at_0 + 1, cal.hour, cal.minute);
+	GUI.label_box(gui, GUI.fit_text(gui, date, 11, text_width), .{ text_width, 20 }, 11, GUI.TEXT_MUTE, id = "date");
+	GUI.end(gui);
+	GUI.box(gui, .{ action_width, 64 }, z = z + 0.2);
+	action := 0; // Add, remove, move up, move down.
+	if roster_index < 0 {
+		GUI.space(gui, 16);
+		clicked, _ := GUI.themed_button(gui, *app.store, ifx selected then "Undo" else "Add", "add_terrain",
+			.{ action_width, 32 }, ifx selected then GUI.LOBBY_BUTTON_DARK else GUI.LOBBY_ACTION_BLUE);
+		if clicked || (widget.released && !dragging) action = ifx selected then 2 else 1;
+	} else {
+		GUI.box(gui, .{ action_width, 28 }, .Right, gap = .{ 4, 0 });
+		clicked, _ := GUI.themed_button(gui, *app.store, "^", "move_up", .{ (action_width - 4) / 2, 28 }, enabled = roster_index > 0);
+		if clicked action = 3;
+		clicked, _ = GUI.themed_button(gui, *app.store, "v", "move_down", .{ (action_width - 4) / 2, 28 }, enabled = roster_index < roster_count - 1);
+		if clicked action = 4;
+		GUI.end(gui);
+		GUI.space(gui, 8);
+		clicked, _ = GUI.themed_button(gui, *app.store, ifx action_width >= 70 then "Remove" else "X", "remove_terrain", .{ action_width, 28 }, font_size = 12);
+		if clicked action = 2;
+	}
+	GUI.end(gui);
+	return action, widget.just_pressed;
+}
+
+draw_create_instance_param_panel :: (app: *App_User, gui: *GUI.GUI_State, menu: *Menu, size: V2f) {
+	GUI.push_id(gui, "parameters");
+	defer GUI.pop_id(gui);
+	bounds := GUI.box(gui, size, inset = v2(8.0));
+	defer GUI.end(gui);
+	store := *app.store;
+	w := size.x - 16;
+	GUI.label_box(gui, "Parameters", .{ w, 24 }, 16, GUI.GOLD_ACCENT, id = "heading");
+	GUI.horizontal_rule(gui, w);
+	GUI.space(gui, 12);
+	GUI.label_box(gui, "Name", .{ w, 20 }, 14, GUI.TEXT_NORMAL, id = "name_label");
+	GUI.input_text(gui, *menu.create_instance.name, 24, width = w, max_chars = 64, id = "instance_name_input",
+		skin = GUI.compact_button_skin(store, GUI.LOBBY_BUTTON_DARK), dark_style = true);
+	GUI.space(gui, 16);
+	menu.create_instance.private = GUI.labeled_checkbox(gui, "Private Instance", w, 18, id = "private_instance_checkbox",
+		default = menu.create_instance.private, label_color = GUI.TEXT_NORMAL, skin = GUI.compact_button_skin(store, GUI.LOBBY_BUTTON_DARK)).checked;
+	GUI.space(gui, 12);
+	if menu.create_instance.private {
+		GUI.label_box(gui, "Password", .{ w, 20 }, 14, GUI.TEXT_NORMAL, id = "password_label");
+		GUI.input_text(gui, *menu.create_instance.password, 24, width = w, max_chars = 64, id = "private_instance_password_input",
+			password_mask = true, skin = GUI.compact_button_skin(store, GUI.LOBBY_BUTTON_DARK), dark_style = true);
+		GUI.space(gui, 16);
+	}
+	menu.create_instance.auto_revive = GUI.labeled_checkbox(gui, "Auto revive", w, 18, id = "auto_revive_checkbox",
+		default = menu.create_instance.auto_revive, label_color = GUI.TEXT_NORMAL, skin = GUI.compact_button_skin(store, GUI.LOBBY_BUTTON_DARK)).checked;
+	GUI.space(gui, max(12.0, bounds.max.y - 8 - 68 - GUI.flow(gui).cursor.y));
+	summary := ifx menu.create_instance.roster_list.count > 0 then tprint("% levels in roster", menu.create_instance.roster_list.count)
+		else "Empty roster uses the default levels.";
+	GUI.label_box(gui, GUI.fit_text(gui, summary, 12, w), .{ w, 24 }, 12, GUI.TEXT_MUTE, id = "roster_summary");
+	GUI.space(gui, 8);
+	GUI.box(gui, .{ w, 36 }, .Right, gap = .{ 8, 0 });
+	defer GUI.end(gui);
+	button_width := (w - 8) / 2;
+	clicked, _ := GUI.themed_button(gui, store, "Create", "create_instance_button", .{ button_width, 36 }, GUI.LOBBY_ACTION_BLUE);
+	if clicked {
 		command: Command.Create_Instance;
-		string_to_array(GUI.view(*menu.create_instance.name), command.name);
-		string_to_array(GUI.view(*menu.create_instance.password), command.password);
+		// send_web_message serializes these views before the input buffers can change.
+		command.name = .{ data = menu.create_instance.name.data, count = menu.create_instance.name.count };
+		command.password = .{ data = menu.create_instance.password.data, count = menu.create_instance.password.count };
 		command.auto_revive = menu.create_instance.auto_revive;
 		command.private = menu.create_instance.private;
 		command.roster = NewArray(menu.create_instance.roster_list.count, int,, temp);
-		for menu.create_instance.roster_list {
-			command.roster[it_index] = it.id;
-		}
+		for menu.create_instance.roster_list command.roster[it_index] = it.id;
 		send_web_message(app.app.platform, gui.controls.time, make_command(command));
 		menu.create_instance.open = false;
 	}
-
-	GUI.space(gui, 16);
-	cancel_clicked, _ := GUI.themed_button(gui, store, "Cancel", "cancel_create_instance_button", .{ 116, 36 });
-	if cancel_clicked
-		menu.create_instance.open = false;
-
+	clicked, _ = GUI.themed_button(gui, store, "Cancel", "cancel_create_instance_button", .{ button_width, 36 });
+	if clicked menu.create_instance.open = false;
 }
 
-
-draw_create_instance_roster_panel :: (
-	app: *App_User,
-	gui: *GUI.GUI_State,
-	menu: *Menu,
-	aabb: AABBf
-) {
-	store := *app.store;
-	platform := app.app.platform;
-	GUI.push_id(gui, 123);
+draw_create_instance_roster_panel :: (app: *App_User, gui: *GUI.GUI_State, menu: *Menu, size: V2f) -> AABBf, int, int {
+	GUI.push_id(gui, "roster");
 	defer GUI.pop_id(gui);
-
-	// vertical separator
-	GUI.push_quad_screen(
-		gui,
-		pos = v2(aabb.min.x - 1, aabb.min.y),
-		size = v2(1.0, height(aabb)),
-		color = v3(GUI.LOBBY_SEPARATOR),
-		z = 26.1
-	);
-
-	GUI.atom_label(
-		gui,
-		"Roster",
-		v2(aabb.min.x + 8, aabb.min.y + 8),
-		scale = 16,
-		color = GUI.GOLD_ACCENT,
-		z = 26.2,
-		align = .Top_Left
-	);
-	GUI.push_quad_screen(
-		gui,
-		pos = v2(aabb.min.x + 4, aabb.min.y + 32),
-		size = v2(width(aabb) - 8, 1),
-		color = v3(GUI.LOBBY_SEPARATOR),
-		z = 26.1
-	);
-
-	cursor := v2(aabb.min.x, aabb.min.y);
-	cursor.y += 40;
-	terrain_entry_row_height := 64.0;
-	terrain_entry_row_width := width(aabb);
-
-	for * menu.create_instance.roster_list {
-		GUI.push_id(gui, it_index);
-		defer GUI.pop_id(gui);
-
-		row_aabb := pos_size(
-			cursor,
-			v2(terrain_entry_row_width, terrain_entry_row_height)
-		);
-
-		GUI.push_quad_screen(gui, row_aabb, v3(ifx it.selected then GUI.LOBBY_ROW_SELECTED else GUI.LOBBY_BUTTON_DARK), z = 26.15, a = 0.9);
-
-		thumbnail_aabb: AABBf;
-		thumbnail_aabb.min = row_aabb.min + v2(4.0, 4);
-		thumbnail_aabb.max = thumbnail_aabb.min + v2(56.0, 56);
-		quad := GUI.push_late_quad_screen(gui, thumbnail_aabb, GUI.GRAY_70);
-		quad.custom_texture_idx = user_texture_idx_thumbnail_for(store, it.id);
-		if quad.custom_texture_idx >= 0 {
-			quad.texture_rect = v4(0.0, 0.0, 1, 1);
-		}
-
-		cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
-		date := tprint(
-			"%/% %:%",
-			cal.day_of_month_starting_at_0 + 1, cal.month_starting_at_0 + 1, cal.hour, cal.minute
-		);
-		GUI.atom_label(
-			gui,
-			it.name,
-			row_aabb.min + v2(72.0, 10.0),
-			scale = 16,
-			color = GUI.TEXT_NORMAL,
-			z = 26.2,
-			align = .Top_Left
-		);
-		GUI.atom_label(
-			gui,
-			ifx it.author.count == 0 then "Anonymous" else it.author,
-			row_aabb.min + v2(72.0, 36.0),
-			scale = 14,
-			color = GUI.TEXT_MUTE,
-			z = 26.2,
-			align = .Top_Left
-		);
-		GUI.atom_label(
-			gui,
-			date,
-			row_aabb.min + v2(terrain_entry_row_width - 78, 36.0),
-			scale = 14,
-			color = GUI.TEXT_MUTE,
-			align = .Top_Right,
-			z = 26.2
-		);
-
-		if it_index < menu.create_instance.roster_list.count - 1
-		&& menu.create_instance.roster_list.count > 1
-		{
-			clicked := GUI.text_button(
-				gui,
-				"Down",
-				v2(row_aabb.max.x - 8, row_aabb.max.y - 12.0),
-				id = "down_btn",
-				z = 26.2,
-				align = .Bottom_Right,
-				skin = GUI.compact_button_skin(store)
-			);
-			if clicked {
-				t := menu.create_instance.roster_list[it_index];
-				menu.create_instance.roster_list[it_index] =
-					menu.create_instance.roster_list[it_index + 1];
-				menu.create_instance.roster_list[it_index + 1] = t;
-			}
-		}
-		if it_index > 0 && menu.create_instance.roster_list.count > 1
-		{
-			clicked := GUI.text_button(
-				gui,
-				"Up",
-				v2(row_aabb.max.x - 8, row_aabb.min.y + 12.0),
-				id = "up_btn",
-				z = 26.2,
-				align = .Top_Right,
-				skin = GUI.compact_button_skin(store)
-			);
-			if clicked {
-				t := menu.create_instance.roster_list[it_index];
-				menu.create_instance.roster_list[it_index] =
-					menu.create_instance.roster_list[it_index - 1];
-				menu.create_instance.roster_list[it_index - 1] = t;
-			}
-		}
-
-		cursor.y += terrain_entry_row_height;
-		cursor.y += 8;
+	GUI.box(gui, size, inset = v2(8.0));
+	defer GUI.end(gui);
+	w := size.x - 16;
+	GUI.label_box(gui, tprint("Roster (% levels)", menu.create_instance.roster_list.count), .{ w, 24 }, 16, GUI.GOLD_ACCENT, id = "heading");
+	GUI.label_box(gui, GUI.fit_text(gui, "Click a map or drag it here. Arrows set the order.", 12, w), .{ w, 26 }, 12, GUI.TEXT_MUTE, id = "instructions");
+	GUI.space(gui, 8);
+	list_height := size.y - 114;
+	page_size := max(1, floor((list_height + 8) / 84).(int));
+	page_count := max(1, (menu.create_instance.roster_list.count + page_size - 1) / page_size);
+	page, _ := GUI.widget(gui, "page", struct { value: int; });
+	page.value = clamp(page.value, 0, page_count - 1);
+	list_bounds := GUI.box(gui, .{ w, list_height }, gap = .{ 0, 8 });
+	remove_index := -1;
+	move_index := -1;
+	move_delta := 0;
+	for index: page.value * page_size..min(menu.create_instance.roster_list.count, (page.value + 1) * page_size) - 1 {
+		entry := menu.create_instance.roster_list[index];
+		action, _ := draw_create_instance_terrain_card(app, gui, entry, .{ w, 76 }, true, index, menu.create_instance.roster_list.count);
+		if action == 2 remove_index = index;
+		if action == 3 || action == 4 { move_index = index; move_delta = ifx action == 3 then -1 else 1; }
 	}
+	if menu.create_instance.roster_list.count == 0 {
+		GUI.label_box(gui, GUI.fit_text(gui, "Add terrains from the left to build a new roster.", 13, w), .{ w, 48 }, 13, GUI.TEXT_MUTE, .Center, "empty_roster");
+	}
+	GUI.end(gui);
+	if remove_index >= 0 remove_create_instance_terrain(*menu.create_instance, remove_index);
+	if move_index >= 0 {
+		target := move_index + move_delta;
+		entry := menu.create_instance.roster_list[move_index];
+		menu.create_instance.roster_list[move_index] = menu.create_instance.roster_list[target];
+		menu.create_instance.roster_list[target] = entry;
+		page.value = target / page_size;
+	}
+	GUI.space(gui, 8);
+	GUI.box(gui, .{ w, 32 }, .Right, gap = .{ 8, 0 });
+	clicked, _ := GUI.themed_button(gui, *app.store, "<", "previous_page", .{ 32, 32 }, enabled = page.value > 0);
+	if clicked page.value -= 1;
+	GUI.label_box(gui, tprint("% / %", page.value + 1, page_count), .{ w - 80, 32 }, 13, GUI.TEXT_MUTE, .Center, "page_number");
+	clicked, _ = GUI.themed_button(gui, *app.store, ">", "next_page", .{ 32, 32 }, enabled = page.value < page_count - 1);
+	if clicked page.value += 1;
+	GUI.end(gui);
+	return list_bounds, page.value, page_size;
 }
 
-draw_create_instance_terrain_panel :: (
-	app: *App_User,
-	gui: *GUI.GUI_State,
-	menu: *Menu,
-	aabb: AABBf
-) {
-	platform := app.app.platform;
-	store := *app.store;
-
-	GUI.column(gui, v2(aabb.min.x + 4, aabb.min.y + 8), z = 26, align = .Top_Left);
+draw_create_instance_terrain_panel :: (app: *App_User, gui: *GUI.GUI_State, menu: *Menu, size: V2f, dragging := false) -> int {
+	GUI.push_id(gui, "catalogue");
+	defer GUI.pop_id(gui);
+	GUI.box(gui, size, inset = v2(8.0));
 	defer GUI.end(gui);
-
-	if GUI.labeled_input_text(
-		gui,
-		"Filter",
-		*menu.create_instance.filter,
-		width(aabb) - 8,
-		16,
-		max_input_width = 256,
-		label_color = GUI.TEXT_NORMAL,
-		skin = GUI.compact_button_skin(store, GUI.LOBBY_BUTTON_DARK), dark_style = true
-	).changed {
-		ask_list_terrain: Command.Ask_List_Terrain;
-		ask_list_terrain.filter = GUI.view(*menu.create_instance.filter);
-		ask_list_terrain.correlation_id = 1;
-		send_web_message(platform, gui.controls.time, make_command(ask_list_terrain));
+	w := size.x - 16;
+	GUI.label_box(gui, "Terrains", .{ w, 24 }, 16, GUI.GOLD_ACCENT, id = "heading");
+	if GUI.labeled_input_text(gui, "Filter", *menu.create_instance.filter, w, 26, scale = 14,
+		max_input_width = w - 56, label_color = GUI.TEXT_NORMAL,
+		skin = GUI.compact_button_skin(*app.store, GUI.LOBBY_BUTTON_DARK), dark_style = true).changed {
+		command: Command.Ask_List_Terrain;
+		command.filter = GUI.view(*menu.create_instance.filter);
+		command.correlation_id = 1;
+		send_web_message(app.app.platform, gui.controls.time, make_command(command));
+		menu.create_instance.terrain_page = 0;
 	}
-	GUI.push_quad_screen(
-		gui,
-		GUI.flow(gui).cursor,
-		v2(width(aabb) - 8, 1),
-		v3(GUI.LOBBY_SEPARATOR),
-		z = 26
-	);
-
-	scroll_aabb := pos_size(
-		v2(aabb.min.x + 4, aabb.min.y + 40),
-		v2(width(aabb) - 8, height(aabb) - 80)
-	);
-
-	cursor := v2(scroll_aabb.min.x, scroll_aabb.min.y);
-	terrain_entry_row_height := 64.0;
-	terrain_entry_row_width := width(scroll_aabb);
-	PAGE_SIZE :: 8;
-	page_count := max((menu.create_instance.terrain_entries.count + PAGE_SIZE - 1) / PAGE_SIZE, 1);
-	menu.create_instance.terrain_page = clamp(
-		menu.create_instance.terrain_page,
-		0,
-		max((menu.create_instance.terrain_entries.count + PAGE_SIZE - 1) / PAGE_SIZE - 1, 0)
-	);
-
-	beg := menu.create_instance.terrain_page * PAGE_SIZE;
-	end := beg + PAGE_SIZE;
-	end = min(end, menu.create_instance.terrain_entries.count);
-	terrain_list_view: []Create_Instance.Terrain_Entry;
-	terrain_list_view.count = end - beg;
-	terrain_list_view.data = menu.create_instance.terrain_entries.data + beg;
-	for * terrain_list_view {
-		GUI.push_id(gui, it_index);
-		defer GUI.pop_id(gui);
-
-		row_aabb := pos_size(
-			cursor,
-			v2(terrain_entry_row_width, terrain_entry_row_height)
-		);
-
-		state, widget := GUI.widget(gui, "row_button", struct {});
-		widget.physical = .Mouse;
-		widget.aabb = row_aabb;
-
-		GUI.push_quad_screen(gui, row_aabb, v3(GUI.LOBBY_BUTTON_DARK), z = 26.1);
-		if widget.hovered {
-			GUI.push_quad_screen(gui, row_aabb, v3(GUI.LOBBY_ROW_HOVER), z = 26.2, a = GUI.LOBBY_ROW_HOVER.w);
-		} else if it.selected {
-			GUI.push_quad_screen(gui, row_aabb, v3(GUI.LOBBY_ROW_SELECTED), z = 26.2, a = GUI.LOBBY_ROW_SELECTED.w);
-		}
-		if widget.just_pressed {
-			if it.selected {
-				it.selected = false;
-				cursor := 0;
-				for x: menu.create_instance.roster_list {
-					if x.id == it.id
-						continue;
-					menu.create_instance.roster_list[cursor] = x;
-					cursor += 1;
-				}
-				menu.create_instance.roster_list.count = cursor;
-			} else {
-				it.selected = true;
-				array_add(*menu.create_instance.roster_list, it);
-			}
-		}
-
-		thumbnail_aabb: AABBf;
-		thumbnail_aabb.min = row_aabb.min + v2(4.0, 4);
-		thumbnail_aabb.max = thumbnail_aabb.min + v2(56.0, 56);
-		quad := GUI.push_late_quad_screen(gui, thumbnail_aabb, GUI.GRAY_70);
-		quad.custom_texture_idx = user_texture_idx_thumbnail_for(store, it.id);
-		if quad.custom_texture_idx >= 0 {
-			quad.texture_rect = v4(0.0, 0.0, 1, 1);
-		}
-
-		cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
-		date := tprint(
-			"%/% %:%",
-			cal.day_of_month_starting_at_0 + 1, cal.month_starting_at_0 + 1, cal.hour, cal.minute
-		);
-		GUI.atom_label(
-			gui,
-			it.name,
-			row_aabb.min + v2(72.0, 10.0),
-			scale = 16,
-			color = GUI.TEXT_NORMAL,
-			z = 26.2,
-			align = .Top_Left
-		);
-		GUI.atom_label(
-			gui,
-			ifx it.author.count == 0 then "Anonymous" else it.author,
-			row_aabb.min + v2(72.0, 36.0),
-			scale = 14,
-			color = GUI.TEXT_MUTE,
-			z = 26.2,
-			align = .Top_Left
-		);
-		GUI.atom_label(
-			gui,
-			date,
-			row_aabb.min + v2(terrain_entry_row_width - 78, 36.0),
-			scale = 14,
-			color = GUI.TEXT_MUTE,
-			align = .Top_Right,
-			z = 26.2
-		);
-
-		cursor.y += terrain_entry_row_height;
-		cursor.y += 8;
+	GUI.space(gui, 8);
+	list_height := size.y - 114;
+	page_size := max(1, floor((list_height + 8) / 84).(int));
+	page_count := max(1, (menu.create_instance.terrain_entries.count + page_size - 1) / page_size);
+	menu.create_instance.terrain_page = clamp(menu.create_instance.terrain_page, 0, page_count - 1);
+	GUI.box(gui, .{ w, list_height }, gap = .{ 0, 8 });
+	pressed_id := -1;
+	for index: menu.create_instance.terrain_page * page_size..min(menu.create_instance.terrain_entries.count, (menu.create_instance.terrain_page + 1) * page_size) - 1 {
+		entry := menu.create_instance.terrain_entries[index];
+		roster_index := create_instance_roster_index(*menu.create_instance, entry.id);
+		action, pressed := draw_create_instance_terrain_card(app, gui, entry, .{ w, 76 }, roster_index >= 0, dragging = dragging);
+		if action == 1 add_create_instance_terrain(*menu.create_instance, entry);
+		if action == 2 remove_create_instance_terrain(*menu.create_instance, roster_index);
+		if pressed pressed_id = entry.id;
 	}
-	cursor.y = scroll_aabb.max.y;
-	cursor.y += 8;
-	GUI.row(gui, v2(cursor.x + terrain_entry_row_width - 4, cursor.y), .Left, align = .Bottom_Right);
-	defer GUI.end(gui);
-
-	clicked, _ := GUI.themed_button(gui, store, ">", "load_dialog_next_page", .{ 36, 32 });
-	if clicked {
-		menu.create_instance.terrain_page = (menu.create_instance.terrain_page + 1) % page_count;
-	}
-	clicked, _ = GUI.themed_button(gui, store, "<", "load_dialog_prev_page", .{ 36, 32 });
-	if clicked {
-		menu.create_instance.terrain_page = (menu.create_instance.terrain_page + page_count - 1) % page_count;
-	}
+	if menu.create_instance.terrain_entries.count == 0
+		GUI.label_box(gui, GUI.fit_text(gui, "No terrains match this filter.", 13, w), .{ w, 48 }, 13, GUI.TEXT_MUTE, .Center, "empty_catalogue");
+	GUI.end(gui);
+	GUI.space(gui, 8);
+	GUI.box(gui, .{ w, 32 }, .Right, gap = .{ 8, 0 });
+	clicked, _ := GUI.themed_button(gui, *app.store, "<", "previous_page", .{ 32, 32 }, enabled = menu.create_instance.terrain_page > 0);
+	if clicked menu.create_instance.terrain_page -= 1;
+	GUI.label_box(gui, tprint("% / %", menu.create_instance.terrain_page + 1, page_count), .{ w - 80, 32 }, 13, GUI.TEXT_MUTE, .Center, "page_number");
+	clicked, _ = GUI.themed_button(gui, *app.store, ">", "next_page", .{ 32, 32 }, enabled = menu.create_instance.terrain_page < page_count - 1);
+	if clicked menu.create_instance.terrain_page += 1;
+	GUI.end(gui);
+	return pressed_id;
 }

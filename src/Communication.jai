@@ -638,7 +638,7 @@ Command :: struct {
 	}
 
 	Note_Played :: struct {
-		pitch: int;
+		pitch: int; // Absolute MIDI note, selected by the server.
 		jukebox_id: int;
 
 		from_coin_id: int;

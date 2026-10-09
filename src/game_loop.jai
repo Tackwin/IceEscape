@@ -98,11 +98,9 @@ process_game :: (
 	if note_played {
 		jukebox := Scene.find_by_jukebox_id(state.scene, note_played.jukebox_id);
 		if jukebox {
-			pitches :: float.[ 67, 66, 63, 57, 56, 64, 68, 72 ];
-
 			trigger: Scene.Sound_Trigger;
 			trigger.kind = .Note;
-			trigger.pitch = xx (pitches[note_played.pitch % pitches.count] - 56);
+			trigger.pitch = xx note_played.pitch;
 			trigger.position = jukebox.position;
 			array_add(*state.scene.sound_triggers, trigger);
 		}
@@ -775,8 +773,7 @@ sounding :: (
 					audio = store.point_up_mp3;
 					audio.volume = 0.5;
 				case .Note;
-					audio = store.note_wav;
-					audio.pitch = it.pitch;
+					audio = get_note_sound(store, xx it.pitch);
 					audio.exponent = 1.0;
 			}
 			if audio.id == -1

@@ -138,7 +138,39 @@ SNOWFLAKES_AND_LIGHTS_MP3_PATH :: "../assets/Sound/Snowflakes and Lights.mp3";
 #insert #run embed_data("FLAG_DOWN_OBJ", "flag_down.obj", #filepath);
 
 CLICK_WAV_PATH :: "assets/Sound/click.wav";
-NOTE_WAV_PATH :: "assets/Sound/Note.wav";
+// MIDI convention: C4 = 60. Sparse recordings cover intervening notes by pitch shift.
+Note_Sample :: struct {
+	path: string;
+	midi_note: int;
+}
+NOTE_SAMPLES :: Note_Sample.[
+	.{ "assets/Sound/Notes/C1vH.wav", 24 },
+	.{ "assets/Sound/Notes/Fs1vH.wav", 30 },
+	.{ "assets/Sound/Notes/B1vH.wav", 35 },
+	.{ "assets/Sound/Notes/Ds2vH.wav", 39 },
+	.{ "assets/Sound/Notes/Fs2vH.wav", 42 },
+	.{ "assets/Sound/Notes/B2vH.wav", 47 },
+	.{ "assets/Sound/Notes/Ds3vH.wav", 51 },
+	.{ "assets/Sound/Notes/Fs3vH.wav", 54 },
+	.{ "assets/Sound/Notes/A3vH.wav", 57 },
+	.{ "assets/Sound/Notes/C4vH.wav", 60 },
+	.{ "assets/Sound/Notes/Ds4vH.wav", 63 },
+	.{ "assets/Sound/Notes/Fs4vH.wav", 66 },
+	.{ "assets/Sound/Notes/A4vH.wav", 69 },
+	.{ "assets/Sound/Notes/C5vH.wav", 72 },
+	.{ "assets/Sound/Notes/Ds5vH.wav", 75 },
+	.{ "assets/Sound/Notes/Fs5vH.wav", 78 },
+	.{ "assets/Sound/Notes/A5vH.wav", 81 },
+	.{ "assets/Sound/Notes/C6vH.wav", 84 },
+	.{ "assets/Sound/Notes/Ds6vH.wav", 87 },
+	.{ "assets/Sound/Notes/Fs6vH.wav", 90 },
+	.{ "assets/Sound/Notes/A6vH.wav", 93 },
+	.{ "assets/Sound/Notes/C7vH.wav", 96 },
+	.{ "assets/Sound/Notes/Ds7vH.wav", 99 },
+	.{ "assets/Sound/Notes/Fs7vH.wav", 102 },
+	.{ "assets/Sound/Notes/A7vH.wav", 105 },
+	.{ "assets/Sound/Notes/B7vH.wav", 107 },
+];
 FOOTSTEP_SNOW_0_MP3_PATH :: "assets/Sound/footstep_snow_000.mp3";
 FOOTSTEP_SNOW_1_MP3_PATH :: "assets/Sound/footstep_snow_001.mp3";
 FOOTSTEP_SNOW_2_MP3_PATH :: "assets/Sound/footstep_snow_002.mp3";
