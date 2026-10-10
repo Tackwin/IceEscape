@@ -539,6 +539,35 @@ handle_entity_placing :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_Sta
 			editor.scene.spawn.position = world_pos;
 		}
 
+		if placing_type == type_info(Scene.Moving_Frame) {
+			a_path_is_already_selected := false;
+			if page.selected.count == 1 {
+				if page.selected[0].type.name == type_info(Scene.Moving_Frame).name {
+					a_path_is_already_selected = true;
+				}
+			}
+			if a_path_is_already_selected {
+				path := page.selected[0].ptr.(*Scene.Moving_Frame);
+				checkpoint: Scene.Moving_Frame_Key;
+				checkpoint.pos = world_pos;
+				
+				Scene.add_key_to_moving_frame(*editor.scene, path, checkpoint);
+			} else {
+				checkpoint: Scene.Moving_Frame_Key;
+				checkpoint.pos = world_pos;
+				
+				path: Scene.Moving_Frame;
+				path.id = Scene.allocate_id(*editor.scene);
+				array_add(*editor.scene.moving_frames, path);
+
+				Scene.add_key_to_moving_frame(
+					*editor.scene,
+					*editor.scene.moving_frames[editor.scene.moving_frames.count - 1],
+					checkpoint
+				);
+			}
+		}
+
 		if placing_type == type_info(Scene.Path) {
 			a_path_is_already_selected := false;
 			if page.selected.count == 1 {
@@ -557,7 +586,7 @@ handle_entity_placing :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_Sta
 				checkpoint.position = world_pos;
 				
 				path: Scene.Path;
-				path.id = editor.scene.paths.count;
+				path.id = Scene.allocate_id(*editor.scene);
 				array_add(*editor.scene.paths, path);
 
 				Scene.add_checkpoint_to_path(
@@ -641,13 +670,38 @@ handle_entity_picking :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_Sta
 
 		entities := get_scene_placeable_entities();
 		for entity: entities {
-			for 0..get_count(*editor.scene, entity)-1 {
-				pos := get_position(*editor.scene, entity, it);
+			if entity.type.name == type_info(Scene.Shuriken).name {
+				for 0..get_count(*editor.scene, entity)-1 {
+					shuriken := get_pointer(*editor.scene, entity, it).(*Scene.Shuriken);
+					pos := Scene.compute_shuriken_server_world_pos(editor.scene, shuriken);
+					
+					if in(aabb, v2(pos)) {
+						array_add(
+							*page.selected, .{ get_pointer(*editor.scene, entity, it), entity.type }
+						);
+					}
+				}
+			} else {
+				for 0..get_count(*editor.scene, entity)-1 {
+					pos := get_position(*editor.scene, entity, it);
 
+					if in(aabb, v2(pos)) {
+						array_add(
+							*page.selected, .{ get_pointer(*editor.scene, entity, it), entity.type }
+						);
+					}
+				}
+			}
+		}
+
+		// Handle moving frames
+		for * frame: editor.scene.moving_frames {
+			for idx: frame.keys.index..frame.keys.index + frame.keys.count - 1 {
+				key := editor.scene.moving_frame_keys[idx];
+				pos := key.pos;
 				if in(aabb, v2(pos)) {
-					array_add(
-						*page.selected, .{ get_pointer(*editor.scene, entity, it), entity.type }
-					);
+					array_add(*page.selected, .{ frame, type_info(Scene.Moving_Frame) });
+					break;
 				}
 			}
 		}
@@ -730,9 +784,9 @@ draw_mode_picker :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State) {
 			gui,
 			pos_size(
 				gui.controls.window_size.x - 256 - 64 - 4,
-				gui.controls.window_size.y - 512 - 4,
+				gui.controls.window_size.y - 512 - 4 - 128 - 32,
 				256 + 64,
-				512
+				512 + 128 + 32
 			)
 		);
 	}
@@ -889,6 +943,7 @@ draw_entity_picker_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GU
 		if GUI.button(gui, info.name, id = info.name) {
 			page.placing_entity_type = info;
 		}
+		GUI.move_cursor(gui, .{ 0, -6 });
 	}
 }
 
@@ -1183,7 +1238,99 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 					GUI.end(gui);
 
 				}
-				if struct_info.name == "ISpan" {
+				if field.type == type_info(Scene.ISpan(Scene.Shoot_Pattern)) {
+					scene := *editor.scene;
+					nutcracker := selected_entity_ptr.(*Scene.Nutcracker);
+					patterns := member_pointer(
+						selected_entity_type, selected_entity_ptr, field.path, Scene.ISpan(Scene.Shoot_Pattern)
+					);
+					changed := false;
+					GUI.row(gui);
+					add := GUI.labeled_text_button(
+						gui, "Shooting pattern", "Add", content_width, 16, id = "add_pattern"
+					);
+					if add {
+						// Keep each nutcracker's view contiguous without moving another nutcracker's entries.
+						page.picking_v3f_field = null;
+						if patterns.index + patterns.count != scene.shoot_patterns.count {
+							new_index := scene.shoot_patterns.count;
+							for 0..patterns.count - 1
+								array_add(*scene.shoot_patterns, scene.shoot_patterns[patterns.index + it]);
+							patterns.index = new_index;
+						}
+						entry: Scene.Shoot_Pattern;
+						entry.target = nutcracker.target;
+						array_add(*scene.shoot_patterns, entry);
+						patterns.count += 1;
+						changed = true;
+					}
+					GUI.end(gui);
+					for i: 0..patterns.count - 1 {
+						GUI.push_id(gui, i);
+						defer GUI.pop_id(gui);
+						pattern := Scene.get(patterns.*, scene.shoot_patterns, i);
+						if !pattern break;
+						GUI.row(gui);
+						target := GUI.labeled_v3_input(
+							gui, tprint("% target:", i), content_width - 32, 16,
+							value = pattern.target, drag_speed = 0.1, precision = 2, id = "pattern_target");
+						if target.changed {
+							pattern.target = target.value;
+							changed = true;
+						}
+						GUI.space(gui, 4);
+						if GUI.button_sized(gui, "X", .{ 16, 16 }, id = "pick_pattern_target") {
+							page.picking_v3f_field = *pattern.target;
+							page.was_rectangle_dragging = false;
+						}
+						GUI.end(gui);
+						GUI.move_cursor(gui, .{ 0, -10 });
+
+						GUI.row(gui);
+						delay := GUI.labeled_float_input(gui, "Time:", content_width - 120, 16,
+							value = pattern.cooldown, min_value = 0.0, drag_speed = 0.1, precision = 2, id = "pattern_time");
+						if delay.changed {
+							pattern.cooldown = delay.value;
+							changed = true;
+						}
+						GUI.space(gui, 4);
+						if GUI.button_sized(gui, "^", .{ 16, 16 }, id = "pattern_up", enabled = i > 0) {
+							page.picking_v3f_field = null;
+							previous := Scene.get(patterns.*, scene.shoot_patterns, i - 1);
+							swap(pattern, previous);
+							changed = true;
+						}
+						GUI.space(gui, 4);
+						if GUI.button_sized(gui, "v", .{ 16, 16 }, id = "pattern_down", enabled = i + 1 < patterns.count) {
+							page.picking_v3f_field = null;
+							next := Scene.get(patterns.*, scene.shoot_patterns, i + 1);
+							swap(pattern, next);
+							changed = true;
+						}
+						GUI.space(gui, 4);
+						remove_pattern := GUI.button_sized(gui, "Rem", .{ 24, 16 }, id = "remove_pattern");
+						GUI.end(gui);
+						GUI.move_cursor(gui, .{ 0, -6 });
+						if remove_pattern {
+							page.picking_v3f_field = null;
+							for j: i + 1..patterns.count - 1
+								scene.shoot_patterns[patterns.index + j - 1] = scene.shoot_patterns[patterns.index + j];
+							if patterns.index + patterns.count == scene.shoot_patterns.count
+								scene.shoot_patterns.count -= 1;
+							patterns.count -= 1;
+							changed = true;
+							break;
+						}
+					}
+					if changed {
+						nutcracker.shoot_pattern_index = 0;
+						nutcracker.last_throw_time = -1.0;
+						nutcracker.next_throw_time = -1.0;
+						Scene.prepare_nutcracker_pattern(scene, nutcracker);
+						nutcracker.next_throw_time += max(Scene.get_nutcracker_clock(scene, nutcracker), 0.0);
+					}
+				}
+				if field.type == type_info(Scene.ISpan(int)) {
 					scene := *editor.scene;
 					indices := member_pointer(
 						selected_entity_type, selected_entity_ptr, field.path, Scene.ISpan(int)
@@ -1253,6 +1400,101 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 				);
 				if checkbox.just_checked {
 					current_value.* = checkbox.checked;
+				}
+				GUI.end(gui);
+			}
+		}
+
+		// Moving Frame
+		if compare(selected_entity_type.name, "Moving_Frame") == 0 {
+			moving_frame := selected_entity_ptr.(*Scene.Moving_Frame);
+			keys := *editor.scene.moving_frame_keys;
+
+			add_checkpoint_clicked, _, _ := GUI.labeled_text_button(
+				gui, "Checkpoints", "Add", content_width, 24, id = "add_checkpoint_button"
+			);
+			if add_checkpoint_clicked {
+				// Add new checkpoint at the end
+				checkpoint: Scene.Moving_Frame_Key;
+				checkpoint.pos = V3f.{ 0, 0, 0 };
+				checkpoint.period = 1;
+				checkpoint.theta = 0;
+				
+				if moving_frame.keys.index + moving_frame.keys.count == keys.count {
+					array_add(keys, checkpoint);
+					moving_frame.keys.count += 1;
+				} else {
+					for 0..moving_frame.keys.count-1 {
+						array_add(keys, keys.data[moving_frame.keys.index + it]);
+					}
+					array_add(keys, checkpoint);
+					moving_frame.keys.count += 1;
+					moving_frame.keys.index = keys.count - moving_frame.keys.count;
+				}
+			}
+			add_shuriken_clicked, _, _ := GUI.labeled_text_button(
+				gui, "Shuriken", "Add", content_width, 24, id = "add_shuriken_button"
+			);
+			if add_shuriken_clicked {
+				shuriken: Scene.Shuriken;
+				shuriken.id = Scene.allocate_id(*editor.scene);
+				shuriken.frame_id = moving_frame.id;
+				array_add(*editor.scene.shurikens, shuriken);
+			}
+
+			for idx: moving_frame.keys.index..moving_frame.keys.index + moving_frame.keys.count-1 {
+				GUI.push_id(gui, idx);
+				defer GUI.pop_id(gui);
+				checkpoint := *editor.scene.moving_frame_keys[idx];
+
+				GUI.row(gui);
+				pos_result := GUI.labeled_v3_input(
+					gui,
+					tprint("cp %", idx),
+					content_width - 32,
+					24,
+					value = checkpoint.pos,
+					drag_speed = editor.grid_snapping,
+					precision = 2,
+					id = tprint("checkpoint_position_%", idx),
+				);
+				if pos_result.changed {
+					checkpoint.pos = pos_result.value;
+				}
+				GUI.space(gui, 8);
+				if GUI.button(gui, "X", id = tprint("checkpoint_pos_%", idx)) {
+					page.picking_v3f_field = *checkpoint.pos;
+					page.was_rectangle_dragging = false;
+				}
+				GUI.end(gui);
+				GUI.row(gui);
+				float_result := GUI.labeled_float_input(
+					gui,
+					"theta",
+					content_width,
+					24,
+					value = checkpoint.theta,
+					drag_speed = 0.1,
+					precision = 2,
+					id = tprint("checkpoint_theta_%", idx),
+				);
+				if float_result.changed {
+					checkpoint.theta = float_result.value;
+				}
+				GUI.end(gui);
+				GUI.row(gui);
+				float_result = GUI.labeled_float_input(
+					gui,
+					"period",
+					content_width,
+					24,
+					value = checkpoint.period,
+					drag_speed = 0.1,
+					precision = 2,
+					id = tprint("checkpoint_period_%", idx),
+				);
+				if float_result.changed {
+					checkpoint.period = float_result.value;
 				}
 				GUI.end(gui);
 			}

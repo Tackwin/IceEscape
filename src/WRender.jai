@@ -840,6 +840,7 @@ WFramegraph :: struct {
 		RECTANGLE :: 0;
 		CIRCLE :: 1;
 		LINE :: 2;
+		CLOCK :: 3;
 	}
 	Sdf_Instance :: struct {
 		FLAG_SCREEN_SPACE :: 1;
@@ -2162,6 +2163,38 @@ make_sdf_circle :: (
 	);
 }
 
+// Progress fills clockwise from the top; gap separates the fill from the outline's inner edge.
+make_sdf_clock :: (
+	position: V3f,
+	radius: float32,
+	outline_thickness: float32,
+	gap: float32,
+	progress: float32,
+	color: V4f,
+	screen_space: bool = false,
+	depth_test: bool = true,
+	rotation: float32 = 0.0,
+	screen_depth: float32 = 0.0
+) -> WFramegraph.Sdf_Instance {
+	aa_margin: float32 = 0.01;
+	if screen_space
+		aa_margin = 1.0;
+	radius = max(radius, 0.0);
+	outline_thickness = max(outline_thickness, 0.0);
+	quad_radius := radius + outline_thickness * 0.5 + aa_margin;
+	return make_sdf_instance(
+		WFramegraph.Sdf_Shape.CLOCK,
+		position,
+		.{ quad_radius, quad_radius },
+		color,
+		.{ radius, outline_thickness, clamp(progress, 0.0, 1.0), max(gap, 0.0) },
+		screen_space,
+		depth_test,
+		rotation,
+		screen_depth
+	);
+}
+
 // Lines are round-capped; half_length and full stroke width use world units or logical pixels.
 make_sdf_line :: (
 	position: V3f,
@@ -3181,9 +3214,17 @@ render_editor :: (
 
 	entities := get_scene_placeable_entities();
 	for entity: entities {
-		for 0..get_count(*editor.scene, entity)-1 {
-			pos := get_position(*editor.scene, entity, it);
-			add_debug_sphere(*extra, pos, scale=0.2);
+		if entity.type.name == type_info(Scene.Shuriken).name {
+			for 0..get_count(*editor.scene, entity)-1 {
+				shuriken := get_pointer(*editor.scene, entity, it).(*Scene.Shuriken);
+				pos := Scene.compute_shuriken_server_world_pos(editor.scene, shuriken);
+				add_debug_sphere(*extra, pos, scale=0.1);
+			}
+		} else {
+			for 0..get_count(*editor.scene, entity)-1 {
+				pos := get_position(*editor.scene, entity, it);
+				add_debug_sphere(*extra, pos, scale=0.2);
+			}
 		}
 	}
 
@@ -3298,9 +3339,32 @@ render_editor :: (
 		}
 	}
 
+	for frame: editor.scene.moving_frames {
+		prev_pos: V3f;
+		for idx: frame.keys.index..frame.keys.index + frame.keys.count - 1 {
+			key := editor.scene.moving_frame_keys[idx];
+			add_debug_sphere(*extra, key.pos, scale=0.1);
+
+			if idx > frame.keys.index {
+				add_debug_cylinder(
+					*extra, prev_pos, key.pos, color=V3f.{ 0.0, 1.0, 1.0 }, radius=0.05
+				);
+			}
+
+			prev_pos = key.pos;
+		}
+	}
+
 	for skull: editor.scene.skulls {
 		pos := Scene.compute_skull_pos(editor.scene, skull);
 		add_debug_sphere(*extra, pos, scale=0.5);
+	}
+
+	for editor.scene.nutcrackers {
+		for idx: 0..it.shoot_patterns.count-1 {
+			pos := editor.scene.shoot_patterns[idx + it.shoot_patterns.index].target;
+			add_debug_sphere(*extra, pos, scale=0.1, color=.{0, 0, 1, 1});
+		}
 	}
 
 	render_extra(frame, *frame.geometry, store, *extra);
@@ -3434,6 +3498,8 @@ render_scene :: (
 		render_bombs(frame, *frame.shadow, scene, store, *extra);
 		render_camp_ices(frame, *frame.shadow, scene, store, *extra);
 		render_pressbuttons(frame, *frame.shadow, scene, store, *extra);
+		render_snowballs(frame, *frame.shadow, scene, store, *extra);
+		render_nutcrackers(frame, *frame.shadow, scene, store, *extra);
 		render_jukeboxes(frame, *frame.shadow, scene, store, *extra, delta_time);
 		render_traps(frame, *frame.shadow, scene, store, *extra);
 		render_extra(frame, *frame.shadow, store, *extra);
@@ -3720,6 +3786,8 @@ render_scene :: (
 		render_power_ups(frame, *frame.geometry, scene, store, *extra);
 		render_turn_tables(frame, *frame.geometry, scene, store, *extra);
 		render_pressbuttons(frame, *frame.geometry, scene, store, *extra);
+		render_snowballs(frame, *frame.geometry, scene, store, *extra);
+		render_nutcrackers(frame, *frame.geometry, scene, store, *extra);
 		render_jukeboxes(frame, *frame.geometry, scene, store, *extra, delta_time);
 		render_block_rocks(frame, *frame.geometry, scene, store, *extra);
 		render_bombs(frame, *frame.geometry, scene, store, *extra);
@@ -4582,15 +4650,20 @@ render_camp_ices :: (
 render_bombs :: (
 	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
-	{
+	if pass == *frame.geometry {
 		instanced := append_sdf_instance_buffer(frame);
 		for scene.bombs {
 			if it.holder != -1
 				continue;
-			instance := make_sdf_circle(
+			progress: float32 = 1.0;
+			if it.server.explosion_time > 0.0
+				progress = it.client.time / it.server.explosion_time;
+			instance := make_sdf_clock(
 				v3(v2(it.client.position), 0.01),
 				it.server.radius_hitbox,
 				0.02,
+				0.02,
+				progress,
 				.{ 0.4, 0.4, 0.4, 0.4 }
 			);
 			instanced.count += 1;
@@ -4756,6 +4829,53 @@ render_pressbuttons_radio :: (
 	}
 	if instanced.count > 0
 		commit_geometry(frame, pass, *store.pressbutton_pressed_radio, instanced.count);
+}
+
+render_snowballs :: (
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+) {
+	instanced := append_instance_buffer(frame);
+	for scene.snowballs {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		instance.M = M4f.translate(it.position);
+		instance.texture_rect = Store.Colormaps_Rect.prop;
+	}
+	if instanced.count > 0
+		commit_geometry(frame, pass, *store.snowball_model, instanced.count);
+}
+
+render_nutcrackers :: (
+	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
+) {
+	instanced := append_instance_buffer(frame);
+	for scene.nutcrackers {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+		M := to_rotation_matrix(from_unit_vectors(v3f(0, -1, 0), it.current_dir));
+		M = M4f.translate(it.position) * M;
+		instance.M = M;
+		instance.texture_rect = Store.Colormaps_Rect.prop;
+	}
+	if instanced.count > 0
+		commit_geometry(frame, pass, *store.nutcracker_body_model, instanced.count);
+	instanced = append_instance_buffer(frame);
+	for scene.nutcrackers {
+		instanced.count += 1;
+		instance := *instanced[instanced.count - 1];
+		instance.* = .{};
+
+		M := M4f.identity();
+		M = to_rotation_matrix(axis_angle(v3f(-1, 0, 0), it.current_arm_angle)) * M;
+		M = to_rotation_matrix(from_unit_vectors(v3f(0, -1, 0), it.current_dir)) * M;
+		M = M4f.translate(it.position + v3f(0, 0, 0.54)) * M;
+		instance.M = M;
+		instance.texture_rect = Store.Colormaps_Rect.prop;
+	}
+	if instanced.count > 0
+		commit_geometry(frame, pass, *store.nutcracker_arm_model, instanced.count);
 }
 
 render_jukeboxes :: (
@@ -4936,6 +5056,29 @@ render_robots :: (
 render_flags :: (
 	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra
 ) {
+	if pass == *frame.geometry {
+		instanced := append_sdf_instance_buffer(frame);
+		for scene.flags {
+			if it.activated
+				continue;
+			
+			needed := ceil(scene.players.count / 1.5).(int);
+			left := clamp(it.last_player_count / needed.(float), 0.0, 1.0);
+			instanced.count += 1;
+			instanced[instanced.count - 1] = make_sdf_clock(
+				v3(v2(it.position), 0.01),
+				0.5,
+				0.02,
+				0.02,
+				0.75,
+				.{ 0.4, 0.4, 0.4, 0.4 }
+			);
+		}
+
+		if instanced.count > 0 {
+			commit_sdf(frame, pass, instanced.count);
+		}
+	}
 	{
 		instanced := append_instance_buffer(frame);
 		for scene.flags {

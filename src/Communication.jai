@@ -256,6 +256,16 @@ Command :: struct {
 	Request_Stats :: struct {
 		player_ids: [16] int;
 	}
+	Throw_Snowball :: struct {
+		thrower_id: int;
+		snowball_id: int;
+		time: float32;
+		position: V3f;
+		direction: V3f;
+		strength: float;
+		next_pattern_index: int;
+		next_throw_time: float32;
+	}
 	Sync_Stats :: struct {
 		player_id: int;
 		death: int;
@@ -730,7 +740,7 @@ Command :: struct {
 		Ask_Enter_Quick_Instance, Set_Thumbnail, Get_Thumbnail, Asset_Chunk, Create_Bomberman,
 		Ans_Create_Bomberman, Pickup_Power_Up, Sync_Camp_Ice,
 		Ask_Play_Session, Ans_Play_Session, Ask_Delete_Terrain, Ans_Delete_Terrain,
-		Debug_Request, Debug_Reply, Sync_Block_Rock, Pity_Time
+		Debug_Request, Debug_Reply, Sync_Block_Rock, Pity_Time, Throw_Snowball
 	);
 	payload: Payload_t;
 	sent_timestamp: float64;

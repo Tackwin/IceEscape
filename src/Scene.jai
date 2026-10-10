@@ -120,9 +120,9 @@ for_expansion :: (iterator: ISpan_Iterator, body: Code, flags: For_Flags) #expan
 }
 
 get :: (span: ISpan($T), array: [] T, index: s64) -> *T {
-	if index >= span.count
+	if index < 0 || index >= span.count || span.index < 0 || span.index >= array.count
 		return null;
-	if span.index + index > xx array.count
+	if index >= array.count - span.index
 		return null;
 
 	return *array[span.index + index];
@@ -146,6 +146,41 @@ Debris :: struct {
 	q: Qf;
 
 	birthtime: float;
+}
+
+Nutcracker :: struct {
+	id: int;
+
+	position: V3f; @edit @picking
+	current_dir: V3f = .{ 1.0, 0.0, 0.0 };
+	current_arm_angle := 0.0;
+	time_offset: float = 0.0; @edit;
+
+	target: V3f;
+
+	next_throw_time := -1.0; // Initialized from the first pattern's delay.
+	last_throw_time := -1.0;
+
+	throw_time_cooldown := 1.0;
+
+	shoot_pattern_index: int = 0;
+	shoot_patterns: ISpan(Shoot_Pattern); @edit
+}
+
+Shoot_Pattern :: struct {
+	target: V3f; @edit @picking
+	cooldown: float = 1.0; @edit; // Seconds to wait before firing at this target.
+}
+
+Snowball :: struct {
+	id: int;
+
+	position: V3f;
+	direction: V3f;
+
+	speed: float;
+
+	radius := 0.07;
 }
 
 Gravestone :: struct {
@@ -197,7 +232,7 @@ Scene :: struct {
 	keys: [..] Key; @allocate("lifetime") @clear("run")
 	gates: [..] Gate; @allocate("lifetime") @clear("run")
 	moving_frames: [..] Moving_Frame; @allocate("lifetime") @clear("run")
-	moving_frame_keys: [..] Moving_Frame.Key; @allocate("lifetime") @clear("run")
+	moving_frame_keys: [..] Moving_Frame_Key; @allocate("lifetime") @clear("run")
 	shurikens: [..] Shuriken; @allocate("lifetime") @clear("run")
 	camera_rails: [..] Camera_Rail; @allocate("lifetime") @clear("run")
 	camera_rail_waypoints: [..] V3f; @allocate("lifetime") @clear("run")
@@ -230,7 +265,10 @@ Scene :: struct {
 	jukeboxes: [..] Jukebox; @allocate("lifetime") @clear("run")
 	debris: [..] Debris; @allocate("lifetime") @clear("run")
 	gravestones: [..] Gravestone; @allocate("lifetime") @clear("run")
+	nutcrackers: [..] Nutcracker; @allocate("lifetime") @clear("run")
+	snowballs: [..] Snowball; @allocate("lifetime") @clear("run")
 	indices: [..] int; @allocate("lifetime") @clear("run")
+	shoot_patterns: [..] Shoot_Pattern; @allocate("lifetime") @clear("run")
 	trigger_activated: Table(int, bool); @allocate("lifetime") @clear("run")
 
 	client_to_server: [..] Command; @allocate("lifetime")
@@ -1518,13 +1556,7 @@ Stand_In :: struct {
 Moving_Frame :: struct {
 	id: int;
 
-	Key :: struct {
-		pos: V3f;
-		theta: float;
-		period: float;
-	}
-
-	keys: ISpan(Key);
+	keys: ISpan(Moving_Frame_Key);
 
 	server: struct {
 		speed: float = 1.0;
@@ -1536,13 +1568,19 @@ Moving_Frame :: struct {
 
 	sum_period := 0.0;
 }
+Moving_Frame_Key :: struct {
+	pos: V3f;
+	theta: float;
+	period: float;
+}
+
 
 Shuriken :: struct {
 	id: int;
 	frame_id := -1;
 
 	server: struct {
-		position: V3f;
+		position: V3f = .{ 0, 0, 0 }; @edit
 
 		radius_hitbox := 0.2;
 	}
@@ -1729,6 +1767,14 @@ Player :: struct {
 find_tombstone_by_player_id :: (scene: Scene, id: int) -> *Tombstone {
 	for * scene.tombstones {
 		if it.player_id == id
+			return it;
+	}
+	return null;
+}
+
+find_by_nutcracker_id :: (scene: Scene, id: int) -> *Nutcracker {
+	for * scene.nutcrackers {
+		if it.id == id
 			return it;
 	}
 	return null;
@@ -1968,6 +2014,21 @@ restart :: (scene: *Scene, params: Scene_Parameters) {
 	}
 	scene.end_scene_countdown_started = false;
 	scene.succeed = false;
+}
+
+add_key_to_moving_frame :: (scene: *Scene, moving_frame: *Moving_Frame, key: Moving_Frame_Key) {
+	if moving_frame.keys.index + moving_frame.keys.count == scene.moving_frame_keys.count {
+		array_add(*scene.moving_frame_keys, key);
+		moving_frame.keys.count += 1;
+		return;
+	}
+
+	for idx: moving_frame.keys.index..moving_frame.keys.index + moving_frame.keys.count - 1 {
+		array_add(*scene.moving_frame_keys, scene.moving_frame_keys[idx]);
+	}
+	array_add(*scene.moving_frame_keys, key);
+	moving_frame.keys.index = scene.moving_frame_keys.count - moving_frame.keys.count;
+	moving_frame.keys.count += 1;
 }
 
 add_checkpoint_to_path :: (scene: *Scene, path: *Path, checkpoint: Checkpoint) {
@@ -2514,6 +2575,14 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		update_shuriken(scene, it, dt);
 	}
 
+	for * scene.nutcrackers {
+		update_nutcracker(scene, it, dt);
+	}
+
+	for * scene.snowballs {
+		update_snowball(scene, it, dt);
+	}
+
 	for * scene.flags {
 		update_flag(scene, it, dt, result);
 	}
@@ -2780,6 +2849,59 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 				continue;
 			}
 		}
+	}
+
+	// >RULE: snowball kill players
+	for *snowball: scene.snowballs {
+		for * player, player_index: scene.players {
+			if player.server.dead
+				continue;
+
+			d := norm(v2(snowball.position - player.server.position));
+			if d < player.server.radius_hurtbox_shuriken + snowball.radius {
+				should_die[player_index].soft_die = true;
+				should_die_source = snowball.position;
+				should_die_strength = 1.0;
+			}
+		}
+	}
+
+	// >RULE: nutcracker throw snowballs
+	for *nutcracker: scene.nutcrackers {
+		prepare_nutcracker_pattern(scene, nutcracker);
+		T := get_nutcracker_clock(scene, nutcracker);
+		if T < nutcracker.next_throw_time
+			continue;
+
+		snowball: Snowball;
+		snowball.position = nutcracker.position + v3f(0, 0, 0.5);
+		snowball.direction = nutcracker.current_dir;
+		snowball.speed = 5;
+		snowball.id = allocate_id(scene);
+		throw_snowball(scene, snowball);
+
+		nutcracker.last_throw_time = T;
+		if nutcracker.shoot_patterns.count > 0
+			nutcracker.shoot_pattern_index = (nutcracker.shoot_pattern_index + 1) % nutcracker.shoot_patterns.count;
+		next_pattern := get(nutcracker.shoot_patterns, scene.shoot_patterns, nutcracker.shoot_pattern_index);
+		if next_pattern {
+			// Advance the scheduled deadline, so frame rounding does not accumulate in the loop.
+			nutcracker.next_throw_time += max(next_pattern.cooldown, 0.0);
+			nutcracker.target = next_pattern.target;
+		} else {
+			nutcracker.next_throw_time = T + 5 * max(nutcracker.throw_time_cooldown, 0.0);
+		}
+
+		command: Command.Throw_Snowball;
+		command.time = T;
+		command.thrower_id = nutcracker.id;
+		command.snowball_id = snowball.id;
+		command.position = snowball.position;
+		command.direction = snowball.direction;
+		command.strength = snowball.speed;
+		command.next_pattern_index = nutcracker.shoot_pattern_index;
+		command.next_throw_time = nutcracker.next_throw_time;
+		array_add(*result.broadcast, make_command(command));
 	}
 
 	// >RULE power up gets destroyed by explosions
@@ -4198,6 +4320,66 @@ update_within_zone :: (scene: *Scene, within: *Within_Zone, dt: float32) {
 	}
 }
 
+throw_snowball :: (scene: *Scene, snowball: Snowball) {
+	array_add(*scene.snowballs, snowball);
+}
+
+update_snowball :: (scene: Scene, snowball: *Snowball, dt: float32) {
+	snowball.position += snowball.direction * snowball.speed * dt;
+}
+
+get_nutcracker_clock :: (scene: Scene, nutcracker: Nutcracker) -> float32 {
+	clock := ifx scene.is_server then scene.server.clock else scene.client.clock;
+	return clock.(float32) - nutcracker.time_offset;
+}
+
+prepare_nutcracker_pattern :: (scene: Scene, nutcracker: *Nutcracker) {
+	if nutcracker.shoot_patterns.count > 0
+		nutcracker.shoot_pattern_index = max(nutcracker.shoot_pattern_index, 0) % nutcracker.shoot_patterns.count;
+	else
+		nutcracker.shoot_pattern_index = 0;
+	pattern := get(nutcracker.shoot_patterns, scene.shoot_patterns, nutcracker.shoot_pattern_index);
+	if pattern
+		nutcracker.target = pattern.target;
+	if nutcracker.next_throw_time < 0.0 {
+		nutcracker.next_throw_time = 0.0;
+		if pattern
+			nutcracker.next_throw_time = max(pattern.cooldown, 0.0);
+	}
+}
+
+update_nutcracker :: (scene: Scene, nutcracker: *Nutcracker, dt: float32) {
+	prepare_nutcracker_pattern(scene, nutcracker);
+	aim := nutcracker.target - nutcracker.position;
+	nutcracker.current_dir = damp(nutcracker.current_dir, normalize(aim), 25.0, dt);
+
+	T := get_nutcracker_clock(scene, nutcracker);
+
+	WINDING_TIME := 1.0;
+	SHOOT_TIME := 0.25;
+	
+	t_from_throw := T - nutcracker.last_throw_time;
+	t_to_throw   := clamp(WINDING_TIME - (nutcracker.next_throw_time - T), 0.0, WINDING_TIME);
+	a_target := 0.0;
+	a_throw := 0.0 * 3.141592 / 2;
+
+	if t_to_throw < t_from_throw && t_to_throw > 0 {
+		t := clamp(t_to_throw / WINDING_TIME, 0.0, 1.0);
+		t = min(sqrt(t / 0.75), 1.0);
+		a := (t * (3.141592 - a_throw)).(float32);
+		a_target = a;
+	}
+	if nutcracker.last_throw_time >= 0.0 && t_from_throw >= 0.0 && t_from_throw < SHOOT_TIME && t_to_throw == 0 {
+		t := clamp(t_from_throw / SHOOT_TIME, 0.0, 1.0);
+		t = 1.0 - t;
+		t = t * t * t;
+		a := 3.141592 * t.(float32);
+		a_target = a;
+	}
+
+	nutcracker.current_arm_angle = damp(nutcracker.current_arm_angle, a_target, 30, dt);
+}
+
 update_shuriken :: (scene: Scene, shuriken: *Shuriken, dt: float32) {
 	shuriken.client.theta += shuriken.client.theta_speed * dt;
 }
@@ -4804,6 +4986,25 @@ process_client_only :: (
 		return true;
 	}
 	
+	snow_throw: *Command.Throw_Snowball = isa(command.payload, Command.Throw_Snowball);
+	if snow_throw {
+		nutcracker := find_by_nutcracker_id(scene, snow_throw.thrower_id);
+		if nutcracker {
+			nutcracker.last_throw_time = snow_throw.time;
+			nutcracker.shoot_pattern_index = snow_throw.next_pattern_index;
+			nutcracker.next_throw_time = snow_throw.next_throw_time;
+			prepare_nutcracker_pattern(scene, nutcracker);
+		}
+
+		snowball: Snowball;
+		snowball.id = snow_throw.snowball_id;
+		snowball.position = snow_throw.position;
+		snowball.direction = snow_throw.direction;
+		snowball.speed = snow_throw.strength;
+		throw_snowball(scene, snowball);
+		return true;
+	}
+
 	power_up_pickup: *Command.Pickup_Power_Up = isa(command.payload, Command.Pickup_Power_Up);
 	if power_up_pickup {
 		powerup := find_by_power_up_id(scene, power_up_pickup.power_up_id);
@@ -5864,7 +6065,50 @@ frame
 		scene.camera_max.x - scene.camera_min.x, scene.camera_max.y - scene.camera_min.y,
 		scene.origin_tile_space.x, scene.origin_tile_space.y
 	);
+
+	for * scene.shurikens {
+		print_to_builder(
+			*sb,
+			#string SHURIKEN
+shuriken
+- position: % % %
+- frame_id: %
+			SHURIKEN,
+			it.server.position.x, it.server.position.y, it.server.position.z,
+			it.frame_id
+		);
+	}
 	
+	for * scene.moving_frames {
+		print_to_builder(
+			*sb,
+			#string MOVING_FRAME
+moving_frame
+- speed: %
+- offset: %
+			MOVING_FRAME,
+			it.server.speed,
+			it.server.offset
+		);
+
+		for key_idx: 0..it.keys.count-1 {
+			key := scene.moving_frame_keys[it.keys.index + key_idx];
+
+			print_to_builder(
+				*sb,
+				#string MOVING_FRAME_KEY
+- key
+-- position: % % %
+-- theta: %
+-- period: %
+				MOVING_FRAME_KEY,
+				key.pos.x, key.pos.y, key.pos.z,
+				key.theta / 2 / 3.141592653589793,
+				key.period
+			);
+		}
+	}
+
 	for * scene.flags {
 		print_to_builder(
 			*sb,
@@ -6054,6 +6298,26 @@ PRESSBUTTON,
 		);
 		if it.is_radio {
 			print_to_builder(*sb, "- radio\n");
+		}
+	}
+
+	for * scene.nutcrackers {
+		print_to_builder(
+			*sb,
+			#string NUTCRACKER
+nutcracker
+- position: % % %
+- target: % % %
+- time_offset: %
+- throw_time_cooldown: %
+NUTCRACKER,
+			it.position.x, it.position.y, it.position.z,
+			it.target.x, it.target.y, it.target.z,
+			it.time_offset, it.throw_time_cooldown
+		);
+		for pattern: iterator(it.shoot_patterns, scene.shoot_patterns) {
+			print_to_builder(*sb, "- shoot_pattern\n-- target: % % %\n-- time: %\n",
+				pattern.target.x, pattern.target.y, pattern.target.z, pattern.cooldown);
 		}
 	}
 

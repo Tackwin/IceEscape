@@ -238,6 +238,9 @@ LOSER_MP3_PATH :: "assets/Sound/loser.mp3";
 #insert #run embed_data("PROP_COLORMAP", "Images/prop_colormap.png", #filepath);
 #insert #run embed_data("SKYBOX_OBJ", "skybox.obj", #filepath);
 #insert #run embed_data("END_HOOK_OBJ", "end_hook.obj", #filepath);
+#insert #run embed_data("NUTCRACKER_BODY_OBJ", "Mesh/nutcracker_body.obj", #filepath);
+#insert #run embed_data("NUTCRACKER_ARM_OBJ", "Mesh/nutcracker_arm.obj", #filepath);
+#insert #run embed_data("SNOWBALL_OBJ", "Mesh/snowball.obj", #filepath);
 
 #insert #run embed_data("ROBOT_A0_OBJ", "robot_A0.obj", #filepath);
 #insert #run embed_data("ROBOT_A1_OBJ", "robot_A1.obj", #filepath);
@@ -377,6 +380,9 @@ load_everything :: (platform: Platform) {
 			"ROCK_MEDIUM",
 			"SKYBOX_OBJ",
 			"END_HOOK_OBJ",
+			"SNOWBALL_OBJ",
+			"NUTCRACKER_BODY_OBJ",
+			"NUTCRACKER_ARM_OBJ",
 			"SKYBOX_VERTEX",
 			"SKYBOX_FRAGMENT",
 			"BOAT_ROW_OBJ",

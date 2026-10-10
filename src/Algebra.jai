@@ -764,6 +764,9 @@ v2 :: (v3: V3($T)) -> V2(T) {
 v3 :: (x: $T, y: T, z: T) -> V3(T) {
 	return .{ x, y, z };
 }
+v3f :: (x: float, y: float, z: float) -> V3(float) {
+	return .{ x, y, z };
+}
 v3 :: (v2: V2($T), z := 0.0) -> V3(T) {
 	return .{ v2.x, v2.y, z };
 }

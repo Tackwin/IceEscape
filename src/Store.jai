@@ -128,6 +128,9 @@ Store :: struct #type_info_none {
 	pressbutton_pressed_radio: WRender.Model;
 	pressbutton_unpressed_radio: WRender.Model;
 	lantern_model: WRender.Model;
+	nutcracker_body_model: WRender.Model;
+	nutcracker_arm_model: WRender.Model;
+	snowball_model: WRender.Model;
 
 	antiair_camion_model: WRender.Model;
 	antiair_canon_model: WRender.Model;
@@ -896,6 +899,9 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	store.pressbutton_pressed_radio = WRender.Model.make_from_obj(Assets.PRESSBUTTON_PRESSED_RADIO_OBJ, "pressbutton_pressed_radio");
 	store.pressbutton_unpressed_radio = WRender.Model.make_from_obj(Assets.PRESSBUTTON_UNPRESSED_RADIO_OBJ, "pressbutton_unpressed_radio");
 	store.lantern_model = WRender.Model.make_from_obj(Assets.LANTERN_OBJ, "lantern");
+	store.nutcracker_body_model = WRender.Model.make_from_obj(Assets.NUTCRACKER_BODY_OBJ, "nutcracker_body");
+	store.nutcracker_arm_model = WRender.Model.make_from_obj(Assets.NUTCRACKER_ARM_OBJ, "nutcracker_arm");
+	store.snowball_model = WRender.Model.make_from_obj(Assets.SNOWBALL_OBJ, "snowball");
 	store.pirateship_model = WRender.Model.make_from_obj(Assets.PIRATE_SHIP_OBJ, "pirateship");
 	store.coin_model = WRender.Model.make_from_obj(Assets.COIN_OBJ, "coin");
 	store.key_model = WRender.Model.make_from_obj(Assets.KEY_OBJ, "key");

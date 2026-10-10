@@ -554,7 +554,7 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 				}
 
 				if scan2(line, "- key") {
-					key: Moving_Frame.Key;
+					key: Moving_Frame_Key;
 					defer array_add(*scene.moving_frame_keys, key);
 
 					cursor += 1;
@@ -661,6 +661,74 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 					continue;
 
 				print("Error reading skull, unrecognized line: % (L%)\n", line, cursor);
+			}
+
+			cursor -= 1;
+		}
+
+		if scan2(line, "nutcracker") {
+			nutcracker: Nutcracker;
+			nutcracker.id = scene.nutcrackers.count + 1;
+			nutcracker.shoot_patterns.index = scene.shoot_patterns.count;
+			defer {
+				nutcracker.shoot_patterns.count = scene.shoot_patterns.count - nutcracker.shoot_patterns.index;
+				array_add(*scene.nutcrackers, nutcracker);
+			}
+
+			cursor += 1;
+			while cursor < lines.count {
+				defer cursor += 1;
+				line := lines[cursor];
+
+				if line.count == 0
+					continue;
+				if starts_with(line, "//")
+					continue;
+				if !starts_with(line, "- ") {
+					cursor -= 1;
+					break;
+				}
+
+				pos := *nutcracker.position;
+				if scan2(line, "- position: % % %", *pos.x, *pos.y, *pos.z)
+					continue;
+
+				target := *nutcracker.target;
+				if scan2(line, "- target: % % %", *target.x, *target.y, *target.z)
+					continue;
+				if scan2(line, "- time_offset: %", *nutcracker.time_offset)
+					continue;
+				if scan2(line, "- throw_time_cooldown: %", *nutcracker.throw_time_cooldown)
+					continue;
+
+				if scan2(line, "- shoot_pattern") {
+					pattern: Shoot_Pattern;
+					defer array_add(*scene.shoot_patterns, pattern);
+					cursor += 1;
+					while cursor < lines.count {
+						defer cursor += 1;
+						line := lines[cursor];
+						if line.count == 0 || starts_with(line, "//")
+							continue;
+						if !starts_with(line, "-- ") {
+							cursor -= 1;
+							break;
+						}
+						target := *pattern.target;
+						if scan2(line, "-- target: % % %", *target.x, *target.y, *target.z)
+							continue;
+						if scan2(line, "-- time: %", *pattern.cooldown) ||
+						   scan2(line, "-- cooldown: %", *pattern.cooldown) {
+							pattern.cooldown = max(pattern.cooldown, 0.0);
+							continue;
+						}
+						print("Error reading shooting pattern, unrecognized line: % (L%)\n", line, cursor);
+					}
+					cursor -= 1;
+					continue;
+				}
+
+				print("Error reading nutcracker, unrecognized line: % (L%)\n", line, cursor);
 			}
 
 			cursor -= 1;

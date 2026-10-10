@@ -3,6 +3,7 @@ diagnostic(off, derivative_uniformity);
 const SHAPE_RECT: u32 = 0u;
 const SHAPE_CIRCLE: u32 = 1u;
 const SHAPE_LINE: u32 = 2u;
+const SHAPE_CLOCK: u32 = 3u;
 
 const FLAG_SCREEN_SPACE: u32 = 1u;
 const FLAG_DEPTH_TEST: u32 = 2u;
@@ -15,6 +16,7 @@ struct SdfInstance {
 	// Rectangle: corner radius, outline thickness, then shape half-width and half-height.
 	// Circle: radius and outline thickness.
 	// Line: half-length and thickness.
+	// Clock: radius, outline thickness, normalized progress, gap to the inset fill.
 	parameters: vec4<f32>,
 	shape: u32,
 	flags: u32,
@@ -93,6 +95,30 @@ fn rectangle_distance(point: vec2<f32>, half_size: vec2<f32>, radius: f32) -> f3
 	return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - r;
 }
 
+fn clock_distance(point: vec2<f32>, parameters: vec4<f32>) -> f32 {
+	let radius = parameters.x;
+	let ring = abs(length(point) - radius) - parameters.y * 0.5;
+	let fill_radius = max(radius - parameters.y * 0.5 - parameters.w, 0.0);
+	let progress = clamp(parameters.z, 0.0, 1.0);
+	if (progress <= 0.0 || fill_radius <= 0.0) {
+		return ring;
+	}
+	let disk = length(point) - fill_radius;
+	if (progress >= 1.0) {
+		return min(ring, disk);
+	}
+
+	// Rotate the sector's bisector onto +Y, then fold its two radial edges together.
+	let half_angle = progress * 3.141592653589793;
+	let rotated = rotate_2d(point, half_angle);
+	let folded = vec2<f32>(abs(rotated.x), rotated.y);
+	let edge = vec2<f32>(sin(half_angle), cos(half_angle));
+	let edge_distance = length(folded - edge * clamp(dot(folded, edge), 0.0, fill_radius));
+	let side = sign(edge.y * folded.x - edge.x * folded.y);
+	let sector = max(disk, edge_distance * side);
+	return min(ring, sector);
+}
+
 fn shape_distance(instance: SdfInstance, point: vec2<f32>) -> f32 {
 	if (instance.shape == SHAPE_RECT) {
 		return rectangle_distance(point, instance.parameters.zw, instance.parameters.x);
@@ -104,13 +130,19 @@ fn shape_distance(instance: SdfInstance, point: vec2<f32>) -> f32 {
 		let q = vec2<f32>(abs(point.x) - instance.parameters.x, point.y);
 		return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - instance.parameters.y * 0.5;
 	}
+	if (instance.shape == SHAPE_CLOCK) {
+		// Logical screen coordinates have their Y axis pointing down.
+		let clock_point = vec2<f32>(point.x, select(point.y, -point.y,
+			(instance.flags & FLAG_SCREEN_SPACE) != 0u));
+		return clock_distance(clock_point, instance.parameters);
+	}
 	return 1.0e20;
 }
 
 @fragment fn fs(input: VertexOutput) -> FragmentOutput {
 	let instance = instances[input.instance_index];
 	var distance = shape_distance(instance, input.local_position);
-	if (instance.shape != SHAPE_LINE && instance.parameters.y > 0.0) {
+	if ((instance.shape == SHAPE_RECT || instance.shape == SHAPE_CIRCLE) && instance.parameters.y > 0.0) {
 		distance = abs(distance) - instance.parameters.y * 0.5;
 	}
 	let antialias_width = max(fwidth(distance), 0.000001);

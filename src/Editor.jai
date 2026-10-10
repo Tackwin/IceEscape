@@ -16,6 +16,7 @@ editable_entities_type :: Type.[
 	Scene.Flag,
 	Scene.Key,
 	Scene.Path,
+	Scene.Moving_Frame,
 	Scene.Skull,
 	Scene.Spawn,
 	Scene.Bomb_Spawner,
@@ -28,7 +29,8 @@ editable_entities_type :: Type.[
 	Scene.AntiAir,
 	Scene.Robot,
 	Scene.Wind_Zone,
-	Scene.Jukebox
+	Scene.Jukebox,
+	Scene.Nutcracker
 ];
 
 Editor :: struct {
