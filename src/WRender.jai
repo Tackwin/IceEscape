@@ -3795,6 +3795,7 @@ render_scene :: (
 		render_traps(frame, *frame.geometry, scene, store, *extra);
 		render_explosions(frame, *frame.geometry, scene, store, *extra);
 		render_within_zones(frame, *frame.geometry, scene, store, *extra);
+		render_global_wind(frame, scene);
 		render_wind_zones(frame, *frame.geometry, scene, store, *extra);
 		render_extra(frame, *frame.geometry, store, *extra);
 		render_safezones(frame, *frame.geometry, scene, store, *extra);
@@ -4072,58 +4073,6 @@ render_extra_quads :: (
 	commit_geometry(frame, pass, *store.tile_model, instanced.count);
 }
 
-lattice_vector :: (x: int, y: int, z: int, w: int, seed_value: s64) -> V3f {
-	key := (x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ (w * 2654435761) ^ (seed_value * 6364136223846793005);
-	// Negative lattice coordinates are valid; keep the seed nonnegative before converting to u64.
-	state := seed((key & 0x7FFFFFFFFFFFFFFF).(u64));
-	a := ((random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
-	b := ((random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
-	c := ((random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
-	return .{ a, b, c };
-}
-blend_vector :: (a: V3f, b: V3f, t: float32) -> V3f {
-	return a + (b - a) * t;
-}
-wind_noise_slice :: (
-	x: int, y: int, z: int, w: int, ux: float32, uy: float32, uz: float32, sv: s64
-) -> V3f {
-	bottom0 := blend_vector(
-		lattice_vector(x, y, z, w, sv), lattice_vector(x + 1, y, z, w, sv), ux
-	);
-	bottom1 := blend_vector(
-		lattice_vector(x, y + 1, z, w, sv), lattice_vector(x + 1, y + 1, z, w, sv), ux
-	);
-	top0 := blend_vector(
-		lattice_vector(x, y, z + 1, w, sv), lattice_vector(x + 1, y, z + 1, w, sv), ux
-	);
-	top1 := blend_vector(
-		lattice_vector(x, y + 1, z + 1, w, sv), lattice_vector(x + 1, y + 1, z + 1, w, sv), ux
-	);
-	return blend_vector(blend_vector(bottom0, bottom1, uy), blend_vector(top0, top1, uy), uz);
-}
-// One 4D vector field for every zone; 1.25 world units per spatial noise cell.
-wind_noise :: (world_position: V3f, clock: float64, seed_value: s64) -> V3f {
-	p := world_position / 1.25;
-	x := floor(p.x).(int);
-	y := floor(p.y).(int);
-	z := floor(p.z).(int);
-	w_coord := clock;
-	w := floor(w_coord).(int);
-	fx := p.x - x.(float32);
-	fy := p.y - y.(float32);
-	fz := p.z - z.(float32);
-	fw := (w_coord - w.(float64)).(float32);
-	ux := fx * fx * (3.0 - 2.0 * fx);
-	uy := fy * fy * (3.0 - 2.0 * fy);
-	uz := fz * fz * (3.0 - 2.0 * fz);
-	uw := fw * fw * (3.0 - 2.0 * fw);
-	return blend_vector(
-		wind_noise_slice(x, y, z, w, ux, uy, uz, seed_value),
-		wind_noise_slice(x, y, z, w + 1, ux, uy, uz, seed_value),
-		uw
-	);
-}
-
 append_trail_wind_box :: (
 	seed_value: int,
 	box_pos: V3f,
@@ -4216,7 +4165,7 @@ append_trail_wind_box :: (
 		// Displace the completed straight trail without weakening the field at zone borders.
 		amplitude := 0.24 * strength / (1.0 + strength);
 		for 0..7 {
-			noise := wind_noise(points[it].position, clock, 0);
+			noise := Scene.wind_noise(points[it].position, clock, 0);
 			noise.z *= 0.5;
 			noise -= trail_direction * dot(noise, trail_direction);
 			points[it].position += noise * amplitude;
@@ -4271,7 +4220,7 @@ append_trail_burst_sphere :: (
 			t := it.(float32) / 7.0;
 			distance := tail_distance + (head_distance - tail_distance) * t;
 			position := sphere_pos + trail_direction * distance;
-			noise := wind_noise(position, time, 0);
+			noise := Scene.wind_noise(position, time, 0);
 			noise.z *= 0.5;
 			noise -= trail_direction * dot(noise, trail_direction);
 			// Keep the impact point fixed and taper displacement at the outer sphere.
@@ -4284,6 +4233,10 @@ append_trail_burst_sphere :: (
 		trail_instanced.count += 1;
 		trail_instanced.data[trail_instanced.count - 1] = make_trail_instance(points, color = color);
 	}
+}
+
+// Short-lived streamlines cover the terrain and follow the cosmetic particle velocity field.
+render_global_wind :: (frame: *Frame, scene: Scene.Scene) {
 }
 
 render_wind_zones :: (
@@ -4890,7 +4843,7 @@ render_jukeboxes :: (
 		target_scale: float = 1.0;
 		if it.hit_time >= 0 && dt >= 0 && dt < 0.75 {
 			amount := 1.0 - smoothstep(dt.(float32), 0.0, 0.75);
-			noise := wind_noise(it.position, scene.client.clock * 14.0, 0);
+			noise := Scene.wind_noise(it.position, scene.client.clock * 14.0, 0);
 			target_up_vector = normalize(V3f.{ 0.18 * amount * noise.x, 0.18 * amount * noise.y, 1 });
 			target_scale += amount * (0.06 * cos((dt * 30.0).(float32)) + 0.04 * noise.z);
 		}

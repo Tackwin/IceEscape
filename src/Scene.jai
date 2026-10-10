@@ -3721,9 +3721,78 @@ update_debris :: (scene: *Scene, dt: float32) {
 	}
 }
 
+lattice_vector :: (x: int, y: int, z: int, w: int, seed_value: s64) -> V3f {
+	key := (x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ (w * 2654435761) ^ (seed_value * 6364136223846793005);
+	// Negative lattice coordinates are valid; keep the seed nonnegative before converting to u64.
+	state := Rand.seed((key & 0x7FFFFFFFFFFFFFFF).(u64));
+	a := ((Rand.random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
+	b := ((Rand.random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
+	c := ((Rand.random_u64(*state) & 0xFFFFFF).(float32) * (2.0 / 16777215.0) - 1.0).(float32);
+	return .{ a, b, c };
+}
+blend_vector :: (a: V3f, b: V3f, t: float32) -> V3f {
+	return a + (b - a) * t;
+}
+wind_noise_slice :: (
+	x: int, y: int, z: int, w: int, ux: float32, uy: float32, uz: float32, sv: s64
+) -> V3f {
+	bottom0 := blend_vector(
+		lattice_vector(x, y, z, w, sv), lattice_vector(x + 1, y, z, w, sv), ux
+	);
+	bottom1 := blend_vector(
+		lattice_vector(x, y + 1, z, w, sv), lattice_vector(x + 1, y + 1, z, w, sv), ux
+	);
+	top0 := blend_vector(
+		lattice_vector(x, y, z + 1, w, sv), lattice_vector(x + 1, y, z + 1, w, sv), ux
+	);
+	top1 := blend_vector(
+		lattice_vector(x, y + 1, z + 1, w, sv), lattice_vector(x + 1, y + 1, z + 1, w, sv), ux
+	);
+	return blend_vector(blend_vector(bottom0, bottom1, uy), blend_vector(top0, top1, uy), uz);
+}
+// One 4D vector field for every zone; 1.25 world units per spatial noise cell.
+wind_noise :: (world_position: V3f, clock: float64, seed_value: s64) -> V3f {
+	p := world_position / 1.25;
+	x := floor(p.x).(int);
+	y := floor(p.y).(int);
+	z := floor(p.z).(int);
+	w_coord := clock;
+	w := floor(w_coord).(int);
+	fx := p.x - x.(float32);
+	fy := p.y - y.(float32);
+	fz := p.z - z.(float32);
+	fw := (w_coord - w.(float64)).(float32);
+	ux := fx * fx * (3.0 - 2.0 * fx);
+	uy := fy * fy * (3.0 - 2.0 * fy);
+	uz := fz * fz * (3.0 - 2.0 * fz);
+	uw := fw * fw * (3.0 - 2.0 * fw);
+	return blend_vector(
+		wind_noise_slice(x, y, z, w, ux, uy, uz, seed_value),
+		wind_noise_slice(x, y, z, w + 1, ux, uy, uz, seed_value),
+		uw
+	);
+}
+
+// Cosmetic flow in world units per second; gameplay wind zones keep their own forces.
+GLOBAL_WIND_STRENGTH :: 1.00;
+
+global_wind_direction :: (clock: float64) -> V3f {
+	angle := (clock * 0.018 + 0.35 * sin((clock * 0.055).(float32)) +
+		0.2 * sin((clock * 0.027).(float32))).(float32);
+	return .{ cos(angle), sin(angle), 0.0 };
+}
+
+global_wind_velocity :: (world_position: V3f, clock: float64) -> V3f {
+	noise := wind_noise(world_position, clock * 0.12, 0);
+	noise.z *= 0.2;
+	return global_wind_direction(clock) * GLOBAL_WIND_STRENGTH + noise * 0.025;
+}
+
 update_particles :: (scene: *Scene, dt: float32) {
 	for * scene.particles {
-		it.position += it.velocity * dt;
+		// Snow and other cosmetic particles advect through the same field as the wind trails.
+		wind := global_wind_velocity(it.position, scene.client.clock);
+		it.position += (it.velocity + wind) * dt;
 		it.velocity.z -= 1.81 * it.gravity * dt;
 		it.velocity *= (1.0 - clamp(it.drag * dt, 0.0, 1.0));
 		if it.floor_bounce >= 0 {
