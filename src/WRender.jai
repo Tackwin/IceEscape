@@ -3800,7 +3800,8 @@ render_scene :: (
 		render_pressbuttons(frame, *frame.geometry, scene, store, *extra);
 		render_snowballs(frame, *frame.geometry, scene, store, *extra);
 		render_nutcrackers(frame, *frame.geometry, scene, store, *extra);
-		render_jukeboxes(frame, *frame.geometry, scene, store, *extra, delta_time);
+		render_jukeboxes(frame, *frame.geometry, scene, store, *extra, delta_time,
+			update_pose = !framegraph.settings.render_shadows);
 		render_block_rocks(frame, *frame.geometry, scene, store, *extra);
 		render_bombs(frame, *frame.geometry, scene, store, *extra);
 		render_camp_ices(frame, *frame.geometry, scene, store, *extra);
@@ -4845,22 +4846,28 @@ render_nutcrackers :: (
 
 render_jukeboxes :: (
 	frame: *Frame, pass: *Frame.Pass, scene: Scene.Scene, store: Store.Store, extra: *Extra,
-	frame_dt: float
+	frame_dt: float, update_pose := true
 ) {
 	instanced := append_instance_buffer(frame);
 	for * scene.jukeboxes {
-		// Advance in the first scene pass; the other pass uses the same pose.
-		dt := scene.client.clock - it.hit_time;
-		target_up_vector: V3f = .{ 0, 0, 1 };
-		target_scale: float = 1.0;
-		if it.hit_time >= 0 && dt >= 0 && dt < 0.75 {
-			amount := 1.0 - smoothstep(dt.(float32), 0.0, 0.75);
-			noise := Scene.wind_noise(it.position, scene.client.clock * 14.0, 0);
-			target_up_vector = normalize(V3f.{ 0.18 * amount * noise.x, 0.18 * amount * noise.y, 1 });
-			target_scale += amount * (0.06 * cos((dt * 30.0).(float32)) + 0.04 * noise.z);
+		if update_pose {
+			// Advance once in the first scene pass; scale the animation's timeline by this note.
+			dt := scene.client.clock - it.hit_time;
+			target_up_vector: V3f = .{ 0, 0, 1 };
+			target_scale: float = 1.0;
+			if it.hit_time >= 0 && it.track_index >= 0 {
+				track := Scene.Jukebox.PIANO_ROLL[it.track_index];
+				time := (dt / track.times[it.note_index]).(float32);
+				if time >= 0 && time < 1.0 {
+					amount := 1.0 - smoothstep(time, 0.0, 1.0);
+					noise := Scene.wind_noise(it.position, time * 10.0, 0);
+					target_up_vector = normalize(V3f.{ 0.18 * amount * noise.x, 0.18 * amount * noise.y, 1 });
+					target_scale += amount * (0.06 * cos(time * 6.0 * PI) + 0.04 * noise.z);
+				}
+			}
+			it.current_up_vector = normalize(damp(it.current_up_vector, target_up_vector, 25.0, frame_dt));
+			it.current_scale = damp(it.current_scale, target_scale, 25.0, frame_dt);
 		}
-		it.current_up_vector = normalize(damp(it.current_up_vector, target_up_vector, 25.0, frame_dt));
-		it.current_scale = damp(it.current_scale, target_scale, 25.0, frame_dt);
 
 		instanced.count += 1;
 		instance := *instanced[instanced.count - 1];
@@ -4880,14 +4887,27 @@ render_jukeboxes :: (
 	commit_geometry(frame, pass, *store.jukebox_model, instanced.count);
 	if pass != *frame.geometry return;
 
+	sdf_instanced := append_sdf_instance_buffer(frame);
+	for scene.jukeboxes {
+		track_index := it.track_index;
+		if track_index < 0 track_index, _ = Scene.jukebox_roll_position(it.position, 0);
+		sdf_instanced.count += 1;
+		sdf := *sdf_instanced[sdf_instanced.count - 1];
+		sdf.* = make_sdf_circle(
+			position = it.position + V3f.{ 0, 0, 0.01 }, radius = 0.65, outline_thickness = 0.035,
+			color = Scene.Jukebox.PIANO_ROLL[track_index].color
+		);
+	}
+	commit_sdf(frame, *frame.sdf, sdf_instanced.count);
+
 	trail_instanced := append_trail_instance_buffer(frame);
 	for scene.jukeboxes {
-		if it.tune_end_time < 0 continue;
+		if it.tune_end_time < 0 || it.finished_track_index < 0 continue;
 		time := ((scene.client.clock - it.tune_end_time) / 0.65).(float32);
 		burst_seed := (fnv1a_hash(xx *it.position, size_of(V3f)) & 0x7FFFFFFFFFFFFFFF).(int);
 		append_trail_burst_sphere(
 			burst_seed, it.position + V3f.{ 0, 0, 0.8 }, 1.9, time, 64, 0.8, *trail_instanced,
-			nominal_color = .{ 1.0, 0.85, 0.35, 1.0 }, nominal_thickness = 0.025
+			nominal_color = Scene.Jukebox.PIANO_ROLL[it.finished_track_index].color, nominal_thickness = 0.025
 		);
 	}
 	if trail_instanced.count > 0 commit_trails(frame, *frame.trail, trail_instanced.count);

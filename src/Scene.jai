@@ -964,63 +964,110 @@ Power_Up :: struct {
 }
 
 Jukebox :: struct {
-	// Absolute MIDI pitches (C4 = 60), one note per coin; rhythms/rests are omitted.
-	PIANO_ROLL :: int.[
-		// Mii Channel.
-		// https://github.com/robsoncouto/arduino-songs/blob/master/miichannel/miichannel.ino
-		66, 69, 73, 69, 66, 62, 62, 62, 61, 62,
-		66, 69, 73, 69, 65, 76, 75, 74,
-		// Megalovania.
-		// https://intro.nyuadim.com/2024/04/24/week-11-music-box-2/
-		62, 62, 74, 69, 68, 67, 65, 62, 65, 67,
-		60, 60, 74, 69, 68, 67, 65, 62, 65, 67,
-		59, 59, 74, 69, 68, 67, 65, 62, 65, 67,
-		58, 58, 74, 69, 68, 67, 65, 62, 65, 67,
-		// Harry Potter / Hedwig's Theme.
-		// https://www.piano-keyboard-guide.com/piano-notes-for-harry-potter-theme-song-ludwigs-theme-easy-tutorial/
-		// D# and F-natural in the first cadence: https://app.hoffmanacademy.com/lessons/piano/hedwigs-theme/video/
-		71, 76, 79, 78, 76, 83, 81, 78, 76, 79,
-		78, 75, 77, 71, 71, 76, 79, 78, 76, 83,
-		86, 85, 84, 80, 84, 83, 82, 78, 79, 76,
-		// Tetris / Korobeiniki.
-		// https://github.com/robsoncouto/arduino-songs/blob/master/tetris/tetris.ino
-		76, 71, 72, 74, 72, 71, 69, 69, 72, 76,
-		74, 72, 71, 72, 74, 76, 72, 69, 69, 74,
-		77, 81, 79, 77, 76, 72, 76, 74, 72, 71,
-		71, 72, 74, 76, 72, 69, 69,
-		// Portal / Still Alive.
-		// https://pianoletternotes.blogspot.com/2018/04/still-alive-portal.html
-		79, 78, 76, 76, 78, 69, 79, 78, 76, 76,
-		78, 74, 76, 69, 69, 76, 78, 79, 76, 73,
-		74, 76, 69, 69, 78,
-		// Mario 1-Up (the six-note jingle, repeated twice).
-		// https://mariofreepianosheetmusic.wordpress.com/wp-content/uploads/2015/05/mario-sheet-music-1-up-mushroom-sound.pdf
-		76, 79, 88, 84, 86, 91, 76, 79, 88, 84,
-		86, 91
-	];
-
-	Tune_Range :: struct {
-		start: int;
-		end: int; // Exclusive.
+	Track :: struct {
+		notes: [] int; // Constant MIDI literals (C4 = 60), at most 64 notes.
+		times: [] float; // Constant durations in seconds, parallel to notes; scales the wiggle.
+		color: V4f;
 	}
-	TUNE_RANGES :: Tune_Range.[
-		.{ 0, 18 }, // Mii Channel.
-		.{ 18, 58 }, // Megalovania.
-		.{ 58, 88 }, // Harry Potter / Hedwig's Theme.
-		.{ 88, 125 }, // Tetris / Korobeiniki.
-		.{ 125, 150 }, // Portal / Still Alive.
-		.{ 150, 162 }, // Mario 1-Up (the six-note jingle, repeated twice).
+	// Literal tracks: one note per coin. Timings animate the jukebox, not automatic playback.
+	PIANO_ROLL :: Track.[
+		.{ // Mii Channel, 114 BPM; intervening rests are included in the preceding time.
+			// https://github.com/robsoncouto/arduino-songs/blob/master/miichannel/miichannel.ino
+			color = .{ 0.25, 0.8, 1.0, 1.0 },
+			notes = .[ 66, 69, 73, 69, 66, 62, 62, 62, 61, 62, 66, 69, 73, 69, 65, 76, 75, 74 ],
+			times = .[ 0.526, 0.263, 0.526, 0.526, 0.263, 0.263, 0.263, 1.316,
+				0.263, 0.263, 0.263, 0.263, 0.526, 0.526, 0.263, 0.789, 0.263, 1.053 ]
+		},
+		.{ // Megalovania; nominal 120 BPM animation rhythm.
+			// https://intro.nyuadim.com/2024/04/24/week-11-music-box-2/
+			color = .{ 0.25, 0.4, 1.0, 1.0 },
+			notes = .[ 62, 62, 74, 69, 68, 67, 65, 62, 65, 67,
+				60, 60, 74, 69, 68, 67, 65, 62, 65, 67,
+				59, 59, 74, 69, 68, 67, 65, 62, 65, 67,
+				58, 58, 74, 69, 68, 67, 65, 62, 65, 67 ],
+			times = .[ 0.25, 0.25, 0.5, 0.75, 0.5, 0.5, 0.5, 0.25, 0.25, 0.25,
+				0.25, 0.25, 0.5, 0.75, 0.5, 0.5, 0.5, 0.25, 0.25, 0.25,
+				0.25, 0.25, 0.5, 0.75, 0.5, 0.5, 0.5, 0.25, 0.25, 0.25,
+				0.25, 0.25, 0.5, 0.75, 0.5, 0.5, 0.5, 0.25, 0.25, 0.25 ]
+		},
+		.{ // Harry Potter / Hedwig's Theme; nominal waltz rhythm.
+			// https://www.piano-keyboard-guide.com/piano-notes-for-harry-potter-theme-song-ludwigs-theme-easy-tutorial/
+			color = .{ 0.7, 0.35, 1.0, 1.0 },
+			notes = .[ 71, 76, 79, 78, 76, 83, 81, 78, 76, 79,
+				78, 75, 77, 71, 71, 76, 79, 78, 76, 83,
+				86, 85, 84, 80, 84, 83, 82, 78, 79, 76 ],
+			times = .[ 0.3, 0.9, 0.3, 0.6, 1.2, 0.6, 1.8, 1.8, 0.9, 0.3,
+				0.6, 1.2, 0.6, 1.8, 0.3, 0.9, 0.3, 0.6, 1.2, 0.6,
+				1.2, 0.6, 1.2, 0.6, 0.9, 0.3, 0.6, 1.2, 0.6, 1.8 ]
+		},
+		.{ // Tetris / Korobeiniki, 144 BPM; rests are included in the preceding time.
+			// https://github.com/robsoncouto/arduino-songs/blob/master/tetris/tetris.ino
+			color = .{ 0.35, 1.0, 0.4, 1.0 },
+			notes = .[ 76, 71, 72, 74, 72, 71, 69, 69, 72, 76,
+				74, 72, 71, 72, 74, 76, 72, 69, 69, 74,
+				77, 81, 79, 77, 76, 72, 76, 74, 72, 71,
+				71, 72, 74, 76, 72, 69, 69 ],
+			times = .[ 0.417, 0.208, 0.208, 0.417, 0.208, 0.208, 0.417, 0.208, 0.208, 0.417,
+				0.208, 0.208, 0.625, 0.208, 0.417, 0.417, 0.417, 0.417, 1.042, 0.417,
+				0.208, 0.417, 0.208, 0.208, 0.625, 0.208, 0.417, 0.208, 0.208, 0.417,
+				0.208, 0.208, 0.417, 0.417, 0.417, 0.417, 0.833 ]
+		},
+		.{ // Portal / Still Alive; nominal animation rhythm.
+			// https://pianoletternotes.blogspot.com/2018/04/still-alive-portal.html
+			color = .{ 1.0, 0.5, 0.15, 1.0 },
+			notes = .[ 79, 78, 76, 76, 78, 69, 79, 78, 76, 76,
+				78, 74, 76, 69, 69, 76, 78, 79, 76, 73, 74, 76, 69, 69, 78 ],
+			times = .[ 0.5, 0.5, 0.5, 0.5, 1.0, 1.5, 0.5, 0.5, 0.5, 0.5,
+				0.5, 0.5, 0.5, 0.5, 1.0, 0.5, 0.5, 0.5, 0.5, 0.5,
+				0.5, 0.5, 0.5, 0.5, 1.5 ]
+		},
+		.{ // Mario 1-Up, repeated twice; nominal jingle rhythm.
+			// https://mariofreepianosheetmusic.wordpress.com/wp-content/uploads/2015/05/mario-sheet-music-1-up-mushroom-sound.pdf
+			color = .{ 1.0, 0.85, 0.2, 1.0 },
+			notes = .[ 76, 79, 88, 84, 86, 91, 76, 79, 88, 84, 86, 91 ],
+			times = .[ 0.12, 0.12, 0.12, 0.12, 0.12, 0.6, 0.12, 0.12, 0.12, 0.12, 0.12, 0.6 ]
+		},
+		.{ // APT. / ROSÉ & Bruno Mars: short chant, nominal 149 BPM rhythm.
+			// https://www.flutenotes.ph/2025/01/apt-rose-bruno-mars.html
+			color = .{ 1.0, 0.25, 0.6, 1.0 },
+			notes = .[ 70, 70, 72, 70, 70, 72, 70, 70, 72, 70, 70, 72 ],
+			times = .[ 0.201, 0.201, 0.403, 0.201, 0.201, 0.403,
+				0.201, 0.201, 0.403, 0.201, 0.201, 0.403 ]
+		}
 	];
+	#run {
+		for PIANO_ROLL {
+			assert(it.notes.count > 0 && it.notes.count <= 64);
+			assert(it.times.count == it.notes.count);
+			for it.times assert(it > 0.0);
+		}
+	}
 
 	id: int;
 	last_coin_clock := 0.0;
 	coin_count := 0;
 	hit_time: float64 = -1.0;
+	track_index: int = -1;
+	note_index: int;
 	current_up_vector: V3f = .{ 0, 0, 1 };
 	current_scale: float = 1.0;
 	tune_end_time: float64 = -1.0;
+	finished_track_index: int = -1;
 	position: V3f; @edit @picking
 	direction: V3f; @edit @normalize
+}
+
+// View the tracks as one continuous roll, preserving the position-seeded starting offset.
+jukebox_roll_position :: (position: V3f, coin_count: int) -> int, int {
+	note_count := 0;
+	for Jukebox.PIANO_ROLL note_count += it.notes.count;
+	seed := (fnv1a_hash(xx *position, size_of(V3f)) & 0x7FFFFFFFFFFFFFFF).(int);
+	note_index := (seed % note_count + coin_count % note_count) % note_count;
+	for Jukebox.PIANO_ROLL {
+		if note_index < it.notes.count return it_index, note_index;
+		note_index -= it.notes.count;
+	}
+	return 0, 0;
 }
 
 Prop :: struct {
@@ -3271,16 +3318,11 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			dt := norm(jukebox.position - pos);
 			if dt < 0.5 {
 				// Position fixes the starting offset; only the server advances the roll.
-				seed := (fnv1a_hash(xx *jukebox.position, size_of(V3f)) & 0x7FFFFFFFFFFFFFFF).(int);
-				note_index := (seed % Jukebox.PIANO_ROLL.count + jukebox.coin_count % Jukebox.PIANO_ROLL.count) % Jukebox.PIANO_ROLL.count;
+				track_index, note_index := jukebox_roll_position(jukebox.position, jukebox.coin_count);
+				track := Jukebox.PIANO_ROLL[track_index];
 				cmd: Command.Note_Played;
-				cmd.pitch = Jukebox.PIANO_ROLL[note_index];
-				for range: Jukebox.TUNE_RANGES {
-					if note_index == range.end - 1 {
-						cmd.tune_finished = true;
-						break;
-					}
-				}
+				cmd.pitch = track.notes[note_index];
+				cmd.tune_finished = note_index == track.notes.count - 1;
 				cmd.jukebox_id = jukebox.id;
 				cmd.from_coin_id = it.id;
 

@@ -98,8 +98,28 @@ process_game :: (
 	if note_played {
 		jukebox := Scene.find_by_jukebox_id(state.scene, note_played.jukebox_id);
 		if jukebox {
+			// Track data stays local and constant; the existing event advances this cursor.
+			if jukebox.track_index < 0 {
+				jukebox.track_index, jukebox.note_index = Scene.jukebox_roll_position(jukebox.position, 0);
+			} else {
+				jukebox.note_index += 1;
+				if jukebox.note_index >= Scene.Jukebox.PIANO_ROLL[jukebox.track_index].notes.count {
+					jukebox.note_index = 0;
+					jukebox.track_index = (jukebox.track_index + 1) % Scene.Jukebox.PIANO_ROLL.count;
+				}
+			}
+			if note_played.tune_finished {
+				// These tracks have distinct final pitches: re-align after a late join or missed note.
+				for Scene.Jukebox.PIANO_ROLL {
+					if it.notes[it.notes.count - 1] != note_played.pitch continue;
+					jukebox.track_index = it_index;
+					jukebox.note_index = it.notes.count - 1;
+					break;
+				}
+				jukebox.finished_track_index = jukebox.track_index;
+				jukebox.tune_end_time = state.scene.client.clock;
+			}
 			jukebox.hit_time = state.scene.client.clock;
-			if note_played.tune_finished jukebox.tune_end_time = state.scene.client.clock;
 			trigger: Scene.Sound_Trigger;
 			trigger.kind = .Note;
 			trigger.pitch = xx note_played.pitch;
