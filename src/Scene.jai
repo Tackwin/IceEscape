@@ -177,6 +177,7 @@ Snowball :: struct {
 
 	position: V3f;
 	direction: V3f;
+	lifetime: float;
 
 	speed: float;
 
@@ -2027,8 +2028,8 @@ add_key_to_moving_frame :: (scene: *Scene, moving_frame: *Moving_Frame, key: Mov
 		array_add(*scene.moving_frame_keys, scene.moving_frame_keys[idx]);
 	}
 	array_add(*scene.moving_frame_keys, key);
-	moving_frame.keys.index = scene.moving_frame_keys.count - moving_frame.keys.count;
 	moving_frame.keys.count += 1;
+	moving_frame.keys.index = scene.moving_frame_keys.count - moving_frame.keys.count;
 }
 
 add_checkpoint_to_path :: (scene: *Scene, path: *Path, checkpoint: Checkpoint) {
@@ -2579,9 +2580,7 @@ update_normal :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		update_nutcracker(scene, it, dt);
 	}
 
-	for * scene.snowballs {
-		update_snowball(scene, it, dt);
-	}
+	update_snowballs(scene, dt);
 
 	for * scene.flags {
 		update_flag(scene, it, dt, result);
@@ -2878,6 +2877,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		snowball.direction = nutcracker.current_dir;
 		snowball.speed = 5;
 		snowball.id = allocate_id(scene);
+		snowball.lifetime = norm(nutcracker.target - nutcracker.position) / snowball.speed;
 		throw_snowball(scene, snowball);
 
 		nutcracker.last_throw_time = T;
@@ -2899,6 +2899,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 		command.position = snowball.position;
 		command.direction = snowball.direction;
 		command.strength = snowball.speed;
+		command.lifetime = snowball.lifetime;
 		command.next_pattern_index = nutcracker.shoot_pattern_index;
 		command.next_throw_time = nutcracker.next_throw_time;
 		array_add(*result.broadcast, make_command(command));
@@ -3921,7 +3922,7 @@ drop_ice_cube :: (scene: *Scene, player: *Player, result: *Frame_Result) {
 	tile_pos := position_to_tile(scene, player.server.position);
 	tile := get_tile(scene, tile_pos);
 
-	if tile && tile.kind != .Ice {
+	if tile && tile.kind == .Dirt {
 		tile.kind = .Ice;
 
 		if result {
@@ -4123,8 +4124,8 @@ update_antiair :: (scene: Scene, antiair: *AntiAir, dt: float32) {
 	}
 
 	if antiair.server.next_target.x == FLOAT32_MAX {
-		x := Rand.random_uniform(*scene.server_rng, -0.5, +0.5);
-		y := Rand.random_uniform(*scene.server_rng, -0.5, +0.5);
+		x := Rand.random_uniform(*scene.server_rng, 0.0, 1.0);
+		y := Rand.random_uniform(*scene.server_rng, 0.0, 1.0);
 		x *= width(antiair.target_aabb);
 		y *= height(antiair.target_aabb);
 		x += antiair.target_aabb.min.x;
@@ -4393,8 +4394,14 @@ throw_snowball :: (scene: *Scene, snowball: Snowball) {
 	array_add(*scene.snowballs, snowball);
 }
 
-update_snowball :: (scene: Scene, snowball: *Snowball, dt: float32) {
-	snowball.position += snowball.direction * snowball.speed * dt;
+update_snowballs :: (scene: *Scene, dt: float32) {
+	for * snowball : scene.snowballs {
+		snowball.position += snowball.direction * snowball.speed * dt;
+		snowball.lifetime -= dt;
+		if snowball.lifetime <= 0.0 {
+			remove snowball;
+		}
+	}
 }
 
 get_nutcracker_clock :: (scene: Scene, nutcracker: Nutcracker) -> float32 {
@@ -4424,8 +4431,8 @@ update_nutcracker :: (scene: Scene, nutcracker: *Nutcracker, dt: float32) {
 
 	T := get_nutcracker_clock(scene, nutcracker);
 
-	WINDING_TIME := 1.0;
-	SHOOT_TIME := 0.25;
+	WINDING_TIME := 0.4;
+	SHOOT_TIME := 0.2;
 	
 	t_from_throw := T - nutcracker.last_throw_time;
 	t_to_throw   := clamp(WINDING_TIME - (nutcracker.next_throw_time - T), 0.0, WINDING_TIME);
@@ -5070,6 +5077,7 @@ process_client_only :: (
 		snowball.position = snow_throw.position;
 		snowball.direction = snow_throw.direction;
 		snowball.speed = snow_throw.strength;
+		snowball.lifetime = snow_throw.lifetime;
 		throw_snowball(scene, snowball);
 		return true;
 	}

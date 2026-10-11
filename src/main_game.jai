@@ -243,6 +243,17 @@ request_play_session :: (app_user: *App_User, instance_id: int, session_id: int,
 process_main :: (app_user: *App_User, command: Command) -> bool {
 	state := *app_user.state;
 	session := *state.play_session;
+	login_admin := isa(command.payload, Command.Login_Admin);
+	if login_admin {
+		if login_admin.accepted {
+			console_print(*app_user.console, "ok: Admin access enabled.");
+			if state.screen_state == .Editor && state.editor_page.show_load_dialog
+				request_editor_terrain_list(app_user);
+		} else {
+			console_print(*app_user.console, "rejected: Invalid admin password or not connected.");
+		}
+		return true;
+	}
 	debug_reply := isa(command.payload, Command.Debug_Reply);
 	if debug_reply {
 		console_debug_reply(app_user, debug_reply.*);

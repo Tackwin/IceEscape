@@ -260,6 +260,7 @@ Command :: struct {
 		thrower_id: int;
 		snowball_id: int;
 		time: float32;
+		lifetime: float;
 		position: V3f;
 		direction: V3f;
 		strength: float;
@@ -594,6 +595,7 @@ Command :: struct {
 		authors_name: [] string;
 		creation_time_ms: [] s64;
 		authors_profile_id: [] int;
+		can_remove: [] bool;
 	}
 
 	Create_Instance :: struct {
@@ -724,6 +726,10 @@ Command :: struct {
 		rock_id: int;
 		exploded: bool;
 	}
+	Login_Admin :: struct {
+		password: string;
+		accepted: bool;
+	}
 
 	Payload_t :: Sum_Type(
 		Move, Spawn, New_Terrain, Sync_Player, Sync_Skull, Sync_Moving_Frame, Move_To_Play_World,
@@ -740,7 +746,7 @@ Command :: struct {
 		Ask_Enter_Quick_Instance, Set_Thumbnail, Get_Thumbnail, Asset_Chunk, Create_Bomberman,
 		Ans_Create_Bomberman, Pickup_Power_Up, Sync_Camp_Ice,
 		Ask_Play_Session, Ans_Play_Session, Ask_Delete_Terrain, Ans_Delete_Terrain,
-		Debug_Request, Debug_Reply, Sync_Block_Rock, Pity_Time, Throw_Snowball
+		Debug_Request, Debug_Reply, Sync_Block_Rock, Pity_Time, Throw_Snowball, Login_Admin
 	);
 	payload: Payload_t;
 	sent_timestamp: float64;

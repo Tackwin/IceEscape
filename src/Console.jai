@@ -372,6 +372,7 @@ console_parse_tile_kind :: (text: string) -> int, bool {
 }
 
 console_command_usage :: (name: string) -> string {
+	if name == "login_admin" return "login_admin <password>";
 	if name == "kill" return "kill <player_id>";
 	if name == "res" return "res <player_id>";
 	if name == "kick" return "kick <player_id>";
@@ -491,4 +492,21 @@ break_rock :: (c: *Console_State) {
 
 who_host :: (c: *Console_State) {
 	console_debug_without_arguments(c, .Who_Host, "who_host");
+} @console
+
+login_admin :: (c: *Console_State) {
+	remaining := c.arguments;
+	password := console_take_argument(*remaining);
+	if password.count == 0 || console_take_argument(*remaining).count != 0 {
+		console_print(c, "usage: login_admin <password>");
+		return;
+	}
+	app_user := c.app_user;
+	if !app_user || !app_user.state.is_communication_established || !app_user.state.is_connected {
+		console_print(c, "error: not connected to a server.");
+		return;
+	}
+	request: Command.Login_Admin;
+	request.password = password;
+	send_web_message(app_user.state.platform, app_user.state.current_time, make_command(request));
 } @console

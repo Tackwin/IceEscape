@@ -23,6 +23,7 @@ Person :: struct {
 	player_id: int;
 	profile_id: int;
 	user_id: int;
+	admin := false;
 
 	last_seen_time: Apollo_Time;
 
@@ -428,7 +429,7 @@ process :: (
 	cheat_action: *Command.Cheat_Action = isa(command.payload, Command.Cheat_Action);
 	if cheat_action {
 		person := find_person_by_user_id(instance, sender_user_id);
-		if !person || person.player_id != debug_host_player_id(instance) return true;
+		if !is_host_or_admin(instance, person) return true;
 		if cheat_action.kind == .Next_Level {
 			scene := find_by_scene_id(instance, instance.playing_scene_id);
 			if scene move_playing_scene(instance, scene.next_id);
@@ -757,7 +758,7 @@ resync_old_person :: (instance: *Instance, user_id: int) {
 }
 
 add_new_person :: (
-	instance: *Instance, user_id: int, profile_id: int = -1, display_name: string = ""
+	instance: *Instance, user_id: int, profile_id: int = -1, display_name: string = "", admin := false
 ) -> bool {
 	pick_scene := find_by_scene_id(instance, instance.pick_scene_id);
 	if !pick_scene return false;
@@ -767,6 +768,7 @@ add_new_person :: (
 	init_play_session(instance);
 	new_person.user_id = user_id;
 	new_person.profile_id = profile_id;
+	new_person.admin = admin;
 	new_person.participant_id = Play_Session.join(*instance.play_session, new_person.player_id, profile_id, display_name);
 	new_person.last_seen_time = current_time_monotonic();
 	array_add(*instance.persons, new_person);
@@ -914,6 +916,10 @@ debug_host_player_id :: (instance: *Instance) -> int {
 	return host;
 }
 
+is_host_or_admin :: (instance: *Instance, person: *Person) -> bool {
+	return person && (person.admin || person.player_id == debug_host_player_id(instance));
+}
+
 debug_reply :: (instance: *Instance, request: Command.Debug_Request, sender_user_id: int,
 	status: Debug_Status, message: string) {
 	reply: Command.Debug_Reply;
@@ -935,8 +941,8 @@ process_instance_debug :: (instance: *Instance, command: Command, sender_user_id
 		debug_reply(instance, request.*, sender_user_id, .Accepted, "Host is the lowest player id in this instance.");
 		return true;
 	}
-	if person.player_id != debug_host_player_id(instance) {
-		debug_reply(instance, request.*, sender_user_id, .Rejected, "Only the host may run this command."); return true;
+	if !is_host_or_admin(instance, person) {
+		debug_reply(instance, request.*, sender_user_id, .Rejected, "Only the host or an admin may run this command."); return true;
 	}
 	if request.kind.(int) < Debug_Operation.Kill_Self.(int) || request.kind.(int) > Debug_Operation.Who_Host.(int) || request.kind == .Kick {
 		debug_reply(instance, request.*, sender_user_id, .Invalid, "Unknown debug operation."); return true;
@@ -968,8 +974,8 @@ apply_instance_debug :: (instance: *Instance, scene: *Scene.Scene) {
 		if pending.scene_id != scene.id { instance.debug_pending[remaining] = pending; remaining += 1; continue; }
 		request := pending.request;
 		person := find_person_by_user_id(instance, pending.sender_user_id);
-		if !person || person.player_id != debug_host_player_id(instance) {
-			debug_reply(instance, request, pending.sender_user_id, .Rejected, "Only the current host may run this command."); continue;
+		if !is_host_or_admin(instance, person) {
+			debug_reply(instance, request, pending.sender_user_id, .Rejected, "Only the current host or an admin may run this command."); continue;
 		}
 		if pending.run_generation != scene.run_generation {
 			debug_reply(instance, request, pending.sender_user_id, .Rejected, "Level changed before the command could run."); continue;

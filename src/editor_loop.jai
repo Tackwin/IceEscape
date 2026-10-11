@@ -23,6 +23,7 @@ Editor_Page :: struct {
 		name: string;
 		author: string;
 		author_profile_id: int = -1;
+		can_remove: bool;
 		created_ms: s64;
 		id: int;
 		delete_pending: bool;
@@ -50,6 +51,7 @@ Editor_Page :: struct {
 	picking_v2f_field: *V2f = null;
 	picking_v3f_field: *V3f = null;
 	picking_aabb_field: *AABBf = null;
+	picking_aabb_field_size: *AABBf = null;
 	picking_aabb_field_did_press := false;
 	placing_entity_type: *Type_Info_Struct = null;
 
@@ -162,6 +164,7 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 		for * page.terrain_list {
 			it.id = ans_list_terrain.terrains_id[it_index];
 			it.author_profile_id = ans_list_terrain.authors_profile_id[it_index];
+			it.can_remove = ans_list_terrain.can_remove[it_index];
 			it.delete_pending = false;
 			it.name = sprint(
 				ans_list_terrain.terrains_name[it_index],, page.terrain_list.allocator
@@ -697,6 +700,8 @@ handle_entity_picking :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_Sta
 		// Handle moving frames
 		for * frame: editor.scene.moving_frames {
 			for idx: frame.keys.index..frame.keys.index + frame.keys.count - 1 {
+				if idx >= editor.scene.moving_frame_keys.count
+					break;
 				key := editor.scene.moving_frame_keys[idx];
 				pos := key.pos;
 				if in(aabb, v2(pos)) {
@@ -997,6 +1002,44 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 					remove_entity_at(*editor.scene, entity, i);
 					remove_from_selection(page, ptr);
 				}
+			}
+		}
+		// Handle path
+		for * editor.scene.paths {
+			if entity_is_selected(page, it) {
+				for * skull, skull_index: editor.scene.skulls {
+					if skull.path_id != it.id
+						continue;
+					
+					editor.scene.skulls[skull_index] =
+						editor.scene.skulls[editor.scene.skulls.count - 1];
+					editor.scene.skulls.count -= 1;
+				}
+
+				for i: it_index..editor.scene.paths.count - 2 {
+					editor.scene.paths[i] = editor.scene.paths[i + 1];
+				}
+				editor.scene.paths.count -= 1;
+				remove_from_selection(page, it);
+			}
+		}
+		// Handle moving frames
+		for * editor.scene.moving_frames {
+			if entity_is_selected(page, it) {
+				for * shuriken, shuriken_index: editor.scene.shurikens {
+					if shuriken.frame_id != it.id
+						continue;
+
+					editor.scene.shurikens[shuriken_index] =
+						editor.scene.shurikens[editor.scene.shurikens.count - 1];
+					editor.scene.shurikens.count -= 1;
+				}
+
+				for i: it_index..editor.scene.moving_frames.count - 2 {
+					editor.scene.moving_frames[i] = editor.scene.moving_frames[i + 1];
+				}
+				editor.scene.moving_frames.count -= 1;
+				remove_from_selection(page, it);
 			}
 		}
 		return;
@@ -1439,6 +1482,7 @@ draw_entity_type_content :: (editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_
 				shuriken: Scene.Shuriken;
 				shuriken.id = Scene.allocate_id(*editor.scene);
 				shuriken.frame_id = moving_frame.id;
+				shuriken.server.position = v3f(1, 1, 0);
 				array_add(*editor.scene.shurikens, shuriken);
 			}
 
@@ -2115,8 +2159,7 @@ draw_load_terrain_list :: (app_user: *App_User, page: *Editor_Page, gui: *GUI.GU
 		}
 
 		cal := platform.to_calendar(milliseconds_to_apollo(it.created_ms));
-		can_remove := app_user.state.is_connected && app_user.state.menu.profile.id >= 0 &&
-			it.author_profile_id == app_user.state.menu.profile.id;
+		can_remove := app_user.state.is_connected && it.can_remove;
 		actions_width := ifx can_remove then 160.0 else 78.0;
 		date := tprint(
 			"%/% %:%",

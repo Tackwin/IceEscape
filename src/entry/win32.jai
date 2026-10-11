@@ -292,7 +292,7 @@ Platform_State :: struct {
 	mouse_wheel := 0;
 	want_quit := false;
 
-	message_arrived: [1024] Message;
+	message_arrived: [1024 * 4] Message;
 	message_arrived_cursor_pulled := 0;
 	message_arrived_cursor_pushed := 0;
 	frame_file_change: [1024] string;

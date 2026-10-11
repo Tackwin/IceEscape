@@ -873,7 +873,7 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 
 		if scan2(line, "camp_ice") {
 			camp_ice: Camp_Ice;
-			camp_ice.id = scene.camp_ices.count + 1;
+			camp_ice.id = allocate_id(scene);
 			defer array_add(*scene.camp_ices, camp_ice);
 
 			cursor += 1;

@@ -26,6 +26,7 @@ User :: struct {
 
 	instance_id: int = -1;
 	profile_id:  int = -1;
+	admin := false;
 }
 
 Server :: struct {
@@ -208,6 +209,23 @@ handle_end_asset :: (server: *Server, asset: *Big_Asset, platform: *Platform) {
 
 process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platform) -> bool {
 	if process_server_debug(server, cmd, sender) return true;
+	login_admin := isa(cmd.payload, Command.Login_Admin);
+	if login_admin {
+		reply: Command.Login_Admin;
+		user := find_user_by_connection(server, sender);
+		if user && user.id >= 0 && login_admin.password == "676767" {
+			// Keep access when leaving an instance to use the editor, or joining another.
+			user.admin = true;
+			instance := find_instance_by_id(server, user.instance_id);
+			if instance {
+				person := find_person_by_user_id(instance, user.id);
+				if person person.admin = true;
+			}
+			reply.accepted = true;
+		}
+		append_queue(server, reply, sender);
+		return true;
+	}
 	version_info := isa(cmd.payload, Command.Version_Info);
 	if version_info {
 		reply: Command.Version_Info;
@@ -382,12 +400,12 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 		reply: Command.Ans_Delete_Terrain;
 		reply.terrain_id = ask_delete_terrain.terrain_id;
 		user := find_user_by_connection(server, sender);
-		if user && user.profile_id >= 0 {
+		if user && user.id >= 0 && (user.admin || user.profile_id >= 0) {
 			Deleted :: struct { id: int; }
-			// Ownership is checked atomically by the server, never trusted from UI.
+			// Only the server's authenticated admin flag can bypass ownership.
 			_, reply.success = sql_load(platform, server.db,
-				sql("UPDATE terrain_infos SET deleted = 1 WHERE id = ? AND author_profile_id = ? RETURNING id",
-					ask_delete_terrain.terrain_id, user.profile_id), Deleted);
+				sql("UPDATE terrain_infos SET deleted = 1 WHERE id = ? AND (author_profile_id = ? OR ? = 1) RETURNING id",
+					ask_delete_terrain.terrain_id, user.profile_id, ifx user.admin then 1 else 0), Deleted);
 		}
 		append_queue(server, reply, sender);
 		return true;
@@ -696,6 +714,7 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 
 	ask_terrain_list := isa(cmd.payload, Command.Ask_List_Terrain);
 	if ask_terrain_list {
+		user := find_user_by_connection(server, sender);
 		Info :: struct {
 			id: int;
 			name: string;
@@ -729,6 +748,7 @@ SELECT_QUERY, filter_pattern),
 		reply.terrains_name = NewArray(entries.count, string,, temp);
 		reply.authors_name = NewArray(entries.count, string,, temp);
 		reply.authors_profile_id = NewArray(entries.count, int,, temp);
+		reply.can_remove = NewArray(entries.count, bool,, temp);
 		reply.creation_time_ms = NewArray(entries.count, s64,, temp);
 		reply.correlation_id = ask_terrain_list.correlation_id;
 	
@@ -737,6 +757,8 @@ SELECT_QUERY, filter_pattern),
 			reply.terrains_name[it] = tprint("%", entries[it].name);
 			reply.authors_name[it] = tprint("%", entries[it].author_name);
 			reply.authors_profile_id[it] = entries[it].author_profile_id;
+			reply.can_remove[it] = user && user.id >= 0 && (user.admin ||
+				(user.profile_id >= 0 && user.profile_id == entries[it].author_profile_id));
 			reply.creation_time_ms[it] = entries[it].created_ms;
 		}
 		append_queue(server, reply, sender);
@@ -824,7 +846,7 @@ SELECT_QUERY, filter_pattern),
 				resync_old_person(instance, user.id);
 				return true;
 			}
-			if add_new_person(instance, user.id, user.profile_id, get_profile_name(platform, server.db, user.profile_id)) {
+			if add_new_person(instance, user.id, user.profile_id, get_profile_name(platform, server.db, user.profile_id), user.admin) {
 				previous := find_instance_by_id(server, user.instance_id);
 				if previous remove_person(previous, user.id);
 				user.instance_id = instance.id;
@@ -969,7 +991,7 @@ SELECT_QUERY, filter_pattern),
 			server.instance_count += 1;
 			server.instance_generation += 1;
 
-			if !add_new_person(*server.instances[server.instance_count - 1], user.id, user.profile_id, get_profile_name(platform, server.db, user.profile_id)) {
+			if !add_new_person(*server.instances[server.instance_count - 1], user.id, user.profile_id, get_profile_name(platform, server.db, user.profile_id), user.admin) {
 				command: Command.Ans_Enter_Custom_Instance;
 				command.reason = .Rejected;
 				append_queue(server, command, sender);
@@ -1017,7 +1039,7 @@ SELECT_QUERY, filter_pattern),
 		server.instance_count += 1;
 		server.instance_generation += 1;
 
-		if !add_new_person(*server.instances[server.instance_count - 1], user.id, user.profile_id, get_profile_name(platform, server.db, user.profile_id)) {
+		if !add_new_person(*server.instances[server.instance_count - 1], user.id, user.profile_id, get_profile_name(platform, server.db, user.profile_id), user.admin) {
 			command: Command.Ans_Enter_Custom_Instance;
 			command.reason = .Rejected;
 			append_queue(server, command, sender);
@@ -1699,8 +1721,8 @@ process_server_debug :: (server: *Server, command: Command, sender: Connection) 
 		append_queue(server, reply, sender);
 		return true;
 	}
-	if person.player_id != reply.host_player_id {
-		reply.message = "Only the host may run this command.";
+	if !is_host_or_admin(instance, person) {
+		reply.message = "Only the host or an admin may run this command.";
 		append_queue(server, reply, sender);
 		return true;
 	}

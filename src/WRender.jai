@@ -3342,6 +3342,8 @@ render_editor :: (
 	for frame: editor.scene.moving_frames {
 		prev_pos: V3f;
 		for idx: frame.keys.index..frame.keys.index + frame.keys.count - 1 {
+			if idx >= editor.scene.moving_frame_keys.count
+				break;
 			key := editor.scene.moving_frame_keys[idx];
 			add_debug_sphere(*extra, key.pos, scale=0.1);
 
@@ -3539,6 +3541,16 @@ render_scene :: (
 			light.kind = 1;
 			light.position = it.client.position;
 			light.position.z += 0.3;
+			light.range = 0.5;
+			light.color = V3f.{ 1.0, 0.8, 0.6 };
+			light.intensity = 0.25;
+		}
+		for scene.jukeboxes {
+			lights.count += 1;
+			light := *lights[lights.count - 1];
+			light.kind = 1;
+			light.position = it.position;
+			light.position.z += 0.4;
 			light.range = 0.5;
 			light.color = V3f.{ 1.0, 0.8, 0.6 };
 			light.intensity = 0.25;
@@ -4275,7 +4287,7 @@ render_wind_zones :: (
 			scene.client.clock.(float32),
 			trail_count,
 			v3(direction),
-			zone.strength,
+			zone.strength * 3,
 			*trail_instanced
 		);
 	}
@@ -5336,9 +5348,10 @@ render_shurikens :: (
 
 	instanced = append_instance_buffer(frame);
 	for scene.shurikens {
-		M := Scene.compute_moving_frame_server_world_matrix(
-			scene, Scene.find_by_frame_id(scene, it.frame_id)
-		);
+		frame := Scene.find_by_frame_id(scene, it.frame_id);
+		if !frame
+			continue;
+		M := Scene.compute_moving_frame_server_world_matrix(scene, frame);
 		pos := v3(M * v4(it.server.position, 1));
 		off := V2f.{ 0.29259, 0.32137 };
 

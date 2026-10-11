@@ -1289,10 +1289,10 @@ push_buy_prompt :: (state: *GUI_State, scene: *Scene.Scene, store: *Store) {
 				if d < player.server.radius_hitbox_key {
 					
 					prompt := tprint(
-						"Not enough souls (%) ! Revive your friends to collect more souls!", needed
+						"Not enough shares (% needed) ! Revive your friends to collect more shares!", needed
 					);
 					if player.server.souls >= needed {
-						prompt = tprint("R to buy. % souls.", needed);
+						prompt = tprint("R to buy. % shares.", needed);
 					}
 
 					pos := v4(q, 1);
@@ -1307,7 +1307,7 @@ push_buy_prompt :: (state: *GUI_State, scene: *Scene.Scene, store: *Store) {
 						state.controls.window_size.y / 2 -
 						pos.y * (state.controls.window_size.y) / 2;
 
-					label := atom_label(state, prompt, screen_p, 24, z=10, align = .Center, outline = true,
+					label := atom_label(state, prompt, screen_p, 16, z=10, align = .Center, outline = true,
 						color = GOLD_ACCENT);
 					push_nine_slice(state,
 						label.aabb_min - v2(10),
@@ -2359,6 +2359,7 @@ atom_label :: (
 
 	cursor := pos;
 	ret.gui_char_start_index = gui.chars.count;
+	bob_67 := (1.5 * sin(1.5 * to_float64_seconds(gui.controls.time) * 6.283185307179586)).(float32);
 	byte_offset := 0;
 	while byte_offset < text.count {
 		codepoint, next_offset := Platform.text_next(text, byte_offset);
@@ -2387,6 +2388,12 @@ atom_label :: (
 		aabb_max.x = max(aabb_max.x, char.pos.x + char.size.x);
 		aabb_max.y = max(aabb_max.y, char.pos.y + char.size.y);
 		ret.baseline_y_from_bottom = min(ret.baseline_y_from_bottom, glyph.planey * scale);
+		// Keep measurement and layout steady while the two glyphs bob in opposite phases.
+		if codepoint == #char "6" && next_offset < text.count && text[next_offset] == #char "7" {
+			char.pos.y -= bob_67;
+		} else if codepoint == #char "7" && byte_offset > 0 && text[byte_offset - 1] == #char "6" {
+			char.pos.y += bob_67;
+		}
 		array_add(*gui.chars, char);
 		byte_offset = next_offset;
 	}

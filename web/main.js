@@ -56,6 +56,7 @@ const fetch_with_progress = async (url, options) => {
 
 const boot_game = async () => {
 	audio_context = new AudioContext();
+	audio_context.addEventListener("statechange", flush_pending_music);
 	try {
 		await initialize_wasm_module(GAME_WASM, 1024 * 32);
 	} catch (err) {
@@ -971,6 +972,32 @@ let sound_id_counter = 0;
 let sound_id_to_state = {};
 const SOUND_PLAYING = 1;
 const SOUND_STOPPED = 2;
+const AUDIO_KIND_MUSIC = 1;
+
+const pending_music = new Map();
+
+const flush_pending_music = () => {
+	if (!audio_context || audio_context.state !== "running") return;
+	for (const [sound_id, params] of pending_music) {
+		if (!audio_id_to_buffer[params.audio_id]) continue;
+		pending_music.delete(sound_id);
+		js_play_audio(params);
+	}
+};
+
+const resume_audio = () => {
+	if (!audio_context || audio_context.state === "closed") return;
+	if (audio_context.state === "running") {
+		flush_pending_music();
+		return;
+	}
+	// Keep the queue if this gesture does not grant playback; a later one can retry.
+	audio_context.resume().then(flush_pending_music).catch(() => {});
+};
+
+for (const event of ["pointerup", "click", "keydown"]) {
+	document.addEventListener(event, resume_audio, { capture: true });
+}
 
 let master_gain = null;
 
@@ -1083,9 +1110,16 @@ const js_load_audio = async (params) => {
 	var buffer = await new Blob([params.buffer]).arrayBuffer();
 	buffer = await audio_context.decodeAudioData(buffer);
 	audio_id_to_buffer[params.audio_id] = buffer;
+	flush_pending_music();
 }
 
 const js_play_audio = (params) => {
+	if (params.kind === AUDIO_KIND_MUSIC && audio_context.state !== "running") {
+		pending_music.set(String(params.sound_id), { ...params });
+		sound_id_to_state[params.sound_id] = SOUND_PLAYING;
+		return;
+	}
+
 	const id = params.audio_id;
 	const x = params.x;
 	const y = params.y;
@@ -1141,7 +1175,7 @@ const js_play_audio = (params) => {
 		gainNode.connect(master_gain);
 	}
 
-	source.start(delay / 1000);
+	source.start(audio_context.currentTime + delay / 1000);
 
 	sound_id_to_sound[sound_id] = {
 		source,
@@ -1158,6 +1192,23 @@ const js_play_audio = (params) => {
 }
 
 const js_set_sound = (params) => {
+	const pending_id = String(params.sound_idx);
+	const pending = pending_music.get(pending_id);
+	if (pending) {
+		if (!params.playing) {
+			pending_music.delete(pending_id);
+			sound_id_to_state[params.sound_idx] = SOUND_STOPPED;
+		} else {
+			pending.x = params.x;
+			pending.y = params.y;
+			pending.z = params.z;
+			pending.volume = params.volume;
+			pending.pitch = params.pitch;
+			pending.loop = params.looping != 0;
+		}
+		return;
+	}
+
 	const sound = sound_id_to_sound[params.sound_idx];
 	if (!sound) {
 		return;
