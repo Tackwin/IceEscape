@@ -1550,10 +1550,14 @@ prefill_fixed_instances :: (server: *Server, platform: *Platform) {
 	init_instance_with_roster(server, *server.instances[1], 2, platform);
 	server.instances[1].scene_parameters.auto_revive = true;
 	string_to_array("Olympus", server.instances[1].name);
+
+	init_instance_with_roster(server, *server.instances[2], 200, platform);
+	server.instances[2].scene_parameters.auto_revive = true;
+	string_to_array("Season 2", server.instances[2].name);
 	
-	init_instance_bomberman(server, *server.instances[2], 64, platform);
-	server.instances[2].scene_parameters.mode = .Bomberman;
-	string_to_array("Bomberman", server.instances[2].name);
+	init_instance_bomberman(server, *server.instances[3], 64, platform);
+	server.instances[3].scene_parameters.mode = .Bomberman;
+	string_to_array("Bomberman", server.instances[3].name);
 }
 
 gc_instances :: (server: *Server) {
