@@ -4202,7 +4202,8 @@ append_trail_burst_sphere :: (
 	strength: float,
 	trail_instanced: *[] WFramegraph.Trail_Instance,
 	nominal_color: V4f = .{ 1.0, 0.65, 0.2, 1.0 },
-	nominal_thickness: float = 0.05
+	nominal_thickness: float = 0.05,
+	direction_bias: V3f = .{ 0, 0, 0 }
 ) {
 	if !(time > 0.0 && time < 1.0) || sphere_radius <= 0.0 || trail_count <= 0
 		|| strength <= 0.0 || nominal_thickness <= 0.0 || nominal_color.w <= 0.0
@@ -4220,6 +4221,11 @@ append_trail_burst_sphere :: (
 		angle := random_uniform(*random_state, 0.0, 2.0 * PI);
 		ring_radius := sqrt(max(0.0, 1.0 - z * z));
 		trail_direction := V3f.{ ring_radius * cos(angle), ring_radius * sin(angle), z };
+		if dot(direction_bias, direction_bias) > 0 {
+			trail_direction += direction_bias;
+			if dot(trail_direction, trail_direction) < 0.000001 continue;
+			trail_direction = normalize(trail_direction);
+		}
 		reach := sphere_radius * random_uniform(*random_state, 0.75, 1.0);
 		lag := random_uniform(*random_state, 0.08, 0.2);
 		width := nominal_thickness * random_uniform(*random_state, 0.65, 1.35);
@@ -4974,10 +4980,34 @@ render_trophies :: (
 		instance.M = M;
 		instance.texture_rect = Store.Colormaps_Rect.vehicle;
 	}
-	if instanced.count == 0
-		return;
+	if instanced.count > 0 commit_geometry(frame, pass, *store.trophy_model, instanced.count);
+	if pass != *frame.geometry return;
 
-	commit_geometry(frame, pass, *store.trophy_model, instanced.count);
+	colors :: V4f.[
+		.{ 1.0, 0.15, 0.45, 1.0 }, .{ 1.0, 0.5, 0.1, 1.0 }, .{ 1.0, 0.9, 0.2, 1.0 },
+		.{ 0.2, 1.0, 0.5, 1.0 }, .{ 0.1, 0.8, 1.0, 1.0 }, .{ 0.65, 0.25, 1.0, 1.0 }
+	];
+	trail_instanced := append_trail_instance_buffer(frame);
+	for scene.trophy_bursts {
+		age := (scene.client.clock - it.birthtime).(float32);
+		burst_seed := ((fnv1a_hash(xx *it.position, size_of(V3f)) & 0x7FFFFFFFFFFFFFFF).(int)) ^ it.player_id;
+		origin := it.position + V3f.{ 0, 0, 0.6 };
+		if it.first {
+			for color, layer: colors {
+				time := (age - layer.(float32) * 0.08) / 1.3;
+				append_trail_burst_sphere(
+					burst_seed ^ ((layer + 1) * 0x9E3779B), origin, 3.5 + layer.(float32) * 0.4,
+					time, 40, 1.1, *trail_instanced, nominal_color = color,
+					nominal_thickness = 0.035, direction_bias = .{ 0, 0, 1.4 }
+				);
+			}
+		} else {
+			append_trail_burst_sphere(burst_seed, origin, 1.5, age / 0.85, 24, 0.8, *trail_instanced,
+				nominal_color = .{ 1.0, 0.85, 0.15, 1.0 }, nominal_thickness = 0.025,
+				direction_bias = .{ 0, 0, 1.8 });
+		}
+	}
+	if trail_instanced.count > 0 commit_trails(frame, *frame.trail, trail_instanced.count);
 }
 
 render_robots :: (

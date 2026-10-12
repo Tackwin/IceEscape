@@ -995,7 +995,7 @@ const resume_audio = () => {
 	audio_context.resume().then(flush_pending_music).catch(() => {});
 };
 
-for (const event of ["pointerup", "click", "keydown"]) {
+for (const event of ["pointerdown", "pointerup", "touchend", "click", "keydown"]) {
 	document.addEventListener(event, resume_audio, { capture: true });
 }
 
@@ -1114,7 +1114,8 @@ const js_load_audio = async (params) => {
 }
 
 const js_play_audio = (params) => {
-	if (params.kind === AUDIO_KIND_MUSIC && audio_context.state !== "running") {
+	if (params.kind === AUDIO_KIND_MUSIC &&
+		(!audio_context || audio_context.state !== "running" || !audio_id_to_buffer[params.audio_id])) {
 		pending_music.set(String(params.sound_id), { ...params });
 		sound_id_to_state[params.sound_id] = SOUND_PLAYING;
 		return;

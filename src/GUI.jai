@@ -1595,7 +1595,7 @@ push_ms_histogram :: (state: *GUI_State, pos: V2f, size: V2f, data: [] float32, 
 }
 
 push_scene_ui :: (state: *GUI_State, scene: Scene.Scene, store: *Store) {
-	top_left_width := 300.0;
+	top_left_width := 325.0;
 	top_left_padding := 8.0;
 
 	begin(state, .{ 0, 0 }, GUI_State.Direction.Down);

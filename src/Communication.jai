@@ -317,6 +317,12 @@ Command :: struct {
 		winner_id: int;
 		pity_time: float;
 	}
+	Trophy_Picked :: struct {
+		scene_id: int;
+		player_id: int;
+		position: V3f;
+		first: bool;
+	}
 	End_Level :: struct {
 		result: Level_Result;
 		winner_id: int;
@@ -675,6 +681,7 @@ Command :: struct {
 		death: int;
 		revive: int;
 		wins: int;
+		score: int;
 	}
 	Get_Instance_Tab_Stats :: struct {
 		wr_time_ms: int;
@@ -746,7 +753,7 @@ Command :: struct {
 		Ask_Enter_Quick_Instance, Set_Thumbnail, Get_Thumbnail, Asset_Chunk, Create_Bomberman,
 		Ans_Create_Bomberman, Pickup_Power_Up, Sync_Camp_Ice,
 		Ask_Play_Session, Ans_Play_Session, Ask_Delete_Terrain, Ans_Delete_Terrain,
-		Debug_Request, Debug_Reply, Sync_Block_Rock, Pity_Time, Throw_Snowball, Login_Admin
+		Debug_Request, Debug_Reply, Sync_Block_Rock, Pity_Time, Throw_Snowball, Login_Admin, Trophy_Picked
 	);
 	payload: Payload_t;
 	sent_timestamp: float64;

@@ -397,6 +397,7 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	Remap_Context();
 	auto_release_temp();
 	poll_data_fetches(_app.platform.*, *app_user.store);
+	launch_music(app_user, _app.platform);
 
 
 	app_user.framegraph.settings.light_enabled = app_user.state.light_enabled;
@@ -488,15 +489,18 @@ write_capture_png :: (app_user: *App_User, platform: *Platform) {
 }
 
 launch_music :: (app_user: *App_User, platform: *Platform) {
+	if app_user.state.music_started || !app_user.store.snowflakes_and_lights_mp3.loaded return;
 	app_user.store.snowflakes_and_lights_mp3.kind = .Music;
 	app_user.store.snowflakes_and_lights_mp3.repeating = true;
 	app_user.store.snowflakes_and_lights_mp3.volume = 0.05;
-	platform.play_audio(app_user.store.snowflakes_and_lights_mp3, .{});
+	sound := platform.play_audio(app_user.store.snowflakes_and_lights_mp3, .{});
+	if sound.id >= 0 app_user.state.music_started = true;
 }
 
 
 State :: struct {
 	current_time: Apollo_Time;
+	music_started := false;
 
 	coommands_received: [..] Command;
 

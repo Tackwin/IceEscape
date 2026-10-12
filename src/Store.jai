@@ -182,6 +182,7 @@ Store :: struct #type_info_none {
 	font_atlas: WRender.WTexture;
 
 	loser_mp3: Platform.Audio;
+	winner_mp3: Platform.Audio;
 	click_wav: Platform.Audio;
 	snowflakes_and_lights_mp3: Platform.Audio;
 
@@ -636,6 +637,7 @@ Audio_Data_Key :: enum int {
 	COIN_LAUNCH;
 	LOSER;
 	POINT_UP;
+	WINNER;
 	NOTE_SAMPLES_BEGIN;
 }
 
@@ -754,6 +756,8 @@ load_ready_audio :: (
 			platform.load_audio(data, true, *store.loser_mp3);
 		case .POINT_UP;
 			platform.load_audio(data, false, *store.point_up_mp3);
+		case .WINNER;
+			platform.load_audio(data, true, *store.winner_mp3);
 	}
 }
 
@@ -1006,6 +1010,7 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 	start_data_fetch(platform, store, Assets.COIN_LAUNCH_MP3_PATH, xx Audio_Data_Key.COIN_LAUNCH);
 	start_data_fetch(platform, store, Assets.LOSER_MP3_PATH, xx Audio_Data_Key.LOSER);
 	start_data_fetch(platform, store, Assets.POINT_UP_MP3_PATH, xx Audio_Data_Key.POINT_UP);
+	start_data_fetch(platform, store, Assets.WINNER_MP3_PATH, xx Audio_Data_Key.WINNER);
 
 	// Native fetches complete synchronously. Browser fetches remain pending and
 	// are picked up by poll_data_fetches from the main loop.

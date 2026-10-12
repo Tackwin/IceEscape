@@ -201,6 +201,7 @@ EXPLOSION_8_MP3_PATH :: "assets/Sound/explosion8.mp3";
 POINT_UP_MP3_PATH :: "assets/Sound/point_up.mp3";
 
 LOSER_MP3_PATH :: "assets/Sound/loser.mp3";
+WINNER_MP3_PATH :: "assets/Sound/winner.mp3";
 
 #insert #run embed_data("TILE_OBJ", "tile.obj", #filepath);
 #insert #run embed_data("TOMBSTONE_OBJ", "tombstone.obj", #filepath);

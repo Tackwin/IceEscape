@@ -484,9 +484,11 @@ process :: (server: *Server, cmd: Command, sender: Connection, platform: *Platfo
 						for instance.persons {
 							reply.players_stats[it_index].player_id = it.player_id;
 							participant := Play_Session.find_participant(*instance.play_session, it.participant_id);
+							if !participant continue;
 							reply.players_stats[it_index].death = participant.death_count;
 							reply.players_stats[it_index].revive = participant.revive_count;
 							reply.players_stats[it_index].wins = participant.win_count;
+							reply.players_stats[it_index].score = participant.score;
 						}
 
 						queue_send(instance, make_command(reply), user.id);
@@ -1552,7 +1554,6 @@ prefill_fixed_instances :: (server: *Server, platform: *Platform) {
 	string_to_array("Olympus", server.instances[1].name);
 
 	init_instance_with_roster(server, *server.instances[2], 200, platform);
-	server.instances[2].scene_parameters.auto_revive = true;
 	string_to_array("Season 2", server.instances[2].name);
 	
 	init_instance_bomberman(server, *server.instances[3], 64, platform);

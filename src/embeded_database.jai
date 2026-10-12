@@ -3206,7 +3206,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-- name: 
+- name: S2E1 Pas les bases
 spawn
 - position: 9.5 9.5 0
 - size: 0 0
@@ -3343,7 +3343,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-- name: 
+- name: S2E2 Don't touch me
 path
 - checkpoint: 15.5 9 0
 - checkpoint: 15.5 12 0
@@ -3554,7 +3554,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-- name: Good Ice
+- name: S2E3 Bomba
 path
 - checkpoint: 30.5 12.25 0
 - checkpoint: 30.5 18.75 0
@@ -3714,7 +3714,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-- name: Buzzzzz
+- name: S2E4 Merry round
 spawn
 - position: 15 21.75 0
 - size: 0.05 0.05
@@ -4140,7 +4140,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-- name: 
+- name: S2E5 Vent d'hiver
 spawn
 - position: 9 17 0
 - size: 0 0
@@ -4343,7 +4343,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-- name: 
+- name: S2E6 Bigflo et au lit
 - night
 path
 - checkpoint: 11.5 19.5 0
@@ -4607,38 +4607,55 @@ pressbutton
 TERRAIN;
 
 S2E7 :: #string TERRAIN
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXGGGGXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXGGGGXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXGGGGXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXGGGGXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXiiiiXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXiiiiXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXGGGGIIIXIXIXIXIXGGGGXXXXXXXXXXX
-XXXXXXGGGGIXIXIXIXIXIXGGGGXXXXXXXXXXX
-XXXXXXGGGGIXIXIXIXIXIXGGGGXXXXXXXXXXX
-XXXXXXGGGGIXIXIXIXIXIXGGGGXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXGGGGXXXIGGGGIIIIiiiiXXXXXXXXXXX
-XXXXXXGGGGXXXIGGGGIIIIiiiiXXXXXXXXXXX
-XXXXXXGGGGXXXIGGGGIIIIiiiiXXXXXXXXXXX
-XXXXXXGGGGXXXIGGGGIIIIiiiiXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXGGGGiiiiiiiiXXXIIIIIIIIGGGXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXGGGGiiiiiiiiXXXIIIIIIIIGGGGGGGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXGGGGiiiiiiiiXXXIIIIIIIIGGGGGGGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXGGGGiiiiiiiiXXXXXXXXXXXGGGXXXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXGGGGGGGXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXiiiiXXXXIIIIIIiiiiiXXiiiiiiiXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXIIIIIIiiiiiXXiiiiiiiXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXiiiiXXXXIIIIIIiiiiiXXiiiiiiiXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXiiiiiiiXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXGGGGIIIXIXIXIXIXGGGGXiiiiiiiXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXGGGGIXIXIXIXIXIXGGGGXiiiiiiiXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXGGGGIXIXIXIXIXIXGGGGXiiiiiiiXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXGGGGIXIXIXIXIXIXGGGGXiiiiiiiXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXiiiiiiiXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXiiiiiiiXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXiiiiiiiXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXGGGGXXXIGGGGIIIIiiiiXiiiiiiiXGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXGGGGXXXIGGGGIIIIiiiiXiiiiiiiiGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXGGGGXXXIGGGGIIIIiiiiXiiiiiiiiGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXGGGGXXXIGGGGIIIIiiiiXiiiiiiiiGGXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXGGGXXXIIIiiiXXXGGGiiiXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXGGGXXXIIIiiiXXXGGGiiiIIIIIIIIIXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXGGGXXXIIXiiiXIIGGGiiiIIIIIIIIIXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXiiiiiiiiXiiiIIIGGGiiiIIIIIIIIIXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXiiiiiiiiXiiiIIIGGGiiiXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-- name: 
+- name: S2E7 Never give up
 path
 - checkpoint: 6.5 17.5 0
 - checkpoint: 9.5 17.5 0
@@ -4646,18 +4663,27 @@ path
 - checkpoint: 6.5 21.5 0
 - closed
 spawn
-- position: 24.5 15.75 0
+- position: 30.25 21.75 0
 - size: 0 0
 frame
-- position: 0 0
-- size: 40 30
-- origin: 0 0
+- position: -0.75 -3
+- size: 40.75 33
+- origin: 14 10
 flag
 - position: 24 15 0
 - index: 0
 flag
 - position: 8 15 0
-- index: 0
+- index: 1
+flag
+- position: 20.5 2.5 0
+- index: 4
+flag
+- position: 30.5 24 0
+- index: 3
+flag
+- position: 8.25 24.75 0
+- index: 2
 trap
 - position: 22 11 0
 - radius_hitbox: 0.5
@@ -4728,20 +4754,636 @@ trap
 - radius_hitbox: 0.5
 - stay_activated_time: 1
 
+trap
+- position: 6.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 7.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 8.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 9.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 10.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 11.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 12.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 13.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 14.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 15.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 16.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 17.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 18.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 19.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 20.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 13 22 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 13 23 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 12 22 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 11 22 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 21.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 20.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 19.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 18.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 17.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 16.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 15.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 14.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 13.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 12.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 11.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 10.5 20.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 10.5 19.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 10.5 18.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 22.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 24.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 25.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 23.5 17.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 26 18.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 26 19.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 26 20.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 26 21.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 19.5 25.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 19.5 24.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 19.5 23.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 5.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 4.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 3.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 5.5 19.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 4.5 19.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 3.5 19.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 25.049999 13 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 25.75 13 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 4.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 5.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 6.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 7.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 8.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 9.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 10.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 11.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 12.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 13.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 14.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 15.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 16.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 17.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 18.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 19.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 20.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 21.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 22.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 23.1 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 3.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 2.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 1.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 0.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: -0.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 26.5 10.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 26.5 11.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 26.5 12.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 26.5 16.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 26.5 15.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 26.5 14.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 26.5 13.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 30.5 4 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 34.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 35.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 36.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
+trap
+- position: 37.5 5.5 0
+- radius_hitbox: 0.5
+- stay_activated_time: 1
+
 trophy
-- position: 7.75 24.25 0
+- position: 5.5 3.5 0
 camp_ice
-- position: 23 13.25 0
+- position: 9 8 0
 - cooldown_time: 1
 - has_ice_cube: true
-skull
-- path_id: 0
-- speed: 1
-- offset: 0.5
-skull
-- path_id: 0
-- speed: 1
-- offset: 0
+camp_ice
+- position: 36 13 0
+- cooldown_time: 1
+- has_ice_cube: true
+camp_ice
+- position: 23 15 0
+- cooldown_time: 1
+- has_ice_cube: true
+camp_ice
+- position: 17 8 0
+- cooldown_time: 1
+- has_ice_cube: true
+camp_ice
+- position: 8 16.5 0
+- cooldown_time: 1
+- has_ice_cube: true
+camp_ice
+- position: 9 24 0
+- cooldown_time: 1
+- has_ice_cube: true
+camp_ice
+- position: 30.5 22.5 0
+- cooldown_time: 1
+- has_ice_cube: true
+camp_ice
+- position: 36 16 0
+- cooldown_time: 1
+- has_ice_cube: true
+jukebox
+- position: 7.5 24 0
+- direction: 0 0 0
+turn_table
+- position: 15 25 0
+- turning_speed: 0.1
+- turning_offset: -0.5
+turn_table
+- position: 34.5 8.5 0
+- turning_speed: 0
+- turning_offset: 0
+turn_table
+- position: 34.5 7.5 0
+- turning_speed: 0
+- turning_offset: 0
+turn_table
+- position: 34.5 6.5 0
+- turning_speed: 0
+- turning_offset: 0
+turn_table
+- position: 24.5 20.5 0
+- turning_speed: 0.1
+- turning_offset: 0
+turn_table
+- position: 23.5 19.5 0
+- turning_speed: 0.1
+- turning_offset: 0.33
+turn_table
+- position: 22.5 18.5 0
+- turning_speed: 0.1
+- turning_offset: 0.66
+turn_table
+- position: 28.5 20.5 0
+- turning_speed: 0
+- turning_offset: 0.75
+turn_table
+- position: 28.5 16.5 0
+- turning_speed: 0
+- turning_offset: 0
+turn_table
+- position: 32.5 16.5 0
+- turning_speed: 0
+- turning_offset: -0.63
+turn_table
+- position: 31 18.5 0
+- turning_speed: 0
+- turning_offset: 0
+turn_table
+- position: 33.75 18.75 0
+- turning_speed: 0
+- turning_offset: 0.75
+turn_table
+- position: 33.5 11.75 0
+- turning_speed: 0
+- turning_offset: -0.64
+turn_table
+- position: 30.5 14.75 0
+- turning_speed: 0
+- turning_offset: 0
+turn_table
+- position: 32.75 14.75 0
+- turning_speed: 0
+- turning_offset: 0.64
+turn_table
+- position: 28.900002 9.25 0
+- turning_speed: 0
+- turning_offset: -0
+turn_table
+- position: 31 20.5 0
+- turning_speed: 0
+- turning_offset: 0.64
+turn_table
+- position: 30.25 17.75 0
+- turning_speed: 0
+- turning_offset: -0.35
+turn_table
+- position: 29.25 18.5 0
+- turning_speed: 0
+- turning_offset: -0.1
+turn_table
+- position: 28.5 14.75 0
+- turning_speed: 0
+- turning_offset: -0.25
+turn_table
+- position: 28.5 10.75 0
+- turning_speed: 0
+- turning_offset: 0
+turn_table
+- position: 33.5 10.5 0
+- turning_speed: 0
+- turning_offset: -0.34
+turn_table
+- position: 32.75 20.5 0
+- turning_speed: 0
+- turning_offset: 0.74
+turn_table
+- position: 32.75 18 0
+- turning_speed: 0
+- turning_offset: -0.37
+turn_table
+- position: 30.5 15.75 0
+- turning_speed: 0
+- turning_offset: -0.48
+turn_table
+- position: 27.5 15.5 0
+- turning_speed: 0
+- turning_offset: 0.75
+turn_table
+- position: 27.5 6.5 0
+- turning_speed: 0
+- turning_offset: 0.12
+turn_table
+- position: 31 9.5 0
+- turning_speed: 0
+- turning_offset: -0.74
+turn_table
+- position: 31 11.75 0
+- turning_speed: 0
+- turning_offset: -0.15
+turn_table
+- position: 25.5 1.5 0
+- turning_speed: 0.3
+- turning_offset: 0.66
+turn_table
+- position: 25.5 2.5 0
+- turning_speed: 0.3
+- turning_offset: 0.33
+turn_table
+- position: 25.5 3.5 0
+- turning_speed: 0.3
+- turning_offset: 0
+turn_table
+- position: 14.5 1 0
+- turning_speed: 0.3
+- turning_offset: 0
+turn_table
+- position: 14.5 4 0
+- turning_speed: 0
+- turning_offset: -0.5
+turn_table
+- position: 11 1 0
+- turning_speed: 0.3
+- turning_offset: 0
+turn_table
+- position: 5.5 1 0
+- turning_speed: -0
+- turning_offset: 0.25
+turn_table
+- position: 14 24 0
+- turning_speed: 0.1
+- turning_offset: 0
 wind_zone
 - direction: 0 1
 - aabb: 22 6 26 13
@@ -4790,7 +5432,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-- name: Big Bomb
+- name: S2E8 6 Axes robotic
 path
 - checkpoint: 35 13.5 0
 - checkpoint: 13 13.51 0
@@ -5299,7 +5941,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-- name: 
+- name: S2E9 Comme en 40
 spawn
 - position: 8 8 0
 - size: 0 0
@@ -5307,6 +5949,8 @@ frame
 - position: 3 2.25
 - size: 34.25 42
 - origin: 10 7
+push
+- antiair_offset_std: 0.75
 flag
 - position: 8 18 0
 - index: 1
@@ -6004,5 +6648,6 @@ antiair
 - cooldown: 2.25
 - radius: 1
 - offset_time: 0
+pop
 
 TERRAIN;

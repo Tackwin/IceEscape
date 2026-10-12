@@ -72,6 +72,7 @@ Sound_Trigger :: struct {
 		Coin_Launch :: 7;
 		Point_Up :: 8;
 		Note :: 9;
+		Winner :: 10;
 	};
 
 	count := 1;
@@ -250,6 +251,7 @@ Scene :: struct {
 	camp_ices: [..] Camp_Ice; @allocate("lifetime") @clear("run")
 	particles: [..] Particle; @allocate("lifetime") @clear("run")
 	trophies: [..] Trophy; @allocate("lifetime") @clear("run")
+	trophy_bursts: [..] Trophy_Burst; @allocate("lifetime") @clear("run")
 	robots: [..] Robot; @allocate("lifetime") @clear("run")
 	explosions: [..] Explosion; @allocate("lifetime") @clear("run")
 	antiairs: [..] AntiAir; @allocate("lifetime") @clear("run")
@@ -1078,6 +1080,13 @@ Prop :: struct {
 Trophy :: struct {
 	id: int;
 	position: V3f; @edit @picking
+}
+
+Trophy_Burst :: struct {
+	position: V3f;
+	player_id: int;
+	birthtime: float64;
+	first: bool;
 }
 
 Particle :: struct {
@@ -2451,6 +2460,10 @@ update_lantern :: (scene: *Scene, lantern: *Lantern, dt: float32) {
 }
 
 update_client :: (scene: *Scene, dt: float32, result: *Frame_Result) {
+	for * scene.trophy_bursts {
+		lifetime := ifx it.first then 1.8 else 0.9;
+		if scene.client.clock - it.birthtime >= lifetime remove it;
+	}
 	if scene.client.render_particles {
 		add_snow(scene, dt);
 		add_dirt_particles(scene, dt);
@@ -3517,7 +3530,7 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 			if player.server.dead || player.server.model_id <= 0 continue;
 			q := v2(player.server.position);
 			d := norm(p - q);
-			if d < 0.25 pick_up_trophy(scene, player.id, time, result);
+			if d < 0.25 pick_up_trophy(scene, player.id, time, result, it.position);
 		}
 	}
 
@@ -3874,10 +3887,12 @@ pity_time_remaining :: (scene: Scene, time: Apollo_Time) -> float64 {
 	return max(cast(float64) 0, scene.pity_time - to_float64_seconds(time - scene.pity_time_start));
 }
 
-pick_up_trophy :: (scene: *Scene, player_id: int, time: Apollo_Time, result: *Frame_Result) {
+pick_up_trophy :: (scene: *Scene, player_id: int, time: Apollo_Time, result: *Frame_Result, position: V3f) {
 	if !scene.is_server || !result || scene.end_scene_countdown_started return;
 	for scene.trophy_player_ids if it == player_id return;
 	array_add(*scene.trophy_player_ids, player_id);
+	push_broadcast(result, Command.Trophy_Picked.{ scene_id = scene.id, player_id = player_id,
+		position = position, first = scene.trophy_player_ids.count == 1 });
 	push_level_participation(scene, player_id, result);
 	array_add(*result.level_events, .{ kind = .Trophy_Pickup, run_generation = scene.run_generation,
 		player_id = player_id });
@@ -5422,6 +5437,17 @@ process_client_only :: (
 			antiair.client.t = 0;
 			return true;
 		}
+	}
+
+	trophy_picked := isa(command.payload, Command.Trophy_Picked);
+	if trophy_picked {
+		if trophy_picked.scene_id != scene.id return true;
+		for scene.trophy_player_ids if it == trophy_picked.player_id return true;
+		array_add(*scene.trophy_player_ids, trophy_picked.player_id);
+		array_add(*scene.trophy_bursts, Trophy_Burst.{ position = trophy_picked.position,
+			player_id = trophy_picked.player_id, birthtime = scene.client.clock, first = trophy_picked.first });
+		array_add(*scene.sound_triggers, Sound_Trigger.{ kind = .Winner, position = trophy_picked.position });
+		return true;
 	}
 
 	pity: *Command.Pity_Time = isa(command.payload, Command.Pity_Time);

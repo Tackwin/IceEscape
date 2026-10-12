@@ -873,9 +873,8 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 
 		if scan2(line, "camp_ice") {
 			camp_ice: Camp_Ice;
-			camp_ice.id = allocate_id(scene);
+			camp_ice.id = scene.camp_ices.count + 1;
 			defer array_add(*scene.camp_ices, camp_ice);
-
 			cursor += 1;
 			while cursor < lines.count {
 				defer cursor += 1;
@@ -900,6 +899,7 @@ parse_terrain :: (text: string, scene: *Scene, generate_props: bool = true) {
 
 				print("Error reading camp_ice, unrecognized line: % (L%)\n", line, cursor);
 			}
+			cursor -= 1;
 		}
 
 		if scan2(line, "bomb_spawner") {

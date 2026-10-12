@@ -7,6 +7,7 @@ Game_Page :: struct {
 		win_count := 0;
 		death_count := 0;
 		revive_count := 0;
+		score := 0;
 	}
 	player_stats: Table(int, Stats);
 	next_terrain_name: string;
@@ -80,6 +81,7 @@ process_game :: (
 			stats.win_count = entry.wins;
 			stats.death_count = entry.death;
 			stats.revive_count = entry.revive;
+			stats.score = entry.score;
 			table_set(*state.game.player_stats, entry.player_id, stats);
 		}
 		if state.game.next_terrain_name
@@ -779,6 +781,12 @@ sounding :: (
 					audio = store.loser_mp3;
 					audio.volume = 2.0;
 					audio.exponent = 1.0;
+				case .Winner;
+					audio = store.winner_mp3;
+					audio.volume = 0.45;
+					audio.exponent = 0.35;
+					audio.pitch = 0.0;
+					audio.fade_in = 10;
 				case .Checkpoint_Ok;
 					audio = store.checkpoint_ok_mp3;
 					audio.volume = 2.0;
@@ -816,7 +824,7 @@ sounding :: (
 push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State, store: *Store) {
 	scoreboard_center := state.controls.window_size / 2;
 	scoreboard_center.y -= state.controls.window_size.y / 12;
-	scoreboard_size := V2f.{ 600, 441 }; // Header plus eight 48px player rows.
+	scoreboard_size := V2f.{ 800, 441 }; // Two columns, with room for session scores.
 	header_height := 56.0;
 	footer_height := 28.0;
 
@@ -1018,6 +1026,9 @@ push_score_tab :: (scene: Scene.Scene, page: *Game_Page, state: *GUI.GUI_State, 
 			outline = true,
 			id = 2
 		);
+		GUI.atom_label(state, tprint("%", stat.score),
+			.{ cursor.x + scoreline_size.x - 24, cursor.y + scoreline_size.y / 2 },
+			scale = 28, z = 12, align = .Center_Right, color = GUI.GOLD_ACCENT, id = 3);
 	}
 
 	for scene.players {
