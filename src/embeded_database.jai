@@ -168,16 +168,16 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXGXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXIIGIIGIIGIIXXXXXXXXXXXXXXXXX
-XXXXXXXXXXGGIIGIIGIIGIIGGXXXXXXXXXXXXXXX
+XXXXXXXXXXXXIGIIGIGIIGIXXXXXXXXXXXXXXXXX
+XXXXXXXXXXGGIGIIGIGIIGIGGXXXXXXXXXXXXXXX
 XXXXXXXXXIIIIIIIIIIIIIIIIIXXXXXXXXXXXXXX
 XXXXXXXXGGIIRIIIIIIIIIRIIGGXXXXXXXXXXXXX
 XXXXXXXXIIIIRIIiiiiiIIRIIIIXXXXXXXXXXXXX
 XXXXXXXXGGIIRIIiiiiiIIRIIGGXXXXXXXXXXXXX
 XXXXXXXXIIIIRIIIIIIIIIRIIIIXXXXXXXXXXXXX
 XXXXXXXXXIGIIIIIXGXIIIIIGIXXXXXXXXXXXXXX
-XXXXXXXXXIGIIIGIXGXIGIIIGIXXXXXXXXXXXXXX
-XXXXXXXXXXXXIIGIXGXIGIIXXXXXXXXXXXXXXXXX
+XXXXXXXXXIGIGIGIXGXIGIGIGIXXXXXXXXXXXXXX
+XXXXXXXXXXXXGIGIXGXIGIGXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXSXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -194,25 +194,25 @@ frame
 
 standin
 - model_id: 1
-- position: 11.5 10.5 0.0
+- position: 10.5 10.5 0.0
 - orientation_dir: 0 -1 0
 
 trigger_zone
 - accept_player_id: -1
 - trigger: Move_To_Play_World
-- position: 11.5 10.5 0.0
+- position: 10.5 10.5 0.0
 - radius: 1.0
 - model_id: 1
 
 standin
 - model_id: 2
-- position: 8.5 10.5 0.0
+- position: 7.5 10.5 0.0
 - orientation_dir: 0 -1 0
 
 trigger_zone
 - accept_player_id: -1
 - trigger: Move_To_Play_World
-- position: 8.5 10.5 0.0
+- position: 7.5 10.5 0.0
 - radius: 1.0
 - model_id: 2
 
@@ -225,20 +225,20 @@ trigger_zone
 
 standin
 - model_id: 3
-- position: 14.5 10.5 0.0
+- position: 15.5 10.5 0.0
 - orientation_dir: 0 -1 0
 
 trigger_zone
 - accept_player_id: -1
 - trigger: Move_To_Play_World
-- position: 14.5 10.5 0.0
+- position: 15.5 10.5 0.0
 - radius: 1.0
 - model_id: 3
 
 trigger_zone
 - accept_player_id: -1
 - trigger: Move_To_Play_World
-- position: 14.5 12.5 0.0
+- position: 15.5 12.5 0.0
 - radius: 1.0
 - model_id: 3
 
@@ -375,6 +375,43 @@ trigger_zone
 - position: 17.5 9.5 0.0
 - radius: 1.0
 - model_id: 24
+
+standin
+- model_id: 25
+- position: 16.5 1.5 0.0
+- orientation_dir: -0.0 +0.99 0
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 16.5 1.5 0.0
+- radius: 1.0
+- model_id: 25
+
+standin
+- model_id: 26
+- position: 6.5 1.5 0.0
+- orientation_dir: -0.00 +0.99 0
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 6.5 1.5 0.0
+- radius: 1.0
+- model_id: 26
+
+
+standin
+- model_id: 27
+- position: 12.5 10.5 0.0
+- orientation_dir: -0.0 -0.99 0
+
+trigger_zone
+- accept_player_id: -1
+- trigger: Move_To_Play_World
+- position: 12.5 10.5 0.0
+- radius: 1.0
+- model_id: 27
 
 trigger_zone
 - accept_player_id: -1

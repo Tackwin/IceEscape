@@ -55,6 +55,9 @@ Model_Id :: enum {
 	Spirit :: 22;
 	Boat_Sail :: 23;
 	Tractor :: 24;
+	Truck :: 25;
+	Boat_Speed :: 26;
+	Boat_Fan :: 27;
 }
 Model_Id_Count :: #run enum_highest_value(Model_Id) + 1;
 
@@ -606,6 +609,14 @@ make_sync_stand_in :: (standin: *Stand_In) -> Command.Sync_Stand_In {
 	sync_standin.standin_id = standin.id;
 	sync_standin.retired = standin.retired;
 	return sync_standin;
+}
+
+stand_in_has_play_trigger :: (scene: *Scene, standin: Stand_In) -> bool {
+	for scene.trigger_zones {
+		if it.trigger == .Move_To_Play_World && it.model_id == standin.model_id
+			return true;
+	}
+	return false;
 }
 
 make_sync_bomb :: (bomb: *Bomb) -> Command.Sync_Bomb {
@@ -3235,24 +3246,28 @@ update_server :: (scene: *Scene, time: Apollo_Time, dt: float32, result: *Frame_
 					move.standin_id = standin.id;
 					if result array_add(*result.move_instance_to_world, move);
 					standin.retired = true;
+					push_broadcast(result, make_sync_stand_in(standin));
 				}
 			}
 		}
 	}
 
-	// >RULE When all standins are retired, reload them
-	if scene.stand_in.count > 0 {
-		all := true;
-		for * scene.stand_in {
-			if !it.retired {
-				all = false;
-				break;
-			}
+	// >RULE Refill the selection batch once every paired standin is retired
+	has_selection := false;
+	all_retired := true;
+	for scene.stand_in {
+		if !stand_in_has_play_trigger(scene, it) continue;
+		has_selection = true;
+		if !it.retired {
+			all_retired = false;
+			break;
 		}
-		if all {
-			for * scene.stand_in {
-				it.retired = false;
-			}
+	}
+	if has_selection && all_retired {
+		for * scene.stand_in {
+			if !stand_in_has_play_trigger(scene, it.*) continue;
+			it.retired = false;
+			push_broadcast(result, make_sync_stand_in(it));
 		}
 	}
 

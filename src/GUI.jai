@@ -129,6 +129,9 @@ MONSTER_TRUCK_SLOT :: V2f.{ 9, 10 };
 SUV_SLOT :: V2f.{ 10, 10 };
 BOAT_SAIL_SLOT :: V2f.{ 11, 10 };
 TRACTOR_SLOT :: V2f.{ 12, 10 };
+TRUCK_SLOT :: V2f.{ 13, 10 };
+BOAT_FAN_SLOT :: V2f.{ 14, 10 };
+BOAT_SPEED_SLOT :: V2f.{ 15, 10 };
 
 Key :: Platform.Key;
 
@@ -183,6 +186,9 @@ model_id_to_slot :: (id: Scene.Model_Id) -> V2f {
 		case .Police; return POLICE_SLOT;
 		case .Boat_Sail; return BOAT_SAIL_SLOT;
 		case .Tractor; return TRACTOR_SLOT;
+		case .Truck; return TRUCK_SLOT;
+		case .Boat_Speed; return BOAT_SPEED_SLOT;
+		case .Boat_Fan; return BOAT_FAN_SLOT;
 	}
 	return QUESTION_SLOT;
 }

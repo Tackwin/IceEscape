@@ -91,10 +91,13 @@ SNOWFLAKES_AND_LIGHTS_MP3_PATH :: "../assets/Sound/Snowflakes and Lights.mp3";
 #insert #run embed_data("VEHICLE_SPEEDSTER_OBJ", "Mesh/Vehicle_Speedster.obj", #filepath);
 #insert #run embed_data("VEHICLE_MONSTER_TRUCK_OBJ", "Mesh/Vehicle_Monster_Truck.obj", #filepath);
 #insert #run embed_data("VEHICLE_VINTAGE_RACER_OBJ", "Mesh/Vehicle_Vintage_Racer.obj", #filepath);
+#insert #run embed_data("VEHICLE_TRUCK_OBJ", "Mesh/Vehicle_Truck.obj", #filepath);
 #insert #run embed_data("VEHICLE_DRAG_RACER_OBJ", "Mesh/Vehicle_Drag_Racer.obj", #filepath);
 #insert #run embed_data("BOAT_SAIL_OBJ", "Mesh/Vehicle_Boat_Sail.obj", #filepath);
 #insert #run embed_data("BOAT_ROW_OBJ", "Mesh/Vehicle_Boat_Row.obj", #filepath);
 #insert #run embed_data("BOAT_FISHING_OBJ", "Mesh/Vehicle_Boat_Fishing.obj", #filepath);
+#insert #run embed_data("BOAT_SPEED_OBJ", "Mesh/Vehicle_Boat_Speed.obj", #filepath);
+#insert #run embed_data("BOAT_FAN_OBJ", "Mesh/Vehicle_Boat_Fan.obj", #filepath);
 #insert #run embed_data("TAXI_OBJ", "Mesh/Vehicle_Taxi.obj", #filepath);
 #insert #run embed_data("POLICE_OBJ", "Mesh/Vehicle_Police.obj", #filepath);
 #insert #run embed_data("TRACTOR_OBJ", "Mesh/Vehicle_Tractor.obj", #filepath);
@@ -338,6 +341,7 @@ load_everything :: (platform: Platform) {
 			"VEHICLE_DRAG_RACER_OBJ",
 			"VEHICLE_MONSTER_TRUCK_OBJ",
 			"VEHICLE_VINTAGE_RACER_OBJ",
+			"VEHICLE_TRUCK_OBJ",
 			"FLAG_OBJ",
 			"FLAG_DOWN_OBJ",
 			"TILE_OBJ",
@@ -389,6 +393,8 @@ load_everything :: (platform: Platform) {
 			"BOAT_ROW_OBJ",
 			"BOAT_SAIL_OBJ",
 			"BOAT_FISHING_OBJ",
+			"BOAT_SPEED_OBJ",
+			"BOAT_FAN_OBJ",
 			"TAXI_OBJ",
 			"POLICE_OBJ",
 			"TRACTOR_OBJ",
