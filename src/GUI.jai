@@ -2365,7 +2365,9 @@ atom_label :: (
 
 	cursor := pos;
 	ret.gui_char_start_index = gui.chars.count;
-	bob_67 := (1.5 * sin(1.5 * to_float64_seconds(gui.controls.time) * 6.283185307179586)).(float32);
+	// Absolute browser timestamps exceed sin's supported angle range; wrap in float64 first.
+	bob_phase_67 := fmod_cycling(1.5 * to_float64_seconds(gui.controls.time), 1.0);
+	bob_67 := (1.5 * sin(bob_phase_67 * TAU64)).(float32);
 	byte_offset := 0;
 	while byte_offset < text.count {
 		codepoint, next_offset := Platform.text_next(text, byte_offset);

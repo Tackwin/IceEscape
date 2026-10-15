@@ -121,8 +121,9 @@ wasm_get_frame_info :: (info: *Frame_Info) {
 	Is_Mobile :: 152;
 	Touch_Release :: 153;
 	Touch_Down :: 154;
-	info.mouse_position.x = xx (controls_buffer.data + Mouse_X).(*u32).*;
-	info.mouse_position.y = xx (controls_buffer.data + Mouse_Y).(*u32).*;
+	// Dragging outside the canvas can produce negative pointer coordinates.
+	info.mouse_position.x = xx (controls_buffer.data + Mouse_X).(*s32).*;
+	info.mouse_position.y = xx (controls_buffer.data + Mouse_Y).(*s32).*;
 	info.mouse_wheel = xx (controls_buffer.data + Mouse_Wheel).(*s32).* / 1000;
 	(controls_buffer.data + Mouse_Wheel).(*s32).* = 0;
 	info.is_mobile = (controls_buffer.data + Is_Mobile).(*u8).* != 0;

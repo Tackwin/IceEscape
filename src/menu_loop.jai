@@ -283,8 +283,12 @@ process_menu :: (app_user: *App_User, command: Command) -> bool {
 				slice(pw, 4, 7),
 				slice(pw, 7, 11)
 			);
+			
+			get_username: Command.Get_Username;
+			send_web_message(state.platform, state.current_time, make_command(get_username));
+
+			state.platform.set_token(login.token);
 		}
-		state.platform.set_token(login.token);
 	}
 
 	get_terrain_leaderboard := isa(command.payload, Command.Get_Terrain_Leaderboard);

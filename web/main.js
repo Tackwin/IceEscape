@@ -639,7 +639,7 @@ const update_pointer_position = (client_x, client_y) => {
 		x = rotated_x;
 	}
 
-	const span = getControlsBufferU32();
+	const span = getControlsBufferS32();
 	Atomics.store(span, Mouse_X / 4, Math.round(x * WASM_GAME_WIDTH));
 	Atomics.store(span, Mouse_Y / 4, Math.round(y * WASM_GAME_HEIGHT));
 };
