@@ -5758,8 +5758,10 @@ Terrain :: struct {
 	tiles: [..] Tile;
 }
 free :: (terrain: *Terrain) {
-	array_free(terrain.tiles);
+	array_reset(*terrain.tiles);
 	free(terrain.text);
+	terrain.text.count = 0;
+	terrain.text.data = null;
 }
 
 get_tile :: (scene: Scene, x: V2i) -> *Tile {

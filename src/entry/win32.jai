@@ -447,8 +447,14 @@ win32_fetch_data :: (path: string) -> Platform.extern_ref {
 	push_context,defer_pop launcher_context;
 	data_fetch_counter += 1;
 
+	// Development runs launch from bin, while the browser uses assets/ URLs.
+	// Prefer packaged assets when present, otherwise use the source asset tree.
+	resolved_path := path;
+	if begins_with(path, "assets/") && Win32.GetFileAttributesA(to_c_string(path,, temp)) == Win32.INVALID_FILE_ATTRIBUTES {
+		resolved_path = tprint("%/../../%", #filepath, path);
+	}
 	fetch: Win32_Data_Fetch;
-	data, ok := read_entire_file(path,, temp);
+	data, ok := read_entire_file(resolved_path,, temp);
 	if ok {
 		copy := NewArray(data.count, u8);
 		memcpy(copy.data, data.data, data.count);
@@ -466,6 +472,8 @@ win32_poll_data :: (
 	ref: Platform.extern_ref,
 	data: [] u8
 ) -> Data_Status {
+	// The caller can be a DLL with a different layout for the extended context.
+	push_context,defer_pop launcher_context;
 	result: Data_Status;
 	if ref <= 0 {
 		result.status = .Invalid;

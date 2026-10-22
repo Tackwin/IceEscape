@@ -1,4 +1,4 @@
-- Terrain seam
++ Terrain seam
 + finish scene animation
 + new level
 + Leave time for wipe
@@ -9,7 +9,7 @@
 + Add status bar for people
 + Add particles
 - Add emotes
-- Add debris animation
++ Add debris animation
 + Add spikes box
 + Fix the sound
 + Scoreboard
@@ -24,16 +24,19 @@
 + Remove score on wipe
 + Way to remove player from the server
 + Change points UI
-- Change endscreen
++ Change endscreen
 + Revive after 60 seconds
 + Fix bug that score reset on next level
 + Don't play sound when the player scoring isn't the controlling player
 + Add lights
 + Add button press
-- Add trails
++ Add trails
 - Add camera rail
-- Make the ships dive and resurface at the end of open paths
++ Make the ships dive and resurface at the end of open paths
 - Snowman that kills on touch. Is immobile, gets destroyed on touch and regenerate.
-- Spike that activate on touch, for the followers
++ Spike that activate on touch, for the followers
 - Shaking camera
+- wind blowing tree
+- replace black sphere  with sdf
+- Add disco ball
 - 

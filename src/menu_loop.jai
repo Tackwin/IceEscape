@@ -544,18 +544,8 @@ draw_lobby_rooms :: (
 ) {
 	lobby_panel_begin(gui, store, .{ 762, 588 }, "GAME ROOMS",
 		inset = .{ 18, 30 }, gap = .{ 0, 12 });
-	GUI.box(gui, .{ 726, 44 }, .Right);
-	GUI.box(gui, .{ 620, 44 });
-	GUI.label_box(gui, "FIND YOUR NEXT ADVENTURE", .{ 620, 18 }, 9,
-		GUI.GOLD_ACCENT, id = "lobby_room_subtitle");
-	GUI.label_box(gui, "Choose a room and brave the ice together.", .{ 620, 26 }, 11,
-		GUI.TEXT_MUTE, id = "lobby_room_description");
-	GUI.end(gui);
-	GUI.label_box(gui, tprint("% rooms", menu.instances_list.count), .{ 106, 44 }, 10,
-		GUI.TEXT_NORMAL, .Center_Right, "lobby_room_count");
-	GUI.end(gui);
 
-	ROOM_PAGE_SIZE :: 5;
+	ROOM_PAGE_SIZE :: 6;
 	page_count := max((menu.instances_list.count + ROOM_PAGE_SIZE - 1) / ROOM_PAGE_SIZE, 1);
 	menu.instances_page = clamp(menu.instances_page, 0, page_count - 1);
 	page_begin := menu.instances_page * ROOM_PAGE_SIZE;
@@ -579,9 +569,9 @@ draw_lobby_rooms :: (
 		row.access = ifx room.private then "Private" else "Public";
 		if room.instance_id == menu.selected_instance_id selected = it - page_begin;
 	}
-	GUI.box(gui, .{ 726, 300 }, gap = .{ 0, 8 });
+	GUI.box(gui, .{ 726, 344 }, gap = .{ 0, 8 });
 	skin := lobby_table_style(store, selected_rows = true);
-	table := GUI.table(gui, rows, .{ 726, 264 }, id = "table",
+	table := GUI.table(gui, rows, .{ 726, 308 }, id = "table",
 		row_height = 40, skin = *skin, selected_row = *selected);
 	if page_count > 1 {
 		GUI.row(gui);
@@ -692,12 +682,25 @@ draw_lobby_right :: (
 		window := GUI.begin_window(gui, gui.controls.window_size / 2, .{ 400, 300 },
 			id = "login_window", z = 10, modal = true, store = store);
 		defer GUI.end_window(gui, id = "login_window");
-		GUI.labeled_input_text(gui, "Passcode:", *menu.login_popup_password, 400 - 16, 24,
-			id = "login_passcode_input", placeholder = "0123456789A", label_color = GUI.TEXT_NORMAL,
-			skin = GUI.compact_button_skin(store, GUI.LOBBY_BUTTON_DARK), dark_style = true);
-		GUI.row(gui,
-			window.pos + v2(window.size.x - 8.0 - (112 * 2 + 16), window.size.y - 8.0 - 36),
-			.Right, align = .Bottom_Left);
+		GUI.move_cursor(gui, .{ 8, 8 });
+		GUI.labeled_input_text(
+			gui,
+			"Passcode:",
+			*menu.login_popup_password,
+			400 - 32,
+			24,
+			id = "login_passcode_input",
+			placeholder = "0123456789A",
+			label_color = GUI.TEXT_NORMAL,
+			skin = GUI.compact_button_skin(store, GUI.LOBBY_BUTTON_DARK),
+			dark_style = true
+		);
+		GUI.row(
+			gui,
+			window.pos + v2(window.size.x - 24.0 - (112 * 2 + 16), window.size.y - 16.0 - 36),
+			.Right,
+			align = .Bottom_Left
+		);
 		defer GUI.end(gui);
 		if GUI.themed_button(gui, store, "Cancel", "login_cancel_btn", .{ 112, 36 })
 			menu.login_popup_open = false;

@@ -21,6 +21,14 @@ Scene :: #import "Scene";
 GUI :: #import "GUI";
 Play_Session :: #import "Play_Session";
 
+remap_app_context :: (platform: *Platform) #expand {
+	mapped := remap_context();
+	// remap_context copies the trace head while its own helper frames are active.
+	// Use the restored caller chain, whose nodes remain live in this scope.
+	mapped.stack_trace = context.stack_trace;
+	`push_context,defer_pop mapped;
+}
+
 process_complete_ntp :: (state: *State, ntp: Command.NTP) {
 	result: State.NTP_Result;
 	result.offset = (ntp.t1 + ntp.t2) / 2 - (ntp.t0 + ntp.t3) / 2;
@@ -88,7 +96,7 @@ App_User :: struct {
 		app_user.state.history_app_update_cursor += 1;
 		app_user.state.history_app_update_cursor %= app_user.state.history_app_update_loop_dt.count;
 	}
-	Remap_Context();
+	remap_app_context(app.platform);
 	auto_release_temp();
 	app_user.app = app;
 	app_user.state.platform = app.platform;
@@ -323,7 +331,7 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 }
 
 #program_export "app_init" app_init :: (app: *App) {
-	Remap_Context();
+	remap_app_context(app.platform);
 
 	app_user := New(App_User);
 	app.user_data = app_user.(*void);
@@ -360,11 +368,11 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 }
 
 #program_export "app_reload_before" app_reload_before :: (_app: *App) {
-	Remap_Context();
+	remap_app_context(_app.platform);
 	reset_temporary_storage();
 }
 #program_export "app_reload" app_reload :: (_app: *App) {
-	Remap_Context();
+	remap_app_context(_app.platform);
 	app_user := _app.user_data.(*App_User);
 	app_user.app = _app;
 	app_user.state.platform = _app.platform;
@@ -394,7 +402,7 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	app_user.app = _app;
 	app_user.state.platform = _app.platform;
 	app_user.graphics.gpu = _app.platform.gpu;
-	Remap_Context();
+	remap_app_context(_app.platform);
 	auto_release_temp();
 	poll_data_fetches(_app.platform.*, *app_user.store);
 	launch_music(app_user, _app.platform);

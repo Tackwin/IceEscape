@@ -224,9 +224,6 @@ init_empty_terrain :: (editor: *Editor, width: int, height: int) {
 	editor.terrain_width = width;
 	editor.terrain_height = height;
 
-	// Free old terrain
-	Scene.free(*editor.scene.terrain);
-
 	// Create new terrain
 	editor.scene.terrain.tiles_count = V2i.{ width, height };
 	editor.scene.terrain.tile_size = V2f.{ 1.0, 1.0 };

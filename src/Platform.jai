@@ -674,7 +674,6 @@ quit_database :: (platform: *Platform, handle: DB_query.Handle) {
 	platform.db_query(*query);
 }
 
-
 Platform :: struct {
 	extern_ref :: s32;
 	wait: #type (promise: extern_ref) = null;
