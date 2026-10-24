@@ -1846,17 +1846,18 @@ remove_entity_at :: (scene: *Scene.Scene, entity: Scene_Placeable_Entity, index:
 draw_editor_toolbar :: (
 	editor: *Editor, page: *Editor_Page, gui: *GUI.GUI_State, state: *State, app_user: *App_User
 ) {
+	store := *app_user.store;
+	win_size := gui.controls.window_size;
+	GUI.push_felt_panel(gui, store, v2f(0, 0), v2f(win_size.x, 64));
+
 	// Top toolbar
 	toolbar_height := 40.0;
 	toolbar_y := 0.0;
 
-	GUI.push_quad_screen(gui, V2f.{ 0, toolbar_y }, V2f.{ gui.controls.window_size.x, toolbar_height }, V3f.{ 0.15, 0.15, 0.15 }, z = 50);
-
-	GUI.row(gui, V2f.{ 8, toolbar_y + toolbar_height / 2 }, z = 51, align = .Center_Left);
-	defer GUI.end(gui);
+	GUI.row(gui, V2f.{ 8 + 8, 8 + 8 }, z = 51, align = .Top_Left);
 
 	// Save button
-	play_clicked, _, _ := GUI.button(gui, "Play", id = "play_btn");
+	play_clicked, _ := GUI.themed_button(gui, store, "Play", "play_btn", v2f(64, 32));
 	if play_clicked {
 		ask_enter_custom_instance: Command.Ask_Enter_Custom_Instance;
 		content := Scene.serialize(editor.scene,, temp);
@@ -1867,11 +1868,11 @@ draw_editor_toolbar :: (
 	}
 
 	// Save button
-	save_clicked, _, _ := GUI.button(gui, "Save", id = "save_btn");
+	save_clicked, _ := GUI.themed_button(gui, store, "Save", "save_btn", v2f(64, 32));
 	if save_clicked {
 		page.show_save_dialog = true;
 	}
-	load_clicked, _, _ := GUI.button(gui, "Load", id = "load_btn");
+	load_clicked, _ := GUI.themed_button(gui, store, "Load", "load_btn", v2f(64, 32));
 	if load_clicked {
 		// Refresh file list
 		page.load_error = "";
@@ -1879,53 +1880,28 @@ draw_editor_toolbar :: (
 		page.show_load_dialog = true;
 	}
 
-	clear_clicked, _, _ := GUI.button(gui, "Clear", id = "clear_btn");
+	clear_clicked, _ := GUI.themed_button(gui, store, "Clear", "clear_btn", v2f(64, 32));
 	if clear_clicked {
 		init_empty_terrain(editor, editor.terrain_width, editor.terrain_height);
 		Scene.clear_scene(*editor.scene);
 	}
-	reset_camera_clicked, _, _ := GUI.button(gui, "Reset Camera", id = "reset_camera_btn");
-	if reset_camera_clicked {
-		editor.camera_offset = v3(0.0, -4, 8);
-		Scene.reset_camera_zoom(*editor.scene.camera);
-	}
 
 	// Back button
-	back_clicked, _, _ := GUI.button(gui, "Back to Menu", id = "back_btn");
+	back_clicked, _ := GUI.themed_button(gui, store, "Back", "back_btn", v2f(64, 32));
 	if back_clicked {
 		state.screen_state = .Menu;
 	}
-
+	GUI.end(gui);
+	GUI.row(gui, V2f.{ win_size.x - 16, 8 + 8 }, direction = .Left, z = 51, align = .Top_Right);
+	defer GUI.end(gui);
 	// Terrain size controls
 	size_x := 620.0;
 
-	// Width controls
-	GUI.atom_label(gui, "W:", V2f.{ size_x, toolbar_y + 20 }, scale = 14, z = 51, color = V4f.{ 0.8, 0.8, 0.8, 1 }, align = .Center_Left);
-	w_minus_clicked, _, _ := GUI.button(gui, tprint("W: %-", editor.terrain_width), id = "w_minus");
-	if w_minus_clicked && editor.terrain_width > 10 {
-		resize_terrain(editor, editor.terrain_width - 5, editor.terrain_height);
-	}
-	GUI.atom_label(gui, tprint("%", editor.terrain_width), V2f.{ size_x + 50, toolbar_y + 20 }, scale = 14, z = 51, color = V4f.{ 1, 1, 1, 1 }, align = .Center_Left);
-	w_plus_clicked, _, _ := GUI.button(gui, tprint("W: %+", editor.terrain_width), id = "w_plus");
-	if w_plus_clicked && editor.terrain_width < 200 {
-		resize_terrain(editor, editor.terrain_width + 5, editor.terrain_height);
-	}
-
-	// Height controls
-	h_minus_clicked, _, _ := GUI.button(gui, tprint("H: %-", editor.terrain_height), id = "h_minus");
-	if h_minus_clicked && editor.terrain_height > 10 {
-		resize_terrain(editor, editor.terrain_width, editor.terrain_height - 5);
-	}
-	h_plus_clicked, _, _ := GUI.button(gui, tprint("H: %+", editor.terrain_height), id = "h_plus");
-	if h_plus_clicked && editor.terrain_height < 200 {
-		resize_terrain(editor, editor.terrain_width, editor.terrain_height + 5);
-	}
-
 	// Current terrain info
-	snap_clicked, _, _ := GUI.button(
-		gui,
+	snap_clicked, _ := GUI.themed_button(
+		gui, store,
 		tprint("Snap %", editor.grid_snapping),
-		id = "snap_btn"
+		"snap_btn", v2f(64, 32)
 	);
 	if snap_clicked {
 		if editor.grid_snapping == 0.05 {
@@ -1937,19 +1913,19 @@ draw_editor_toolbar :: (
 		}
 	}
 	
-	clock_clicked, _, _ := GUI.button(
-		gui,
+	clock_clicked, _ := GUI.themed_button(
+		gui, store,
 		tprint("Clock %", editor.clock_running),
-		id = "clock_btn"
+		"clock_btn", v2f(64, 32)
 	);
 	if clock_clicked {
 		editor.clock_running = !editor.clock_running;
 	}
 
-	screenshot_clicked, _, _ := GUI.button(
-		gui,
+	screenshot_clicked, _ := GUI.themed_button(
+		gui, store,
 		"Screenshot",
-		id = "screenshot_btn"
+		"screenshot_btn", v2f(64, 32)
 	);
 
 	current_generation := app_user.framegraph.screenshot_data_generation;

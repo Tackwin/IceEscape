@@ -707,6 +707,7 @@ Platform :: struct {
 	load_audio: #type (data: [] u8, compressed: bool, out: *Audio) -> extern_ref = null;
 	play_audio: #type (audio: Audio, position: V3f) -> Sound = null;
 	set_sound: #type (sound: Sound) = null;
+	kill_sound: #type (sound_id: int) = null;
 
 	list_files : #type (path: string, rec: bool) -> [] string = null;
 	read_entire_file: #type (path: string, data: [] u8) -> int = null;

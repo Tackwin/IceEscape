@@ -3163,9 +3163,10 @@ button_sized :: (
 	font_size := 14.0,
 	icon := V2f.{ -1, -1 },
 	enabled := true,
-	align := Align.Bottom_Left
+	_align := Align.Undefined
 ) -> bool, bool {
 	f := flow(gui);
+	align := ifx _align == Align.Undefined then f.align else _align;
 	button_z := ifx z == FLOAT32_MAX then f.z else z;
 	origin := f.cursor;
 	_, widget := widget_sized(

@@ -644,6 +644,14 @@ set_sound :: (sound: Sound) {
 		// ma_sound_set_pitch(win32_sound.sound, sound.pitch);
 	}
 }
+kill_sound :: (sound_id: int) {
+	ok, win32_sound := table_find(*sound_id_to_sound, sound_id);
+	if ok && win32_sound.sound {
+		ma_sound_stop(win32_sound.sound);
+		ma_sound_uninit(win32_sound.sound);
+	}
+	table_remove(*sound_id_to_sound, sound_id);
+}
 
 P_Thread :: struct {
 	thread: Thread;
@@ -835,6 +843,7 @@ init_platform :: () -> Platform {
 		return false;
 	};
 	platform.set_sound = set_sound;
+	platform.kill_sound = kill_sound;
 	platform.fetch_data = win32_fetch_data;
 	platform.poll = win32_poll_data;
 	platform.load_audio = load_audio;

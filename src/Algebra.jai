@@ -758,6 +758,9 @@ v2 :: (v: V2($T)) -> V2(T) {
 v2 :: (a: $T, b: T) -> V2(T) {
 	return .{ a, b };
 }
+v2f :: (a: float, b: float) -> V2(float) {
+	return .{ a, b };
+}
 v2 :: (v3: V3($T)) -> V2(T) {
 	return .{ v3.x, v3.y };
 }

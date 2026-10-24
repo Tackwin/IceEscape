@@ -696,23 +696,23 @@ sounding :: (
 	}
 
 	for * scene.shurikens {
+		frame := Scene.find_by_frame_id(scene, it.frame_id);
+		if !frame
+			continue;
 		ok, sound := table_find(*state.shurikens_id_to_sound, it.id);
 		if !ok {
 			audio := get_drone_buzzing(store, 0);
 			if !audio
 				continue;
 			audio.kind = .Sound;
-			audio.exponent = 2.5;
-			audio.volume = 0.010;
+			audio.exponent = 2.25;
+			audio.volume = 0.020;
 			sound = platform.play_audio(audio, .{});
 			sound.volume = audio.volume;
 			sound.loop = true;
 			platform.set_sound(sound);
 			table_set(*state.shurikens_id_to_sound, it.id, sound);
 		}
-		frame := Scene.find_by_frame_id(scene, it.frame_id);
-		if !frame
-			continue;
 		M := Scene.compute_moving_frame_server_world_matrix(scene, frame);
 		pos := M * v4(it.server.position, 1);
 		sound.position = v3(pos);
@@ -722,17 +722,15 @@ sounding :: (
 
 	for value, key: state.skull_id_to_sound {
 		if !table_contains(*skull_seen, key) {
-			value.playing = false;
-			platform.set_sound(value);
+			platform.kill_sound(value.id);
 			table_remove(*state.skull_id_to_sound, key);
 		}
 	}
 
 	for value, key: state.shurikens_id_to_sound {
 		if !table_contains(*shurikens_seen, key) {
-			value.playing = false;
-			platform.set_sound(value);
-			table_remove(*state.shurikens_id_to_sound, key);
+			platform.kill_sound(value.id);
+			table_remove(*state.shurikens_id_to_sound, key)	;
 		}
 	}
 
