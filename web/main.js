@@ -1,5 +1,5 @@
 "use strict";
-
+const utf8 = new TextDecoder();
 let audio_context = null;
 
 const set_loader_progress = (fraction, label) => {
@@ -668,66 +668,6 @@ const reset_pointer_input = () => {
 	set_mouse_button(2, false);
 };
 
-const flush_audio_command = (idx) => {
-	const base = controls_buffer_data + Number(Control_Audio_Command_Buffer) + (1 + idx) * 136;
-	const kind = getU64(base, 0);
-
-	if (kind == 0) {
-		const id = getU64(base, 8);
-		const sound_id = getU64(base, 16);
-		const x = getF32(base, 24);
-		const y = getF32(base, 28);
-		const z = getF32(base, 32);
-		const volume = getF32(base, 36);
-		const pitch = getF32(base, 40);
-		const loop = getU32(base, 44) != 0;
-		const kind = getS32(base, 48);
-		const fade_in = getS32(base, 52);
-		const exponent = getF32(base, 56);
-		const delay = getF32(base, 60);
-
-		js_play_audio({
-			audio_id: id, x, y, z, volume, pitch, loop, kind, fade_in, exponent, delay, sound_id
-		});
-	}
-	else if (kind == 1) {
-		const sound_id = getU64(base, 64);
-		const x = getF32(base, 72);
-		const y = getF32(base, 76);
-		const z = getF32(base, 80);
-		const volume = getF32(base, 84);
-		const pitch = getF32(base, 88);
-		const playing = getU32(base, 92) != 0;
-		const looping = getU32(base, 96) != 0;
-
-		js_set_sound({
-			sound_idx: sound_id, x, y, z, volume, pitch, playing, looping
-		});
-	}
-	else if (kind == 2) {
-		const x = getF32(base, 104);
-		const y = getF32(base, 108);
-		const z = getF32(base, 112);
-		const forward_x = getF32(base, 116);
-		const forward_y = getF32(base, 120);
-		const forward_z = getF32(base, 124);
-		const volume = getF32(base, 128);
-
-		js_set_listener_info({
-			x, y, z, forward_x, forward_y, forward_z, volume
-		});
-	}
-}
-
-let flushed_command_cusror = 0;
-const flush_audio_commands = () => {
-	const current_command_cursor = getU64(controls_buffer_data, Control_Audio_Command_Cursor);
-	for (let i = flushed_command_cusror; i < current_command_cursor; i++) {
-		flush_audio_command(Number(i) % 1024);
-	}
-	flushed_command_cusror = current_command_cursor;
-}
-
 const mapKeyNameToKeyIndex = (e) => {
 	const lowered = e.toLowerCase();
 	switch (lowered) {
@@ -963,13 +903,25 @@ jai_imports.js_set_token = (token) => {
 };
 
 //SOUND
-let audio_id_to_buffer = {};
+let listener_info = {
+	x: 0,
+	y: 0,
+	z: 0,
+	fx: 0,
+	fy: 1,
+	fz: 0,
+	rx: 1,
+	ry: 0,
+	rz: 0
+};
+
+let audio_id_to_buffer = new Map();
 let audio_id_counter = 0;
 
-let sound_id_to_sound = {};
+let sound_id_to_sound = new Map();
 let sound_id_counter = 0;
 
-let sound_id_to_state = {};
+let sound_id_to_state = new Map();
 const SOUND_PLAYING = 1;
 const SOUND_STOPPED = 2;
 const AUDIO_KIND_MUSIC = 1;
@@ -979,12 +931,80 @@ const pending_music = new Map();
 const flush_pending_music = () => {
 	if (!audio_context || audio_context.state !== "running") return;
 	for (const [sound_id, params] of pending_music) {
-		if (!audio_id_to_buffer[params.audio_id]) continue;
+		if (!audio_id_to_buffer.has(params.audio_id)) continue;
 		pending_music.delete(sound_id);
 		js_play_audio(params);
 	}
 };
 
+
+const flush_audio_command = (idx) => {
+	const base = controls_buffer_data + Number(Control_Audio_Command_Buffer) + (1 + idx) * 144;
+	const kind = getU64(base, 0);
+
+	if (kind == 0) {
+		const id = getU64(base, 8);
+		const sound_id = getU64(base, 16);
+		const x = getF32(base, 24);
+		const y = getF32(base, 28);
+		const z = getF32(base, 32);
+		const volume = getF32(base, 36);
+		const pitch = getF32(base, 40);
+		const loop = getU32(base, 44) != 0;
+		const kind = getS32(base, 48);
+		const fade_in = getS32(base, 52);
+		const exponent = getF32(base, 56);
+		const delay = getF32(base, 60);
+
+		js_play_audio({
+			audio_id: id, x, y, z, volume, pitch, loop, kind, fade_in, exponent, delay, sound_id
+		});
+	}
+	else if (kind == 1) {
+		const sound_id = getU64(base, 64);
+		const x = getF32(base, 72);
+		const y = getF32(base, 76);
+		const z = getF32(base, 80);
+		const volume = getF32(base, 84);
+		const pitch = getF32(base, 88);
+		const playing = getU32(base, 92) != 0;
+		const looping = getU32(base, 96) != 0;
+
+		js_set_sound({
+			sound_idx: sound_id, x, y, z, volume, pitch, playing, looping
+		});
+	}
+	else if (kind == 2) {
+		const x = getF32(base, 104);
+		const y = getF32(base, 108);
+		const z = getF32(base, 112);
+		const forward_x = getF32(base, 116);
+		const forward_y = getF32(base, 120);
+		const forward_z = getF32(base, 124);
+		const volume = getF32(base, 128);
+
+		js_set_listener_info({
+			x, y, z, forward_x, forward_y, forward_z, volume
+		});
+	}
+	else if (kind == 3) {
+		const sound_id = getU64(base, 136);
+		js_kill_sound({
+			sound_id
+		});
+	}
+}
+
+let flushed_command_cursor = 0;
+const flush_audio_commands = () => {
+	let  current_command_cursor = getU32(controls_buffer_data, Control_Audio_Command_Cursor);
+	current_command_cursor = Number(current_command_cursor);
+	for (let i = flushed_command_cursor; i < current_command_cursor; i++) {
+		flush_audio_command(i % 1024);
+	}
+	flushed_command_cursor = current_command_cursor;
+	update_audio_panners();
+}
 const resume_audio = () => {
 	if (!audio_context || audio_context.state === "closed") return;
 	if (audio_context.state === "running") {
@@ -1109,15 +1129,15 @@ jai_imports.js_load_audio = (params_ptr) => {
 const js_load_audio = async (params) => {
 	var buffer = await new Blob([params.buffer]).arrayBuffer();
 	buffer = await audio_context.decodeAudioData(buffer);
-	audio_id_to_buffer[params.audio_id] = buffer;
+	audio_id_to_buffer.set(params.audio_id, buffer);
 	flush_pending_music();
 }
 
 const js_play_audio = (params) => {
 	if (params.kind === AUDIO_KIND_MUSIC &&
-		(!audio_context || audio_context.state !== "running" || !audio_id_to_buffer[params.audio_id])) {
+		(!audio_context || audio_context.state !== "running" || !audio_id_to_buffer.has(params.audio_id))) {
 		pending_music.set(String(params.sound_id), { ...params });
-		sound_id_to_state[params.sound_id] = SOUND_PLAYING;
+		sound_id_to_state.set(params.sound_id, SOUND_PLAYING);
 		return;
 	}
 
@@ -1134,7 +1154,7 @@ const js_play_audio = (params) => {
 	const delay = params.delay;
 	const sound_id = params.sound_id;
 
-	const buffer = audio_id_to_buffer[id];
+	const buffer = audio_id_to_buffer.get(id);
 	if (!buffer) {
 		return;
 	}
@@ -1150,23 +1170,11 @@ const js_play_audio = (params) => {
 	}
 
 	const gainNode = audio_context.createGain();
-	gainNode.gain.setValueAtTime(0, audio_context.currentTime);
-
-	let mult = 1.0;
-	if (kind == 0)
-		mult = 0.2;
-	gainNode.gain.linearRampToValueAtTime(mult * volume, audio_context.currentTime + fade_in / 1000);
+	gainNode.gain.value = 0;
 
 	let panner = null;
 	if (kind == 0) {
-		panner = audio_context.createPanner();
-		panner.panningModel = 'equalpower';
-		panner.distanceModel = 'exponential';
-		panner.refDistance = 1.0;
-		panner.maxDistance = 1000;
-		panner.rolloffFactor = exponent;
-		panner.setPosition(x, y, z);
-
+		panner = audio_context.createStereoPanner();
 		source.connect(gainNode);
 		gainNode.connect(panner);
 		panner.connect(master_gain);
@@ -1178,17 +1186,25 @@ const js_play_audio = (params) => {
 
 	source.start(audio_context.currentTime + delay / 1000);
 
-	sound_id_to_sound[sound_id] = {
+	sound_id_to_sound.set(sound_id, {
 		source,
 		gainNode,
 		panner,
 		audio_id: id,
-	};
-	sound_id_to_state[sound_id] = SOUND_PLAYING;
+		x,
+		y,
+		z,
+		exponent,
+		volume,
+		start_time: audio_context.currentTime + delay / 1000,
+		fade_in: fade_in / 1000,
+		mult: kind == 0 ? 0.2 : 1.0
+	});
+	sound_id_to_state.set(sound_id, SOUND_PLAYING);
 
 	source.onended = () => {
-		delete sound_id_to_sound[sound_id];
-		sound_id_to_state[sound_id] = SOUND_STOPPED;
+		sound_id_to_sound.delete(sound_id);
+		sound_id_to_state.delete(sound_id);
 	};
 }
 
@@ -1198,7 +1214,7 @@ const js_set_sound = (params) => {
 	if (pending) {
 		if (!params.playing) {
 			pending_music.delete(pending_id);
-			sound_id_to_state[params.sound_idx] = SOUND_STOPPED;
+			sound_id_to_state.set(params.sound_idx, SOUND_STOPPED);
 		} else {
 			pending.x = params.x;
 			pending.y = params.y;
@@ -1210,7 +1226,7 @@ const js_set_sound = (params) => {
 		return;
 	}
 
-	const sound = sound_id_to_sound[params.sound_idx];
+	const sound = sound_id_to_sound.get(params.sound_idx);
 	if (!sound) {
 		return;
 	}
@@ -1220,38 +1236,103 @@ const js_set_sound = (params) => {
 	let panner = sound.panner;
 
 	if (panner) {
-		panner.positionX.value = params.x;
-		panner.positionY.value = params.y;
-		panner.positionZ.value = params.z;
+		sound.x = params.x;
+		sound.y = params.y;
+		sound.z = params.z;
 	}
-	gainNode.gain.value = params.volume;
+	sound.volume = params.volume;
 	// source.playbackRate.value = params.pitch;
 
-	const is_sound_playing = sound_id_to_state[params.sound_idx] === SOUND_PLAYING;
-	if (params.playing) {
-		if (!is_sound_playing) {
-			source.start(0);
-			sound_id_to_state[params.sound_idx] = SOUND_PLAYING;
-		}
-	} else {
-		if (is_sound_playing) {
-			source.stop(0);
-			sound_id_to_state[params.sound_idx] = SOUND_STOPPED;
-		}
+	const is_sound_playing = sound_id_to_state.get(params.sound_idx) === SOUND_PLAYING;
+	if (!params.playing) {
+		source.stop(0);
+		source.disconnect();
+		gainNode.disconnect();
+		if (panner)
+			panner.disconnect();
+		sound_id_to_sound.delete(params.sound_idx);
+		if (sound_id_to_state.has(params.sound_idx))
+			sound_id_to_state.delete(params.sound_idx);
 	}
 	source.loop = params.looping != 0;
 }
 
+const js_kill_sound = (params) => {
+	const sound_id = params.sound_id;
+	const sound = sound_id_to_sound.get(sound_id);
+	if (sound) {
+		sound.source.stop(0);
+		sound.source.disconnect();
+		sound.gainNode.disconnect();
+		if (sound.panner)
+			sound.panner.disconnect();
+		sound_id_to_sound.delete(sound_id);
+	}
+	if (sound_id_to_state.has(sound_id))
+		sound_id_to_state.delete(sound_id);
+}
+
 const js_set_listener_info = (params) => {
-	audio_context.listener.setPosition(params.x, params.y, params.z);
-	audio_context.listener.setOrientation(
-		params.forward_x, params.forward_y, params.forward_z, 0, 0, 1
-	);
+	let l = Math.hypot(params.forward_x, params.forward_y, params.forward_z) || 1;
+	let fx = params.forward_x / l;
+	let fy = params.forward_y / l;
+	let fz = params.forward_z / l;
+	let rx = fy;
+	let ry = -fx;
+	l = Math.hypot(rx, ry) || 1;
+	rx /= l;
+	ry /= l;
+	// right = forward × up, with up = (0,0,1)
+	listener_info.x = params.x;
+	listener_info.y = params.y;
+	listener_info.z = params.z;
+	listener_info.fx = fx;
+	listener_info.fy = fy;
+	listener_info.fz = fz;
+	listener_info.rx = rx;
+	listener_info.ry = ry;
+	listener_info.rz = 0;
+	// audio_context.listener.setPosition(params.x, params.y, params.z);
+	// audio_context.listener.setOrientation(
+	// 	params.forward_x, params.forward_y, params.forward_z, 0, 0, 1
+	// );
 	if (master_gain === null) {
 		master_gain = audio_context.createGain();
 		master_gain.connect(audio_context.destination);
 	}
 	master_gain.gain.value = params.volume;
+}
+
+const update_audio_panners = () => {
+	const now = audio_context.currentTime;
+	for (const sound of sound_id_to_sound.values()){
+		let g = sound.volume * sound.mult;
+		if (sound.fade_in > 0)
+			g *= Math.min(1, Math.max(0, (now - sound.start_time) / sound.fade_in));
+
+		if (sound.panner) {
+			const dx = sound.x - listener_info.x;
+			const dy = sound.y - listener_info.y;
+			const dz = sound.z - listener_info.z;
+			const distance = Math.hypot(dx, dy, dz) || 1;
+			g *= Math.pow(Math.max(1.0, distance) / 1.0, -sound.exponent);
+			let pan = 0;
+			if (distance > 0) {
+				let az = Math.atan2(
+					dx * listener_info.rx + dy * listener_info.ry + dz * listener_info.rz,
+					dx * listener_info.fx + dy * listener_info.fy + dz * listener_info.fz
+				);
+				if (az > Math.PI / 2)
+					az = Math.PI - az;
+				else if (az < -Math.PI / 2)
+					az = -Math.PI - az;
+				pan = 2 * az / Math.PI;
+			}
+			sound.panner.pan.value = pan;
+		}
+		if (sound.gainNode)
+			sound.gainNode.gain.value = g;
+	};
 }
 
 //WEBGPU
@@ -1894,12 +1975,8 @@ const setU64 = (ptr, offset, value) => {
 	data_view.setBigUint64(Number(ptr) + Number(offset), BigInt(value), true);
 }
 
-const getStringX = (data, length) => {
-	const span = new Uint8Array(jai_exports.memory.buffer, Number(data), Number(length));
-	const copy = new ArrayBuffer(Number(length));
-	new Uint8Array(copy).set(span);
-	return new TextDecoder().decode(copy);
-}
+const getStringX = (data, length) =>
+	utf8.decode(new Uint8Array(jai_exports.memory.buffer, Number(data), Number(length)).slice());
 
 const getString = (stringview_ptr) => {
 	const data = getU64(stringview_ptr, 0);
@@ -3205,7 +3282,7 @@ jai_imports.jsRenderPassEncoderDraw = (params_ptr, returns_ptr) => {
 }
 
 jai_imports.jsRenderPassEncoderDrawIndexed = (params_ptr, returns_ptr) => {
-	const pass_idx = getU64(params_ptr, 0);
+	const pass_idx = getU32(params_ptr, 0);
 	const indexCount = getU32(params_ptr, 8);
 	const instanceCount = getU32(params_ptr, 12);
 	const firstIndex = getU32(params_ptr, 16);

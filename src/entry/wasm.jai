@@ -178,6 +178,7 @@ Audio_Command :: struct {
 		Play :: 0;
 		Set  :: 1;
 		Listener :: 2;
+		Kill :: 3;
 	} // 8
 
 	play: struct {
@@ -215,7 +216,10 @@ Audio_Command :: struct {
 		dz: float32;
 		volume: float32;
 	} // 28
-} // 128
+	kill: struct {
+		sound_id: s64;
+	} // 8
+} // 136
 
 audio_commands: [] Audio_Command;
 audio_command_cursor: *s64;
@@ -324,6 +328,12 @@ set_sound :: (sound: Sound) {
 	cmd.set.playing = xx sound.playing;
 	cmd.set.looping = xx sound.loop;
 }
+kill_sound :: (sound_id: int) {
+	audio_command_cursor.* += 1;
+	cmd := *audio_commands[(audio_command_cursor.* - 1) % audio_commands.count];
+	cmd.kind = .Kill;
+	cmd.kill.sound_id = sound_id;
+}
 set_listener_info :: (listener: Listener) {
 	audio_command_cursor.* += 1;
 	cmd := *audio_commands[(audio_command_cursor.* - 1) % audio_commands.count];
@@ -411,6 +421,7 @@ init_platform :: () -> Platform {
 	platform.wait = wasm_wait;
 	platform.play_audio = play_audio;
 	platform.set_sound = set_sound;
+	platform.kill_sound = kill_sound;
 	platform.set_listener_info = set_listener_info;
 
 

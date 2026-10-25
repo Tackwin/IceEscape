@@ -4179,7 +4179,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 - name: S2E5 Vent d'hiver
 spawn
-- position: 9 17 0
+- position: 9 8 0
 - size: 0 0
 frame
 - position: 5 4.75
@@ -4409,7 +4409,7 @@ path
 - checkpoint: 4.5 28 0
 - checkpoint: 3.5 28 0
 spawn
-- position: 16.5 26.25 0
+- position: 8.5 7.25 0
 - size: 0 0
 frame
 - position: -2.25 3.75
@@ -4700,7 +4700,7 @@ path
 - checkpoint: 6.5 21.5 0
 - closed
 spawn
-- position: 30.25 21.75 0
+- position: 9.25 8.75 0
 - size: 0 0
 frame
 - position: -0.75 -3
