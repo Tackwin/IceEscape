@@ -19,6 +19,7 @@ WRender :: #import "WRender";
 PNG :: #import "PNG";
 Scene :: #import "Scene";
 GUI :: #import "GUI";
+GUI2 :: #import "GUI2";
 Play_Session :: #import "Play_Session";
 
 remap_app_context :: (platform: *Platform) #expand {
@@ -187,7 +188,7 @@ App_User :: struct {
 	if app.platform.set_text_input_active {
 		text_input_active := app_user.gui_state.controls.text_input_active;
 		if app_user.state.screen_state == .Editor {
-			text_input_active = app_user.state.editor.gui_state.controls.text_input_active;
+			text_input_active |= app_user.state.editor.gui_state.controls.text_input_active;
 		}
 		app.platform.set_text_input_active(text_input_active);
 	}
@@ -354,9 +355,9 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	menu.create_instance.password = GUI.make(*menu.string_pool);
 	menu.create_bomberman.name = GUI.make(*menu.string_pool);
 	menu.create_bomberman.password = GUI.make(*menu.string_pool);
-	GUI.init(*app_user.state.editor_page.string_pool);
-	app_user.state.editor_page.load_filter = GUI.make(*app_user.state.editor_page.string_pool);
-	app_user.state.editor_page.save_dialog_input = GUI.make(*app_user.state.editor_page.string_pool);
+	GUI2.init(*app_user.state.editor_page.string_pool);
+	app_user.state.editor_page.load_filter = GUI2.make(*app_user.state.editor_page.string_pool);
+	app_user.state.editor_page.save_dialog_input = GUI2.make(*app_user.state.editor_page.string_pool);
 	init_console(app_user);
 	WRender.init_framegraph(*app_user.framegraph, *app_user.store);
 
@@ -380,7 +381,8 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	WRender.graphics = *app_user.graphics;
 	GUI.gui_state_init(*app_user.gui_state, *app_user.store);
 	GUI.rebind(*app_user.state.menu.string_pool);
-	GUI.rebind(*app_user.state.editor_page.string_pool);
+	GUI2.rebind(*app_user.state.editor_page.string_pool);
+	GUI2.rebind(*app_user.state.editor.gui_state, *app_user.store.verdana, editor_gui_skin(*app_user.store));
 	rebind_console(app_user);
 
 	scene: Scene.Scene;

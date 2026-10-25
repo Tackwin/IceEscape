@@ -297,6 +297,12 @@ COIN_LAUNCH_MP3_PATH :: "assets/Sound/coin_launch.mp3";
 #insert #run embed_data("UI_PANEL_FRAME_PNG", "UI/textures/panel_frame.png", #filepath);
 #insert #run embed_data("UI_BTN_COMPACT_FRAME_PNG", "UI/textures/button_compact_frame.png", #filepath);
 #insert #run embed_data("UI_BTN_DARK_FRAME_PNG", "UI/textures/button_dark_frame.png", #filepath);
+#insert #run embed_data("UI_SCROLL_TRACK_TOP_PNG", "UI/textures/track_top.png", #filepath);
+#insert #run embed_data("UI_SCROLL_TRACK_MIDDLE_PNG", "UI/textures/track_middle.png", #filepath);
+#insert #run embed_data("UI_SCROLL_TRACK_BOTTOM_PNG", "UI/textures/track_bottom.png", #filepath);
+#insert #run embed_data("UI_SCROLL_THUMB_TOP_PNG", "UI/textures/thumb_top.png", #filepath);
+#insert #run embed_data("UI_SCROLL_THUMB_MIDDLE_PNG", "UI/textures/thumb_middle.png", #filepath);
+#insert #run embed_data("UI_SCROLL_THUMB_BOTTOM_PNG", "UI/textures/thumb_bottom.png", #filepath);
 
 
 
@@ -335,6 +341,12 @@ load_everything :: (platform: Platform) {
 			"UI_BTN_COMPACT_FRAME_PNG",
 			"UI_BTN_DARK_FRAME_PNG",
 			"UI_PANEL_FRAME_PNG",
+			"UI_SCROLL_TRACK_TOP_PNG",
+			"UI_SCROLL_TRACK_MIDDLE_PNG",
+			"UI_SCROLL_TRACK_BOTTOM_PNG",
+			"UI_SCROLL_THUMB_TOP_PNG",
+			"UI_SCROLL_THUMB_MIDDLE_PNG",
+			"UI_SCROLL_THUMB_BOTTOM_PNG",
 			"VEHICLE_RACER_OBJ",
 			"VEHICLE_SUV_OBJ",
 			"VEHICLE_SPEEDSTER_OBJ",

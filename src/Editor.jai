@@ -1,6 +1,6 @@
 #scope_file
 Scene :: #import "Scene";
-GUI :: #import "GUI";
+GUI2 :: #import "GUI2";
 #import "Reflect";
 #import "Algebra";
 #import "Basic";
@@ -35,7 +35,7 @@ editable_entities_type :: Type.[
 
 Editor :: struct {
 	scene: Scene.Scene;
-	gui_state: GUI.GUI_State;
+	gui_state: GUI2.GUI_State;
 
 	clock_running := true;
 

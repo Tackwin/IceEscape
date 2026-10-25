@@ -182,6 +182,12 @@ Store :: struct #type_info_none {
 	ui_felt: WRender.WTexture;
 	ui_compact_frame: WRender.WTexture;
 	lobby_button_frame: WRender.WTexture;
+	ui_scroll_track_top: WRender.WTexture;
+	ui_scroll_track_middle: WRender.WTexture;
+	ui_scroll_track_bottom: WRender.WTexture;
+	ui_scroll_thumb_top: WRender.WTexture;
+	ui_scroll_thumb_middle: WRender.WTexture;
+	ui_scroll_thumb_bottom: WRender.WTexture;
 	font_atlas: WRender.WTexture;
 
 	loser_mp3: Platform.Audio;
@@ -859,6 +865,24 @@ init_store :: (platform: Platform.Platform, store: *Store) {
 
 	compact_png := Assets.load_png(Assets.UI_BTN_COMPACT_FRAME_PNG,, temp);
 	store.ui_compact_frame = WRender.WTexture.make_from_image(compact_png, "ui_compact_frame");
+	store.ui_scroll_track_top = WRender.WTexture.make_from_image(
+		Assets.load_png(Assets.UI_SCROLL_TRACK_TOP_PNG,, temp), "ui_scroll_track_top"
+	);
+	store.ui_scroll_track_middle = WRender.WTexture.make_from_image(
+		Assets.load_png(Assets.UI_SCROLL_TRACK_MIDDLE_PNG,, temp), "ui_scroll_track_middle"
+	);
+	store.ui_scroll_track_bottom = WRender.WTexture.make_from_image(
+		Assets.load_png(Assets.UI_SCROLL_TRACK_BOTTOM_PNG,, temp), "ui_scroll_track_bottom"
+	);
+	store.ui_scroll_thumb_top = WRender.WTexture.make_from_image(
+		Assets.load_png(Assets.UI_SCROLL_THUMB_TOP_PNG,, temp), "ui_scroll_thumb_top"
+	);
+	store.ui_scroll_thumb_middle = WRender.WTexture.make_from_image(
+		Assets.load_png(Assets.UI_SCROLL_THUMB_MIDDLE_PNG,, temp), "ui_scroll_thumb_middle"
+	);
+	store.ui_scroll_thumb_bottom = WRender.WTexture.make_from_image(
+		Assets.load_png(Assets.UI_SCROLL_THUMB_BOTTOM_PNG,, temp), "ui_scroll_thumb_bottom"
+	);
 	verdana_atlas_png := Assets.load_png(Assets.verdana_png,, temp);
 	store.verdana_atlas = WRender.WTexture.make_from_image(verdana_atlas_png, "verdana_atlas");
 	store.verdana = Assets.load_font(xx Assets.verdana_csv);

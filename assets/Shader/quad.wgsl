@@ -9,6 +9,8 @@ struct InstanceData {
 	rotation: f32,
 	outline: f32,
 	use_custom_texture: u32,
+	rounded: f32,
+	clip_rect: vec4f, // screen-space min x/y, max x/y
 };
 
 struct UniformData {
@@ -19,6 +21,7 @@ struct VertexOutput {
 	@builtin(position) position: vec4f,
 	@location(0) uv: vec2f,
 	@interpolate(flat) @location(1) instanceIndex: u32,
+	@location(2) local_position: vec2f,
 };
 
 
@@ -60,7 +63,12 @@ struct VertexOutput {
 	var uv = pos[vertexIndex];
 	uv = uv * instance.texture_rect.zw + instance.texture_rect.xy;
 
-	return VertexOutput(vec4f(p, 0.0, 1.0), uv, instanceIndex);
+	return VertexOutput(
+		vec4f(p, 0.0, 1.0),
+		uv,
+		instanceIndex,
+		pos[vertexIndex] * abs(instance.size)
+	);
 }
 
 fn median(r: f32, g: f32, b: f32) -> f32 {
@@ -87,10 +95,26 @@ fn address_uv(uv: vec2f, wrap_uvs: bool) -> vec2f {
 }
 
 @fragment fn fs(
+	@builtin(position) position: vec4f,
 	@location(0) uv: vec2f,
 	@interpolate(flat) @location(1) instanceIndex: u32,
+	@location(2) local_position: vec2f,
 ) -> @location(0) vec4f {
 	let instance = instanceData[instanceIndex];
+	let half_size = abs(instance.size) * 0.5;
+	let radius = clamp(instance.rounded, 0.0, min(half_size.x, half_size.y));
+	let corner = abs(local_position - half_size) - half_size + vec2f(radius);
+	let distance = length(max(corner, vec2f(0.0))) + min(max(corner.x, corner.y), 0.0) - radius;
+	// Evaluate derivatives for every fragment, before any instance-dependent branches.
+	let edge_width = max(fwidth(distance), 0.0001);
+	if (any(position.xy < instance.clip_rect.xy) || any(position.xy >= instance.clip_rect.zw)) {
+		discard;
+	}
+	let rounded_opacity = select(
+		1.0,
+		1.0 - smoothstep(-0.5 * edge_width, 0.5 * edge_width, distance),
+		radius > 0.0
+	);
 	// Addressing is per draw, not part of the texture/sampler resource.
 	let repeat_uvs = (instance.z30sdf2 & 2u) != 0u;
 	let sample_uv = address_uv(uv, repeat_uvs);
@@ -103,7 +127,7 @@ fn address_uv(uv: vec2f, wrap_uvs: bool) -> vec2f {
 		let aa = max(fwidth(radius), 0.015);
 		let coverage = 1.0 - smoothstep(1.0-aa, 1.0, radius);
 		if ((instance.z30sdf2 & 8u) != 0u) {
-			return vec4f(color.rgb, color.a * coverage);
+			return vec4f(color.rgb, color.a * coverage * rounded_opacity);
 		}
 		let rim = smoothstep(0.78, 0.83, radius);
 		let bevel = 0.9 + 0.25 * dot(p, normalize(vec2f(-1.0, -1.0)));
@@ -114,7 +138,7 @@ fn address_uv(uv: vec2f, wrap_uvs: bool) -> vec2f {
 		let stem = (1.0-smoothstep(0.08, 0.08+aa, abs(p.x))) * (1.0-smoothstep(0.34, 0.34+aa, abs(p.y)));
 		let caps = (1.0-smoothstep(0.23, 0.23+aa, abs(p.x))) * (1.0-smoothstep(0.05, 0.05+aa, abs(abs(p.y)-0.30)));
 		gold *= 1.0 - max(stem, caps) * 0.46;
-		return vec4f(gold, color.a * coverage);
+		return vec4f(gold, color.a * coverage * rounded_opacity);
 	}
 	if (abs(instance.texture_rect.z) > 0.0 && abs(instance.texture_rect.w) > 0.0) {
 		if ((instance.z30sdf2 & 1u) != 0u) {
@@ -163,5 +187,5 @@ fn address_uv(uv: vec2f, wrap_uvs: bool) -> vec2f {
 		}
 	}
 
-	return vec4f(color.rgb, color.a);
+	return vec4f(color.rgb, color.a * rounded_opacity);
 }
