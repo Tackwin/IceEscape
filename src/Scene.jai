@@ -14,7 +14,6 @@
 Platform :: #import "Platform";
 Controls :: #import "Controls";
 Rand :: #import "Rand";
-GUI :: #import "GUI";
 XPBD :: #import "XPBD";
 #scope_file
 Play_Session :: #import "Play_Session";
@@ -2226,23 +2225,23 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 	}
 	if #complete scene.params.mode == {
 		case .Standard;
-			if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Left) {
+			if Controls.is_action_pressed(controls, Controls.Action_Key.Move_Left) {
 				dt.x -= scene.camera.speed * controls.delta_time;
 				any_camera_move = true;
 			}
-			if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Right) {
+			if Controls.is_action_pressed(controls, Controls.Action_Key.Move_Right) {
 				dt.x += scene.camera.speed * controls.delta_time;
 				any_camera_move = true;
 			}
-			if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Down) {
+			if Controls.is_action_pressed(controls, Controls.Action_Key.Move_Down) {
 				dt.y -= scene.camera.speed * controls.delta_time;
 				any_camera_move = true;
 			}
-			if Controls.is_action_pressed(controls, GUI.Action_Key.Move_Up) {
+			if Controls.is_action_pressed(controls, Controls.Action_Key.Move_Up) {
 				dt.y += scene.camera.speed * controls.delta_time;
 				any_camera_move = true;
 			}
-			if Controls.is_action_just_pressed(controls, GUI.Action_Key.Camera_Locked) {
+			if Controls.is_action_just_pressed(controls, Controls.Action_Key.Camera_Locked) {
 				scene.camera_locked = !scene.camera_locked;
 			}
 
@@ -2255,7 +2254,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 			if scene.camera.locked {
 				scene.camera.target += dt;
 			}
-			if Controls.is_action_just_pressed(controls, GUI.Action_Key.Drop) {
+			if Controls.is_action_just_pressed(controls, Controls.Action_Key.Drop) {
 				player := find_by_player_id(scene, scene.controlled_player_id);
 				if player && !player.server.dead {
 					command: Command.Drop;
@@ -2264,7 +2263,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 				}
 			}
 		case .Bomberman;
-			if Controls.is_action_just_pressed(controls, GUI.Action_Key.Bomberman_Drop) {
+			if Controls.is_action_just_pressed(controls, Controls.Action_Key.Bomberman_Drop) {
 				player := find_by_player_id(scene, scene.controlled_player_id);
 				if player && !player.server.dead {
 					tile := position_to_tile(scene, player.server.position);
@@ -2278,7 +2277,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 				}
 			}
 	}
-	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Buy_Ask) {
+	if Controls.is_action_just_pressed(controls, Controls.Action_Key.Buy_Ask) {
 		buy_ask(scene, scene.controlled_player_id, result);
 	}
 	if controls.just_pressed[Platform.Key.V] {
@@ -2376,7 +2375,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 			}
 		}
 	}
-	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Coin) {
+	if Controls.is_action_just_pressed(controls, Controls.Action_Key.Coin) {
 		player := find_by_player_id(scene, scene.controlled_player_id);
 		if player && !player.server.dead {
 			command: Command.Spawn_Coin;
@@ -2385,7 +2384,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 		}
 	}
 
-	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Klaxon) {
+	if Controls.is_action_just_pressed(controls, Controls.Action_Key.Klaxon) {
 		player := find_by_player_id(scene, scene.controlled_player_id);
 		if player && !player.server.dead {
 			command: Command.Klaxon;
@@ -2393,7 +2392,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 			add(result, scene.id, command);
 		}
 	}
-	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Safe) {
+	if Controls.is_action_just_pressed(controls, Controls.Action_Key.Safe) {
 		player := find_by_player_id(scene, scene.controlled_player_id);
 		if player && !player.server.dead {
 			if player.server.has_safe_present {
@@ -2406,7 +2405,7 @@ input :: (scene: *Scene, controls: *Controls.State, result: *Process_Response) {
 		}
 	}
 
-	if Controls.is_action_just_pressed(controls, GUI.Action_Key.Hook)  {
+	if Controls.is_action_just_pressed(controls, Controls.Action_Key.Hook)  {
 		player := find_by_player_id(scene, scene.controlled_player_id);
 		if player && !player.server.dead {
 			if player.server.has_hook_present > 0 {

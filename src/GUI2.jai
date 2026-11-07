@@ -2,9 +2,10 @@
 GUI2 - immediate-mode UI
 ========================
 
-This module owns its layout, input, widget state, strings and draw commands.
-The application supplies a Platform.Font and a Skin containing texture handles.
-It has no dependency on GUI, Controls, Store or WRender.
+This module owns its layout, widget state, strings and draw commands. The
+application advances Controls.State once per frame and passes it to begin_frame,
+along with a Platform.Font and a Skin containing texture handles. GUI2 has no
+dependency on GUI, Store or WRender.
 
 QUICK START
 -----------
@@ -21,7 +22,7 @@ QUICK START
     enabled := true;
     speed := 1.0;
 
-    GUI2.begin_frame(*gui, frame_info, keyboard_layout, blocked = console_open);
+    GUI2.begin_frame(*gui, *controls, blocked = console_open);
     {
         GUI2.begin_window(*gui, .{ 480, 240 }, pos = .{ 32, 32 }, id = "settings");
         defer GUI2.end(*gui);
@@ -119,6 +120,23 @@ SIZING, LAYOUT AND STYLING
         }
     GUI2.scroll_end(*gui);
 
+WIDGET DATA AND TABLES
+----------------------
+
+    // The same ID in the current ID scope refers to the same widget state.
+    state := GUI2.widget_data(*gui, "properties", My_State);
+    state.expanded = true;
+
+    columns := GUI2.Table_Column.[
+        .{ label = "Name", width = 200 },
+        .{ label = "Play", width = 64, button = true },
+    ];
+    // Each Table_Row contains an array of string cells.
+    result := GUI2.table(*gui, columns, rows, .{ 264, 200 }, id = "levels");
+    if result.clicked_column == 1 {
+        play_level(result.clicked_row);
+    }
+
 NOTES
 -----
     - row(), column() and begin_window() pair with end(). Windows scope IDs.
@@ -131,6 +149,12 @@ NOTES
       keep their declared bounds when children overflow.
     - Flow clips are copied into widgets, quads and glyphs for rendering/hit testing.
     - Text input consumes committed UTF-8. Unsupported glyphs use the font fallback.
+    - widget_data allocates and initializes one value per scoped widget ID. The
+      allocation is freed when the widget expires or the GUI is destroyed. The
+      caller must release any resources owned by that value before it expires.
+      Reusing an ID for a different data type is an error. Restart after changing
+      the layout of a persistent widget-data type during development.
+    - Tables keep selection in widget data unless selected_row is supplied.
     - Click a number to edit it; drag to adjust it. Shift slows, Control speeds.
     - Quad.rounded is a pixel radius. Nine_Slice_Style.rounded masks only the fill.
     - Nine-slice corners and three-slice caps keep their authored scale, shrinking
@@ -142,20 +166,21 @@ WIDGET INDEX
 ------------
     Parameters below follow declaration order. Defaults are in the definitions.
 
-    label(gui, text, height: float, color, id, pos, align, direction, z, skin);
-    label(gui, text, size: V2f, text_height, color, id, pos, align, direction, z, skin);
-    image(gui, size: V2f, texture, texture_index, color, rounded, id, pos, align, direction, z, skin);
-    button(gui, text, height: float, enabled, id, pos, align, direction, z, skin);
-    button(gui, text, size: V2f, enabled, id, pos, align, direction, z, skin);
-    input_text(gui, buf, size: V2f, placeholder, max_chars, id, pos, align, direction, z, skin);
+    label(gui, text, height: float, color, outline, id, pos, align, direction, z, skin);
+    label(gui, text, size: V2f, text_height, color, outline, id, pos, align, direction, z, skin);
+    image(gui, size: V2f, texture, texture_index, color, texture_rect, rounded, id, pos, align, direction, z, skin);
+    button(gui, text, height: float, enabled, icon, icon_rect, id, pos, align, direction, z, skin);
+    button(gui, text, size: V2f, enabled, icon, icon_rect, id, pos, align, direction, z, skin);
+    input_text(gui, buf, size: V2f, placeholder, max_chars, password_mask, force_focus, cursor_to_end, unfocus_on_commit, id, pos, align, direction, z, skin);
+    table(gui, columns, rows, size: V2f, row_height, selected_row, style, id, pos, align, direction, z, skin);
     checkbox(gui, size: V2f, value, id, pos, align, direction, z, skin);
     dropdown(gui, options, size: V2f, value, id, pos, align, direction, z, skin);
     float_input(gui, size: V2f, value, min_value, max_value, drag_speed, precision, id, pos, align, direction, z, skin);
     int_input(gui, size: V2f, value, min_value, max_value, drag_speed, id, pos, align, direction, z, skin);
-    labeled_input_text(gui, label, buf, size: V2f, placeholder, max_chars, label_color, id, pos, align, direction, z, skin);
+    labeled_input_text(gui, label, buf, size: V2f, placeholder, max_chars, password_mask, force_focus, cursor_to_end, unfocus_on_commit, label_color, id, pos, align, direction, z, skin);
     labeled_checkbox(gui, label, size: V2f, value, label_color, id, pos, align, direction, z, skin);
     labeled_dropdown(gui, label, options, size: V2f, value, label_color, id, pos, align, direction, z, skin);
-    labeled_text_button(gui, label, text, size: V2f, enabled, label_color, id, pos, align, direction, z, skin);
+    labeled_text_button(gui, label, text, size: V2f, enabled, label_color, icon, icon_rect, id, pos, align, direction, z, skin);
     labeled_float_input(gui, label, size: V2f, value, min_value, max_value, drag_speed, precision, label_color, id, pos, align, direction, z, skin);
     labeled_int_input(gui, label, size: V2f, value, min_value, max_value, drag_speed, label_color, id, pos, align, direction, z, skin);
     labeled_v2_input(gui, label, size: V2f, value, min_value, max_value, drag_speed, precision, label_color, id, pos, align, direction, z, skin);
@@ -177,11 +202,12 @@ FRAME, STATE AND STRING INDEX
     rebind(pool, allocator);
     rebind(gui, font, skin);
     destroy(gui);
-    begin_frame(gui, info, layout, blocked);
+    begin_frame(gui, controls, blocked);
     end_frame(gui);
     push_id(gui, id);
     pop_id(gui);
     widget_aabb(gui, id);
+    widget_data(gui, id, T, default);
     init(pool, allocator);
     make(pool, initial_capacity);
     view(s);
@@ -199,9 +225,10 @@ DRAWING HELPERS - NO FLOW ADVANCEMENT
     draw_three_slice(gui, aabb, style, z, tint);
     draw_panel(gui, aabb, skin, z);
     draw_text(gui, aabb, text, height, color, z, align, outline);
-    draw_label(gui, p, text, height, color, id);
-    draw_button(gui, p, text, enabled, id);
-    draw_input_text(gui, aabb, buf, w, height, skin, placeholder, max_chars, z, unfocus_on_commit);
+    draw_label(gui, p, text, height, color, outline, id);
+    draw_button(gui, p, text, enabled, icon, icon_rect, id, icon_slot);
+    draw_input_text(gui, aabb, buf, w, height, skin, placeholder, max_chars, z, unfocus_on_commit, force_focus, cursor_to_end, password_mask);
+    draw_table(gui, p, columns, rows, row_height, style, selected_row, id);
     draw_property_label(gui, p, text, label_color);
     draw_dropdown(gui, p, options, value, id);
     draw_number(gui, p, value, min_value, max_value, drag_speed, precision, id);
@@ -218,9 +245,11 @@ OTHER HELPERS
     align_pos(pos, size, align);
     direction_delta(direction, size);
     include_bounds(f, aabb);
+    find_or_create_widget(gui, id);
     get_widget(gui, id, aabb, z, physical);
     contains(aabb, p);
     text_width(gui, text, height);
+    input_text_width(gui, text, height, password_mask);
     fit_text(gui, text, height, width);
     text_boundary(text, at);
     string_id(text);
@@ -238,11 +267,12 @@ OTHER HELPERS
 #import "Algebra";
 #import "Hash_Table";
 Platform :: #import "Platform";
+Controls :: #import "Controls";
 
 #scope_export
 
 // Independent immediate-mode editor UI. Only the application knows about
-// Store and WRender; this module owns geometry, input, strings and layout.
+// Store and WRender; this module owns geometry, widget state, strings and layout.
 Align :: enum {
 	Undefined :: 0;
 	Left :: 1;
@@ -273,8 +303,112 @@ Direction :: enum {
 NO_POSITION :: V2f.{ FLOAT32_MAX, FLOAT32_MAX };
 AUTO_SIZE :: V2f.{ -1, -1 };
 INHERIT_SPACING :: V2f.{ -1, -1 };
-TEXT_NORMAL :: V4f.{ 0.89, 0.87, 0.80, 1 };
 INHERIT_COLOR :: V4f.{ 0, 0, 0, -1 };
+
+
+gui2_color_div :: (a: V4f, b: float32) -> V4f {
+	return .{ a.x / b, a.y / b, a.z / b, a.w / b };
+}
+
+GRAY_00  :: #run gui2_color_div(V4f.{  35,  31,  32, 255 }, 255.0);
+GRAY_10  :: #run gui2_color_div(V4f.{  65,  64,  66, 255 }, 255.0);
+GRAY_20  :: #run gui2_color_div(V4f.{  88,  89,  91, 255 }, 255.0);
+GRAY_30  :: #run gui2_color_div(V4f.{ 109, 110, 113, 255 }, 255.0);
+GRAY_40  :: #run gui2_color_div(V4f.{ 128, 130, 133, 255 }, 255.0);
+GRAY_50  :: #run gui2_color_div(V4f.{ 147, 149, 152, 255 }, 255.0);
+GRAY_60  :: #run gui2_color_div(V4f.{ 167, 169, 172, 255 }, 255.0);
+GRAY_70  :: #run gui2_color_div(V4f.{ 188, 190, 192, 255 }, 255.0);
+GRAY_80  :: #run gui2_color_div(V4f.{ 209, 211, 212, 255 }, 255.0);
+GRAY_90  :: #run gui2_color_div(V4f.{ 230, 231, 232, 255 }, 255.0);
+GRAY_100 :: #run gui2_color_div(V4f.{ 255, 255, 255, 255 }, 255.0);
+
+TEXT_MUTE   :: GRAY_50;
+TEXT_NORMAL :: GRAY_80;
+GOLD_ACCENT :: V4f.{ 0.81, 0.70, 0.48, 1 };
+COLOR_SOMBER_A :: V3f.{ 5/255.0, 107/255.0, 150/255.0 };
+
+LOBBY_BACKGROUND       :: V3f.{ 0.03, 0.055, 0.075 };
+MENU_BASE_BACKGROUND   :: V3f.{ 0.1, 0.1, 0.1 };
+LOBBY_BUTTON_DARK      :: V4f.{ 0.04, 0.09, 0.12, 1 };
+LOBBY_ACTION_BLUE      :: V4f.{ 0.06, 0.16, 0.22, 1 };
+LOBBY_ACTION_OLIVE     :: V4f.{ 0.16, 0.22, 0.10, 1 };
+LOBBY_ROW_SELECTED     :: V4f.{ 0.09, 0.22, 0.29, 0.75 };
+LOBBY_ROW_HOVER        :: V4f.{ 0.20, 0.32, 0.36, 0.24 };
+LOBBY_TABLE_BACKGROUND :: V4f.{ 0.015, 0.045, 0.055, 0.08 };
+LOBBY_SEPARATOR        :: V4f.{ 0.22, 0.30, 0.32, 0.55 };
+LOBBY_READY            :: V4f.{ 0.58, 0.72, 0.62, 1 };
+
+Z_SLOT :: V2f.{ 0, 15 };
+RELOAD_SLOT :: V2f.{ 10, 15 };
+PLAY_SLOT :: V2f.{ 11, 15 };
+EYE_SLOT :: V2f.{ 12, 15 };
+Q_SLOT :: V2f.{ 1, 15 };
+C_SLOT :: V2f.{ 2, 15 };
+UP_SLOT :: V2f.{ 3, 15 };
+QUESTION_SLOT :: V2f.{ 9, 15 };
+S_SLOT :: V2f.{ 0, 14 };
+D_SLOT :: V2f.{ 1, 14 };
+A_SLOT :: V2f.{ 2, 14 };
+RIGHT_SLOT :: V2f.{ 3, 14 };
+SPACE_SLOT :: V2f.{ 0, 13 };
+W_SLOT :: V2f.{ 1, 13 };
+DOWN_SLOT :: V2f.{ 2, 13 };
+LEFT_SLOT :: V2f.{ 3, 13 };
+DROP_SLOT :: V2f.{ 9, 14 };
+W_OUTLINE_SLOT :: V2f.{ 0, 12 };
+A_OUTLINE_SLOT :: V2f.{ 1, 12 };
+Q_OUTLINE_SLOT :: V2f.{ 2, 12 };
+S_OUTLINE_SLOT :: V2f.{ 3, 12 };
+D_OUTLINE_SLOT :: V2f.{ 4, 15 };
+Z_OUTLINE_SLOT :: V2f.{ 4, 14 };
+C_OUTLINE_SLOT :: V2f.{ 4, 13 };
+X_OUTLINE_SLOT :: V2f.{ 5, 15 };
+E_OUTLINE_SLOT :: V2f.{ 6, 13 };
+R_OUTLINE_SLOT :: V2f.{ 7, 13 };
+V_OUTLINE_SLOT :: V2f.{ 8, 13 };
+F_OUTLINE_SLOT :: V2f.{ 9, 13 };
+COIN_SLOT :: V2f.{ 4, 12 };
+VOLUME_ON_SLOT :: V2f.{ 0, 11 };
+VOLUME_OFF_SLOT :: V2f.{ 1, 11 };
+KLAXON_SLOT :: V2f.{ 2, 11 };
+LOCKED_SLOT :: V2f.{ 3, 11 };
+UNLOCKED_SLOT :: V2f.{ 4, 11 };
+BUBBLE_INDICATOR_SLOT :: V2f.{ 5, 14 };
+BUBBLE_INDICATOR_SLOT_DOWN :: V2f.{ 5, 14 };
+BUBBLE_INDICATOR_SLOT_LEFT :: V2f.{ 6, 14 };
+BUBBLE_INDICATOR_SLOT_UP :: V2f.{ 7, 14 };
+BUBBLE_INDICATOR_SLOT_RIGHT :: V2f.{ 8, 14 };
+AWARD_SLOT :: V2f.{ 5, 13 };
+REVIVE_SLOT :: V2f.{ 5, 12 };
+DEATH_SLOT :: V2f.{ 5, 11 };
+SCORE_SLOT :: V2f.{ 6, 11 };
+SAFE_ZONE_SLOT :: V2f.{ 7, 15 };
+HOOK_SLOT :: V2f.{ 8, 15 };
+HAND_OPEN_SLOT :: V2f.{ 6, 12 };
+STAR_SLOT :: V2f.{ 7, 12 };
+RESURRECT_SLOT :: V2f.{ 7, 11 };
+BOMB_SLOT :: V2f.{ 9, 12 };
+SHIELD_SLOT :: V2f.{ 10, 11 };
+EXPLOSION_TIME_SLOT :: V2f.{ 9, 11 };
+CROSS_LENGTH_SLOT :: V2f.{ 8, 11 };
+
+PLAYER_ICON_SLOT :: V2f.{ 0, 10 };
+AMBULANCE_SLOT :: V2f.{ 0, 10 };
+TAXI_SLOT :: V2f.{ 1, 10 };
+POLICE_SLOT :: V2f.{ 2, 10 };
+RACER_SLOT :: V2f.{ 3, 10 };
+SPEEDSTER_SLOT :: V2f.{ 4, 10 };
+DRAG_RACER_SLOT :: V2f.{ 5, 10 };
+SPACESHIP_SLOT :: V2f.{ 6, 10 };
+BOAT_FISHING_SLOT :: V2f.{ 7, 10 };
+BOAT_ROW_SLOT :: V2f.{ 8, 10 };
+MONSTER_TRUCK_SLOT :: V2f.{ 9, 10 };
+SUV_SLOT :: V2f.{ 10, 10 };
+BOAT_SAIL_SLOT :: V2f.{ 11, 10 };
+TRACTOR_SLOT :: V2f.{ 12, 10 };
+TRUCK_SLOT :: V2f.{ 13, 10 };
+BOAT_FAN_SLOT :: V2f.{ 14, 10 };
+BOAT_SPEED_SLOT :: V2f.{ 15, 10 };
 
 String_Pool :: struct {
 	allocator: Allocator;
@@ -364,8 +498,10 @@ Nine_Slice_Style :: struct {
 	borders: V4f;
 	scale := 1.0;
 	fill_color: V4f = .{ 0.04, 0.07, 0.08, 1 };
+	fill_inset := 2.0; // Logical pixels between the outer bounds and the fill.
 	rounded := 0.0; // Fill corner radius in logical pixels; the frame keeps its own alpha.
 	transparent_center := true;
+	hide_bottom_rail := false; // Omits only the center piece of the bottom border.
 }
 
 Three_Slice_Style :: struct {
@@ -375,12 +511,46 @@ Three_Slice_Style :: struct {
 	scale := 1.0;
 }
 
+Table_Column :: struct {
+	label: string;
+	width: float; // Zero shares the remaining width with other automatic columns.
+	align := Align.Center_Left;
+	button := false;
+	icon: Texture;
+	icon_rect := V4f.{ 0, 0, 1, 1 };
+	icon_slot := V2f.{ -1, -1 };
+}
+
+Table_Row :: struct {
+	cells: [] string;
+}
+
+Table_State :: struct {
+	selection := -1;
+}
+
+Table_Style :: struct {
+	selectable := true;
+	vertical_rules := true;
+	dashed_header := true;
+	compact_icons := false;
+	header_height := 14.0;
+	background: V4f = .{ 0.04, 0.07, 0.08, 1 };
+	header: V4f = .{ 0.86, 0.70, 0.40, 1 };
+	text := TEXT_NORMAL;
+	separator: V4f = .{ 0.30, 0.34, 0.34, 1 };
+	selected: V4f = .{ 0.19, 0.30, 0.34, 1 };
+	hovered: V4f = .{ 0.13, 0.20, 0.23, 1 };
+	button: Nine_Slice_Style;
+}
+
 Skin :: struct {
 	panel: Nine_Slice_Style;
 	panel_fill: Texture;
 	button: Nine_Slice_Style;
 	input: Nine_Slice_Style;
 	checkbox: Nine_Slice_Style;
+	table: Table_Style;
 	scroll_track: Three_Slice_Style;
 	scroll_thumb: Three_Slice_Style;
 	scrollbar_width := 24.0;
@@ -392,6 +562,8 @@ Skin :: struct {
 }
 
 Quad :: struct {
+	FLAG_COIN :: 4;
+	FLAG_COIN_SHADOW :: 8;
 	pos: V2f;
 	size: V2f;
 	color: V4f = .{ 1, 1, 1, 1 };
@@ -400,6 +572,9 @@ Quad :: struct {
 	custom_texture: *void;
 	custom_texture_idx := -1;
 	repeat := false;
+	flags: u32;
+	rotation: float;
+	coin_face := 1.0;
 	rounded := 0.0; // Corner radius in logical pixels. Zero leaves the quad square.
 	clip: AABBf;
 }
@@ -412,21 +587,6 @@ Char :: struct {
 	z: float;
 	outline: bool;
 	clip: AABBf;
-}
-
-Input_State :: struct {
-	using keys: Platform.Keys;
-	text_input: string;
-	text_input_active: bool;
-	text_input_consumed: bool;
-	mouse_pos: V2f;
-	mouse_wheel: int;
-	window_size: V2f;
-	captured_mouse: bool;
-	captured_keyboard: bool;
-	delta_time: float;
-	time: Apollo_Time;
-	layout: Platform.Layout;
 }
 
 Flow :: struct {
@@ -480,11 +640,14 @@ Widget :: struct {
 	drag_start_value: float64;
 	open: bool;
 	popup_owner: u64;
+	user_data: *void;
+	user_data_type: u64;
+	user_data_size: int;
 	scroll: Scroll_State;
 }
 
 GUI_State :: struct {
-	controls: Input_State;
+	controls: *Controls.State;
 	main_font: *Platform.Font;
 	skin: Skin;
 	flow_stack: [..] Flow;
@@ -514,6 +677,7 @@ rebind :: (gui: *GUI_State, font: *Platform.Font, skin: Skin) {
 destroy :: (gui: *GUI_State) {
 	for w: gui.widgets {
 		release(*w.text);
+		if w.user_data free(w.user_data,, gui.string_pool.allocator);
 		free(w);
 	}
 
@@ -562,6 +726,40 @@ pop_id :: (gui: *GUI_State) {
 	gui.id_stack.count -= 1;
 }
 
+find_or_create_widget :: (gui: *GUI_State, id: $Id) -> *Widget {
+	key := combine_id(last_id(gui), id_value(id));
+	found := table_find_pointer(*gui.widgets, key);
+	if found {
+		found.*.seen = gui.frame;
+		return found.*;
+	}
+
+	w := New(Widget);
+	w.id = key;
+	w.text.pool = *gui.string_pool;
+	w.physical = false;
+	w.seen = gui.frame;
+	table_add(*gui.widgets, key, w);
+	return w;
+}
+
+// One typed allocation per widget ID. The caller owns resources inside T.
+widget_data :: (gui: *GUI_State, id: $Id, $T: Type, default: T = .{}) -> *T {
+	w := find_or_create_widget(gui, id);
+	type_id := #run string_id(type_to_string(type_info(T)));
+	if !w.user_data {
+		data := New(T,, gui.string_pool.allocator);
+		data.* = default;
+		w.user_data = data;
+		w.user_data_type = type_id;
+		w.user_data_size = size_of(T);
+	} else {
+		assert(w.user_data_type == type_id && w.user_data_size == size_of(T),
+			"Widget ID was reused with a different data type or layout size");
+	}
+	return cast(*T) w.user_data;
+}
+
 get_widget :: (
 	gui: *GUI_State,
 	id: $Id,
@@ -569,18 +767,7 @@ get_widget :: (
 	z: float,
 	physical := true
 ) -> *Widget {
-	key := combine_id(last_id(gui), id_value(id));
-	found := table_find_pointer(*gui.widgets, key);
-	w: *Widget;
-	if found {
-		w = found.*;
-	} else {
-		w = New(Widget);
-		w.id = key;
-		w.text.pool = *gui.string_pool;
-		table_add(*gui.widgets, key, w);
-	}
-
+	w := find_or_create_widget(gui, id);
 	w.aabb = aabb;
 	w.clip = flow(gui).clip;
 	w.z = z;
@@ -615,28 +802,16 @@ contains :: (aabb: AABBf, p: V2f) -> bool {
 
 begin_frame :: (
 	gui: *GUI_State,
-	info: Platform.Frame_Info,
-	layout := Platform.Layout.AZERTY,
+	controls: *Controls.State,
 	blocked := false
 ) {
 	gui.frame += 1;
 	gui.order = 0;
 	gui.blocked = blocked;
-	gui.controls.keys = Platform.advance_keys(gui.controls.keys, info.keys.pressed, info.keys.just_released);
-	for i: 0..Platform.Key_COUNT - 1 {
-		gui.controls.just_pressed[i] |= info.keys.just_pressed[i];
-	}
-	gui.controls.text_input = info.text_input;
-	gui.controls.text_input_active = false;
-	gui.controls.text_input_consumed = false;
-	gui.controls.mouse_pos = info.mouse_position;
-	gui.controls.window_size = info.window_size;
-	gui.controls.mouse_wheel = info.mouse_wheel;
-	gui.controls.time = info.time;
-	gui.controls.delta_time = info.delta_time;
-	gui.controls.layout = ifx info.layout == .Unknown then layout else info.layout;
-	gui.controls.captured_mouse = blocked;
-	gui.controls.captured_keyboard = blocked;
+	assert(controls != null);
+	gui.controls = controls;
+	gui.controls.captured_mouse |= blocked;
+	gui.controls.captured_keyboard |= blocked;
 	gui.quads.count = 0;
 	gui.chars.count = 0;
 	gui.flow_stack.count = 0;
@@ -651,6 +826,7 @@ begin_frame :: (
 				gui.mouse_owner = 0;
 			}
 			release(*w.text);
+			if w.user_data free(w.user_data,, gui.string_pool.allocator);
 			free(w);
 			remove key;
 			continue;
@@ -699,14 +875,14 @@ begin_frame :: (
 	}
 
 	owner := table_find_pointer(*gui.widgets, gui.mouse_owner);
-	if owner && owner.*.z >= gui.modal_z {
+	if gui.mouse_owner != 0 && owner && owner.*.physical && owner.*.z >= gui.modal_z {
 		owner.*.pressed = gui.controls.pressed[Platform.Key.MouseLeft];
 		owner.*.released = gui.controls.just_released[Platform.Key.MouseLeft] && owner.* == hit;
 		gui.controls.captured_mouse |= owner.*.pressed || gui.controls.just_released[Platform.Key.MouseLeft];
 	}
 
 	focused := table_find_pointer(*gui.widgets, gui.focus);
-	if focused && focused.*.z >= gui.modal_z {
+	if gui.focus != 0 && focused && focused.*.physical && focused.*.z >= gui.modal_z {
 		gui.controls.captured_keyboard = true;
 	} else {
 		gui.focus = 0;
@@ -983,9 +1159,10 @@ draw_slice :: (
 ) {
 	size := aabb.max - aabb.min;
 	if size.x <= 0 || size.y <= 0 return;
+	inset := min(max(style.fill_inset, 0.0), min(size.x, size.y) / 2);
 	draw_rect(
 		gui,
-		shrink(aabb, 2),
+		shrink(aabb, inset),
 		v4(
 			style.fill_color.x * tint.x,
 			style.fill_color.y * tint.y,
@@ -1022,6 +1199,7 @@ draw_slice :: (
 	for iy: 0..2 {
 		for ix: 0..2 {
 			if ix == 1 && iy == 1 && style.transparent_center continue;
+			if ix == 1 && iy == 2 && style.hide_bottom_rail continue;
 			piece_size := v2(x[ix + 1] - x[ix], y[iy + 1] - y[iy]);
 			source := v4(
 				source_x[ix],
@@ -1265,6 +1443,12 @@ scroll_end :: (gui: *GUI_State) {
 	pop_id(gui);
 }
 
+Window_Layout :: struct {
+	pos: V2f;
+	size: V2f;
+	content_aabb: AABBf;
+}
+
 begin_window :: (
 	gui: *GUI_State,
 	size: V2f,
@@ -1276,7 +1460,7 @@ begin_window :: (
 	direction := Direction.Down,
 	z := FLOAT32_MAX,
 	skin: *Skin = null
-) {
+) -> Window_Layout {
 	assert(size.x >= 0 && size.y >= 0, "A window needs an explicit size");
 	window_z := ifx z == FLOAT32_MAX then flow(gui).z else z;
 	push_id(gui, id);
@@ -1310,6 +1494,12 @@ begin_window :: (
 	} else if contains(b, gui.controls.mouse_pos) && contains(f.clip, gui.controls.mouse_pos) {
 		gui.controls.captured_mouse = true;
 	}
+
+	return .{
+		pos = b.min,
+		size = b.max - b.min,
+		content_aabb = .{ b.min + f.padding, b.max - f.padding },
+	};
 }
 
 text_width :: (gui: *GUI_State, text: string, height: float) -> float {
@@ -1372,6 +1562,8 @@ draw_text :: (
 	}
 	p := align_pos(anchor, text_size, align);
 	i := 0;
+	bob_phase := fmod_cycling(1.5 * to_float64_seconds(gui.controls.time), 1.0);
+	bob := (3.0 * sin(bob_phase * TAU64)).(float);
 	while i < text.count {
 		cp, next := Platform.text_next(text, i);
 		glyph := Platform.text_glyph(gui.main_font, cp);
@@ -1383,6 +1575,11 @@ draw_text :: (
 		ch.color = color;
 		ch.outline = outline;
 		ch.clip = flow(gui).clip;
+		if cp == #char "6" && next < text.count && text[next] == #char "7" {
+			ch.pos.y -= bob;
+		} else if cp == #char "7" && i > 0 && text[i - 1] == #char "6" {
+			ch.pos.y += bob;
+		}
 		array_add(*gui.chars, ch);
 		p.x += glyph.advance * height;
 		i = next;
@@ -1395,6 +1592,8 @@ draw_label :: (
 	text: string,
 	height: float,
 	color: V4f,
+	outline: bool,	
+	text_align: Align,
 	id: string
 ) {
 	get_widget(gui, id, p.aabb, p.z, false);
@@ -1404,7 +1603,8 @@ draw_label :: (
 		fit_text(gui, text, height, p.aabb.max.x - p.aabb.min.x),
 		height,
 		ifx color.w < 0 then p.skin.text else color,
-		p.z
+		p.z,
+		text_align
 	);
 }
 
@@ -1413,18 +1613,20 @@ label :: (
 	text: string,
 	height := -1.0,
 	color := INHERIT_COLOR,
+	outline := false,
 	id := "label",
 	pos := NO_POSITION,
 	align := Align.Undefined,
 	direction := Direction.Inherit,
 	z := FLOAT32_MAX,
-	skin: *Skin = null
+	skin: *Skin = null,
+	text_align := Align.Center_Left
 ) -> AABBf {
 	s := ifx skin then skin.* else flow(gui).skin;
 	actual_height := ifx height < 0 then s.font_size else height;
 	size := v2(text_width(gui, text, actual_height), actual_height);
 	p := placement(gui, size, pos, align, direction, z, skin);
-	draw_label(gui, p, text, actual_height, color, id);
+	draw_label(gui, p, text, actual_height, color, outline, text_align, id);
 	finish(gui, p);
 	return p.aabb;
 }
@@ -1435,6 +1637,8 @@ label :: (
 	size: V2f,
 	text_height := -1.0,
 	color := INHERIT_COLOR,
+	outline := false,
+	text_align := Align.Center_Left,
 	id := "label",
 	pos := NO_POSITION,
 	align := Align.Undefined,
@@ -1444,7 +1648,7 @@ label :: (
 ) -> AABBf {
 	p := placement(gui, size, pos, align, direction, z, skin);
 	actual_height := ifx text_height < 0 then p.skin.font_size else text_height;
-	draw_label(gui, p, text, actual_height, color, id);
+	draw_label(gui, p, text, actual_height, color, outline, .Center_Left, id);
 	finish(gui, p);
 	return p.aabb;
 }
@@ -1455,6 +1659,7 @@ image :: (
 	texture: *void = null,
 	texture_index := -1,
 	color := V4f.{ 1, 1, 1, 1 },
+	texture_rect := V4f.{ 0, 0, 1, 1 },
 	rounded := 0.0,
 	id := "image",
 	pos := NO_POSITION,
@@ -1469,7 +1674,7 @@ image :: (
 	q.custom_texture = texture;
 	q.custom_texture_idx = texture_index;
 	if texture || texture_index >= 0 {
-		q.texture_rect = .{ 0, 0, 1, 1 };
+		q.texture_rect = texture_rect;
 	}
 	finish(gui, p);
 	return q;
@@ -1480,16 +1685,34 @@ draw_button :: (
 	p: Placement,
 	text: string,
 	enabled: bool,
-	id: string
+	icon: Texture,
+	icon_rect: V4f,
+	id: string,
+	icon_slot := V2f.{ -1, -1 }
 ) -> bool {
 	w := get_widget(gui, id, p.aabb, p.z, enabled);
 	tint := ifx !enabled then v4(0.5, 0.5, 0.5, 1) else ifx w.pressed then v4(0.72, 0.72, 0.72, 1)
 		else ifx w.hovered then v4(1.2, 1.2, 1.2, 1) else v4(1.0, 1.0, 1.0, 1);
 	draw_slice(gui, p.aabb, p.skin.button, p.z, tint);
+	text_aabb := p.aabb;
+	if icon.handle || icon_slot.x >= 0 {
+		size := p.aabb.max - p.aabb.min;
+		icon_size := max(0.0, min(24.0, min(size.y - 10, size.x - 8)));
+		icon_pos := p.aabb.min + v2(8.0, (size.y - icon_size) / 2);
+		if text.count == 0 icon_pos.x = p.aabb.min.x + (size.x - icon_size) / 2;
+		q := draw_rect(gui, .{ icon_pos, icon_pos + v2(icon_size) }, tint, p.z + 0.2);
+		if icon.handle {
+			q.custom_texture = icon.handle;
+			q.texture_rect = icon_rect;
+		} else {
+			q.texture_rect = .{ icon_slot.x / 16, (15 - icon_slot.y) / 16, 1.0 / 16, 1.0 / 16 };
+		}
+		text_aabb.min.x = min(text_aabb.max.x, icon_pos.x + icon_size + 4);
+	}
 	draw_text(
 		gui,
-		p.aabb,
-		fit_text(gui, text, p.skin.font_size, max(0.0, p.aabb.max.x - p.aabb.min.x - 8)),
+		text_aabb,
+		fit_text(gui, text, p.skin.font_size, max(0.0, text_aabb.max.x - text_aabb.min.x - 8)),
 		p.skin.font_size,
 		p.skin.text,
 		p.z + 0.1,
@@ -1503,6 +1726,9 @@ button :: (
 	text: string,
 	height := -1.0,
 	enabled := true,
+	icon: Texture = .{},
+	icon_rect := V4f.{ 0, 0, 1, 1 },
+	icon_slot := V2f.{ -1, -1 },
 	id := "button",
 	pos := NO_POSITION,
 	align := Align.Undefined,
@@ -1514,7 +1740,7 @@ button :: (
 	actual_height := ifx height < 0 then s.control_height else height;
 	size := v2(max(26.0, text_width(gui, text, s.font_size) + 16), actual_height);
 	p := placement(gui, size, pos, align, direction, z, skin);
-	clicked := draw_button(gui, p, text, enabled, id);
+	clicked := draw_button(gui, p, text, enabled, icon, icon_rect, id, icon_slot);
 	finish(gui, p);
 	return clicked;
 }
@@ -1524,6 +1750,9 @@ button :: (
 	text: string,
 	size: V2f,
 	enabled := true,
+	icon: Texture = .{},
+	icon_rect := V4f.{ 0, 0, 1, 1 },
+	icon_slot := V2f.{ -1, -1 },
 	id := "button",
 	pos := NO_POSITION,
 	align := Align.Undefined,
@@ -1532,9 +1761,153 @@ button :: (
 	skin: *Skin = null
 ) -> bool {
 	p := placement(gui, size, pos, align, direction, z, skin);
-	clicked := draw_button(gui, p, text, enabled, id);
+	clicked := draw_button(gui, p, text, enabled, icon, icon_rect, id, icon_slot);
 	finish(gui, p);
 	return clicked;
+}
+
+Table_Result :: struct {
+	value := -1;
+	changed := false;
+	clicked_row := -1;
+	clicked_column := -1;
+	aabb: AABBf;
+}
+
+draw_table :: (
+	gui: *GUI_State,
+	p: Placement,
+	columns: [] Table_Column,
+	rows: [] Table_Row,
+	row_height: float,
+	style: Table_Style,
+	selected_row: *int,
+	id: string
+) -> Table_Result {
+	result: Table_Result;
+	result.aabb = p.aabb;
+	get_widget(gui, id, p.aabb, p.z, false);
+	state := widget_data(gui, id, Table_State);
+	selection := ifx selected_row then selected_row.* else state.selection;
+	selection = clamp(selection, -1, rows.count - 1);
+	initial_selection := selection;
+
+	parent_clip := flow(gui).clip;
+	flow(gui).clip = .{ vmax(parent_clip.min, p.aabb.min), vmin(parent_clip.max, p.aabb.max) };
+	defer flow(gui).clip = parent_clip;
+	push_id(gui, id);
+	defer pop_id(gui);
+	draw_rect(gui, p.aabb, style.background, p.z);
+
+	width := p.aabb.max.x - p.aabb.min.x;
+	fixed_width := 0.0;
+	auto_columns := 0;
+	for columns {
+		if it.width > 0 fixed_width += it.width;
+		else auto_columns += 1;
+	}
+	auto_width := 0.0;
+	if auto_columns > 0 auto_width = max(0.0, width - fixed_width) / auto_columns;
+
+	x := p.aabb.min.x;
+	for column, col_index: columns {
+		column_width := ifx column.width > 0 then column.width else auto_width;
+		header := AABBf.{ v2(x + 4, p.aabb.min.y), v2(x + column_width - 4, p.aabb.min.y + row_height) };
+		draw_text(gui, header, fit_text(gui, column.label, style.header_height, max(0.0, column_width - 8)),
+			style.header_height, style.header, p.z + 0.1, column.align);
+		x += column_width;
+		if style.vertical_rules && col_index < columns.count - 1 {
+			draw_rect(gui, .{ v2(x, p.aabb.min.y), v2(x + 1, p.aabb.max.y) }, style.separator, p.z + 0.02);
+		}
+	}
+	if style.dashed_header {
+		x = p.aabb.min.x;
+		while x < p.aabb.max.x {
+			draw_rect(gui, .{ v2(x, p.aabb.min.y), v2(min(x + 4, p.aabb.max.x), p.aabb.min.y + 2) },
+				style.separator, p.z + 0.03);
+			x += 8;
+		}
+	}
+
+	for row, row_index: rows {
+		y := p.aabb.min.y + (row_index + 1) * row_height;
+		if y >= p.aabb.max.y break;
+		bounds := AABBf.{ v2(p.aabb.min.x, y), v2(p.aabb.max.x, y + row_height) };
+		push_id(gui, row_index);
+		row_widget := get_widget(gui, "row", bounds, p.z + 0.03, style.selectable);
+		if row_widget.released {
+			selection = row_index;
+			result.clicked_row = row_index;
+		}
+		if selection == row_index && style.selectable {
+			draw_rect(gui, bounds, style.selected, p.z + 0.01);
+		} else if row_widget.hovered {
+			draw_rect(gui, bounds, style.hovered, p.z + 0.01);
+		}
+
+		x = p.aabb.min.x;
+		for column, col_index: columns {
+			column_width := ifx column.width > 0 then column.width else auto_width;
+			cell := AABBf.{ v2(x + 4, y), v2(x + column_width - 4, y + row_height) };
+			value := ifx col_index < row.cells.count then row.cells[col_index] else "";
+			if column.button && column_width > 8 {
+				button_p := p;
+				button_p.z = p.z + 0.1;
+				button_p.aabb = cell;
+				button_p.skin.text = style.text;
+				if style.button.texture.handle button_p.skin.button = style.button;
+				button_text := value;
+				if style.compact_icons && column.icon.handle {
+					button_width := min(28.0, column_width - 8);
+					button_height := min(22.0, row_height);
+					button_p.aabb.min = v2(x + (column_width - button_width) / 2,
+						y + (row_height - button_height) / 2);
+					button_p.aabb.max = button_p.aabb.min + v2(button_width, button_height);
+					button_text = "";
+				}
+				if draw_button(gui, button_p, button_text, true, column.icon, column.icon_rect, tprint("cell_%", col_index), icon_slot = column.icon_slot) {
+					selection = row_index;
+					result.clicked_row = row_index;
+					result.clicked_column = col_index;
+				}
+			} else if column_width > 8 {
+				draw_text(gui, cell, fit_text(gui, value, p.skin.font_size, column_width - 8),
+					p.skin.font_size, style.text, p.z + 0.1, column.align);
+			}
+			x += column_width;
+		}
+		draw_rect(gui, .{ v2(p.aabb.min.x, y + row_height - 1), v2(p.aabb.max.x, y + row_height) },
+			style.separator, p.z + 0.02);
+		pop_id(gui);
+	}
+	result.value = selection;
+	result.changed = selection != initial_selection;
+	state.selection = selection;
+	if selected_row selected_row.* = selection;
+	return result;
+}
+
+table :: (
+	gui: *GUI_State,
+	columns: [] Table_Column,
+	rows: [] Table_Row,
+	size: V2f,
+	row_height := 26.0,
+	selected_row: *int = null,
+	style: *Table_Style = null,
+	id := "table",
+	pos := NO_POSITION,
+	align := Align.Undefined,
+	direction := Direction.Inherit,
+	z := FLOAT32_MAX,
+	skin: *Skin = null
+) -> Table_Result {
+	assert(row_height > 0, "Table row height must be positive");
+	p := placement(gui, size, pos, align, direction, z, skin);
+	s := ifx style then style.* else p.skin.table;
+	result := draw_table(gui, p, columns, rows, row_height, s, selected_row, id);
+	finish(gui, p);
+	return result;
 }
 
 Input_Text_Result :: struct {
@@ -1554,6 +1927,13 @@ text_boundary :: (text: string, at: int) -> int {
 	return i;
 }
 
+input_text_width :: (gui: *GUI_State, text: string, height: float, password_mask: bool) -> float {
+	if password_mask {
+		return Platform.text_character_count(text) * text_width(gui, "*", height);
+	}
+	return text_width(gui, text, height);
+}
+
 draw_input_text :: (
 	gui: *GUI_State,
 	aabb: AABBf,
@@ -1564,18 +1944,26 @@ draw_input_text :: (
 	placeholder: string,
 	max_chars: int,
 	z: float,
-	unfocus_on_commit := true
+	unfocus_on_commit := true,
+	force_focus := false,
+	cursor_to_end := false,
+	password_mask := false
 ) -> Input_Text_Result {
 	result: Input_Text_Result;
 	w.input = true;
 	text := view(buf);
 	w.cursor = text_boundary(text, w.cursor);
+	if force_focus && !gui.blocked && z >= gui.modal_z {
+		gui.focus = w.id;
+	}
+	if cursor_to_end w.cursor = text.count;
 	if w.just_pressed {
 		gui.focus = w.id;
 		w.cursor = text_boundary(text, w.display_start);
 		x := aabb.min.x + 4;
 		while w.cursor < text.count {
 			cp, next := Platform.text_next(text, w.cursor);
+			if password_mask cp = #char "*";
 			advance := ifx gui.main_font then Platform.text_glyph(gui.main_font, cp).advance * height else height / 2;
 			if gui.controls.mouse_pos.x < x + advance / 2 break;
 			x += advance;
@@ -1647,14 +2035,21 @@ draw_input_text :: (
 
 	draw_slice(gui, aabb, skin.input, z);
 	if focused {
-		draw_rect(gui, .{ aabb.min, v2(aabb.max.x, aabb.min.y + 1) }, skin.accent, z + 0.02);
+		draw_rect(
+			gui,
+			.{ v2(aabb.min.x, aabb.max.y), v2(aabb.max.x, aabb.max.y - 1) },
+			skin.accent,
+			z + 0.02
+		);
 	}
 	inner := AABBf.{ aabb.min + v2(4.0, 0.0), aabb.max - v2(4.0, 0.0) };
 	width := max(0.0, inner.max.x - inner.min.x - 1);
 	text = view(buf);
 	w.display_start = 0;
 	if focused {
-		while w.display_start < w.cursor && text_width(gui, slice(text, w.display_start, w.cursor - w.display_start), height) > width {
+		while w.display_start < w.cursor && input_text_width(
+			gui, slice(text, w.display_start, w.cursor - w.display_start), height, password_mask
+		) > width {
 			_, next := Platform.text_next(text, w.display_start);
 			w.display_start = next;
 		}
@@ -1665,10 +2060,17 @@ draw_input_text :: (
 		w.display_start,
 		text.count - w.display_start
 	) else placeholder;
+	if password_mask && text.count > 0 {
+		masked := NewArray(Platform.text_character_count(displayed), u8, false,, temp);
+		for * masked it.* = #char "*";
+		displayed = .{ count = masked.count, data = masked.data };
+	}
 	draw_text(gui, inner, fit_text(gui, displayed, height, width), height,
 		ifx text.count > 0 then skin.text else skin.muted, z + 0.03);
 	if focused {
-		x := inner.min.x + text_width(gui, slice(text, w.display_start, w.cursor - w.display_start), height);
+		x := inner.min.x + input_text_width(
+			gui, slice(text, w.display_start, w.cursor - w.display_start), height, password_mask
+		);
 		draw_rect(gui, .{ v2(x, aabb.min.y + 4), v2(x + 1, aabb.max.y - 4) }, skin.accent, z + 0.04);
 	}
 
@@ -1681,6 +2083,10 @@ input_text :: (
 	size: V2f,
 	placeholder := "",
 	max_chars := -1,
+	password_mask := false,
+	force_focus := false,
+	cursor_to_end := false,
+	unfocus_on_commit := true,
 	id := "input_text",
 	pos := NO_POSITION,
 	align := Align.Undefined,
@@ -1699,7 +2105,11 @@ input_text :: (
 		p.skin,
 		placeholder,
 		max_chars,
-		p.z
+		p.z,
+		unfocus_on_commit = unfocus_on_commit,
+		force_focus = force_focus,
+		cursor_to_end = cursor_to_end,
+		password_mask = password_mask
 	);
 	finish(gui, p);
 	return result;
@@ -1731,6 +2141,10 @@ labeled_input_text :: (
 	size: V2f,
 	placeholder := "",
 	max_chars := -1,
+	password_mask := false,
+	force_focus := false,
+	cursor_to_end := false,
+	unfocus_on_commit := true,
 	label_color := INHERIT_COLOR,
 	id := "labeled_input_text",
 	pos := NO_POSITION,
@@ -1743,7 +2157,13 @@ labeled_input_text :: (
 	push_id(gui, id);
 	a := draw_property_label(gui, p, label, label_color);
 	w := get_widget(gui, "input", a, p.z);
-	result := draw_input_text(gui, a, buf, w, p.skin.font_size, p.skin, placeholder, max_chars, p.z);
+	result := draw_input_text(
+		gui, a, buf, w, p.skin.font_size, p.skin, placeholder, max_chars, p.z,
+		unfocus_on_commit = unfocus_on_commit,
+		force_focus = force_focus,
+		cursor_to_end = cursor_to_end,
+		password_mask = password_mask
+	);
 	pop_id(gui);
 	get_widget(gui, id, p.aabb, p.z, false);
 	finish(gui, p);
@@ -1833,7 +2253,7 @@ draw_dropdown :: (
 	if gui.controls.just_pressed[Platform.Key.MouseLeft] && !w.hovered && gui.mouse_owner != w.id {
 		// Option ownership keeps the popup open until that option consumes release.
 		owner := table_find_pointer(*gui.widgets, gui.mouse_owner);
-		if !owner || owner.*.z < p.z + 100 {
+		if gui.mouse_owner == 0 || !owner || owner.*.z < p.z + 100 {
 			w.open = false;
 		}
 	}
@@ -1928,6 +2348,8 @@ labeled_text_button :: (
 	size: V2f,
 	enabled := true,
 	label_color := INHERIT_COLOR,
+	icon: Texture = .{},
+	icon_rect := V4f.{ 0, 0, 1, 1 },
 	id := "labeled_text_button",
 	pos := NO_POSITION,
 	align := Align.Undefined,
@@ -1939,7 +2361,7 @@ labeled_text_button :: (
 	input := p;
 	input.aabb = draw_property_label(gui, p, label, label_color);
 	push_id(gui, id);
-	clicked := draw_button(gui, input, text, enabled, "button");
+	clicked := draw_button(gui, input, text, enabled, icon, icon_rect, "button");
 	pop_id(gui);
 	get_widget(gui, id, p.aabb, p.z, false);
 	finish(gui, p);
@@ -2287,3 +2709,387 @@ labeled_v3_input :: (
 	finish(gui, p);
 	return result;
 }
+
+
+// Small application drawing helpers. They use the GUI2 flow and draw buffers;
+// callers can migrate incrementally while keeping all widget state in GUI2.
+Atom_Label :: struct {
+	aabb_min: V2f;
+	aabb_max: V2f;
+}
+
+begin :: (gui: *GUI_State, direction: Direction, z := FLOAT32_MAX, align := Align.Undefined) {
+	if direction == .Right || direction == .Left {
+		row(gui, direction = direction, z = z, align = align);
+	} else {
+		column(gui, direction = direction, z = z, align = align);
+	}
+}
+
+begin :: (gui: *GUI_State, z := FLOAT32_MAX, align := Align.Undefined) {
+	begin(gui, flow(gui).direction, z, align);
+}
+
+row :: (gui: *GUI_State, direction: Direction, z := FLOAT32_MAX, align := Align.Undefined) {
+	row(gui, AUTO_SIZE, pos = NO_POSITION, direction = direction, z = z, align = align);
+}
+
+box :: (
+	gui: *GUI_State,
+	size: V2f,
+	direction := Direction.Down,
+	inset := V2f.{ 0, 0 },
+	gap := V2f.{ 0, 0 },
+	z := FLOAT32_MAX
+) -> AABBf {
+	pos := flow(gui).cursor;
+	if direction == .Right || direction == .Left {
+		row(gui, size, pos = pos, align = .Top_Left, direction = direction,
+			padding = inset, gap = gap, z = z);
+	} else {
+		column(gui, size, pos = pos, align = .Top_Left, direction = direction,
+			padding = inset, gap = gap, z = z);
+	}
+	return container_aabb(gui);
+}
+
+end_window :: (gui: *GUI_State, id := "window") {
+	end(gui);
+}
+
+begin_window :: (
+	gui: *GUI_State,
+	anchor: V2f,
+	size: V2f,
+	align := Align.Center,
+	id := "window",
+	z := FLOAT32_MAX,
+	modal := false,
+	skin: *Skin = null
+) -> Window_Layout {
+	return begin_window(gui, size, modal = modal, id = id, pos = anchor,
+		align = align, z = z, skin = skin);
+}
+
+label_box :: (
+	gui: *GUI_State,
+	text: string,
+	size: V2f,
+	height := 16.0,
+	color := INHERIT_COLOR,
+	align := Align.Center_Left,
+	id := "label"
+) -> AABBf {
+	pos := flow(gui).cursor;
+	return label(gui, text, size, text_height = height, color = color, id = id,
+		pos = pos, align = .Top_Left, text_align = align);
+}
+
+atom_label :: (
+	gui: *GUI_State,
+	text: string,
+	pos: V2f,
+	height := 16.0,
+	z := 0.0,
+	align := Align.Bottom_Left,
+	color := INHERIT_COLOR,
+	outline := false,
+	id: u64 = 0,
+	generate_offsets := false
+) -> Atom_Label {
+	width := text_width(gui, text, height);
+	size := v2(width, height);
+	origin := align_pos(pos, size, align);
+	bounds := AABBf.{ origin, origin + size };
+	// An unnamed drawing helper has no persistent widget identity.
+	if id != 0 get_widget(gui, id, bounds, z, false);
+	draw_text(gui, bounds, text, height, color, z, .Top_Left, outline);
+	return .{ bounds.min, bounds.max };
+}
+
+move_cursor :: (gui: *GUI_State, delta: V2f) {
+	f := flow(gui);
+	old := f.cursor;
+	f.cursor += delta;
+	include_bounds(f, .{ vmin(old, f.cursor), vmax(old, f.cursor) });
+}
+
+move_cursor :: (gui: *GUI_State, amount: float) {
+	space(gui, amount);
+}
+
+horizontal_rule :: (
+	gui: *GUI_State,
+	width: float,
+	color := LOBBY_SEPARATOR,
+	thickness := 1.0,
+	z := FLOAT32_MAX
+) {
+	f := flow(gui);
+	actual_z := ifx z == FLOAT32_MAX then f.z else z;
+	draw_rect(gui, .{ f.cursor, f.cursor + v2(width, thickness) }, color, actual_z);
+	space(gui, thickness);
+}
+
+push_quad :: (gui: *GUI_State, quad: Quad) {
+	quad_to_add := quad;
+	quad_to_add.clip = flow(gui).clip;
+	array_add(*gui.quads, quad_to_add);
+}
+
+push_quad_screen :: (
+	gui: *GUI_State,
+	pos: V2f,
+	size: V2f,
+	color: V3f,
+	z := 0.0,
+	a := 1.0
+) -> *Quad {
+	return draw_rect(gui, .{ pos, pos + size }, .{ color.x, color.y, color.z, a }, z);
+}
+
+push_quad_screen :: (
+	gui: *GUI_State,
+	bounds: AABBf,
+	color: V3f,
+	z := 0.0,
+	a := 1.0
+) -> *Quad {
+	return draw_rect(gui, bounds, .{ color.x, color.y, color.z, a }, z);
+}
+
+push_quad_screen :: (
+	gui: *GUI_State,
+	pos: V2f,
+	size: V2f,
+	color: V4f,
+	z := 0.0
+) -> *Quad {
+	return draw_rect(gui, .{ pos, pos + size }, color, z);
+}
+
+push_quad_texture :: (
+	gui: *GUI_State,
+	pos: V2f,
+	size: V2f,
+	color: V3f,
+	tex_slot: V2f,
+	z := 0.0
+) -> *Quad {
+	q := draw_rect(gui, .{ pos, pos + size }, .{ color.x, color.y, color.z, 1 }, z);
+	q.texture_rect = .{ tex_slot.x / 16, (15 - tex_slot.y) / 16, 1.0 / 16, 1.0 / 16 };
+	return q;
+}
+
+push_quad_custom_texture :: (
+	gui: *GUI_State,
+	pos: V2f,
+	size: V2f,
+	texture: *void,
+	texture_rect := V4f.{ 0, 0, 1, 1 },
+	z := 0.0,
+	color := V4f.{ 1, 1, 1, 1 }
+) -> *Quad {
+	q := draw_rect(gui, .{ pos, pos + size }, color, z);
+	q.custom_texture = texture;
+	q.texture_rect = texture_rect;
+	return q;
+}
+
+push_late_quad_screen :: (
+	gui: *GUI_State,
+	pos: V2f,
+	size: V2f,
+	color: V3f,
+	z := 0.0,
+	a := 1.0
+) -> *Quad {
+	return push_quad_screen(gui, pos, size, color, z, a);
+}
+
+push_tiled_texture :: (
+	gui: *GUI_State,
+	pos: V2f,
+	size: V2f,
+	texture: *void,
+	texture_size: V2f,
+	z := 0.0,
+	color := V4f.{ 1, 1, 1, 1 }
+) -> *Quad {
+	if !texture || texture_size.x <= 0 || texture_size.y <= 0 || size.x <= 0 || size.y <= 0 return null;
+	q := push_quad_custom_texture(gui, pos, size, texture,
+		.{ 0, 0, size.x / texture_size.x, size.y / texture_size.y }, z, color);
+	q.repeat = true;
+	return q;
+}
+
+push_nine_slice :: (
+	gui: *GUI_State,
+	pos: V2f,
+	size: V2f,
+	style: Nine_Slice_Style,
+	z := 0.0,
+	color := V4f.{ 1, 1, 1, 1 }
+) {
+	draw_slice(gui, .{ pos, pos + size }, style, z, color);
+}
+
+widget :: (gui: *GUI_State, id: $Id, $T: Type, default: T = .{}) -> *T, *Widget {
+	w := find_or_create_widget(gui, id);
+	data := widget_data(gui, id, T, default);
+	return data, w;
+}
+
+widget_sized :: (
+	gui: *GUI_State,
+	id: $Id,
+	$T: Type,
+	bounds: AABBf,
+	z: float,
+	physical := true
+) -> *T, *Widget {
+	data := widget_data(gui, id, T);
+	w := get_widget(gui, id, bounds, z, physical);
+	return data, w;
+}
+
+button_sized :: (
+	gui: *GUI_State,
+	text: string,
+	size: V2f,
+	id := "button",
+	skin: Nine_Slice_Style = .{},
+	z := FLOAT32_MAX,
+	font_size := 14.0,
+	icon := V2f.{ -1, -1 },
+	enabled := true,
+	_align := Align.Undefined
+) -> bool, bool {
+	button_skin := flow(gui).skin;
+	button_skin.font_size = font_size;
+	if skin.texture.handle button_skin.button = skin;
+	resolved_z := ifx z == FLOAT32_MAX then flow(gui).z else z;
+	resolved_align := ifx _align == Align.Undefined then flow(gui).align else _align;
+	p := placement(gui, size, align = resolved_align, z = resolved_z, skin = *button_skin);
+	icon_slot := ifx icon.x >= 0 then icon else V2f.{ -1, -1 };
+	clicked := draw_button(gui, p, text, enabled, .{}, .{ 0, 0, 1, 1 }, id, icon_slot);
+	w := table_find_pointer(*gui.widgets, combine_id(last_id(gui), id_value(id)));
+	finish(gui, p);
+	return clicked, ifx w then w.*.pressed else false;
+}
+
+input_text :: (
+	gui: *GUI_State,
+	buf: *String,
+	height: float,
+	width := 128.0,
+	id := "input_text",
+	placeholder := "",
+	max_chars := -1,
+	password_mask := false,
+	dark_style := false,
+	margin := 2.0,
+	skin: Nine_Slice_Style = .{}
+) -> Input_Text_Result {
+	input_skin := flow(gui).skin;
+	input_skin.font_size = min(input_skin.font_size, height * 0.65);
+	if skin.texture.handle input_skin.input = skin;
+	if dark_style input_skin.input.fill_color = .{ 0.02, 0.04, 0.05, 1 };
+	return input_text(gui, buf, .{ width, height }, placeholder, max_chars,
+		password_mask, id = id, skin = *input_skin);
+}
+
+labeled_input_text :: (
+	gui: *GUI_State,
+	label: string,
+	buf: *String,
+	width: float,
+	height: float,
+	scale := 16.0,
+	id := "labeled_input_text",
+	max_input_width := 128.0,
+	label_color := INHERIT_COLOR,
+	max_chars := -1,
+	padding := 4.0,
+	placeholder := "",
+	skin: Nine_Slice_Style = .{},
+	dark_style := false
+) -> Input_Text_Result {
+	input_skin := flow(gui).skin;
+	input_skin.font_size = scale;
+	if skin.texture.handle input_skin.input = skin;
+	if dark_style input_skin.input.fill_color = .{ 0.02, 0.04, 0.05, 1 };
+	input_width := min(width * 0.58, max_input_width);
+	// Keep the label and input on one fixed row; the input remains codepoint-safe.
+	return labeled_input_text(gui, label, buf, .{ width, height }, placeholder,
+		max_chars, label_color = label_color, id = id, skin = *input_skin);
+}
+
+labeled_checkbox :: (
+	gui: *GUI_State,
+	label: string,
+	width: float,
+	height: float,
+	id := "labeled_checkbox",
+	padding := 4.0,
+	default := false,
+	label_color := INHERIT_COLOR,
+	skin: Nine_Slice_Style = .{}
+) -> Checkbox {
+	local_skin := flow(gui).skin;
+	if skin.texture.handle local_skin.checkbox = skin;
+	return labeled_checkbox(gui, label, .{ width, height }, value = default,
+		label_color = label_color, id = id, skin = *local_skin);
+}
+
+labeled_dropdown :: (
+	gui: *GUI_State,
+	label: string,
+	options: [] string,
+	width: float,
+	height: float,
+	id := "labeled_dropdown",
+	label_color := INHERIT_COLOR,
+	padding := 4.0,
+	default_index := 0,
+	skin: Nine_Slice_Style = .{}
+) -> Dropdown {
+	local_skin := flow(gui).skin;
+	if skin.texture.handle local_skin.button = skin;
+	result := labeled_dropdown(gui, label, options, .{ width, height }, value = default_index,
+		label_color = label_color, id = id, skin = *local_skin);
+	return .{ value = result.value, changed = result.changed };
+}
+
+labeled_int_input :: (
+	gui: *GUI_State,
+	label: string,
+	width: float,
+	height: float,
+	value: int,
+	min_value := S64_MIN,
+	max_value := S64_MAX,
+	drag_speed := 1,
+	id := "labeled_int_input",
+	padding := 4.0,
+	skin: Nine_Slice_Style = .{},
+	label_color := INHERIT_COLOR
+) -> Int_Input {
+	local_skin := flow(gui).skin;
+	if skin.texture.handle local_skin.input = skin;
+	return labeled_int_input(gui, label, .{ width, height }, value,
+		min_value, max_value, drag_speed, label_color, id, skin = *local_skin);
+}
+
+text_button :: (
+	gui: *GUI_State,
+	text: string,
+	pos: V2f,
+	z: float,
+	id := "button",
+	align := Align.Top_Left
+) -> bool {
+	size := v2(text_width(gui, text, flow(gui).skin.font_size) + 16, 24);
+	return button(gui, text, size, id = id, pos = pos, align = align, z = z);
+}
+

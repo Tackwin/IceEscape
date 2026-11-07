@@ -13,7 +13,6 @@
 Store :: #import "Store";
 Scene :: #import "Scene";
 Editor :: #import "Editor";
-GUI :: #import "GUI";
 GUI2 :: #import "GUI2";
 
 offset_of :: ($T: Type, $member: string) -> int {
@@ -3826,83 +3825,6 @@ render_scene :: (
 		render_mark(frame, *frame.geometry, scene, store, *extra);
 	}
 }
-render_gui :: (
-	frame: *Frame, framegraph: *WFramegraph, gui_state: GUI.GUI_State, store: *Store.Store
-) {
-	frame.ui.uniforms = .{};
-	frame.ui.uniforms.window_size = gui_state.controls.window_size;
-	frame.ui.current_custom_texture = null;
-
-	font := *store.verdana;
-
-	items: [..] UI_Draw_Item;
-	items.allocator = temp;
-	array_reserve(*items, gui_state.quads.count + gui_state.chars.count);
-	for gui_state.quads {
-		item: UI_Draw_Item;
-		item.instance.pos = it.pos;
-		item.instance.size = it.size;
-		item.instance.color = it.color;
-		// Sort on the actual depth. Low shader bits are flags, not fractional depth.
-		item.z = it.z;
-		item.instance.z30sdf2 = it.flags;
-		if it.address_mode == GUI.Texture_Address_Mode.Repeat item.instance.z30sdf2 |= 2;
-		item.instance.rotation = it.rotation;
-		item.instance.outline = it.coin_face;
-		item.instance.texture_rect = it.texture_rect;
-		if it.custom_texture
-			item.custom_texture = it.custom_texture.(*WTexture);
-		if !item.custom_texture && it.custom_texture_idx >= 0 {
-			item.custom_texture = Store.user_texture(store, it.custom_texture_idx);
-			if item.custom_texture && item.custom_texture.gpu
-				item.instance.color = V4f.{ 1, 1, 1, 1 };
-		}
-		if item.custom_texture && WTexture.is_gpu_valid(item.custom_texture)
-			item.instance.use_custom_texture = 1;
-		else {
-			// An unavailable custom image must not accidentally sample the UI atlas.
-			if it.custom_texture || it.custom_texture_idx >= 0 continue;
-			item.custom_texture = null;
-		}
-		item.order = items.count;
-		array_add(*items, item);
-	}
-
-	for gui_state.chars {
-		item: UI_Draw_Item;
-
-		glyph := text_glyph(font, it.id);
-
-		item.instance.pos = it.pos;
-		item.instance.size = it.size;
-		item.instance.texture_rect.x = glyph.atlasx / 1024;
-		item.instance.texture_rect.y = glyph.atlasy / 1024;
-		item.instance.texture_rect.z = (glyph.atlasw - glyph.atlasx) / 1024;
-		item.instance.texture_rect.w = (glyph.atlash - glyph.atlasy) / 1024;
-		item.z = it.z;
-		item.instance.z30sdf2 = 1;
-		item.instance.color = it.color;
-		item.instance.outline = ifx it.outline then 1.0 else 0.0;
-		item.order = items.count;
-		array_add(*items, item);
-	}
-
-	quick_sort(items, ui_draw_item_sort);
-	instances := append_ui_instance_buffer(frame);
-	current_custom_texture: *WTexture = null;
-	for items {
-		if it.custom_texture != current_custom_texture {
-			commit_ui(frame, *frame.ui, instances.count);
-			instances = append_ui_instance_buffer(frame);
-			current_custom_texture = it.custom_texture;
-			frame.ui.current_custom_texture = current_custom_texture;
-		}
-		instances.count += 1;
-		instances[instances.count - 1] = it.instance;
-	}
-	commit_ui(frame, *frame.ui, instances.count);
-}
-
 render_gui2 :: (
 	frame: *Frame, framegraph: *WFramegraph, gui_state: GUI2.GUI_State, store: *Store.Store
 ) {
@@ -3922,8 +3844,10 @@ render_gui2 :: (
 		item.instance.color = it.color;
 		// Sort on the actual depth. Low shader bits are flags, not fractional depth.
 		item.z = it.z;
-		item.instance.z30sdf2 = 0;
+		item.instance.z30sdf2 = it.flags;
 		if it.repeat item.instance.z30sdf2 |= 2;
+		item.instance.rotation = it.rotation;
+		item.instance.outline = it.coin_face;
 		item.instance.rounded = it.rounded;
 		item.instance.clip_rect = .{ it.clip.min.x, it.clip.min.y, it.clip.max.x, it.clip.max.y };
 		item.instance.texture_rect = it.texture_rect;

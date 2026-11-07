@@ -18,7 +18,6 @@ Controls :: #import "Controls";
 WRender :: #import "WRender";
 PNG :: #import "PNG";
 Scene :: #import "Scene";
-GUI :: #import "GUI";
 GUI2 :: #import "GUI2";
 Play_Session :: #import "Play_Session";
 
@@ -80,7 +79,9 @@ App_User :: struct {
 	controls: Controls.State;
 	graphics: WRender.Graphics;
 	app_context: *#Context;
-	gui_state: GUI.GUI_State;
+	gui_state: GUI2.GUI_State;
+	controls_state: Controls.State;
+	gui_frame_started := false;
 	console: Console_State;
 
 	counter := 0;
@@ -138,7 +139,13 @@ App_User :: struct {
 		}
 	}
 
-	GUI.begin_frame(*app_user.gui_state, app_user.allocated_frame_info, *app_user.controls, app_user.state.keyboard_layout);
+	Controls.begin_frame(*app_user.controls_state, *app_user.controls,
+		app_user.allocated_frame_info, app_user.state.keyboard_layout);
+	app_user.gui_frame_started = false;
+	if app_user.state.screen_state != .Editor {
+		GUI2.begin_frame(*app_user.gui_state, *app_user.controls_state);
+		app_user.gui_frame_started = true;
+	}
 	handle_debug_local_server(app_user);
 	handle_console(app_user);
 	defer {
@@ -184,10 +191,15 @@ App_User :: struct {
 			quit = editor_loop(app_user);
 	}
 
+	if app_user.gui_frame_started {
+		GUI2.end_frame(*app_user.gui_state);
+		app_user.gui_frame_started = false;
+	}
+
 	handle_sending_assets(app_user);
 	if app.platform.set_text_input_active {
-		text_input_active := app_user.gui_state.controls.text_input_active;
-		if app_user.state.screen_state == .Editor {
+		text_input_active := app_user.controls_state.text_input_active;
+		if app_user.state.screen_state == .Editor && app_user.state.editor.gui_state.controls {
 			text_input_active |= app_user.state.editor.gui_state.controls.text_input_active;
 		}
 		app.platform.set_text_input_active(text_input_active);
@@ -343,18 +355,18 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	WRender.init_graphics(app.platform, *app_user.graphics);
 	WRender.graphics = *app_user.graphics;
 	init_store(app.platform, *app_user.store);
-	GUI.gui_state_init(*app_user.gui_state, *app_user.store);
+	GUI2.gui_state_init(*app_user.gui_state, *app_user.store.verdana, editor_gui_skin(*app_user.store));
 	menu := *app_user.state.menu;
-	GUI.init(*menu.string_pool);
-	menu.username = GUI.make(*menu.string_pool);
-	menu.login_popup_password = GUI.make(*menu.string_pool);
-	menu.scene_name_leadeboard = GUI.make(*menu.string_pool);
-	menu.enter_instance_password = GUI.make(*menu.string_pool);
-	menu.create_instance.filter = GUI.make(*menu.string_pool);
-	menu.create_instance.name = GUI.make(*menu.string_pool);
-	menu.create_instance.password = GUI.make(*menu.string_pool);
-	menu.create_bomberman.name = GUI.make(*menu.string_pool);
-	menu.create_bomberman.password = GUI.make(*menu.string_pool);
+	GUI2.init(*menu.string_pool);
+	menu.username = GUI2.make(*menu.string_pool);
+	menu.login_popup_password = GUI2.make(*menu.string_pool);
+	menu.scene_name_leadeboard = GUI2.make(*menu.string_pool);
+	menu.enter_instance_password = GUI2.make(*menu.string_pool);
+	menu.create_instance.filter = GUI2.make(*menu.string_pool);
+	menu.create_instance.name = GUI2.make(*menu.string_pool);
+	menu.create_instance.password = GUI2.make(*menu.string_pool);
+	menu.create_bomberman.name = GUI2.make(*menu.string_pool);
+	menu.create_bomberman.password = GUI2.make(*menu.string_pool);
 	GUI2.init(*app_user.state.editor_page.string_pool);
 	app_user.state.editor_page.load_filter = GUI2.make(*app_user.state.editor_page.string_pool);
 	app_user.state.editor_page.save_dialog_input = GUI2.make(*app_user.state.editor_page.string_pool);
@@ -379,8 +391,8 @@ process_main :: (app_user: *App_User, command: Command) -> bool {
 	app_user.state.platform = _app.platform;
 	app_user.graphics.gpu = _app.platform.gpu;
 	WRender.graphics = *app_user.graphics;
-	GUI.gui_state_init(*app_user.gui_state, *app_user.store);
-	GUI.rebind(*app_user.state.menu.string_pool);
+	GUI2.rebind(*app_user.gui_state, *app_user.store.verdana, editor_gui_skin(*app_user.store));
+	GUI2.rebind(*app_user.state.menu.string_pool);
 	GUI2.rebind(*app_user.state.editor_page.string_pool);
 	GUI2.rebind(*app_user.state.editor.gui_state, *app_user.store.verdana, editor_gui_skin(*app_user.store));
 	rebind_console(app_user);
@@ -493,6 +505,7 @@ write_capture_png :: (app_user: *App_User, platform: *Platform) {
 #load "game_loop.jai";
 #load "editor_loop.jai";
 #load "Console.jai";
+#load "GUI_End_Level.jai";
 #load "End_Level.jai";
 
 #program_export "app_quit" app_quit :: (_app: *App) {

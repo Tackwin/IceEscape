@@ -14,9 +14,10 @@ Console_State :: struct {
 	open := false;
 	ate_input := false;
 
-	string_pool: GUI.String_Pool;
-	input: GUI.String;
-	history_draft: GUI.String;
+	gui: GUI2.GUI_State;
+	string_pool: GUI2.String_Pool;
+	input: GUI2.String;
+	history_draft: GUI2.String;
 
 	lines: [..] string;
 	history: [..] string;
@@ -29,15 +30,17 @@ Console_State :: struct {
 
 init_console :: (app_user: *App_User) {
 	c := *app_user.console;
-	GUI.init(*c.string_pool);
-	c.input = GUI.make(*c.string_pool, 64);
-	c.history_draft = GUI.make(*c.string_pool, 64);
+	GUI2.gui_state_init(*c.gui, *app_user.store.verdana, editor_gui_skin(*app_user.store));
+	GUI2.init(*c.string_pool);
+	c.input = GUI2.make(*c.string_pool, 64);
+	c.history_draft = GUI2.make(*c.string_pool, 64);
 	c.lines.allocator = context.allocator;
 	c.history.allocator = context.allocator;
 }
 
 rebind_console :: (app_user: *App_User) {
-	GUI.rebind(*app_user.console.string_pool);
+	GUI2.rebind(*app_user.console.string_pool);
+	GUI2.rebind(*app_user.console.gui, *app_user.store.verdana, editor_gui_skin(*app_user.store));
 }
 
 console_print :: (c: *Console_State, text: string) {
@@ -72,7 +75,7 @@ handle_console :: (app_user: *App_User) {
 	}
 
 	if c.open || c.ate_input {
-		console_steal(*app_user.gui_state.controls);
+		console_steal(*app_user.controls_state);
 		console_steal(*app_user.controls);
 	}
 }
@@ -88,50 +91,35 @@ console_steal_if_needed :: (c: *Console_State, controls: *Controls.State) {
 	}
 }
 
-draw_console :: (c: *Console_State, gui: *GUI.GUI_State) {
+draw_console :: (app_user: *App_User) {
+	c := *app_user.console;
 	if !c.open return;
 
+
+	gui := *c.gui;
+	GUI2.begin_frame(gui, *app_user.controls_state);
+	defer GUI2.end_frame(gui);
+	GUI2.push_id(gui, "console");
+	defer GUI2.pop_id(gui);
+
 	window := gui.controls.window_size;
-	panel_h := window.y * CONSOLE_HEIGHT_FRACTION;
-	if panel_h < 80 panel_h = 80;
-
-	panel: AABBf;
-	panel.min = .{ 0, 0 };
-	panel.max = .{ window.x, panel_h };
-
-	GUI.push_id(gui, "console");
-	defer GUI.pop_id(gui);
-
-	GUI.widget_sized(gui, "panel", struct {}, panel, CONSOLE_Z, .Solid);
-	GUI.push_quad_screen(gui, panel, V3f.{ 0, 0, 0 }, CONSOLE_Z, a = 0.85);
+	panel_h := max(80.0, window.y * CONSOLE_HEIGHT_FRACTION);
+	panel := AABBf.{ .{ 0, 0 }, .{ window.x, panel_h } };
+	GUI2.get_widget(gui, "panel", panel, CONSOLE_Z);
+	GUI2.draw_rect(gui, panel, .{ 0, 0, 0, 0.85 }, CONSOLE_Z);
 
 	line_h := 16.0;
 	input_h := 22.0;
 	y := panel_h - input_h - 6 - line_h;
 	i := c.lines.count - 1;
 	while i >= 0 && y >= 4 {
-		GUI.atom_label(
-			gui,
-			c.lines[i],
-			.{ 8, y },
-			14,
-			CONSOLE_Z + 1,
-			.Top_Left,
-			GUI.GRAY_90
-		);
+		GUI2.draw_text(gui, .{ .{ 8, y }, .{ window.x - 8, y + line_h } },
+			c.lines[i], 14, GUI2.GRAY_90, CONSOLE_Z + 1, .Top_Left);
 		y -= line_h;
 		i -= 1;
 	}
-
-	GUI.atom_label(
-		gui,
-		">",
-		.{ 8, panel_h - 6 },
-		16,
-		CONSOLE_Z + 2,
-		.Bottom_Left,
-		GUI.GRAY_90
-	);
+	GUI2.label(gui, ">", height = 16, color = GUI2.GRAY_90, id = "prompt",
+		pos = .{ 8, panel_h - 6 }, align = .Bottom_Left, z = CONSOLE_Z + 2);
 
 	cursor_to_end := false;
 	if gui.controls.just_pressed[Key.Up] {
@@ -146,23 +134,22 @@ draw_console :: (c: *Console_State, gui: *GUI.GUI_State) {
 		if console_tab_complete(c) cursor_to_end = true;
 	}
 
-	result := GUI.atom_input_text(
+	result := GUI2.input_text(
 		gui,
 		*c.input,
-		18,
-		window.x - 32,
-		.{ 24, panel_h - 4 },
-		CONSOLE_Z + 2,
-		.Bottom_Left,
+		.{ max(0.0, window.x - 32), 18 },
 		placeholder = "help",
 		unfocus_on_commit = false,
 		force_focus = true,
-		cursor_to_end = cursor_to_end
+		cursor_to_end = cursor_to_end,
+		id = "input",
+		pos = .{ 24, panel_h - 4 },
+		align = .Bottom_Left,
+		z = CONSOLE_Z + 2
 	);
-
 	if result.committed {
-		run_console_line(c, GUI.view(*c.input));
-		GUI.set(*c.input, "");
+		run_console_line(c, GUI2.view(*c.input));
+		GUI2.set(*c.input, "");
 		c.history_index = -1;
 	}
 }
@@ -171,12 +158,12 @@ console_history_up :: (c: *Console_State) {
 	if c.history.count <= 0 return;
 
 	if c.history_index < 0 {
-		GUI.set(*c.history_draft, GUI.view(*c.input));
+		GUI2.set(*c.history_draft, GUI2.view(*c.input));
 		c.history_index = c.history.count - 1;
 	} else if c.history_index > 0 {
 		c.history_index -= 1;
 	}
-	GUI.set(*c.input, c.history[c.history_index]);
+	GUI2.set(*c.input, c.history[c.history_index]);
 }
 
 console_history_down :: (c: *Console_State) {
@@ -184,15 +171,15 @@ console_history_down :: (c: *Console_State) {
 
 	if c.history_index + 1 < c.history.count {
 		c.history_index += 1;
-		GUI.set(*c.input, c.history[c.history_index]);
+		GUI2.set(*c.input, c.history[c.history_index]);
 	} else {
 		c.history_index = -1;
-		GUI.set(*c.input, GUI.view(*c.history_draft));
+		GUI2.set(*c.input, GUI2.view(*c.history_draft));
 	}
 }
 
 console_tab_complete :: (c: *Console_State) -> bool {
-	prefix := GUI.view(*c.input);
+	prefix := GUI2.view(*c.input);
 	matches: [..] string;
 	matches.allocator = temp;
 	for console_commands {
@@ -203,7 +190,7 @@ console_tab_complete :: (c: *Console_State) -> bool {
 	if matches.count == 0 return false;
 
 	if matches.count == 1 {
-		GUI.set(*c.input, matches[0]);
+		GUI2.set(*c.input, matches[0]);
 		return true;
 	}
 
@@ -211,7 +198,7 @@ console_tab_complete :: (c: *Console_State) -> bool {
 	for 1..matches.count - 1 {
 		common = console_common_prefix(common, matches[it]);
 	}
-	GUI.set(*c.input, common);
+	GUI2.set(*c.input, common);
 	console_print(c, ":");
 	for matches console_print(c, "  %", it);
 	return true;

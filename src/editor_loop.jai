@@ -164,16 +164,19 @@ process_editor :: (app_user: *App_User, command: Command) -> bool {
 		array_resize(*page.terrain_list, ans_list_terrain.terrains_id.count);
 		for * page.terrain_list {
 			it.id = ans_list_terrain.terrains_id[it_index];
-			it.author_profile_id = ans_list_terrain.authors_profile_id[it_index];
-			it.can_remove = ans_list_terrain.can_remove[it_index];
+			it.author_profile_id = ifx it_index < ans_list_terrain.authors_profile_id.count
+				then ans_list_terrain.authors_profile_id[it_index] else 0;
+			it.can_remove = ifx it_index < ans_list_terrain.can_remove.count
+				then ans_list_terrain.can_remove[it_index] else false;
 			it.delete_pending = false;
-			it.name = sprint(
-				ans_list_terrain.terrains_name[it_index],, page.terrain_list.allocator
-			);
-			it.author = sprint(
-				ans_list_terrain.authors_name[it_index],, page.terrain_list.allocator
-			);
-			it.created_ms = ans_list_terrain.creation_time_ms[it_index];
+			name := ifx it_index < ans_list_terrain.terrains_name.count
+				then ans_list_terrain.terrains_name[it_index] else "";
+			author := ifx it_index < ans_list_terrain.authors_name.count
+				then ans_list_terrain.authors_name[it_index] else "";
+			it.name = sprint(name,, page.terrain_list.allocator);
+			it.author = sprint(author,, page.terrain_list.allocator);
+			it.created_ms = ifx it_index < ans_list_terrain.creation_time_ms.count
+				then ans_list_terrain.creation_time_ms[it_index] else 0;
 
 			get_thumbnail: Command.Get_Thumbnail;
 			get_thumbnail.asset.id = app_user.counter;
@@ -349,17 +352,21 @@ editor_loop :: (app_user: *App_User) -> bool {
 	editor := *app_user.state.editor;
 	editor_page := *app_user.state.editor_page;
 	gui := *editor.gui_state;
-	info := app_user.allocated_frame_info;
 
 	if !editor.initialized {
 		enter_editor(app_user);
 	}
 
-	update_editor(editor);
-
 	// Begin GUI frame
-	GUI2.begin_frame(gui, info, app_user.state.keyboard_layout,
+	// The main menu and editor keep separate GUI2 states. Clear stale menu capture
+	// so it cannot block editor input after switching screens.
+	if !app_user.console.open && !app_user.console.ate_input {
+		app_user.gui_state.controls.captured_mouse = false;
+		app_user.gui_state.controls.captured_keyboard = false;
+	}
+	GUI2.begin_frame(gui, *app_user.controls_state,
 		blocked = app_user.console.open || app_user.console.ate_input);
+	update_editor(editor);
 
 	if editor_page.rectangle_dragging {
 		// Draw selection rectangle
@@ -416,7 +423,7 @@ editor_loop :: (app_user: *App_User) -> bool {
 	}
 
 	GUI2.end_frame(gui);
-	draw_console(*app_user.console, *app_user.gui_state);
+	draw_console(app_user);
 
 	// Render the editor
 	editor_render(app_user);
@@ -2121,13 +2128,12 @@ editor_render :: (app_user: *App_User) {
 
 	frame := WRender.begin_frame(framegraph, app_user.state.current_time);
 
-	// Render the scene (terrain)
 	WRender.render_scene(frame, framegraph, editor.scene, store, in_editor = true, delta_time = editor.gui_state.controls.delta_time);
 	WRender.render_editor(frame, framegraph, editor, store);
 
 	// Render the GUI
 	WRender.render_gui2(frame, framegraph, editor.gui_state, store);
-	if app_user.console.open WRender.render_gui(frame, framegraph, app_user.gui_state, store);
+	if app_user.console.open WRender.render_gui2(frame, framegraph, app_user.console.gui, store);
 
 	WRender.end_frame(framegraph, frame);
 }

@@ -17,95 +17,95 @@ end_level_time :: (milliseconds: int) -> string {
 }
 
 dividend_card :: (
-	gui: *GUI_State, store: *Store, result: Play_Session.Result, index: int,
+	gui: *GUI2.GUI_State, store: *Store, result: Play_Session.Result, index: int,
 	clock: float64, size: V2f, caption: string, score_override: int = -1
 ) -> AABBf {
 	player := result.players[index];
-	push_id(gui, player.player_id);
-	defer pop_id(gui);
-	bounds := box(gui, size, inset = .{ 14, 9 }, z = 12);
-	push_nine_slice(gui, bounds.min, size, lobby_button_skin(store), 11);
-	label_box(gui, caption, .{ size.x - 28, 18 }, 12, GOLD_ACCENT, id = "role");
-	row(gui);
-	icon := box(gui, .{ 58, 52 });
-	push_quad_texture(gui, icon.min + v2(3.0, 3.0), .{ 44, 44 }, v3(TEXT_NORMAL),
+	GUI2.push_id(gui, player.player_id);
+	defer GUI2.pop_id(gui);
+	bounds := GUI2.box(gui, size, inset = .{ 14, 9 }, z = 12);
+	GUI2.push_nine_slice(gui, bounds.min, size, lobby_button_skin(store), 11);
+	GUI2.label_box(gui, caption, .{ size.x - 28, 18 }, 12, GUI2.GOLD_ACCENT, id = "role");
+	GUI2.row(gui);
+	icon := GUI2.box(gui, .{ 58, 52 });
+	GUI2.push_quad_texture(gui, icon.min + v2(3.0, 3.0), .{ 44, 44 }, v3(GUI2.TEXT_NORMAL),
 		model_id_to_slot(xx player.icon_id), 12);
-	end(gui);
+	GUI2.end(gui);
 	text_width := size.x - 28 - 58;
-	box(gui, .{ text_width, 52 });
+	GUI2.box(gui, .{ text_width, 52 });
 	name := player.display_name;
 	if name.count == 0 name = tprint("Player %", player.player_id);
-	label_box(gui, name, .{ text_width, 20 }, 15, TEXT_NORMAL, id = "name");
-	row(gui);
+	GUI2.label_box(gui, name, .{ text_width, 20 }, 15, GUI2.TEXT_NORMAL, id = "name");
+	GUI2.row(gui);
 	score := score_override;
 	if score < 0 score = Play_Session.displayed_score(result, index, clock);
-	label_box(gui, tprint("%", score),
-		.{ 96, 32 }, 25, GOLD_ACCENT, id = "score");
-	label_box(gui, "points", .{ max(0.0, text_width - 96), 32 }, 12, TEXT_MUTE, id = "points");
-	end(gui);
-	end(gui);
-	end(gui);
-	end(gui);
+	GUI2.label_box(gui, tprint("%", score),
+		.{ 96, 32 }, 25, GUI2.GOLD_ACCENT, id = "score");
+	GUI2.label_box(gui, "points", .{ max(0.0, text_width - 96), 32 }, 12, GUI2.TEXT_MUTE, id = "points");
+	GUI2.end(gui);
+	GUI2.end(gui);
+	GUI2.end(gui);
+	GUI2.end(gui);
 	return bounds;
 }
 
 push_end_screen :: (
-	gui: *GUI_State, result: Play_Session.Result, presentation: Play_Session.Presentation, store: *Store
+	gui: *GUI2.GUI_State, result: Play_Session.Result, presentation: Play_Session.Presentation, store: *Store
 ) {
-	push_id(gui, "end_level");
-	defer pop_id(gui);
+	GUI2.push_id(gui, "end_level");
+	defer GUI2.pop_id(gui);
 	n := result.players.count;
 	winner := -1;
 	for result.players if it.player_id == result.winner_id winner = it_index;
 	if winner < 0 return;
 	size := v2(1080.0, 612.0);
 	origin := (v2(gui.controls.window_size) - size) / 2;
-	push_quad_screen(gui, v2(0.0), v2(gui.controls.window_size), MENU_BASE_BACKGROUND, 9, a = 0.78);
-	column(gui, origin, z = 12, align = .Top_Left);
-	panel := box(gui, size, inset = .{ 24, 24 });
+	GUI2.push_quad_screen(gui, v2(0.0), v2(gui.controls.window_size), GUI2.MENU_BASE_BACKGROUND, 9, a = 0.78);
+	GUI2.column(gui, pos = origin, direction = .Down, z = 12, align = .Top_Left);
+	panel := GUI2.box(gui, size, inset = .{ 24, 24 });
 	push_felt_panel(gui, store, panel.min, size, 10);
 	width := size.x - 48;
-	label_box(gui, "LEVEL CLEARED", .{ width, 26 }, 24, GOLD_ACCENT, .Center, "title");
-	label_box(gui, "RESURRECTION DIVIDENDS", .{ width, 18 }, 12, TEXT_MUTE, .Center, "subtitle");
-	label_box(gui, tprint("%   |   Time %   |   Personal share weight %", result.level_name,
+	GUI2.label_box(gui, "LEVEL CLEARED", .{ width, 26 }, 24, GUI2.GOLD_ACCENT, .Center, "title");
+	GUI2.label_box(gui, "RESURRECTION DIVIDENDS", .{ width, 18 }, 12, GUI2.TEXT_MUTE, .Center, "subtitle");
+	GUI2.label_box(gui, tprint("%   |   Time %   |   Personal share weight %", result.level_name,
 		end_level_time(result.duration_ms), result.personal_share_weight),
-		.{ width, 20 }, 13, TEXT_NORMAL, .Center, "level");
-	space(gui, 12);
+		.{ width, 20 }, 13, GUI2.TEXT_NORMAL, .Center, "level");
+	GUI2.space(gui, 12);
 	anchors := NewArray(n, AABBf,, temp);
 	visible := NewArray(n, bool,, temp);
-	animation, animation_widget := widget(gui, "dividend_particles", Dividend_Animation);
-	row(gui);
-	space(gui, (width - 360) / 2);
+	animation, animation_widget := GUI2.widget(gui, "dividend_particles", Dividend_Animation);
+	GUI2.row(gui);
+	GUI2.space(gui, (width - 360) / 2);
 	anchors[winner] = dividend_card(gui, store, result, winner, presentation.clock,
 		.{ 360, 96 }, "LEVEL WINNER  /  BASE AWARD + DIVIDENDS",
 		dividend_counter(animation, result, winner, presentation.clock));
 	visible[winner] = true;
-	end(gui);
-	space(gui, 36);
+	GUI2.end(gui);
+	GUI2.space(gui, 36);
 
-	page, page_widget := widget(gui, "dividend_page", Dividend_Page);
+	page, page_widget := GUI2.widget(gui, "dividend_page", Dividend_Page);
 	page_count := max(1, (n - 1 + 5) / 6);
 	page.page = clamp(page.page, 0, page_count - 1);
-	row(gui);
+	GUI2.row(gui);
 	status := "Base award: 1,000  /  awaiting direct shares";
 	if presentation.clock >= Play_Session.SETTLEMENT_SECONDS status = "Settlement complete";
 	else if presentation.clock >= Play_Session.RECURSIVE_START status = "Round 2 of 2  /  recursive difference";
 	else if presentation.clock >= Play_Session.INITIAL_HOLD_SECONDS + Play_Session.DIRECT_SECONDS status = "Direct shares settled";
 	else if presentation.clock >= Play_Session.INITIAL_HOLD_SECONDS status = "Round 1 of 2  /  direct trophy shares";
-	label_box(gui, status, .{ width - 180, 24 }, 14, GOLD_ACCENT, id = "status");
+	GUI2.label_box(gui, status, .{ width - 180, 24 }, 14, GUI2.GOLD_ACCENT, id = "status");
 	if page_count > 1 {
 		previous, pressed := themed_button(gui, store, "<", "previous", .{ 32, 24 }, enabled = page.page > 0);
 		if previous page.page -= 1;
-		label_box(gui, tprint("% / %", page.page+1, page_count), .{ 116, 24 }, 12, TEXT_MUTE, .Center, "page");
+		GUI2.label_box(gui, tprint("% / %", page.page+1, page_count), .{ 116, 24 }, 12, GUI2.TEXT_MUTE, .Center, "page");
 		next, next_pressed := themed_button(gui, store, ">", "next", .{ 32, 24 }, enabled = page.page+1 < page_count);
 		if next page.page += 1;
-	} else label_box(gui, tprint("% shareholders", n-1), .{ 180, 24 }, 12, TEXT_MUTE, .Center_Right, "count");
-	end(gui);
+	} else GUI2.label_box(gui, tprint("% shareholders", n-1), .{ 180, 24 }, 12, GUI2.TEXT_MUTE, .Center_Right, "count");
+	GUI2.end(gui);
 
-	grid := box(gui, .{ width, 252 }, inset = .{ 16, 12 });
-	push_nine_slice(gui, grid.min, grid.max-grid.min, compact_button_skin(store), 10.5);
-	label_box(gui, "SHAREHOLDERS  /  SORTED BY FINAL DIVIDEND", .{ width-32, 18 }, 12, TEXT_MUTE, id = "grid_title");
-	space(gui, 8);
+	grid := GUI2.box(gui, .{ width, 252 }, inset = .{ 16, 12 });
+	GUI2.push_nine_slice(gui, grid.min, grid.max-grid.min, compact_button_skin(store), 10.5);
+	GUI2.label_box(gui, "SHAREHOLDERS  /  SORTED BY FINAL DIVIDEND", .{ width-32, 18 }, 12, GUI2.TEXT_MUTE, id = "grid_title");
+	GUI2.space(gui, 8);
 	indices := NewArray(max(0, n-1), int,, temp);
 	cursor := 0;
 	for id: result.ranked_player_ids {
@@ -118,8 +118,8 @@ push_end_screen :: (
 	}
 	card_width := (width - 32 - 24) / 3;
 	for grid_row: 0..1 {
-		row(gui);
-		flow(gui).padding = .{ 12, 0 };
+		GUI2.row(gui);
+		GUI2.flow(gui).padding = .{ 12, 0 };
 		for grid_column: 0..2 {
 			rank := page.page*6 + grid_row*3 + grid_column;
 			if rank >= cursor continue;
@@ -130,22 +130,22 @@ push_end_screen :: (
 				dividend_counter(animation, result, index, presentation.clock));
 			visible[index] = true;
 		}
-		end(gui);
-		if grid_row == 0 space(gui, 8);
+		GUI2.end(gui);
+		if grid_row == 0 GUI2.space(gui, 8);
 	}
-	if cursor == 0 label_box(gui, "No other players this level", .{ width-32, 80 }, 16, TEXT_MUTE, .Center, "empty");
-	end(gui);
-	space(gui, 8);
+	if cursor == 0 GUI2.label_box(gui, "No other players this level", .{ width-32, 80 }, 16, GUI2.TEXT_MUTE, .Center, "empty");
+	GUI2.end(gui);
+	GUI2.space(gui, 8);
 	wr := "World record loading...";
 	if result.record.status == .Missing wr = "No world record yet";
 	if result.record.status == .Available wr = tprint("World record %  /  %", end_level_time(result.record.time_ms), result.record.holder);
-	label_box(gui, wr, .{ width, 20 }, 13, TEXT_NORMAL, .Center, "record");
-	label_box(gui, tprint("Next: %  /  % seconds", result.next_level_name,
-		ceil(max(cast(float64) 0, presentation.countdown_remaining)).(int)), .{ width, 20 }, 13, TEXT_MUTE, .Center, "next_level");
-	label_box(gui, "Winner: 1,000 points. Other finishers: 900. Plus revive shares.",
-		.{ width, 18 }, 12, TEXT_MUTE, .Center, "explanation");
-	end(gui);
-	end(gui);
+	GUI2.label_box(gui, wr, .{ width, 20 }, 13, GUI2.TEXT_NORMAL, .Center, "record");
+	GUI2.label_box(gui, tprint("Next: %  /  % seconds", result.next_level_name,
+		ceil(max(cast(float64) 0, presentation.countdown_remaining)).(int)), .{ width, 20 }, 13, GUI2.TEXT_MUTE, .Center, "next_level");
+	GUI2.label_box(gui, "Winner: 1,000 points. Other finishers: 900. Plus revive shares.",
+		.{ width, 18 }, 12, GUI2.TEXT_MUTE, .Center, "explanation");
+	GUI2.end(gui);
+	GUI2.end(gui);
 	dividend_update(animation, result, presentation.clock, anchors, visible);
 	push_dividend_coins(gui, animation);
 }
@@ -377,27 +377,27 @@ dividend_counter :: (animation: *Dividend_Animation, result: Play_Session.Result
 	return Play_Session.displayed_score(result, index, clock);
 }
 
-push_dividend_coins :: (gui: *GUI_State, animation: *Dividend_Animation) {
+push_dividend_coins :: (gui: *GUI2.GUI_State, animation: *Dividend_Animation) {
 	for coin: array_view(animation.coins, 0, animation.coin_count) {
 		if !coin.active continue;
 		face := cos(coin.tilt);
 		width := coin.radius*2*max(0.16, abs(face));
-		quad: GUI_State.Quad;
+		quad: GUI2.Quad;
 		quad.texture_rect = .{ 0, 0, 1, 1 };
-		quad.flags = GUI_State.Quad.FLAG_COIN | GUI_State.Quad.FLAG_COIN_SHADOW;
+		quad.flags = GUI2.Quad.FLAG_COIN | GUI2.Quad.FLAG_COIN_SHADOW;
 		quad.size = .{ coin.radius*2.2, coin.radius*0.55 };
 		quad.pos = coin.position - quad.size*0.5 + v2(3.0, coin.radius+4);
-		quad.color = .{ MENU_BASE_BACKGROUND.x, MENU_BASE_BACKGROUND.y, MENU_BASE_BACKGROUND.z, 0.45 };
+		quad.color = .{ GUI2.MENU_BASE_BACKGROUND.x, GUI2.MENU_BASE_BACKGROUND.y, GUI2.MENU_BASE_BACKGROUND.z, 0.45 };
 		quad.z = 11.8;
-		push_quad(gui, quad);
-		quad.flags = GUI_State.Quad.FLAG_COIN;
+		GUI2.push_quad(gui, quad);
+		quad.flags = GUI2.Quad.FLAG_COIN;
 		quad.size = .{ width, coin.radius*2 };
 		quad.pos = coin.position-quad.size*0.5;
 		quad.rotation = coin.rotation;
 		quad.coin_face = face*0.5+0.5;
-		quad.color = GOLD_ACCENT;
+		quad.color = GUI2.GOLD_ACCENT;
 		// Above the panel/card artwork, below its text: no unreadable status labels.
 		quad.z = 11.9;
-		push_quad(gui, quad);
+		GUI2.push_quad(gui, quad);
 	}
 }

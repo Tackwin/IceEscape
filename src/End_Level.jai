@@ -100,5 +100,5 @@ handle_end_level_preview :: (app_user: *App_User) {
 push_end_level_preview :: (app_user: *App_User) {
 	preview := *app_user.end_level_preview;
 	if !preview.active return;
-	GUI.push_end_screen(*app_user.gui_state, preview.result, preview.presentation, *app_user.store);
+	push_end_screen(*app_user.gui_state, preview.result, preview.presentation, *app_user.store);
 }
